@@ -1,171 +1,53 @@
 {
-  "last_node_id": 12,
-  "last_link_id": 14,
-  "nodes": [
-    {
-      "id": 1,
-      "type": "VHS_LoadImages",
-      "pos": [100, 300],
-      "size": [300, 150],
-      "flags": {},
-      "order": 0,
-      "mode": 0,
-      "outputs": [
-        {"name": "IMAGE", "type": "IMAGE", "links": [1], "slot_index": 0},
-        {"name": "MASK", "type": "MASK", "links": null},
-        {"name": "INT (frame_count)", "type": "INT", "links": [2], "slot_index": 2}
-      ],
-      "properties": {"Node name for S&R": "VHS_LoadImages"},
-      "widgets_values": [
-        "source/frames/",
-        0,
-        0,
-        false,
-        "frame_%04d.png"
-      ],
-      "color": "#223322",
-      "title": "Load Source Frames"
+  "_comment": "Depth Analysis Workflow - API format for ComfyUI /prompt endpoint",
+  "1": {
+    "class_type": "VHS_LoadImages",
+    "inputs": {
+      "directory": "source/frames/",
+      "image_load_cap": 0,
+      "skip_first_images": 0,
+      "select_every_nth": 1
     },
-    {
-      "id": 2,
-      "type": "DepthAnythingV3_MultiView",
-      "pos": [500, 300],
-      "size": [350, 200],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [
-        {"name": "images", "type": "IMAGE", "link": 1}
-      ],
-      "outputs": [
-        {"name": "DEPTH", "type": "IMAGE", "links": [3], "slot_index": 0},
-        {"name": "extrinsics", "type": "STRING", "links": [4], "slot_index": 1},
-        {"name": "intrinsics", "type": "STRING", "links": [5], "slot_index": 2},
-        {"name": "point_cloud", "type": "POINT_CLOUD", "links": null}
-      ],
-      "properties": {"Node name for S&R": "DepthAnythingV3_MultiView"},
-      "widgets_values": [
-        "vitl",
-        true,
-        true,
-        0.5
-      ],
-      "color": "#332233",
-      "title": "Depth Anything V3 (MultiView)"
-    },
-    {
-      "id": 3,
-      "type": "VHS_SaveImages",
-      "pos": [950, 200],
-      "size": [300, 150],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [
-        {"name": "images", "type": "IMAGE", "link": 3},
-        {"name": "frame_count", "type": "INT", "link": 2}
-      ],
-      "outputs": [],
-      "properties": {"Node name for S&R": "VHS_SaveImages"},
-      "widgets_values": [
-        "depth/",
-        "depth_%04d",
-        "png",
-        1001,
-        false,
-        true
-      ],
-      "color": "#223344",
-      "title": "Save Depth Maps"
-    },
-    {
-      "id": 4,
-      "type": "SaveText",
-      "pos": [950, 400],
-      "size": [300, 120],
-      "flags": {},
-      "order": 3,
-      "mode": 0,
-      "inputs": [
-        {"name": "text", "type": "STRING", "link": 4}
-      ],
-      "outputs": [],
-      "properties": {"Node name for S&R": "SaveText"},
-      "widgets_values": [
-        "camera/extrinsics.json",
-        "overwrite",
-        true
-      ],
-      "color": "#334422",
-      "title": "Save Extrinsics"
-    },
-    {
-      "id": 5,
-      "type": "SaveText",
-      "pos": [950, 550],
-      "size": [300, 120],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "inputs": [
-        {"name": "text", "type": "STRING", "link": 5}
-      ],
-      "outputs": [],
-      "properties": {"Node name for S&R": "SaveText"},
-      "widgets_values": [
-        "camera/intrinsics.json",
-        "overwrite",
-        true
-      ],
-      "color": "#334422",
-      "title": "Save Intrinsics"
-    },
-    {
-      "id": 6,
-      "type": "Note",
-      "pos": [100, 100],
-      "size": [600, 150],
-      "flags": {},
-      "order": 5,
-      "mode": 0,
-      "properties": {"text": ""},
-      "widgets_values": [
-        "01_ANALYSIS WORKFLOW\n\nInputs: source/frames/ (PNG sequence starting at frame_1001.png)\nOutputs:\n  - depth/ (depth maps)\n  - camera/extrinsics.json (4x4 camera matrices per frame)\n  - camera/intrinsics.json (fx, fy, cx, cy)\n\nRun export_camera.py after to convert camera data to Alembic."
-      ],
-      "color": "#444444",
-      "title": "Workflow Info"
-    }
-  ],
-  "links": [
-    [1, 1, 0, 2, 0, "IMAGE"],
-    [2, 1, 2, 3, 1, "INT"],
-    [3, 2, 0, 3, 0, "IMAGE"],
-    [4, 2, 1, 4, 0, "STRING"],
-    [5, 2, 2, 5, 0, "STRING"]
-  ],
-  "groups": [
-    {
-      "title": "Input",
-      "bounding": [80, 250, 350, 220],
-      "color": "#3f789e"
-    },
-    {
-      "title": "Processing",
-      "bounding": [480, 250, 400, 280],
-      "color": "#8e44ad"
-    },
-    {
-      "title": "Output",
-      "bounding": [930, 150, 350, 550],
-      "color": "#27ae60"
-    }
-  ],
-  "config": {},
-  "extra": {
-    "ds": {
-      "scale": 0.9,
-      "offset": [50, 50]
-    }
+    "_meta": {"title": "Load Source Frames"}
   },
-  "version": 0.4
+  "2": {
+    "class_type": "DepthAnythingV3",
+    "inputs": {
+      "images": ["1", 0],
+      "model": "vitl",
+      "temporal_consistency": true,
+      "estimate_camera": true,
+      "camera_smoothness": 0.5
+    },
+    "_meta": {"title": "Depth Anything V3"}
+  },
+  "3": {
+    "class_type": "VHS_SaveImages",
+    "inputs": {
+      "images": ["2", 0],
+      "directory": "depth/",
+      "filename_prefix": "depth",
+      "format": "png",
+      "start_number": 1001
+    },
+    "_meta": {"title": "Save Depth Maps"}
+  },
+  "4": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": ["2", 1],
+      "file_path": "camera/extrinsics.json",
+      "mode": "overwrite"
+    },
+    "_meta": {"title": "Save Extrinsics"}
+  },
+  "5": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": ["2", 2],
+      "file_path": "camera/intrinsics.json",
+      "mode": "overwrite"
+    },
+    "_meta": {"title": "Save Intrinsics"}
+  }
 }

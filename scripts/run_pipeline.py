@@ -105,6 +105,74 @@ def check_comfyui_running(url: str) -> bool:
         return False
 
 
+def convert_workflow_to_api_format(workflow: dict) -> dict:
+    """Convert ComfyUI workflow format to API format if needed.
+
+    Workflow format (saved from UI): {"nodes": [...], "links": [...]}
+    API format (for /prompt): {"1": {"class_type": "...", "inputs": {...}}, ...}
+
+    Note: Full conversion from workflow format requires node type definitions.
+    Workflow templates should be saved in API format directly.
+
+    Args:
+        workflow: Workflow dict (either format)
+
+    Returns:
+        Workflow in API format for /prompt endpoint
+    """
+    # If already in API format (no "nodes" key), return as-is
+    if "nodes" not in workflow:
+        return workflow
+
+    # Workflow format detected - attempt basic conversion
+    # Note: This only handles linked inputs, not widget values
+    print("  Warning: Workflow in UI format, attempting conversion...", file=sys.stderr)
+    print("  For reliable execution, save workflows in API format", file=sys.stderr)
+
+    nodes = workflow.get("nodes", [])
+    links = workflow.get("links", [])
+
+    # Build link lookup: link_id -> (source_node_id, source_slot)
+    link_lookup = {}
+    for link in links:
+        # Link format: [link_id, source_node_id, source_slot, dest_node_id, dest_slot, type]
+        if len(link) >= 5:
+            link_id, src_node, src_slot, dst_node, dst_slot = link[:5]
+            link_lookup[link_id] = (src_node, src_slot)
+
+    api_workflow = {}
+
+    for node in nodes:
+        node_id = str(node.get("id"))
+        node_type = node.get("type")
+
+        # Skip special nodes that don't execute
+        if node_type in ("Note", "Reroute"):
+            continue
+
+        inputs = {}
+
+        # Process linked inputs only
+        node_inputs = node.get("inputs", [])
+        for inp in node_inputs:
+            inp_name = inp.get("name")
+            link_id = inp.get("link")
+
+            if link_id is not None and link_id in link_lookup:
+                src_node, src_slot = link_lookup[link_id]
+                inputs[inp_name] = [str(src_node), src_slot]
+
+        api_workflow[node_id] = {
+            "class_type": node_type,
+            "inputs": inputs
+        }
+
+        if node.get("title"):
+            api_workflow[node_id]["_meta"] = {"title": node.get("title")}
+
+    return api_workflow
+
+
 def queue_workflow(workflow_path: Path, comfyui_url: str) -> str:
     """Queue a workflow for execution via ComfyUI API.
 
@@ -114,8 +182,11 @@ def queue_workflow(workflow_path: Path, comfyui_url: str) -> str:
     with open(workflow_path) as f:
         workflow = json.load(f)
 
+    # Convert workflow format to API format if needed
+    api_workflow = convert_workflow_to_api_format(workflow)
+
     # Wrap workflow in prompt format
-    prompt_data = {"prompt": workflow}
+    prompt_data = {"prompt": api_workflow}
 
     data = json.dumps(prompt_data).encode('utf-8')
     req = urllib.request.Request(
