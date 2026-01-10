@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""Initialize VFX projects directory structure.
+
+Creates the root directory where all VFX projects will be stored,
+along with necessary configuration and symlinks.
+
+Usage:
+    ./build_projects_setup /path/to/VFX
+
+The path argument is REQUIRED - this script will not run in the current directory.
+"""
+
+import argparse
+import json
+import shutil
+import sys
+from pathlib import Path
+
+# Get the repo root (where workflow_templates/ lives)
+REPO_ROOT = Path(__file__).parent.resolve()
+
+
+def setup_projects_root(target_dir: Path) -> bool:
+    """Initialize the VFX projects root directory.
+
+    Creates:
+        target_dir/
+        ├── projects/           # Individual project folders go here
+        ├── workflow_templates/ # Symlink to repo templates
+        └── config.json         # Configuration file
+
+    Args:
+        target_dir: Root directory for VFX projects
+
+    Returns:
+        True if successful
+    """
+    print(f"Initializing VFX projects root: {target_dir}")
+
+    # Create main directories
+    projects_dir = target_dir / "projects"
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    print(f"  Created: {projects_dir}")
+
+    # Symlink workflow_templates from repo
+    templates_link = target_dir / "workflow_templates"
+    templates_source = REPO_ROOT / "workflow_templates"
+
+    if templates_link.exists() or templates_link.is_symlink():
+        templates_link.unlink()
+
+    if templates_source.exists():
+        templates_link.symlink_to(templates_source)
+        print(f"  Linked: {templates_link} -> {templates_source}")
+    else:
+        print(f"  Warning: workflow_templates not found at {templates_source}")
+        # Copy instead if can't symlink
+        templates_link.mkdir(exist_ok=True)
+        print(f"  Created: {templates_link} (empty - add templates manually)")
+
+    # Copy scripts to target
+    scripts_dir = target_dir / "scripts"
+    scripts_source = REPO_ROOT / "scripts"
+
+    if scripts_source.exists():
+        if scripts_dir.exists():
+            shutil.rmtree(scripts_dir)
+        shutil.copytree(scripts_source, scripts_dir)
+        print(f"  Copied: {scripts_dir}")
+
+        # Make scripts executable
+        for script in scripts_dir.glob("*.py"):
+            script.chmod(0o755)
+    else:
+        print(f"  Warning: scripts not found at {scripts_source}")
+
+    # Create config file
+    config_path = target_dir / "config.json"
+    config = {
+        "projects_dir": str(projects_dir),
+        "workflow_templates": str(templates_link),
+        "start_frame": 1001,
+        "default_fps": 24.0,
+        "comfyui_url": "http://127.0.0.1:8188"
+    }
+
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2)
+    print(f"  Created: {config_path}")
+
+    # Create convenience wrapper script
+    run_script = target_dir / "run"
+    run_script.write_text(f'''#!/bin/bash
+# Convenience wrapper for run_pipeline.py
+exec python3 "{scripts_dir}/run_pipeline.py" --projects-dir "{projects_dir}" "$@"
+''')
+    run_script.chmod(0o755)
+    print(f"  Created: {run_script}")
+
+    print(f"\nSetup complete!")
+    print(f"\nUsage:")
+    print(f"  {run_script} /path/to/footage.mp4 --name 'Shot_Name'")
+    print(f"\nOr directly:")
+    print(f"  python {scripts_dir}/run_pipeline.py /path/to/footage.mp4 --projects-dir {projects_dir}")
+
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Initialize VFX projects directory structure",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__
+    )
+    parser.add_argument(
+        "target_dir",
+        type=Path,
+        nargs="?",
+        default=None,
+        help="Target directory for VFX projects (REQUIRED)"
+    )
+
+    args = parser.parse_args()
+
+    # Require path argument
+    if args.target_dir is None:
+        print("Error: Target directory is required.", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("Usage: ./build_projects_setup /path/to/VFX", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("This script will NOT run in the current directory.", file=sys.stderr)
+        sys.exit(1)
+
+    target_dir = args.target_dir.resolve()
+    current_dir = Path.cwd().resolve()
+
+    # Refuse to run in current directory
+    if target_dir == current_dir:
+        print("Error: Cannot initialize projects in the current directory.", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("Please specify a different location:", file=sys.stderr)
+        print("  ./build_projects_setup /path/to/VFX", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("This is a safety measure to avoid cluttering your working directory.", file=sys.stderr)
+        sys.exit(1)
+
+    # Also refuse if target is inside the repo
+    try:
+        target_dir.relative_to(REPO_ROOT)
+        print("Error: Cannot initialize projects inside the repository.", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("Please specify a location outside the repo:", file=sys.stderr)
+        print(f"  ./build_projects_setup /path/to/VFX", file=sys.stderr)
+        sys.exit(1)
+    except ValueError:
+        pass  # Good - target is not inside repo
+
+    # Run setup
+    if not setup_projects_root(target_dir):
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

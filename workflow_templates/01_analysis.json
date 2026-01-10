@@ -1,0 +1,53 @@
+{
+  "_comment": "Depth Analysis Workflow - API format for ComfyUI /prompt endpoint",
+  "1": {
+    "class_type": "VHS_LoadImages",
+    "inputs": {
+      "directory": "source/frames/",
+      "image_load_cap": 0,
+      "skip_first_images": 0,
+      "select_every_nth": 1
+    },
+    "_meta": {"title": "Load Source Frames"}
+  },
+  "2": {
+    "class_type": "DepthAnythingV3",
+    "inputs": {
+      "images": ["1", 0],
+      "model": "vitl",
+      "temporal_consistency": true,
+      "estimate_camera": true,
+      "camera_smoothness": 0.5
+    },
+    "_meta": {"title": "Depth Anything V3"}
+  },
+  "3": {
+    "class_type": "VHS_SaveImages",
+    "inputs": {
+      "images": ["2", 0],
+      "directory": "depth/",
+      "filename_prefix": "depth",
+      "format": "png",
+      "start_number": 1001
+    },
+    "_meta": {"title": "Save Depth Maps"}
+  },
+  "4": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": ["2", 1],
+      "file_path": "camera/extrinsics.json",
+      "mode": "overwrite"
+    },
+    "_meta": {"title": "Save Extrinsics"}
+  },
+  "5": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": ["2", 2],
+      "file_path": "camera/intrinsics.json",
+      "mode": "overwrite"
+    },
+    "_meta": {"title": "Save Intrinsics"}
+  }
+}

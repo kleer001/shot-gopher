@@ -14,10 +14,28 @@ Traditional VFX prep work (roto, depth, clean plates) is tedious. Modern ML mode
 - Outputs VFX-ready passes out
 - Follows real production folder conventions (frame numbering starts at 1001, etc.)
 
+## Quick Start
+
+```bash
+# Single command - processes everything
+python scripts/run_pipeline.py /path/to/footage.mp4 --name "My_Shot"
+
+# Or run specific stages
+python scripts/run_pipeline.py footage.mp4 --stages depth,camera
+```
+
+Requires ComfyUI running: `cd /path/to/ComfyUI && python main.py --listen`
+
 ## Architecture
 
 ```
-movie.mp4 → ingest.sh → project folder → ComfyUI workflows → VFX passes
+movie.mp4 → run_pipeline.py → project folder → ComfyUI API → VFX passes
+                   │
+                   ├── Extract frames (ffmpeg)
+                   ├── Setup project structure
+                   ├── Populate workflow templates with project paths
+                   ├── Queue workflows via ComfyUI API
+                   └── Post-process (camera export)
 ```
 
 **Core components:**
@@ -34,20 +52,21 @@ projects/My_Shot_Name/
 ├── depth/            # Depth maps
 ├── roto/             # Segmentation masks
 ├── cleanplate/       # Inpainted plates
-└── camera/           # Camera/geometry data
+├── camera/           # Camera/geometry data (.abc, .json)
+└── workflows/        # Project-specific workflows (with absolute paths)
 ```
-
-ComfyUI's output folder is symlinked to the active project.
 
 ## Current State
 
 ### Working
-- `install_vfx_pipeline.sh` - Full installation (ComfyUI + nodes + models + conda env)
-- `ingest.sh` - Movie → project folder + frame extraction
-- `set_project.sh` - Switch between projects
-- `01_analysis.json` - Depth Anything V3 workflow
+- `scripts/run_pipeline.py` - **Main entry point** - automated pipeline runner
+- `scripts/setup_project.py` - Project setup with workflow templating
+- `scripts/export_camera.py` - Camera data → Alembic/JSON export
+- `workflow_templates/01_analysis.json` - Depth Anything V3 + camera estimation
+
+### Needs Testing
 - `02_segmentation.json` - SAM3 video segmentation (text prompt → masks)
-- `03_cleanplate.json` - ProPainter inpainting (needs testing)
+- `03_cleanplate.json` - ProPainter inpainting
 
 ### Known Issues
 - SAM3 text prompts like "person" don't capture carried items (bags, purses) - need multi-prompt approach
@@ -57,8 +76,7 @@ ComfyUI's output folder is symlinked to the active project.
 ### Not Yet Implemented
 - Automated mask combination (when using multi-prompt segmentation)
 - Depth-to-normals conversion for relighting
-- Alembic camera export from DA3 data
-- Batch processing wrapper (multiple shots)
+- Batch processing wrapper (multiple shots in parallel)
 
 ## Design Decisions
 
@@ -66,7 +84,7 @@ ComfyUI's output folder is symlinked to the active project.
 
 2. **1001 frame numbering** - Industry convention. Leaves room for handles/pre-roll.
 
-3. **Project symlinks over path configs** - ComfyUI's SaveImage is path-limited. Symlinking `output/` to the active project is cleaner than fighting the node.
+3. **Templated workflows per project** - Each project gets its own copy of workflow JSONs with absolute paths populated. Avoids symlink management and makes projects self-contained.
 
 4. **Text prompts over manual selection** - For first-pass automation. Manual point-clicking is available but defeats the hands-off goal.
 
