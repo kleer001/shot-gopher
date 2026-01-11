@@ -1,10 +1,10 @@
 # VFX Pipeline
 
-A FOSS automated VFX pipeline built on ComfyUI for first-pass rotoscoping, depth extraction, and clean plate generation.
+A FOSS automated VFX pipeline built on ComfyUI for first-pass rotoscoping, depth extraction, 3D reconstruction, and clean plate generation.
 
 ## Goal
 
-**Hands-off batch processing.** Ingest a movie file, get production-ready outputs (depth maps, segmentation masks, clean plates) with minimal manual intervention. Manual refinement happens downstream in Nuke/Fusion/Houdini—not here.
+**Hands-off batch processing.** Ingest a movie file, get production-ready outputs (depth maps, segmentation masks, clean plates, camera solves, 3D point clouds) with minimal manual intervention. Manual refinement happens downstream in Nuke/Fusion/Houdini—not here.
 
 ## Why This Exists
 
@@ -22,20 +22,26 @@ python scripts/run_pipeline.py /path/to/footage.mp4 --name "My_Shot"
 
 # Or run specific stages
 python scripts/run_pipeline.py footage.mp4 --stages depth,camera
+
+# Run with COLMAP for accurate camera reconstruction + mesh
+python scripts/run_pipeline.py footage.mp4 --stages ingest,colmap,camera --colmap-dense --colmap-mesh
 ```
 
-Requires ComfyUI running: `cd /path/to/ComfyUI && python main.py --listen`
+Requires:
+- ComfyUI running: `cd /path/to/ComfyUI && python main.py --listen`
+- COLMAP (for colmap stage): `sudo apt install colmap` or `conda install -c conda-forge colmap`
 
 ## Architecture
 
 ```
-movie.mp4 → run_pipeline.py → project folder → ComfyUI API → VFX passes
+movie.mp4 → run_pipeline.py → project folder → VFX passes
                    │
                    ├── Extract frames (ffmpeg)
                    ├── Setup project structure
                    ├── Populate workflow templates with project paths
-                   ├── Queue workflows via ComfyUI API
-                   └── Post-process (camera export)
+                   ├── Queue ComfyUI workflows (depth, roto, cleanplate)
+                   ├── COLMAP reconstruction (camera, point cloud, mesh)
+                   └── Export camera to Alembic/JSON
 ```
 
 **Core components:**
@@ -44,6 +50,7 @@ movie.mp4 → run_pipeline.py → project folder → ComfyUI API → VFX passes
 - **Depth Anything V3** - Monocular depth estimation with temporal consistency
 - **ProPainter** - Video inpainting for clean plate generation
 - **VideoHelperSuite** - Frame I/O handling
+- **COLMAP** - Structure-from-Motion for accurate camera reconstruction and 3D geometry
 
 **Project structure** (per-shot):
 ```
@@ -52,7 +59,15 @@ projects/My_Shot_Name/
 ├── depth/            # Depth maps
 ├── roto/             # Segmentation masks
 ├── cleanplate/       # Inpainted plates
-├── camera/           # Camera/geometry data (.abc, .json)
+├── camera/           # Camera/geometry data
+│   ├── extrinsics.json    # Per-frame camera matrices
+│   ├── intrinsics.json    # Camera calibration
+│   ├── camera.abc         # Alembic camera (for Houdini/Nuke/Maya)
+│   ├── pointcloud.ply     # Dense point cloud (if --colmap-dense)
+│   └── mesh.ply           # Scene mesh (if --colmap-mesh)
+├── colmap/           # COLMAP working directory
+│   ├── sparse/       # Sparse reconstruction
+│   └── dense/        # Dense reconstruction (if --colmap-dense)
 └── workflows/        # Project-specific workflows (with absolute paths)
 ```
 
@@ -61,7 +76,8 @@ projects/My_Shot_Name/
 ### Working
 - `scripts/run_pipeline.py` - **Main entry point** - automated pipeline runner
 - `scripts/setup_project.py` - Project setup with workflow templating
-- `scripts/export_camera.py` - Camera data → Alembic/JSON export
+- `scripts/export_camera.py` - Camera data → Alembic/JSON export (supports both DA3 and COLMAP)
+- `scripts/run_colmap.py` - COLMAP SfM/MVS reconstruction wrapper
 - `workflow_templates/01_analysis.json` - Depth Anything V3 + camera estimation
 
 ### Needs Testing
@@ -89,6 +105,56 @@ projects/My_Shot_Name/
 4. **Text prompts over manual selection** - For first-pass automation. Manual point-clicking is available but defeats the hands-off goal.
 
 5. **Separate passes, not monolithic workflow** - Depth, roto, and clean plate as individual workflows. Easier to re-run one stage without redoing everything.
+
+6. **COLMAP for accurate camera, DA3 for fast depth** - Two camera sources serve different needs:
+   - **Depth Anything V3**: Fast monocular depth maps for compositing. Camera estimates are approximate.
+   - **COLMAP**: Accurate Structure-from-Motion camera solves via bundle adjustment. Produces 3D geometry.
+
+## COLMAP Integration
+
+COLMAP provides geometric 3D reconstruction from multiple views, producing:
+- **Sparse reconstruction**: Feature matching + bundle adjustment → accurate camera poses
+- **Dense reconstruction**: Multi-view stereo → dense 3D point cloud
+- **Mesh**: Poisson surface reconstruction from point cloud
+
+### Usage
+
+```bash
+# Basic COLMAP reconstruction (sparse only, fast)
+python scripts/run_pipeline.py footage.mp4 --stages ingest,colmap,camera
+
+# With dense point cloud
+python scripts/run_pipeline.py footage.mp4 --stages ingest,colmap,camera --colmap-dense
+
+# With mesh generation (requires --colmap-dense)
+python scripts/run_pipeline.py footage.mp4 --stages ingest,colmap,camera --colmap-dense --colmap-mesh
+
+# Quality presets: low (fast), medium (default), high (accurate)
+python scripts/run_pipeline.py footage.mp4 --stages colmap --colmap-quality high
+```
+
+### Standalone COLMAP
+
+```bash
+# Run COLMAP directly on an existing project
+python scripts/run_colmap.py /path/to/projects/My_Shot --dense --mesh
+
+# Check if COLMAP is installed
+python scripts/run_colmap.py --check
+```
+
+### COLMAP vs DA3
+
+| Aspect | Depth Anything V3 | COLMAP |
+|--------|-------------------|--------|
+| Camera accuracy | Approximate (monocular) | Geometric (bundle adjustment) |
+| Scale | Relative only | Consistent across scene |
+| Speed | Fast (GPU inference) | Slower (CPU-bound matching) |
+| 3D output | Depth maps only | Point cloud + mesh |
+| Requirements | ComfyUI + model | COLMAP binary |
+| Best for | Compositing depth | Matchmove, 3D reconstruction |
+
+**Recommendation**: Use COLMAP for camera solves if you need accurate matchmove. Use DA3 depth maps for compositing tasks (holdouts, depth-based effects).
 
 ## For the Agent
 

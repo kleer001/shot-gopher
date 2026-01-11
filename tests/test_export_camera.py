@@ -75,7 +75,7 @@ class TestComputeFOV:
 
 
 class TestLoadCameraData:
-    def test_load_valid_data(self):
+    def test_load_valid_data_da3(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             camera_dir = Path(tmpdir)
 
@@ -89,10 +89,39 @@ class TestLoadCameraData:
             with open(camera_dir / "intrinsics.json", "w") as f:
                 json.dump(intrinsics, f)
 
-            loaded_ext, loaded_int = load_camera_data(camera_dir)
+            loaded_ext, loaded_int, source = load_camera_data(camera_dir)
 
             assert len(loaded_ext) == 2
             assert loaded_int["fx"] == 1000
+            assert source == "da3"
+
+    def test_load_valid_data_colmap(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            camera_dir = Path(tmpdir)
+
+            # Create test extrinsics (2 frames, identity matrices)
+            extrinsics = [np.eye(4).tolist(), np.eye(4).tolist()]
+            with open(camera_dir / "extrinsics.json", "w") as f:
+                json.dump(extrinsics, f)
+
+            # Create test intrinsics (COLMAP format with extra fields)
+            intrinsics = {
+                "fx": 1000, "fy": 1000, "cx": 960, "cy": 540,
+                "width": 1920, "height": 1080, "model": "OPENCV"
+            }
+            with open(camera_dir / "intrinsics.json", "w") as f:
+                json.dump(intrinsics, f)
+
+            # Create colmap_raw.json to indicate COLMAP source
+            with open(camera_dir / "colmap_raw.json", "w") as f:
+                json.dump({"source": "colmap"}, f)
+
+            loaded_ext, loaded_int, source = load_camera_data(camera_dir)
+
+            assert len(loaded_ext) == 2
+            assert loaded_int["fx"] == 1000
+            assert loaded_int["model"] == "OPENCV"
+            assert source == "colmap"
 
     def test_missing_file_raises(self):
         with tempfile.TemporaryDirectory() as tmpdir:

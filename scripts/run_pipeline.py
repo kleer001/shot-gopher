@@ -34,6 +34,7 @@ STAGES = {
     "depth": "Run depth analysis (01_analysis.json)",
     "roto": "Run segmentation (02_segmentation.json)",
     "cleanplate": "Run clean plate generation (03_cleanplate.json)",
+    "colmap": "Run COLMAP SfM reconstruction",
     "camera": "Export camera to Alembic",
 }
 
@@ -285,6 +286,47 @@ def run_export_camera(project_dir: Path, fps: float = 24.0) -> bool:
         return False
 
 
+def run_colmap_reconstruction(
+    project_dir: Path,
+    quality: str = "medium",
+    run_dense: bool = False,
+    run_mesh: bool = False
+) -> bool:
+    """Run COLMAP Structure-from-Motion reconstruction.
+
+    Args:
+        project_dir: Project directory containing source/frames/
+        quality: Quality preset ('low', 'medium', 'high')
+        run_dense: Whether to run dense reconstruction
+        run_mesh: Whether to generate mesh
+
+    Returns:
+        True if reconstruction succeeded
+    """
+    script_path = Path(__file__).parent / "run_colmap.py"
+
+    if not script_path.exists():
+        print(f"    Error: run_colmap.py not found", file=sys.stderr)
+        return False
+
+    cmd = [
+        sys.executable, str(script_path),
+        str(project_dir),
+        "--quality", quality,
+    ]
+
+    if run_dense:
+        cmd.append("--dense")
+    if run_mesh:
+        cmd.append("--mesh")
+
+    try:
+        run_command(cmd, "Running COLMAP reconstruction")
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 def setup_project(
     project_dir: Path,
     workflows_dir: Path
@@ -312,7 +354,10 @@ def run_pipeline(
     stages: list[str] = None,
     comfyui_url: str = DEFAULT_COMFYUI_URL,
     fps: Optional[float] = None,
-    skip_existing: bool = False
+    skip_existing: bool = False,
+    colmap_quality: str = "medium",
+    colmap_dense: bool = False,
+    colmap_mesh: bool = False,
 ) -> bool:
     """Run the full VFX pipeline.
 
@@ -324,6 +369,9 @@ def run_pipeline(
         comfyui_url: ComfyUI API URL
         fps: Override frame rate
         skip_existing: Skip stages with existing output
+        colmap_quality: COLMAP quality preset ('low', 'medium', 'high')
+        colmap_dense: Run COLMAP dense reconstruction
+        colmap_mesh: Generate mesh from COLMAP dense reconstruction
 
     Returns:
         True if all stages successful
@@ -415,12 +463,29 @@ def run_pipeline(
                 print("  → Cleanplate stage failed", file=sys.stderr)
                 return False
 
+    # Stage: COLMAP reconstruction
+    if "colmap" in stages:
+        print(f"\n[COLMAP Reconstruction]")
+        colmap_sparse = project_dir / "colmap" / "sparse" / "0"
+        if skip_existing and colmap_sparse.exists():
+            print("  → Skipping (COLMAP sparse model exists)")
+        else:
+            if not run_colmap_reconstruction(
+                project_dir,
+                quality=colmap_quality,
+                run_dense=colmap_dense,
+                run_mesh=colmap_mesh
+            ):
+                print("  → COLMAP reconstruction failed", file=sys.stderr)
+                # Non-fatal for pipeline - continue to camera export
+                # (may use DA3 camera data as fallback)
+
     # Stage: Camera export
     if "camera" in stages:
         print(f"\n[Camera Export]")
         camera_dir = project_dir / "camera"
         if not (camera_dir / "extrinsics.json").exists():
-            print(f"  → Skipping (no camera data from depth stage)")
+            print(f"  → Skipping (no camera data - run depth or colmap stage first)")
         elif skip_existing and (camera_dir / "camera.abc").exists():
             print("  → Skipping (camera.abc exists)")
         else:
@@ -486,6 +551,24 @@ def main():
         help="List available stages and exit"
     )
 
+    # COLMAP options
+    parser.add_argument(
+        "--colmap-quality",
+        choices=["low", "medium", "high"],
+        default="medium",
+        help="COLMAP quality preset (default: medium)"
+    )
+    parser.add_argument(
+        "--colmap-dense",
+        action="store_true",
+        help="Run COLMAP dense reconstruction (slower, produces point cloud)"
+    )
+    parser.add_argument(
+        "--colmap-mesh",
+        action="store_true",
+        help="Generate mesh from COLMAP dense reconstruction (requires --colmap-dense)"
+    )
+
     args = parser.parse_args()
 
     if args.list_stages:
@@ -519,7 +602,10 @@ def main():
         stages=stages,
         comfyui_url=args.comfyui_url,
         fps=args.fps,
-        skip_existing=args.skip_existing
+        skip_existing=args.skip_existing,
+        colmap_quality=args.colmap_quality,
+        colmap_dense=args.colmap_dense,
+        colmap_mesh=args.colmap_mesh,
     )
 
     sys.exit(0 if success else 1)

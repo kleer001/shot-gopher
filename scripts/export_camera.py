@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Export DA3 camera data to Alembic format.
+"""Export camera data to Alembic format.
 
-Converts Depth Anything V3 camera estimates (extrinsics + intrinsics)
-to an Alembic (.abc) camera file for import into Houdini/Nuke/Maya/Blender.
+Converts camera data (from Depth Anything V3 or COLMAP) to an Alembic (.abc)
+camera file for import into Houdini/Nuke/Maya/Blender.
+
+Supports camera data from:
+  - Depth Anything V3 (monocular depth estimation with camera)
+  - COLMAP (Structure-from-Motion reconstruction)
 
 Usage:
     python export_camera.py <project_dir> [--start-frame 1001] [--fps 24]
@@ -26,17 +30,20 @@ except ImportError:
     HAS_ALEMBIC = False
 
 
-def load_camera_data(camera_dir: Path) -> tuple[list[np.ndarray], dict]:
-    """Load extrinsics and intrinsics from DA3 output JSONs.
+def load_camera_data(camera_dir: Path) -> tuple[list[np.ndarray], dict, str]:
+    """Load extrinsics and intrinsics from camera data JSONs.
+
+    Supports both Depth Anything V3 and COLMAP output formats.
 
     Args:
         camera_dir: Path to camera/ directory containing extrinsics.json and intrinsics.json
 
     Returns:
-        Tuple of (list of 4x4 extrinsic matrices, intrinsics dict)
+        Tuple of (list of 4x4 extrinsic matrices, intrinsics dict, source name)
     """
     extrinsics_path = camera_dir / "extrinsics.json"
     intrinsics_path = camera_dir / "intrinsics.json"
+    colmap_raw_path = camera_dir / "colmap_raw.json"
 
     if not extrinsics_path.exists():
         raise FileNotFoundError(f"Extrinsics file not found: {extrinsics_path}")
@@ -49,8 +56,14 @@ def load_camera_data(camera_dir: Path) -> tuple[list[np.ndarray], dict]:
     with open(intrinsics_path) as f:
         intrinsics_data = json.load(f)
 
+    # Detect source: COLMAP creates colmap_raw.json, DA3 does not
+    if colmap_raw_path.exists():
+        source = "colmap"
+    else:
+        source = "da3"
+
     # Parse extrinsics - expected format: list of 4x4 matrices (one per frame)
-    # DA3 may output as nested lists or flat arrays
+    # Both DA3 and COLMAP output as nested lists
     extrinsics = []
     if isinstance(extrinsics_data, list):
         for matrix_data in extrinsics_data:
@@ -64,7 +77,7 @@ def load_camera_data(camera_dir: Path) -> tuple[list[np.ndarray], dict]:
             matrix = np.array(matrix_data).reshape(4, 4)
             extrinsics.append(matrix)
 
-    return extrinsics, intrinsics_data
+    return extrinsics, intrinsics_data, source
 
 
 def matrix_to_alembic_xform(matrix: np.ndarray) -> list[float]:
@@ -331,7 +344,7 @@ def main():
 
     # Load camera data
     try:
-        extrinsics, intrinsics = load_camera_data(camera_dir)
+        extrinsics, intrinsics, source = load_camera_data(camera_dir)
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"Error loading camera data: {e}", file=sys.stderr)
         sys.exit(1)
@@ -340,7 +353,8 @@ def main():
         print("Error: No camera extrinsics found", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Loaded {len(extrinsics)} camera frames")
+    source_name = "COLMAP (SfM)" if source == "colmap" else "Depth Anything V3"
+    print(f"Loaded {len(extrinsics)} camera frames from {source_name}")
 
     # Determine output path
     output_base = args.output or (camera_dir / "camera")
