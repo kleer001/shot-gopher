@@ -291,7 +291,8 @@ def run_colmap_reconstruction(
     project_dir: Path,
     quality: str = "medium",
     run_dense: bool = False,
-    run_mesh: bool = False
+    run_mesh: bool = False,
+    use_masks: bool = True
 ) -> bool:
     """Run COLMAP Structure-from-Motion reconstruction.
 
@@ -300,6 +301,7 @@ def run_colmap_reconstruction(
         quality: Quality preset ('low', 'medium', 'high')
         run_dense: Whether to run dense reconstruction
         run_mesh: Whether to generate mesh
+        use_masks: If True, use segmentation masks from roto/ (if available)
 
     Returns:
         True if reconstruction succeeded
@@ -320,6 +322,8 @@ def run_colmap_reconstruction(
         cmd.append("--dense")
     if run_mesh:
         cmd.append("--mesh")
+    if not use_masks:
+        cmd.append("--no-masks")
 
     try:
         run_command(cmd, "Running COLMAP reconstruction")
@@ -399,6 +403,7 @@ def run_pipeline(
     colmap_quality: str = "medium",
     colmap_dense: bool = False,
     colmap_mesh: bool = False,
+    colmap_use_masks: bool = True,
     gsir_iterations: int = 35000,
     gsir_path: Optional[str] = None,
 ) -> bool:
@@ -415,6 +420,7 @@ def run_pipeline(
         colmap_quality: COLMAP quality preset ('low', 'medium', 'high')
         colmap_dense: Run COLMAP dense reconstruction
         colmap_mesh: Generate mesh from COLMAP dense reconstruction
+        colmap_use_masks: Use segmentation masks for COLMAP (if available)
         gsir_iterations: Total GS-IR training iterations
         gsir_path: Path to GS-IR installation
 
@@ -519,7 +525,8 @@ def run_pipeline(
                 project_dir,
                 quality=colmap_quality,
                 run_dense=colmap_dense,
-                run_mesh=colmap_mesh
+                run_mesh=colmap_mesh,
+                use_masks=colmap_use_masks
             ):
                 print("  → COLMAP reconstruction failed", file=sys.stderr)
                 # Non-fatal for pipeline - continue to camera export
@@ -632,6 +639,11 @@ def main():
         action="store_true",
         help="Generate mesh from COLMAP dense reconstruction (requires --colmap-dense)"
     )
+    parser.add_argument(
+        "--colmap-no-masks",
+        action="store_true",
+        help="Disable automatic use of segmentation masks for COLMAP (default: use masks if available)"
+    )
 
     # GS-IR options
     parser.add_argument(
@@ -684,6 +696,7 @@ def main():
         colmap_quality=args.colmap_quality,
         colmap_dense=args.colmap_dense,
         colmap_mesh=args.colmap_mesh,
+        colmap_use_masks=not args.colmap_no_masks,
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
     )

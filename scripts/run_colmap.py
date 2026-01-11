@@ -109,7 +109,8 @@ def extract_features(
     image_path: Path,
     camera_model: str = "OPENCV",
     max_features: int = 8192,
-    single_camera: bool = True
+    single_camera: bool = True,
+    mask_path: Optional[Path] = None
 ) -> None:
     """Extract SIFT features from images.
 
@@ -119,6 +120,7 @@ def extract_features(
         camera_model: Camera model (OPENCV, PINHOLE, RADIAL, etc.)
         max_features: Maximum features per image
         single_camera: If True, assume all images from same camera
+        mask_path: Optional path to mask directory (excludes masked regions from feature extraction)
     """
     args = {
         "database_path": str(database_path),
@@ -128,6 +130,11 @@ def extract_features(
         "SiftExtraction.max_num_features": max_features,
         "SiftExtraction.use_gpu": 1,
     }
+
+    # Add mask path if provided (excludes dynamic regions from feature extraction)
+    if mask_path and mask_path.exists():
+        args["ImageReader.mask_path"] = str(mask_path)
+        print(f"    Using masks from: {mask_path}")
 
     run_colmap_command("feature_extractor", args, "Extracting features")
 
@@ -562,6 +569,7 @@ def run_colmap_pipeline(
     run_dense: bool = False,
     run_mesh: bool = False,
     camera_model: str = "OPENCV",
+    use_masks: bool = True,
 ) -> bool:
     """Run the complete COLMAP reconstruction pipeline.
 
@@ -571,6 +579,7 @@ def run_colmap_pipeline(
         run_dense: Whether to run dense reconstruction
         run_mesh: Whether to generate mesh (requires dense)
         camera_model: COLMAP camera model to use
+        use_masks: If True, automatically use segmentation masks from roto/ (if available)
 
     Returns:
         True if reconstruction succeeded
@@ -600,6 +609,20 @@ def run_colmap_pipeline(
     print(f"Project: {project_dir}")
     print(f"Frames: {frame_count}")
     print(f"Quality: {quality}")
+
+    # Check for segmentation masks
+    mask_dir = project_dir / "roto"
+    mask_path = None
+    if use_masks and mask_dir.exists():
+        mask_count = len(list(mask_dir.glob("*.png"))) + len(list(mask_dir.glob("*.jpg")))
+        if mask_count > 0:
+            mask_path = mask_dir
+            print(f"Dynamic scene segmentation: Enabled ({mask_count} masks)")
+            print(f"  → Excluding dynamic regions from feature extraction")
+        else:
+            print(f"Dynamic scene segmentation: Disabled (no masks found)")
+    else:
+        print(f"Dynamic scene segmentation: Disabled")
     print()
 
     # Setup paths
@@ -627,6 +650,7 @@ def run_colmap_pipeline(
             camera_model=camera_model,
             max_features=preset["sift_max_features"],
             single_camera=True,
+            mask_path=mask_path,
         )
 
         # Feature matching
@@ -736,6 +760,11 @@ def main():
         help="COLMAP camera model (default: OPENCV)"
     )
     parser.add_argument(
+        "--no-masks",
+        action="store_true",
+        help="Disable automatic use of segmentation masks from roto/ directory"
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Check if COLMAP is available and exit"
@@ -762,6 +791,7 @@ def main():
         run_dense=args.dense,
         run_mesh=args.mesh,
         camera_model=args.camera_model,
+        use_masks=not args.no_masks,
     )
 
     sys.exit(0 if success else 1)
