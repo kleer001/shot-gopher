@@ -119,7 +119,7 @@ def check_gpu_available() -> Tuple[bool, str]:
         if vram_match:
             total_vram = int(vram_match.group(2))
             return True, f"{total_vram}MB total VRAM"
-    except:
+    except (ValueError, AttributeError, ImportError):
         pass
 
     return True, "GPU detected"
@@ -140,7 +140,7 @@ def get_disk_space(path: Path = Path.home()) -> Tuple[float, float]:
         available_gb = stat.free / (1024**3)
         total_gb = stat.total / (1024**3)
         return available_gb, total_gb
-    except:
+    except (OSError, AttributeError):
         return 0.0, 0.0
 
 
@@ -569,7 +569,8 @@ class CheckpointDownloader:
                             pct = (downloaded / total_size) * 100
                             mb_downloaded = downloaded / (1024 * 1024)
                             mb_total = total_size / (1024 * 1024)
-                            print(f"\r  Progress: {pct:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end='', flush=True)
+                            progress_msg = f"\r  Progress: {pct:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)"
+                            print(progress_msg, end='', flush=True)
 
             print()  # New line after progress
             print_success(f"Downloaded {dest.name}")
@@ -670,7 +671,11 @@ class CheckpointDownloader:
 
         return success
 
-    def download_all_checkpoints(self, component_ids: List[str], state_manager: Optional['InstallationStateManager'] = None) -> bool:
+    def download_all_checkpoints(
+        self,
+        component_ids: List[str],
+        state_manager: Optional['InstallationStateManager'] = None
+    ) -> bool:
         """Download checkpoints for multiple components.
 
         Args:
