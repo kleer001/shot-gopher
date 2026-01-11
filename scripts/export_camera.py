@@ -160,7 +160,8 @@ def export_alembic_camera(
     start_frame: int = 1001,
     fps: float = 24.0,
     image_width: int = 1920,
-    image_height: int = 1080
+    image_height: int = 1080,
+    camera_name: str = "camera"
 ) -> None:
     """Export camera animation to Alembic file.
 
@@ -172,6 +173,7 @@ def export_alembic_camera(
         fps: Frames per second
         image_width: Image width for FOV calculation
         image_height: Image height for FOV calculation
+        camera_name: Name for the camera object (e.g., 'colmap_camera', 'da3_camera')
     """
     if not HAS_ALEMBIC:
         raise ImportError(
@@ -192,11 +194,11 @@ def export_alembic_camera(
     ts_index = archive.addTimeSampling(time_sampling)
 
     # Create camera object
-    camera_obj = AbcGeom.OCamera(top, "DA3_Camera", ts_index)
+    camera_obj = AbcGeom.OCamera(top, camera_name, ts_index)
     camera_schema = camera_obj.getSchema()
 
     # Create xform (transform) for the camera
-    xform_obj = AbcGeom.OXform(top, "DA3_Camera_Xform", ts_index)
+    xform_obj = AbcGeom.OXform(top, f"{camera_name}_xform", ts_index)
     xform_schema = xform_obj.getSchema()
 
     # Calculate FOV from intrinsics
@@ -283,7 +285,7 @@ def export_json_camera(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Export DA3 camera data to Alembic format",
+        description="Export camera data to Alembic/JSON format (supports DA3 and COLMAP)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
@@ -354,6 +356,7 @@ def main():
         sys.exit(1)
 
     source_name = "COLMAP (SfM)" if source == "colmap" else "Depth Anything V3"
+    camera_name = "colmap_camera" if source == "colmap" else "da3_camera"
     print(f"Loaded {len(extrinsics)} camera frames from {source_name}")
 
     # Determine output path
@@ -371,7 +374,8 @@ def main():
                     start_frame=args.start_frame,
                     fps=args.fps,
                     image_width=args.width,
-                    image_height=args.height
+                    image_height=args.height,
+                    camera_name=camera_name
                 )
             except Exception as e:
                 print(f"Error exporting Alembic: {e}", file=sys.stderr)
