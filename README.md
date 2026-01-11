@@ -331,6 +331,240 @@ projects/My_Shot/
 - **Large frame counts**: 150+ frames can stall SAM3 propagation. Batch processing or frame range support planned.
 - **Mask combination**: Multiple prompt runs currently write to same output directory. Manual mask merging may be needed for complex scenes.
 
+## Human Motion Capture (Experimental)
+
+**Status:** Experimental - requires additional dependencies (WHAM, TAVA, ECON)
+
+Reconstruct people from video with temporally consistent geometry and textures ready for VFX matchmove.
+
+### What It Produces
+
+```
+mocap/
+├── wham/
+│   └── motion.pkl              # World-grounded skeleton animation
+├── econ/
+│   ├── mesh_0001.obj           # Clothed geometry keyframes
+│   ├── mesh_0025.obj
+│   └── ...
+├── tava/
+│   └── mesh_sequence.pkl       # Consistent topology sequence
+├── obj_sequence/               # Exported mesh per frame
+│   ├── frame_0001.obj          # SMPL-X topology (10,475 verts)
+│   ├── frame_0002.obj          # Same vertex IDs across frames
+│   └── ...
+└── texture.png                 # Canonical UV texture (1024x1024)
+```
+
+**Key features:**
+- **Consistent topology**: Same vertex count/connectivity across all frames (SMPL-X: 10,475 vertices)
+- **Standard UV layout**: SMPL-X UV coordinates - no texture swimming
+- **World-space alignment**: Matches COLMAP camera/scene coordinates
+- **Clothed geometry**: Captures actual clothing, not template body
+
+### Pipeline Stages
+
+```
+Frames → WHAM (motion) → ECON (geometry) → TAVA (tracking) → Textured mesh
+           ↓                  ↓                  ↓
+    World-space         Clothed body      Consistent topology
+    skeleton            keyframes         + UV texture
+```
+
+1. **WHAM**: World-grounded motion tracking
+   - Estimates SMPL-X skeleton animation
+   - Output in world coordinates (aligns with COLMAP)
+   - Includes foot contact detection
+
+2. **ECON**: Clothed body reconstruction
+   - Captures actual clothing geometry (not template)
+   - Runs on keyframes (every 25 frames by default)
+   - Produces high-quality meshes
+
+3. **TAVA**: Temporal tracking
+   - Registers ECON geometry to SMPL-X topology
+   - Tracks consistent vertex IDs through time
+   - Interpolates between keyframes
+
+4. **Texture projection**: Multi-view texturing
+   - Projects camera images to canonical UV space
+   - Weighted by viewing angle + visibility
+   - Temporal consistency filtering
+
+### Usage
+
+**Prerequisites:**
+```bash
+# Check dependencies
+python scripts/run_mocap.py --check
+
+# Install WHAM
+git clone https://github.com/yohanshin/WHAM.git
+cd WHAM && pip install -e .
+# Download WHAM checkpoints from project page
+
+# Install TAVA
+git clone https://github.com/facebookresearch/tava.git
+cd tava && pip install -e .
+
+# Install ECON
+git clone https://github.com/YuliangXiu/ECON.git
+cd ECON && pip install -r requirements.txt
+# Download SMPL-X models + ECON checkpoints
+
+# Core dependencies
+pip install numpy torch smplx trimesh opencv-python pillow
+```
+
+**Basic usage:**
+```bash
+# Full pipeline (requires COLMAP camera data first)
+python scripts/run_pipeline.py footage.mp4 \
+  --stages ingest,roto,colmap,mocap,camera
+
+# Standalone mocap
+python scripts/run_mocap.py /path/to/projects/My_Shot
+
+# Skip texture (faster, mesh only)
+python scripts/run_mocap.py /path/to/projects/My_Shot --skip-texture
+
+# Custom keyframe interval
+python scripts/run_mocap.py /path/to/projects/My_Shot --keyframe-interval 30
+```
+
+**Testing individual stages:**
+```bash
+# Test motion tracking only
+python scripts/run_mocap.py project/ --test-stage motion
+
+# Test ECON reconstruction
+python scripts/run_mocap.py project/ --test-stage econ
+
+# Test TAVA tracking
+python scripts/run_mocap.py project/ --test-stage tava
+
+# Test texture projection
+python scripts/run_mocap.py project/ --test-stage texture
+```
+
+### Integration with VFX Tools
+
+**Import to Maya/Houdini/Blender:**
+```python
+# Load OBJ sequence
+obj_dir = "mocap/obj_sequence/"
+frames = sorted(glob("frame_*.obj"))
+
+# All frames have:
+# - Same vertex count (10,475)
+# - Same connectivity (no topology changes)
+# - SMPL-X UV coordinates
+
+# Load texture
+texture = "mocap/texture.png"
+# Apply to mesh with SMPL-X UV layout
+```
+
+**Nuke compositing:**
+```python
+# Load mesh sequence + camera
+ReadGeo {
+  file "mocap/obj_sequence/frame_####.obj"
+}
+Camera {
+  file "camera/camera.abc"
+}
+
+# Both in world space - already aligned!
+```
+
+### Output Format
+
+**Mesh sequence:**
+- Format: OBJ per frame (Alembic export planned)
+- Topology: SMPL-X (10,475 vertices, standard connectivity)
+- UVs: SMPL-X layout (consistent across frames)
+- Scale: Meters (world-space aligned with COLMAP)
+
+**Texture:**
+- Resolution: 1024x1024 (configurable)
+- Format: PNG, RGB
+- UV layout: SMPL-X canonical space
+- Source: Aggregated from all camera views
+
+### Known Limitations
+
+- **Experimental**: Requires installing multiple research codebases
+- **GPU intensive**: Needs 12GB+ VRAM for ECON/WHAM
+- **Slow**: Full pipeline can take hours (TAVA training is bottleneck)
+- **Single person**: Multi-person support requires per-person segmentation
+- **Clothing detail**: Quality depends on ECON keyframe density
+- **Occlusions**: Heavy occlusions may cause tracking drift
+
+### Validation & Testing
+
+**Check motion quality:**
+```bash
+# Visualize WHAM skeleton
+python -c "
+import pickle
+with open('mocap/wham/motion.pkl', 'rb') as f:
+    data = pickle.load(f)
+print('Frames:', len(data['poses']))
+print('Root trajectory:', data['trans'])
+"
+```
+
+**Check mesh consistency:**
+```bash
+# Verify vertex count is consistent
+for obj in mocap/obj_sequence/*.obj; do
+    echo "$obj: $(grep -c '^v ' $obj) vertices"
+done
+# Should all print same number (10,475 for SMPL-X)
+```
+
+**Check texture coverage:**
+```bash
+# View texture
+display mocap/texture.png  # ImageMagick
+# Check for unfilled regions (black areas)
+```
+
+### Best Practices
+
+1. **Run COLMAP first** - Mocap needs world-space camera data
+2. **Use segmentation masks** - Helps WHAM focus on person
+3. **Adjust keyframe interval** - More keyframes = better detail, slower processing
+4. **Test stages independently** - Use `--test-stage` to debug failures
+5. **Validate topology** - Check vertex counts match before importing to DCC
+6. **Check scale** - SMPL-X is in meters, verify it matches your scene
+
+### Troubleshooting
+
+**"WHAM not available":**
+```bash
+python scripts/run_mocap.py --check
+# Follow installation instructions printed
+```
+
+**"Motion file not found":**
+```bash
+# Run motion stage first
+python scripts/run_mocap.py project/ --test-stage motion
+```
+
+**"Camera data required":**
+```bash
+# Run COLMAP before mocap
+python scripts/run_pipeline.py footage.mp4 --stages colmap
+```
+
+**Mesh quality issues:**
+- Increase `--keyframe-interval` (e.g., 15 instead of 25)
+- Check person is clearly visible in frames
+- Verify segmentation masks are accurate
+
 ## For the Agent
 
 When continuing development:

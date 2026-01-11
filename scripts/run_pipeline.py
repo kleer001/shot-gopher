@@ -35,6 +35,7 @@ STAGES = {
     "roto": "Run segmentation (02_segmentation.json)",
     "cleanplate": "Run clean plate generation (03_cleanplate.json)",
     "colmap": "Run COLMAP SfM reconstruction",
+    "mocap": "Run human motion capture (WHAM + TAVA)",
     "gsir": "Run GS-IR material decomposition",
     "camera": "Export camera to Alembic",
 }
@@ -332,6 +333,46 @@ def run_colmap_reconstruction(
         return False
 
 
+def run_mocap(
+    project_dir: Path,
+    skip_texture: bool = False,
+    keyframe_interval: int = 25,
+    fps: float = 24.0
+) -> bool:
+    """Run human motion capture with WHAM + TAVA.
+
+    Args:
+        project_dir: Project directory with frames and camera data
+        skip_texture: Skip texture projection (faster)
+        keyframe_interval: ECON keyframe interval
+        fps: Frame rate for export
+
+    Returns:
+        True if mocap succeeded
+    """
+    script_path = Path(__file__).parent / "run_mocap.py"
+
+    if not script_path.exists():
+        print(f"    Error: run_mocap.py not found", file=sys.stderr)
+        return False
+
+    cmd = [
+        sys.executable, str(script_path),
+        str(project_dir),
+        "--keyframe-interval", str(keyframe_interval),
+        "--fps", str(fps),
+    ]
+
+    if skip_texture:
+        cmd.append("--skip-texture")
+
+    try:
+        run_command(cmd, "Running motion capture")
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 def run_gsir_materials(
     project_dir: Path,
     iterations_stage1: int = 30000,
@@ -531,6 +572,25 @@ def run_pipeline(
                 print("  → COLMAP reconstruction failed", file=sys.stderr)
                 # Non-fatal for pipeline - continue to camera export
                 # (may use DA3 camera data as fallback)
+
+    # Stage: Motion capture
+    if "mocap" in stages:
+        print(f"\n[Motion Capture]")
+        mocap_output = project_dir / "mocap" / "tava" / "mesh_sequence.pkl"
+        camera_dir = project_dir / "camera"
+        if not camera_dir.exists() or not (camera_dir / "extrinsics.json").exists():
+            print("  → Skipping (camera data required - run colmap stage first)")
+        elif skip_existing and mocap_output.exists():
+            print("  → Skipping (mocap data exists)")
+        else:
+            if not run_mocap(
+                project_dir,
+                skip_texture=False,  # Could add as pipeline option
+                keyframe_interval=25,
+                fps=fps
+            ):
+                print("  → Motion capture failed", file=sys.stderr)
+                # Non-fatal - continue to other stages
 
     # Stage: GS-IR material decomposition
     if "gsir" in stages:
