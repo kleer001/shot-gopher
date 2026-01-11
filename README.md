@@ -30,6 +30,7 @@ python scripts/run_pipeline.py footage.mp4 --stages ingest,colmap,camera --colma
 Requires:
 - ComfyUI running: `cd /path/to/ComfyUI && python main.py --listen`
 - COLMAP (for colmap stage): `sudo apt install colmap` or `conda install -c conda-forge colmap`
+- GS-IR (for gsir stage): https://github.com/lzhnb/GS-IR
 
 ## Architecture
 
@@ -64,7 +65,9 @@ projects/My_Shot_Name/
 │   ├── intrinsics.json    # Camera calibration
 │   ├── camera.abc         # Alembic camera (for Houdini/Nuke/Maya)
 │   ├── pointcloud.ply     # Dense point cloud (if --colmap-dense)
-│   └── mesh.ply           # Scene mesh (if --colmap-mesh)
+│   ├── mesh.ply           # Scene mesh (if --colmap-mesh)
+│   ├── materials/         # PBR material maps (if gsir stage run)
+│   └── normals/           # Normal maps (if gsir stage run)
 ├── colmap/           # COLMAP working directory
 │   ├── sparse/       # Sparse reconstruction
 │   └── dense/        # Dense reconstruction (if --colmap-dense)
@@ -78,6 +81,7 @@ projects/My_Shot_Name/
 - `scripts/setup_project.py` - Project setup with workflow templating
 - `scripts/export_camera.py` - Camera data → Alembic/JSON export (supports both DA3 and COLMAP)
 - `scripts/run_colmap.py` - COLMAP SfM/MVS reconstruction wrapper
+- `scripts/run_gsir.py` - GS-IR material decomposition wrapper
 - `workflow_templates/01_analysis.json` - Depth Anything V3 + camera estimation
 
 ### Needs Testing
@@ -155,6 +159,61 @@ python scripts/run_colmap.py --check
 | Best for | Compositing depth | Matchmove, 3D reconstruction |
 
 **Recommendation**: Use COLMAP for camera solves if you need accurate matchmove. Use DA3 depth maps for compositing tasks (holdouts, depth-based effects).
+
+## GS-IR Integration (Material Decomposition)
+
+GS-IR (Gaussian Splatting for Inverse Rendering) extracts PBR material properties from multi-view images:
+- **Albedo maps** — Diffuse color without lighting
+- **Roughness maps** — Surface roughness for specular
+- **Metallic maps** — Metallic vs dielectric
+- **Normal maps** — Surface orientation
+- **Environment lighting** — Estimated HDR environment
+
+### Prerequisites
+
+1. Install GS-IR from https://github.com/lzhnb/GS-IR
+2. Run COLMAP first (GS-IR needs camera poses)
+3. CUDA GPU with 12GB+ VRAM
+
+### Usage
+
+```bash
+# Full pipeline: ingest → COLMAP → GS-IR → camera export
+python scripts/run_pipeline.py footage.mp4 --stages ingest,colmap,gsir,camera
+
+# With custom iterations (longer = better quality)
+python scripts/run_pipeline.py footage.mp4 --stages colmap,gsir --gsir-iterations 50000
+
+# Standalone on existing project
+python scripts/run_gsir.py /path/to/projects/My_Shot
+
+# Check if GS-IR is installed
+python scripts/run_gsir.py --check
+```
+
+### Output Structure
+
+```
+camera/
+├── materials/           # PBR material maps per frame
+│   ├── 00000_brdf.png   # Combined: albedo | roughness | metallic
+│   ├── 00000_albedo.png # Extracted albedo
+│   └── ...
+├── normals/             # Normal maps per frame
+├── depth_gsir/          # Depth maps from GS-IR
+├── environment.png      # Estimated environment lighting
+└── gsir_metadata.json   # Export metadata
+```
+
+### Pipeline Flow
+
+```
+Frames → COLMAP (cameras) → GS-IR (materials) → VFX-ready outputs
+              ↓                    ↓
+         camera.abc          albedo/roughness/normal maps
+```
+
+**Note**: GS-IR training takes 1-3 hours depending on scene complexity and iteration count. The default 35,000 iterations balances quality and time.
 
 ## For the Agent
 
