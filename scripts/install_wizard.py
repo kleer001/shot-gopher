@@ -699,8 +699,9 @@ class CheckpointDownloader:
 class InstallationValidator:
     """Validates installation with smoke tests."""
 
-    def __init__(self, conda_manager: 'CondaEnvironmentManager'):
+    def __init__(self, conda_manager: 'CondaEnvironmentManager', install_dir: Optional[Path] = None):
         self.conda_manager = conda_manager
+        self.install_dir = install_dir
 
     def validate_python_imports(self) -> Dict[str, bool]:
         """Test importing key Python packages.
@@ -767,7 +768,10 @@ class InstallationValidator:
         Returns:
             Dict mapping component to checkpoint status
         """
-        base_dir = base_dir or Path.home() / ".vfx_pipeline"
+        base_dir = base_dir or self.install_dir
+        if not base_dir:
+            return {}
+
         results = {}
 
         checkpoints = {
@@ -1070,11 +1074,15 @@ class InstallationWizard:
 
     def __init__(self):
         self.components = {}
+        # Get repository root (parent of scripts directory)
+        self.repo_root = Path(__file__).parent.parent.resolve()
+        self.install_dir = self.repo_root / ".vfx_pipeline"
+
         self.conda_manager = CondaEnvironmentManager()
-        self.state_manager = InstallationStateManager()
-        self.checkpoint_downloader = CheckpointDownloader()
-        self.validator = InstallationValidator(self.conda_manager)
-        self.config_generator = ConfigurationGenerator(self.conda_manager)
+        self.state_manager = InstallationStateManager(self.install_dir / "install_state.json")
+        self.checkpoint_downloader = CheckpointDownloader(self.install_dir)
+        self.validator = InstallationValidator(self.conda_manager, self.install_dir)
+        self.config_generator = ConfigurationGenerator(self.conda_manager, self.install_dir)
         self.setup_components()
 
     def setup_components(self):
@@ -1126,7 +1134,7 @@ class InstallationWizard:
                 GitRepoInstaller(
                     'WHAM',
                     'https://github.com/yohanshin/WHAM.git',
-                    Path.home() / ".vfx_pipeline" / "WHAM",
+                    self.install_dir / "WHAM",
                     size_gb=3.0  # Code + checkpoints
                 )
             ]
@@ -1140,7 +1148,7 @@ class InstallationWizard:
                 GitRepoInstaller(
                     'TAVA',
                     'https://github.com/facebookresearch/tava.git',
-                    Path.home() / ".vfx_pipeline" / "tava",
+                    self.install_dir / "tava",
                     size_gb=2.0  # Code + checkpoints
                 )
             ]
@@ -1154,14 +1162,14 @@ class InstallationWizard:
                 GitRepoInstaller(
                     'ECON',
                     'https://github.com/YuliangXiu/ECON.git',
-                    Path.home() / ".vfx_pipeline" / "ECON",
+                    self.install_dir / "ECON",
                     size_gb=6.0  # Code + dependencies + checkpoints + models
                 )
             ]
         }
 
         # ComfyUI and custom nodes
-        comfyui_dir = Path.home() / ".vfx_pipeline" / "ComfyUI"
+        comfyui_dir = self.install_dir / "ComfyUI"
         self.components['comfyui'] = {
             'name': 'ComfyUI',
             'required': False,
@@ -1581,7 +1589,7 @@ class InstallationWizard:
 
         # ComfyUI
         if status.get('comfyui', False):
-            comfyui_path = Path.home() / ".vfx_pipeline" / "ComfyUI"
+            comfyui_path = self.install_dir / "ComfyUI"
             print("\n🎨 ComfyUI:")
             print(f"  ✓ Installed at {comfyui_path}")
             print("  ✓ Custom nodes installed")

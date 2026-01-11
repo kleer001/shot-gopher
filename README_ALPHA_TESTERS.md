@@ -51,7 +51,7 @@ https://github.com/YuliangXiu/ECON/releases/download/v1.0/econ_model.tar
 **If downloads fail:**
 1. Visit the project GitHub pages (URLs shown in error messages)
 2. Download checkpoints manually
-3. Place in `~/.vfx_pipeline/{WHAM,tava,ECON}/checkpoints/`
+3. Place in `<repo>/.vfx_pipeline/{WHAM,tava,ECON}/checkpoints/`
 4. Or update URLs in `scripts/install_wizard.py` (lines 487, 500, 513)
 
 ### 2. Motion Capture Integration
@@ -172,7 +172,7 @@ The wizard will:
 ```bash
 conda activate vfx-pipeline
 # Or use generated script
-source ~/.vfx_pipeline/activate.sh
+source .vfx_pipeline/activate.sh
 ```
 
 #### 5. Test Pipeline
@@ -327,7 +327,7 @@ Based on your feedback, we'll:
 **Before asking:**
 1. Check `TESTING.md` for component-specific testing
 2. Run `--validate` to see what's broken
-3. Check logs in `~/.vfx_pipeline/install_state.json`
+3. Check logs in `<repo>/.vfx_pipeline/install_state.json`
 
 **Still stuck?**
 Ask! Include the info from "How to Report Issues" above.
@@ -363,7 +363,7 @@ python scripts/run_mocap.py <proj> --test-stage motion  # Test WHAM only
 
 # Activation
 conda activate vfx-pipeline                         # Activate environment
-source ~/.vfx_pipeline/activate.sh                  # Use generated script
+source .vfx_pipeline/activate.sh                  # Use generated script
 ```
 
 ---
