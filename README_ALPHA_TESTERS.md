@@ -175,7 +175,25 @@ conda activate vfx-pipeline
 source .vfx_pipeline/activate.sh
 ```
 
-#### 5. Test Pipeline
+#### 5. Verify Installation Health
+
+Use the janitor tool to check everything is working:
+
+```bash
+# Quick health check
+python scripts/janitor.py -H
+
+# Detailed status report
+python scripts/janitor.py -R
+```
+
+This will verify:
+- Conda environment exists
+- Git repositories are clean
+- Checkpoints downloaded correctly
+- All components pass validation tests
+
+#### 6. Test Pipeline
 ```bash
 # Create test project
 python scripts/run_pipeline.py init test_project
@@ -185,6 +203,54 @@ python scripts/run_pipeline.py ingest test_project /path/to/video.mp4
 
 # Check what stages are available
 python scripts/run_pipeline.py run test_project --help
+```
+
+---
+
+## Maintenance During Testing
+
+### Keep Installation Healthy
+
+```bash
+# Daily health check (5 seconds)
+python scripts/janitor.py -H
+
+# Update components
+python scripts/janitor.py -u -y
+
+# Clean temporary files
+python scripts/janitor.py -c
+
+# Full maintenance
+python scripts/janitor.py -a
+```
+
+### Troubleshooting with Janitor
+
+**If something isn't working:**
+
+```bash
+# 1. Check health
+python scripts/janitor.py -H
+
+# 2. Try repairs
+python scripts/janitor.py -r -y
+
+# 3. Verify fix worked
+python scripts/janitor.py -H
+```
+
+**If checkpoints are missing:**
+
+```bash
+# Re-download all checkpoints
+python scripts/janitor.py -r
+```
+
+**Check disk usage:**
+
+```bash
+python scripts/janitor.py -R | grep -A 20 "Disk Usage"
 ```
 
 ---
