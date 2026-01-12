@@ -8,7 +8,7 @@ A FOSS automated VFX pipeline built on ComfyUI for first-pass rotoscoping, depth
 
 ## Why This Exists
 
-Traditional VFX prep work (roto, depth, clean plates) is tedious. Modern ML models (SAM3, Depth Anything V3, ProPainter) can automate 80% of it. This pipeline stitches them together into a single workflow that:
+Traditional VFX prep work (roto, depth, clean plates) is tedious. Modern ML models (SAM2, Depth Anything V3, ProPainter) can automate 80% of it. This pipeline stitches them together into a single workflow that:
 
 - Takes raw footage in
 - Outputs VFX-ready passes out
@@ -134,7 +134,7 @@ movie.mp4 → run_pipeline.py → project folder → VFX passes
 
 **Core components:**
 - **ComfyUI** - Node-based workflow engine (not for image generation here—just ML inference)
-- **SAM3** - Segment Anything Model 3 for text-prompted rotoscoping
+- **SAM2** - Segment Anything Model 2 for text-prompted rotoscoping
 - **Depth Anything V3** - Monocular depth estimation with temporal consistency
 - **ProPainter** - Video inpainting for clean plate generation
 - **VideoHelperSuite** - Frame I/O handling
@@ -169,15 +169,15 @@ projects/My_Shot_Name/
 - `scripts/export_camera.py` - Camera data → Alembic/JSON export (supports both DA3 and COLMAP)
 - `scripts/run_colmap.py` - COLMAP SfM/MVS reconstruction wrapper with mask support
 - `scripts/run_gsir.py` - GS-IR material decomposition wrapper
-- `scripts/run_segmentation.py` - Standalone SAM3 segmentation runner with multi-prompt support
+- `scripts/run_segmentation.py` - Standalone SAM2 segmentation runner with multi-prompt support
 - `workflow_templates/01_analysis.json` - Depth Anything V3 + camera estimation
-- `workflow_templates/02_segmentation.json` - SAM3 video segmentation (text prompt → masks)
+- `workflow_templates/02_segmentation.json` - SAM2 video segmentation (text prompt → masks)
 - `workflow_templates/03_cleanplate.json` - ProPainter inpainting
 
 ### Known Issues
-- SAM3 text prompts like "person" don't capture carried items (bags, purses) - use `run_segmentation.py --prompts` for multi-prompt
+- SAM2 text prompts like "person" don't capture carried items (bags, purses) - use `run_segmentation.py --prompts` for multi-prompt
 - Frame numbering in ComfyUI SaveImage doesn't support custom start numbers (1001+) - outputs need post-rename or custom node
-- Large frame counts (150+) can stall SAM3 propagation - need batching strategy
+- Large frame counts (150+) can stall SAM2 propagation - need batching strategy
 
 ### Not Yet Implemented
 - Automated mask combination (when using multi-prompt segmentation)
@@ -311,7 +311,7 @@ For footage with moving subjects (people, vehicles, etc.), the pipeline supports
 ### How It Works
 
 ```
-Frames → SAM3 Segmentation → Masks → COLMAP (masked) → Static reconstruction
+Frames → SAM2 Segmentation → Masks → COLMAP (masked) → Static reconstruction
                   ↓
               Clean plates (ProPainter inpainting)
 ```
@@ -350,7 +350,7 @@ python scripts/run_segmentation.py /path/to/projects/My_Shot --prompt "car"
 
 ### Workflow Stages
 
-1. **Segmentation (roto)**: SAM3 video segmentation
+1. **Segmentation (roto)**: SAM2 video segmentation
    - Text-prompted object detection
    - Temporal propagation across frames
    - Output: Binary masks in `roto/`
@@ -377,7 +377,7 @@ python scripts/run_segmentation.py project/ --prompts "person,bag,phone,cup"
 python scripts/run_segmentation.py project/ --prompts "person,car,bicycle"
 ```
 
-**Note**: Multiple prompts run sequentially and combine masks. For complex scenes with 150+ frames, consider batching or using frame ranges to avoid SAM3 propagation stalls.
+**Note**: Multiple prompts run sequentially and combine masks. For complex scenes with 150+ frames, consider batching or using frame ranges to avoid SAM2 propagation stalls.
 
 ### Pipeline Integration
 
@@ -414,8 +414,8 @@ projects/My_Shot/
 
 ### Known Limitations
 
-- **Text prompt specificity**: SAM3's "person" prompt doesn't capture carried items (bags, purses). Use multi-prompt for complete coverage.
-- **Large frame counts**: 150+ frames can stall SAM3 propagation. Batch processing or frame range support planned.
+- **Text prompt specificity**: SAM2's "person" prompt doesn't capture carried items (bags, purses). Use multi-prompt for complete coverage.
+- **Large frame counts**: 150+ frames can stall SAM2 propagation. Batch processing or frame range support planned.
 - **Mask combination**: Multiple prompt runs currently write to same output directory. Manual mask merging may be needed for complex scenes.
 
 ## Human Motion Capture (Experimental)
