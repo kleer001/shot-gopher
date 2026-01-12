@@ -687,23 +687,33 @@ cd .. && python main.py --listen
 
 ### SMPL-X and ECON Model Access (Required for Motion Capture)
 
-**Models can be downloaded automatically, but require TWO separate registrations:**
+**Models can be downloaded automatically, but require TWO separate registrations.**
+
+#### What Each Component Provides
+
+**SMPL-X** (Skinned Multi-Person Linear model, eXpressive):
+- Parametric body model defining skeleton, mesh topology, and UV layout
+- The "rigged character" - a deformable human mesh with consistent vertex ordering
+- Provides the underlying body structure that can be posed and animated
+
+**ECON** (Explicit Clothed humans Obtained from Normals):
+- Clothed human reconstruction from monocular video
+- Creates detailed 3D meshes including clothing geometry from video frames
+- Uses SMPL-X as the body prior to ensure consistent topology
 
 #### Registration Sites
 
-You need to register at **both** websites (use the same email/password for convenience):
+| Site | URL | Purpose |
+|------|-----|---------|
+| SMPL-X | https://smpl-x.is.tue.mpg.de/ | Parametric body model (skeleton + mesh) |
+| ICON/ECON | https://icon.is.tue.mpg.de/ | Clothed reconstruction checkpoints |
 
-| Site | URL | Required For |
-|------|-----|--------------|
-| SMPL-X | https://smpl-x.is.tue.mpg.de/ | Body model topology and UV mapping |
-| ICON/ECON | https://icon.is.tue.mpg.de/ | Clothed human reconstruction |
-
-**Note**: These are separate registrations! Both require approval (usually 24-48 hours each).
+**Note**: These are **separate registrations**. Both require approval (usually 24-48 hours each).
 
 #### Setup Steps
 
-1. Register at https://smpl-x.is.tue.mpg.de/ (for SMPL-X body models)
-2. Register at https://icon.is.tue.mpg.de/ (for ECON checkpoints) - **separate registration!**
+1. Register at https://smpl-x.is.tue.mpg.de/
+2. Register at https://icon.is.tue.mpg.de/ (separate registration)
 3. Wait for approval emails from both sites
 4. Create `SMPL.login.dat` in repository root:
    ```

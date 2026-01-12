@@ -47,16 +47,19 @@ Required for: Video segmentation (SAM2)
 
 ### SMPL-X and ICON/ECON Credentials
 
-Required for: Motion capture (WHAM, ECON)
+Required for: Motion capture pipeline
 
 **IMPORTANT: Register at BOTH websites separately!**
 
-| Site | URL | Models |
-|------|-----|--------|
-| SMPL-X | https://smpl-x.is.tue.mpg.de/ | Body topology/UV |
-| ICON | https://icon.is.tue.mpg.de/ | ECON checkpoints |
+| Site | URL | Purpose |
+|------|-----|---------|
+| SMPL-X | https://smpl-x.is.tue.mpg.de/ | Parametric body model (skeleton, mesh topology, UVs) |
+| ICON | https://icon.is.tue.mpg.de/ | ECON clothed human reconstruction checkpoints |
 
-Use the same email/password for both registrations. Save to `SMPL.login.dat`:
+**SMPL-X** provides the deformable body mesh that gets animated.
+**ECON** reconstructs clothed humans from video using SMPL-X as the body prior.
+
+Save credentials to `SMPL.login.dat`:
 
 ```
 your.email@example.com

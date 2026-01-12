@@ -1,15 +1,22 @@
 # SMPL-X / ICON Login Credentials Template
 #
-# These credentials are used to download:
-#   - SMPL-X body models (from smpl-x.is.tue.mpg.de)
-#   - ECON checkpoints (from icon.is.tue.mpg.de)
+# These credentials are used to download models for the motion capture pipeline:
+#
+#   SMPL-X (smpl-x.is.tue.mpg.de):
+#     Parametric body model that defines skeleton, mesh topology, and UV layout.
+#     This is the "rigged character" - a deformable human mesh with consistent
+#     vertex ordering that can be posed and animated.
+#
+#   ECON (icon.is.tue.mpg.de):
+#     Clothed human reconstruction system. Takes video frames and reconstructs
+#     a detailed 3D mesh with clothing geometry, using SMPL-X as the underlying
+#     body prior to ensure consistent topology.
 #
 # IMPORTANT: You must register at BOTH websites separately!
 #
 # Registration Steps:
 # 1. Register at https://smpl-x.is.tue.mpg.de/ (for SMPL-X body models)
 # 2. Register at https://icon.is.tue.mpg.de/ (for ECON checkpoints)
-#    TIP: Use the SAME email and password for both registrations
 # 3. Wait for approval emails (usually 24-48 hours for each)
 # 4. Copy this file to SMPL.login.dat (remove .template)
 # 5. Replace the lines below with your credentials

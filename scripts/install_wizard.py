@@ -2339,20 +2339,25 @@ class InstallationWizard:
         # SMPL-X / ICON credentials setup
         if not smpl_exists:
             print(f"\n{Colors.BOLD}SMPL-X / ICON Credentials Setup{Colors.ENDC}")
-            print("Required for: Motion capture (WHAM, ECON, SMPL-X body models)")
+            print("Required for: Motion capture pipeline")
             print("")
             print(f"{Colors.WARNING}IMPORTANT: You need to register at TWO separate websites!{Colors.ENDC}")
             print("")
-            print("Registration sites (same credentials work for both after registering):")
-            print("  1. SMPL-X models:    https://smpl-x.is.tue.mpg.de/")
-            print("  2. ECON checkpoints: https://icon.is.tue.mpg.de/")
+            print("What each provides:")
+            print("  SMPL-X: Parametric body model - defines the skeleton, mesh topology,")
+            print("          and UV layout. This is the 'rigged character' that gets animated.")
+            print("")
+            print("  ECON:   Clothed human reconstruction - takes video frames and creates")
+            print("          a detailed 3D mesh with clothing, using SMPL-X as the body prior.")
+            print("")
+            print("Registration sites:")
+            print("  1. SMPL-X: https://smpl-x.is.tue.mpg.de/")
+            print("  2. ECON:   https://icon.is.tue.mpg.de/")
             print("")
             print("Steps:")
-            print("  1. Register at https://smpl-x.is.tue.mpg.de/ (for SMPL-X body models)")
-            print("  2. Register at https://icon.is.tue.mpg.de/ (for ECON checkpoints)")
-            print("     NOTE: Use the SAME email/password for both registrations")
-            print("  3. Wait for approval emails (usually within 24-48 hours)")
-            print("  4. Once approved, enter your credentials below")
+            print("  1. Register at both websites (separate accounts)")
+            print("  2. Wait for approval emails (usually within 24-48 hours each)")
+            print("  3. Once approved, enter your credentials below")
             print("")
 
             if ask_yes_no("Set up SMPL-X/ICON credentials now?", default=True):
@@ -2366,7 +2371,6 @@ class InstallationWizard:
                         # Set restrictive permissions
                         smpl_creds_file.chmod(0o600)
                         print_success(f"Credentials saved to {smpl_creds_file}")
-                        print_info("These credentials work for both SMPL-X and ICON downloads")
                     else:
                         print_info("Skipped - you can add SMPL.login.dat later")
                 else:

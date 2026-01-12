@@ -38,7 +38,7 @@ The installation wizard (`scripts/install_wizard.py`) is **production-quality**:
 The wizard downloads checkpoints from:
 
 - **WHAM**: Google Drive (uses `gdown` library)
-- **ECON**: icon.is.tue.mpg.de (requires same credentials as SMPL-X)
+- **ECON**: icon.is.tue.mpg.de (requires separate registration from SMPL-X)
 
 **If downloads fail:**
 1. Visit the project GitHub pages (URLs shown in error messages)
@@ -88,24 +88,37 @@ SAM2 (Segment Anything Model 2) requires accepting the license on HuggingFace:
 
 **IMPORTANT: You need to register at TWO separate websites!**
 
-Both sites use the same credential format, so use the same email/password for both:
+#### What Each Component Provides
 
-1. **SMPL-X models**: Register at https://smpl-x.is.tue.mpg.de/
-   - Required for: Body model topology and UV mapping
+**SMPL-X** (Skinned Multi-Person Linear model, eXpressive):
+- Parametric body model that defines skeleton, mesh topology, and UV layout
+- The "rigged character" - a deformable human mesh with consistent vertex ordering
+- Provides the underlying body structure that can be posed and animated
+- Includes face and hand articulation
 
-2. **ECON checkpoints**: Register at https://icon.is.tue.mpg.de/
-   - Required for: Clothed human reconstruction
-   - NOTE: This is a SEPARATE registration from SMPL-X!
+**ECON** (Explicit Clothed humans Obtained from Normals):
+- Clothed human reconstruction from monocular video
+- Takes video frames and creates a detailed 3D mesh including clothing geometry
+- Uses SMPL-X as the body prior to ensure consistent topology under the clothes
+- Outputs meshes that match SMPL-X vertex ordering for animation compatibility
 
-3. Wait for approval emails (usually 24-48 hours for each site)
+#### Registration Sites
 
-4. Create `SMPL.login.dat` in repository root:
+1. **SMPL-X**: https://smpl-x.is.tue.mpg.de/
+2. **ECON**: https://icon.is.tue.mpg.de/
+
+These are **separate registrations** - you need accounts on both sites.
+
+#### Setup Steps
+
+1. Register at both websites
+2. Wait for approval emails (usually 24-48 hours for each site)
+3. Create `SMPL.login.dat` in repository root:
    ```
    your.email@example.com
    your_password_here
    ```
-
-5. Run wizard - models download automatically to `.vfx_pipeline/smplx_models/` and `.vfx_pipeline/ECON/data/`
+4. Run wizard - models download automatically to `.vfx_pipeline/smplx_models/` and `.vfx_pipeline/ECON/data/`
 
 **Template file**: Copy `SMPL.login.dat.template` and fill in credentials.
 
