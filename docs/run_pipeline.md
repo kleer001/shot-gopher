@@ -196,7 +196,7 @@ Generates depth maps using Depth-Anything-V3.
 
 **Requirements**:
 - ComfyUI server running
-- Depth-Anything-V3 custom node installed
+- DepthAnythingV3 custom node installed
 
 **Workflow**: `01_analysis.json`
 

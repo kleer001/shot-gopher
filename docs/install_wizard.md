@@ -140,7 +140,7 @@ What would you like to install?
 **Option 2** adds:
 - ComfyUI
 - VideoHelperSuite custom node
-- Depth-Anything-V3 custom node
+- DepthAnythingV3 custom node
 - SAM2 custom node
 
 **Option 3** adds:
@@ -166,7 +166,7 @@ Choose individual components:
 [ComfyUI]
   [ ] ComfyUI base
   [ ] VideoHelperSuite
-  [ ] Depth-Anything-V3
+  [ ] DepthAnythingV3
   [ ] SAM2
 
 [Motion Capture]

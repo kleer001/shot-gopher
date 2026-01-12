@@ -1521,9 +1521,9 @@ class InstallationWizard:
                     size_gb=0.1
                 ),
                 GitRepoInstaller(
-                    'ComfyUI-Depth-Anything-V3',
-                    'https://github.com/neverbiasu/ComfyUI-Depth-Anything-V3.git',
-                    comfyui_dir / "custom_nodes" / "ComfyUI-Depth-Anything-V3",
+                    'ComfyUI-DepthAnythingV3',
+                    'https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3.git',
+                    comfyui_dir / "custom_nodes" / "ComfyUI-DepthAnythingV3",
                     size_gb=0.5
                 ),
                 GitRepoInstaller(
