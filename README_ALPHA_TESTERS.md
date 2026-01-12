@@ -4,6 +4,8 @@
 **Target Users**: Technical users comfortable with Python and troubleshooting
 **Expected Time**: 30-60 minutes for full setup
 
+**⚠️ IMPORTANT**: SAM3 and SMPL-X models require requesting access/registration before use. See "What Needs Real-World Validation" section below.
+
 ---
 
 ## What Works Solidly ✅
@@ -24,7 +26,7 @@ The installation wizard (`scripts/install_wizard.py`) is **production-quality**:
 ### Core Pipeline
 - ✅ Video frame extraction
 - ✅ Depth analysis (Depth Anything V3)
-- ✅ Segmentation (SAM2)
+- ✅ Segmentation (SAM3)
 - ✅ Clean plate generation
 - ✅ COLMAP integration for SfM
 
@@ -75,7 +77,21 @@ econ_exe = econ_dir / "infer.py"
 3. Update `scripts/run_mocap.py` with correct commands
 4. Report findings so we can fix it
 
-### 3. SMPL-X Models
+### 3. SAM3 Model Access
+**Requires requesting access on Hugging Face:**
+
+SAM3 is not fully open-source and requires requesting access:
+
+1. Visit the SAM3 model page on Hugging Face
+2. Click "Request Access" and accept the license terms
+3. Wait for approval (usually automatic or within 24 hours)
+4. Once approved, the ComfyUI-SAM3 node can download the model
+
+**Without SAM3 access**: Segmentation workflows (roto, cleanplate stages) will fail.
+
+**Testing priority**: Please report if SAM3 access approval is fast or slow in your region.
+
+### 4. SMPL-X Models
 Requires manual download due to registration:
 
 1. Register at https://smpl-x.is.tue.mpg.de/

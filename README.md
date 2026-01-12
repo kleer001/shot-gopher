@@ -683,6 +683,18 @@ git clone https://github.com/your-repo/ComfyUI-SAM3.git
 cd .. && python main.py --listen
 ```
 
+### SAM3 Model Access (Required for Segmentation)
+
+**SAM3 requires requesting access on Hugging Face:**
+
+1. Visit the SAM3 model page on Hugging Face
+2. Click "Request Access" and fill out the form
+3. Wait for approval (usually automatic or within 24 hours)
+4. Once approved, download the model weights
+5. Place in the ComfyUI-SAM3 custom node directory
+
+**Note**: Without SAM3 access, segmentation workflows (roto, cleanplate) will not work.
+
 ### Motion Capture Dependencies (Optional)
 
 ```bash
