@@ -35,6 +35,7 @@ STAGES = {
     "roto": "Run segmentation (02_segmentation.json)",
     "cleanplate": "Run clean plate generation (03_cleanplate.json)",
     "colmap": "Run COLMAP SfM reconstruction",
+    "mocap": "Run human motion capture (WHAM + TAVA)",
     "gsir": "Run GS-IR material decomposition",
     "camera": "Export camera to Alembic",
 }
@@ -63,7 +64,7 @@ def extract_frames(
         Number of frames extracted
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_pattern = output_dir / f"frame_%04d.png"
+    output_pattern = output_dir / "frame_%04d.png"
 
     cmd = ["ffmpeg", "-i", str(input_path)]
 
@@ -229,7 +230,7 @@ def wait_for_completion(prompt_id: str, comfyui_url: str, timeout: int = 3600) -
 
         time.sleep(check_interval)
 
-    print(f"    Timeout waiting for workflow completion", file=sys.stderr)
+    print("    Timeout waiting for workflow completion", file=sys.stderr)
     return False
 
 
@@ -246,20 +247,20 @@ def run_comfyui_workflow(
     """
     if not check_comfyui_running(comfyui_url):
         print(f"    Error: ComfyUI not running at {comfyui_url}", file=sys.stderr)
-        print(f"    Start ComfyUI first: python main.py --listen", file=sys.stderr)
+        print("    Start ComfyUI first: python main.py --listen", file=sys.stderr)
         return False
 
     print(f"  → Queuing workflow: {workflow_path.name}")
     prompt_id = queue_workflow(workflow_path, comfyui_url)
 
     if not prompt_id:
-        print(f"    Error: Failed to queue workflow", file=sys.stderr)
+        print("    Error: Failed to queue workflow", file=sys.stderr)
         return False
 
     print(f"    Prompt ID: {prompt_id}")
 
     if wait:
-        print(f"    Waiting for completion...")
+        print("    Waiting for completion...")
         return wait_for_completion(prompt_id, comfyui_url, timeout)
 
     return True
@@ -270,7 +271,7 @@ def run_export_camera(project_dir: Path, fps: float = 24.0) -> bool:
     script_path = Path(__file__).parent / "export_camera.py"
 
     if not script_path.exists():
-        print(f"    Error: export_camera.py not found", file=sys.stderr)
+        print("    Error: export_camera.py not found", file=sys.stderr)
         return False
 
     cmd = [
@@ -291,7 +292,8 @@ def run_colmap_reconstruction(
     project_dir: Path,
     quality: str = "medium",
     run_dense: bool = False,
-    run_mesh: bool = False
+    run_mesh: bool = False,
+    use_masks: bool = True
 ) -> bool:
     """Run COLMAP Structure-from-Motion reconstruction.
 
@@ -300,6 +302,7 @@ def run_colmap_reconstruction(
         quality: Quality preset ('low', 'medium', 'high')
         run_dense: Whether to run dense reconstruction
         run_mesh: Whether to generate mesh
+        use_masks: If True, use segmentation masks from roto/ (if available)
 
     Returns:
         True if reconstruction succeeded
@@ -307,7 +310,7 @@ def run_colmap_reconstruction(
     script_path = Path(__file__).parent / "run_colmap.py"
 
     if not script_path.exists():
-        print(f"    Error: run_colmap.py not found", file=sys.stderr)
+        print("    Error: run_colmap.py not found", file=sys.stderr)
         return False
 
     cmd = [
@@ -320,9 +323,51 @@ def run_colmap_reconstruction(
         cmd.append("--dense")
     if run_mesh:
         cmd.append("--mesh")
+    if not use_masks:
+        cmd.append("--no-masks")
 
     try:
         run_command(cmd, "Running COLMAP reconstruction")
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def run_mocap(
+    project_dir: Path,
+    skip_texture: bool = False,
+    keyframe_interval: int = 25,
+    fps: float = 24.0
+) -> bool:
+    """Run human motion capture with WHAM + TAVA.
+
+    Args:
+        project_dir: Project directory with frames and camera data
+        skip_texture: Skip texture projection (faster)
+        keyframe_interval: ECON keyframe interval
+        fps: Frame rate for export
+
+    Returns:
+        True if mocap succeeded
+    """
+    script_path = Path(__file__).parent / "run_mocap.py"
+
+    if not script_path.exists():
+        print("    Error: run_mocap.py not found", file=sys.stderr)
+        return False
+
+    cmd = [
+        sys.executable, str(script_path),
+        str(project_dir),
+        "--keyframe-interval", str(keyframe_interval),
+        "--fps", str(fps),
+    ]
+
+    if skip_texture:
+        cmd.append("--skip-texture")
+
+    try:
+        run_command(cmd, "Running motion capture")
         return True
     except subprocess.CalledProcessError:
         return False
@@ -348,7 +393,7 @@ def run_gsir_materials(
     script_path = Path(__file__).parent / "run_gsir.py"
 
     if not script_path.exists():
-        print(f"    Error: run_gsir.py not found", file=sys.stderr)
+        print("    Error: run_gsir.py not found", file=sys.stderr)
         return False
 
     cmd = [
@@ -399,6 +444,7 @@ def run_pipeline(
     colmap_quality: str = "medium",
     colmap_dense: bool = False,
     colmap_mesh: bool = False,
+    colmap_use_masks: bool = True,
     gsir_iterations: int = 35000,
     gsir_path: Optional[str] = None,
 ) -> bool:
@@ -415,6 +461,7 @@ def run_pipeline(
         colmap_quality: COLMAP quality preset ('low', 'medium', 'high')
         colmap_dense: Run COLMAP dense reconstruction
         colmap_mesh: Generate mesh from COLMAP dense reconstruction
+        colmap_use_masks: Use segmentation masks for COLMAP (if available)
         gsir_iterations: Total GS-IR training iterations
         gsir_path: Path to GS-IR installation
 
@@ -455,14 +502,14 @@ def run_pipeline(
     print(f"Frame rate: {fps} fps")
 
     # Stage: Setup
-    print(f"\n[Setup]")
+    print("\n[Setup]")
     if not setup_project(project_dir, workflows_dir):
         print("Failed to set up project", file=sys.stderr)
         return False
 
     # Stage: Ingest
     if "ingest" in stages:
-        print(f"\n[Ingest]")
+        print("\n[Ingest]")
         if skip_existing and list(source_frames.glob("frame_*.png")):
             print("  → Skipping (frames exist)")
         else:
@@ -471,10 +518,10 @@ def run_pipeline(
 
     # Stage: Depth
     if "depth" in stages:
-        print(f"\n[Depth Analysis]")
+        print("\n[Depth Analysis]")
         workflow_path = project_dir / "workflows" / "01_analysis.json"
         if not workflow_path.exists():
-            print(f"  → Skipping (workflow not found)")
+            print("  → Skipping (workflow not found)")
         elif skip_existing and list((project_dir / "depth").glob("*.png")):
             print("  → Skipping (depth maps exist)")
         else:
@@ -484,10 +531,10 @@ def run_pipeline(
 
     # Stage: Roto
     if "roto" in stages:
-        print(f"\n[Segmentation]")
+        print("\n[Segmentation]")
         workflow_path = project_dir / "workflows" / "02_segmentation.json"
         if not workflow_path.exists():
-            print(f"  → Skipping (workflow not found)")
+            print("  → Skipping (workflow not found)")
         elif skip_existing and list((project_dir / "roto").glob("*.png")):
             print("  → Skipping (masks exist)")
         else:
@@ -497,10 +544,10 @@ def run_pipeline(
 
     # Stage: Cleanplate
     if "cleanplate" in stages:
-        print(f"\n[Clean Plate]")
+        print("\n[Clean Plate]")
         workflow_path = project_dir / "workflows" / "03_cleanplate.json"
         if not workflow_path.exists():
-            print(f"  → Skipping (workflow not found)")
+            print("  → Skipping (workflow not found)")
         elif skip_existing and list((project_dir / "cleanplate").glob("*.png")):
             print("  → Skipping (cleanplates exist)")
         else:
@@ -510,7 +557,7 @@ def run_pipeline(
 
     # Stage: COLMAP reconstruction
     if "colmap" in stages:
-        print(f"\n[COLMAP Reconstruction]")
+        print("\n[COLMAP Reconstruction]")
         colmap_sparse = project_dir / "colmap" / "sparse" / "0"
         if skip_existing and colmap_sparse.exists():
             print("  → Skipping (COLMAP sparse model exists)")
@@ -519,15 +566,35 @@ def run_pipeline(
                 project_dir,
                 quality=colmap_quality,
                 run_dense=colmap_dense,
-                run_mesh=colmap_mesh
+                run_mesh=colmap_mesh,
+                use_masks=colmap_use_masks
             ):
                 print("  → COLMAP reconstruction failed", file=sys.stderr)
                 # Non-fatal for pipeline - continue to camera export
                 # (may use DA3 camera data as fallback)
 
+    # Stage: Motion capture
+    if "mocap" in stages:
+        print("\n[Motion Capture]")
+        mocap_output = project_dir / "mocap" / "tava" / "mesh_sequence.pkl"
+        camera_dir = project_dir / "camera"
+        if not camera_dir.exists() or not (camera_dir / "extrinsics.json").exists():
+            print("  → Skipping (camera data required - run colmap stage first)")
+        elif skip_existing and mocap_output.exists():
+            print("  → Skipping (mocap data exists)")
+        else:
+            if not run_mocap(
+                project_dir,
+                skip_texture=False,  # Could add as pipeline option
+                keyframe_interval=25,
+                fps=fps
+            ):
+                print("  → Motion capture failed", file=sys.stderr)
+                # Non-fatal - continue to other stages
+
     # Stage: GS-IR material decomposition
     if "gsir" in stages:
-        print(f"\n[GS-IR Material Decomposition]")
+        print("\n[GS-IR Material Decomposition]")
         colmap_sparse = project_dir / "colmap" / "sparse" / "0"
         gsir_checkpoint = project_dir / "gsir" / "model" / f"chkpnt{gsir_iterations}.pth"
         if not colmap_sparse.exists():
@@ -546,10 +613,10 @@ def run_pipeline(
 
     # Stage: Camera export
     if "camera" in stages:
-        print(f"\n[Camera Export]")
+        print("\n[Camera Export]")
         camera_dir = project_dir / "camera"
         if not (camera_dir / "extrinsics.json").exists():
-            print(f"  → Skipping (no camera data - run depth or colmap stage first)")
+            print("  → Skipping (no camera data - run depth or colmap stage first)")
         elif skip_existing and (camera_dir / "camera.abc").exists():
             print("  → Skipping (camera.abc exists)")
         else:
@@ -605,43 +672,48 @@ def main():
         help="Override frame rate (default: auto-detect)"
     )
     parser.add_argument(
-        "--skip-existing",
+        "--skip-existing", "-e",
         action="store_true",
         help="Skip stages that have existing output"
     )
     parser.add_argument(
-        "--list-stages",
+        "--list-stages", "-l",
         action="store_true",
         help="List available stages and exit"
     )
 
     # COLMAP options
     parser.add_argument(
-        "--colmap-quality",
+        "--colmap-quality", "-q",
         choices=["low", "medium", "high"],
         default="medium",
         help="COLMAP quality preset (default: medium)"
     )
     parser.add_argument(
-        "--colmap-dense",
+        "--colmap-dense", "-d",
         action="store_true",
         help="Run COLMAP dense reconstruction (slower, produces point cloud)"
     )
     parser.add_argument(
-        "--colmap-mesh",
+        "--colmap-mesh", "-m",
         action="store_true",
         help="Generate mesh from COLMAP dense reconstruction (requires --colmap-dense)"
+    )
+    parser.add_argument(
+        "--colmap-no-masks", "-M",
+        action="store_true",
+        help="Disable automatic use of segmentation masks for COLMAP (default: use masks if available)"
     )
 
     # GS-IR options
     parser.add_argument(
-        "--gsir-iterations",
+        "--gsir-iterations", "-i",
         type=int,
         default=35000,
         help="GS-IR total training iterations (default: 35000)"
     )
     parser.add_argument(
-        "--gsir-path",
+        "--gsir-path", "-g",
         type=str,
         default=None,
         help="Path to GS-IR installation (default: auto-detect)"
@@ -684,6 +756,7 @@ def main():
         colmap_quality=args.colmap_quality,
         colmap_dense=args.colmap_dense,
         colmap_mesh=args.colmap_mesh,
+        colmap_use_masks=not args.colmap_no_masks,
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
     )

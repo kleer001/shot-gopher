@@ -182,10 +182,12 @@ class TestExportColmapToPipelineFormat:
 
             with open(sparse_path / "images.txt", "w") as f:
                 f.write("# Image list\n")
+                f.write("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n")
+                f.write("# POINTS2D[] as (X, Y, POINT3D_ID)\n")
                 f.write("1 1 0 0 0 0 0 0 1 frame_0001.png\n")
-                f.write("# Points (ignored)\n")
+                f.write("100.0 200.0 -1\n")  # Dummy 2D point (X, Y, POINT3D_ID=-1 means no 3D point)
                 f.write("2 1 0 0 0 0 0 1 1 frame_0002.png\n")
-                f.write("# Points (ignored)\n")
+                f.write("150.0 250.0 -1\n")  # Dummy 2D point
 
             result = export_colmap_to_pipeline_format(sparse_path, output_dir)
 

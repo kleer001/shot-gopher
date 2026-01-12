@@ -1,0 +1,12 @@
+# HuggingFace Token Template
+#
+# To download models that require HuggingFace authentication (like SAM3):
+# 1. Visit https://huggingface.co/settings/tokens
+# 2. Create a new token (Read access is sufficient)
+# 3. Copy this file to HF_TOKEN.dat (remove .template)
+# 4. Replace the line below with your token
+# 5. Run the installation wizard: python scripts/install_wizard.py
+#
+# Format: Single line with your HuggingFace token
+#
+hf_YOUR_TOKEN_HERE

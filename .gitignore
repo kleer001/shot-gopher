@@ -205,3 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# VFX Pipeline installation artifacts
+.vfx_pipeline/
+
+# Credentials and tokens (DO NOT COMMIT)
+SMPL.login.dat
+HF_TOKEN.dat
