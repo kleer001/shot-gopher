@@ -70,6 +70,6 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 echo "Next steps:"
 echo "  1. Activate environment: conda activate vfx-pipeline"
-echo "  2. Or use: source ~/.vfx_pipeline/activate.sh"
+echo "  2. Or use: source $INSTALL_DIR/.vfx_pipeline/activate.sh"
 echo "  3. Read: $INSTALL_DIR/README.md"
 echo ""
