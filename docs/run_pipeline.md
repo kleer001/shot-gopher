@@ -63,7 +63,7 @@ python scripts/run_pipeline.py -l
 
 ```bash
 --name NAME                  # Project name
---projects-dir DIR           # Projects directory (default: ~/vfx_projects)
+--projects-dir DIR           # Projects directory (default: ./projects)
 --stages STAGES              # Stages to run (comma-separated or "all")
 --comfyui-url URL           # ComfyUI API URL (default: http://127.0.0.1:8188)
 --fps FPS                    # Override frame rate (default: auto-detect)
@@ -348,7 +348,7 @@ python scripts/run_pipeline.py footage.mp4 -s depth,camera
 Pipeline creates this directory structure:
 
 ```
-~/vfx_projects/MyShot/           # Project directory
+./projects/MyShot/               # Project directory
 ├── source/
 │   └── frames/                  # Extracted frames
 │       ├── frame_1001.png

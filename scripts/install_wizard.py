@@ -152,7 +152,7 @@ def check_gpu_available() -> Tuple[bool, str]:
     return True, "GPU detected"
 
 
-def get_disk_space(path: Path = Path.home()) -> Tuple[float, float]:
+def get_disk_space(path: Path = Path.cwd()) -> Tuple[float, float]:
     """Get available and total disk space in GB.
 
     Args:
@@ -353,7 +353,7 @@ class InstallationStateManager:
     """Manages installation state for resume/recovery."""
 
     def __init__(self, state_file: Optional[Path] = None):
-        self.state_file = state_file or Path.home() / ".vfx_pipeline" / "install_state.json"
+        self.state_file = state_file or Path.cwd() / ".vfx_pipeline" / "install_state.json"
         self.state = self.load_state()
 
     def load_state(self) -> Dict:
@@ -562,8 +562,8 @@ class CheckpointDownloader:
                     'extract': True
                 }
             ],
-            'dest_dir_rel': '.smplx',  # Relative to HOME, not install_dir
-            'use_home_dir': True,
+            'dest_dir_rel': 'smplx_models',  # Relative to install_dir
+            'use_home_dir': False,
             'instructions': '''SMPL-X models require registration:
 1. Register at https://smpl-x.is.tue.mpg.de/
 2. Wait for approval email (usually within 24 hours)
@@ -596,7 +596,7 @@ class CheckpointDownloader:
     }
 
     def __init__(self, base_dir: Optional[Path] = None):
-        self.base_dir = base_dir or Path.home() / ".vfx_pipeline"
+        self.base_dir = base_dir or Path.cwd() / ".vfx_pipeline"
 
     def download_file(self, url: str, dest: Path, expected_size_mb: Optional[int] = None) -> bool:
         """Download file with progress tracking.
@@ -908,7 +908,7 @@ class CheckpointDownloader:
 
         # Determine destination directory
         if checkpoint_info.get('use_home_dir'):
-            dest_dir = Path.home() / checkpoint_info['dest_dir_rel']
+            dest_dir = Path.cwd() / checkpoint_info['dest_dir_rel']
         else:
             dest_dir = self.base_dir / checkpoint_info['dest_dir_rel']
 
@@ -1090,9 +1090,9 @@ class InstallationValidator:
         Returns:
             (success, message)
         """
-        smplx_dir = Path.home() / ".smplx"
+        smplx_dir = self.base_dir / "smplx_models"
         if not smplx_dir.exists():
-            return False, "SMPL-X directory not found (~/.smplx/)"
+            return False, "SMPL-X directory not found (.vfx_pipeline/smplx_models/)"
 
         # Look for model files
         model_files = list(smplx_dir.glob("SMPLX_*.pkl"))
@@ -1175,7 +1175,7 @@ class ConfigurationGenerator:
 
     def __init__(self, conda_manager: 'CondaEnvironmentManager', base_dir: Optional[Path] = None):
         self.conda_manager = conda_manager
-        self.base_dir = base_dir or Path.home() / ".vfx_pipeline"
+        self.base_dir = base_dir or Path.cwd() / ".vfx_pipeline"
 
     def generate_config_dict(self) -> Dict:
         """Generate configuration dictionary.
@@ -1193,7 +1193,7 @@ class ConfigurationGenerator:
                 "wham": str(self.base_dir / "WHAM"),
                 "tava": str(self.base_dir / "tava"),
                 "econ": str(self.base_dir / "ECON"),
-                "smplx_models": str(Path.home() / ".smplx"),
+                "smplx_models": str(self.base_dir / "smplx_models"),
             },
             "python": str(python_exe) if python_exe else None,
             "conda_activate": self.conda_manager.get_activation_command(),
@@ -1239,7 +1239,7 @@ export VFX_PIPELINE_BASE="{self.base_dir}"
 export WHAM_DIR="{self.base_dir / "WHAM"}"
 export TAVA_DIR="{self.base_dir / "tava"}"
 export ECON_DIR="{self.base_dir / "ECON"}"
-export SMPLX_MODEL_DIR="{Path.home() / ".smplx"}"
+export SMPLX_MODEL_DIR="{self.base_dir / "smplx_models"}"
 
 echo "✓ VFX Pipeline environment activated"
 echo "  Environment: {self.conda_manager.env_name}"
@@ -1335,7 +1335,7 @@ class GitRepoInstaller(ComponentInstaller):
     def __init__(self, name: str, repo_url: str, install_dir: Optional[Path] = None, size_gb: float = 0.0):
         super().__init__(name, size_gb)
         self.repo_url = repo_url
-        self.install_dir = install_dir or Path.home() / ".vfx_pipeline" / name.lower()
+        self.install_dir = install_dir or Path.cwd() / ".vfx_pipeline" / name.lower()
 
     def check(self) -> bool:
         self.installed = self.install_dir.exists() and (self.install_dir / ".git").exists()
@@ -1947,8 +1947,8 @@ class InstallationWizard:
             print("\n📦 SMPL-X Body Models (Manual Download Required):")
             print("  1. Register at https://smpl-x.is.tue.mpg.de/")
             print("  2. Download SMPL-X models")
-            print("  3. Place in ~/.smplx/")
-            print("     mkdir -p ~/.smplx && cp SMPLX_*.pkl ~/.smplx/")
+            print("  3. Place in .vfx_pipeline/smplx_models/")
+            print("     mkdir -p .vfx_pipeline/smplx_models && cp SMPLX_*.pkl .vfx_pipeline/smplx_models/")
 
         # Checkpoints status
         has_mocap = status.get('wham', False) or status.get('tava', False) or status.get('econ', False)

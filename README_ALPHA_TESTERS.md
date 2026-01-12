@@ -108,7 +108,7 @@ SAM3 requires requesting access on HuggingFace:
    your.email@example.com
    your_password_here
    ```
-4. Run wizard - models download automatically to `~/.smplx/`
+4. Run wizard - models download automatically to `.vfx_pipeline/smplx_models/`
 
 **Template file**: Copy `SMPL.login.dat.template` and fill in credentials.
 
@@ -144,7 +144,7 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/comfyui_ingest/main/bootst
 ```
 
 This will:
-1. Clone the repository to `~/comfyui_ingest`
+1. Clone the repository to `./comfyui_ingest` (current directory)
 2. Launch the installation wizard automatically
 3. Handle everything for you
 

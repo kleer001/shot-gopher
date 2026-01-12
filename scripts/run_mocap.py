@@ -150,7 +150,7 @@ def install_instructions():
 
     print("\nSMPL-X body model:")
     print("  1. Register at https://smpl-x.is.tue.mpg.de/")
-    print("  2. Download models → place in ~/.smplx/")
+    print("  2. Download models → place in .vfx_pipeline/smplx_models/")
     print()
 
 

@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 # Pipeline configuration
-DEFAULT_PROJECTS_DIR = Path.home() / "vfx_projects"
+DEFAULT_PROJECTS_DIR = Path.cwd() / "projects"
 DEFAULT_COMFYUI_URL = "http://127.0.0.1:8188"
 START_FRAME = 1001
 SUPPORTED_FORMATS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf", ".exr", ".dpx", ".jpg", ".png"}

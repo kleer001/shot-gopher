@@ -573,10 +573,10 @@ Ensure conda is in PATH:
 which conda
 ```
 
-If not found, activate conda:
+If not found, activate conda (adjust path to your conda installation):
 
 ```bash
-source ~/miniconda3/etc/profile.d/conda.sh
+source /path/to/miniconda3/etc/profile.d/conda.sh
 ```
 
 ### "Git repository has uncommitted changes"

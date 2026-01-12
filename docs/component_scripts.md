@@ -36,7 +36,7 @@ python scripts/setup_project.py <project_dir> [--workflows-dir DIR]
 ### Example
 
 ```bash
-python scripts/setup_project.py ~/vfx_projects/MyShot
+python scripts/setup_project.py ./projects/MyShot
 ```
 
 ### Output Structure
@@ -94,17 +94,17 @@ python scripts/run_colmap.py <project_dir> [options]
 
 **Basic reconstruction**:
 ```bash
-python scripts/run_colmap.py ~/vfx_projects/Shot01
+python scripts/run_colmap.py ./projects/Shot01
 ```
 
 **High quality with dense + mesh**:
 ```bash
-python scripts/run_colmap.py ~/vfx_projects/Shot01 -q high -d -m
+python scripts/run_colmap.py ./projects/Shot01 -q high -d -m
 ```
 
 **Without segmentation masks**:
 ```bash
-python scripts/run_colmap.py ~/vfx_projects/Shot01 --no-masks
+python scripts/run_colmap.py ./projects/Shot01 --no-masks
 ```
 
 ### Input
@@ -236,22 +236,22 @@ python scripts/run_mocap.py <project_dir> [options]
 
 **Full motion capture**:
 ```bash
-python scripts/run_mocap.py ~/vfx_projects/Actor01
+python scripts/run_mocap.py ./projects/Actor01
 ```
 
 **Skip texture projection** (faster):
 ```bash
-python scripts/run_mocap.py ~/vfx_projects/Actor01 --skip-texture
+python scripts/run_mocap.py ./projects/Actor01 --skip-texture
 ```
 
 **Custom keyframe interval**:
 ```bash
-python scripts/run_mocap.py ~/vfx_projects/Actor01 --keyframe-interval 50
+python scripts/run_mocap.py ./projects/Actor01 --keyframe-interval 50
 ```
 
 **Check installation**:
 ```bash
-python scripts/run_mocap.py ~/vfx_projects/Actor01 --check
+python scripts/run_mocap.py ./projects/Actor01 --check
 ```
 
 ### Input
@@ -322,17 +322,17 @@ python scripts/run_gsir.py <project_dir> [options]
 
 **Basic material decomposition**:
 ```bash
-python scripts/run_gsir.py ~/vfx_projects/Shot01
+python scripts/run_gsir.py ./projects/Shot01
 ```
 
 **High quality** (more iterations):
 ```bash
-python scripts/run_gsir.py ~/vfx_projects/Shot01 --iterations-stage2 50000
+python scripts/run_gsir.py ./projects/Shot01 --iterations-stage2 50000
 ```
 
 **Resume interrupted training**:
 ```bash
-python scripts/run_gsir.py ~/vfx_projects/Shot01 --resume
+python scripts/run_gsir.py ./projects/Shot01 --resume
 ```
 
 ### Input
@@ -397,22 +397,22 @@ python scripts/export_camera.py <project_dir> [options]
 
 **Export to Alembic and FBX**:
 ```bash
-python scripts/export_camera.py ~/vfx_projects/Shot01
+python scripts/export_camera.py ./projects/Shot01
 ```
 
 **Alembic only** (most compatible):
 ```bash
-python scripts/export_camera.py ~/vfx_projects/Shot01 --format abc
+python scripts/export_camera.py ./projects/Shot01 --format abc
 ```
 
 **Custom frame rate**:
 ```bash
-python scripts/export_camera.py ~/vfx_projects/Shot01 --fps 30
+python scripts/export_camera.py ./projects/Shot01 --fps 30
 ```
 
 **Scale adjustment** (for different scene units):
 ```bash
-python scripts/export_camera.py ~/vfx_projects/Shot01 --scale 0.01
+python scripts/export_camera.py ./projects/Shot01 --scale 0.01
 ```
 
 ### Input
@@ -534,21 +534,21 @@ Manual pipeline execution:
 
 ```bash
 # 1. Set up project
-python scripts/setup_project.py ~/vfx_projects/MyShot
+python scripts/setup_project.py ./projects/MyShot
 
 # 2. Place frames in source/frames/
 
 # 3. Run COLMAP
-python scripts/run_colmap.py ~/vfx_projects/MyShot -q high
+python scripts/run_colmap.py ./projects/MyShot -q high
 
 # 4. Export camera
-python scripts/export_camera.py ~/vfx_projects/MyShot
+python scripts/export_camera.py ./projects/MyShot
 
 # 5. Run mocap (if applicable)
-python scripts/run_mocap.py ~/vfx_projects/MyShot
+python scripts/run_mocap.py ./projects/MyShot
 
 # 6. Run GS-IR (if needed)
-python scripts/run_gsir.py ~/vfx_projects/MyShot
+python scripts/run_gsir.py ./projects/MyShot
 ```
 
 ### Batch Processing
@@ -556,7 +556,7 @@ python scripts/run_gsir.py ~/vfx_projects/MyShot
 Process multiple projects:
 
 ```bash
-for project in ~/vfx_projects/*; do
+for project in ./projects/*; do
     echo "Processing $project"
     python scripts/run_colmap.py "$project" -q medium
     python scripts/export_camera.py "$project"
@@ -569,10 +569,10 @@ Test one component:
 
 ```bash
 # Test COLMAP only
-python scripts/run_colmap.py ~/vfx_projects/Test -q low
+python scripts/run_colmap.py ./projects/Test -q low
 
 # Check output
-ls ~/vfx_projects/Test/colmap/sparse/0/
+ls ./projects/Test/colmap/sparse/0/
 ```
 
 ## See Also

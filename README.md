@@ -711,11 +711,11 @@ cd .. && python main.py --listen
    your.email@example.com
    your_password_here
    ```
-4. Run the installation wizard - it will automatically download and extract SMPL-X models to `~/.smplx/`
+4. Run the installation wizard - it will automatically download and extract SMPL-X models to `.vfx_pipeline/smplx_models/`
 
 **Template file**: Copy `SMPL.login.dat.template` and fill in your credentials.
 
-**Manual alternative**: If you prefer manual installation, download models from the SMPL-X website and place in `~/.smplx/SMPLX_*.pkl`
+**Manual alternative**: If you prefer manual installation, download models from the SMPL-X website and place in `.vfx_pipeline/smplx_models/SMPLX_*.pkl`
 
 **Note**: Without SMPL-X models, motion capture workflows will not work.
 

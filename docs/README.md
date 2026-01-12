@@ -111,7 +111,7 @@ comfyui_ingest/
 When you process footage, the pipeline creates this structure:
 
 ```
-~/vfx_projects/MyShot/       # Default projects directory
+./projects/MyShot/           # Default projects directory
 ├── source/
 │   └── frames/              # Extracted frames (1001.png, 1002.png, ...)
 ├── workflows/               # ComfyUI workflow copies

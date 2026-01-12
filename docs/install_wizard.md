@@ -290,7 +290,7 @@ export VFX_PIPELINE_BASE="/path/to/.vfx_pipeline"
 export WHAM_DIR="/path/to/.vfx_pipeline/WHAM"
 export TAVA_DIR="/path/to/.vfx_pipeline/tava"
 export ECON_DIR="/path/to/.vfx_pipeline/ECON"
-export SMPLX_MODEL_DIR="$HOME/.smplx"
+export SMPLX_MODEL_DIR="${VFX_PIPELINE_BASE}/smplx_models"
 
 echo "✓ VFX Pipeline environment activated"
 ```

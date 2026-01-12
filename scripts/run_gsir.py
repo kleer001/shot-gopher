@@ -58,10 +58,9 @@ def check_gsir_available() -> tuple[bool, Optional[Path]]:
 
     # Check common installation locations
     common_paths = [
-        Path.home() / "GS-IR",
-        Path.home() / "gs-ir",
-        Path("/opt/GS-IR"),
+        Path.cwd() / ".vfx_pipeline" / "GS-IR",
         Path.cwd() / "GS-IR",
+        Path("/opt/GS-IR"),
     ]
 
     for path in common_paths:
