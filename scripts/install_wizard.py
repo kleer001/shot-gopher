@@ -692,8 +692,321 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
             print_error(f"Could not read file for checksum: {e}")
             return False
 
+    def _install_gdown(self) -> Optional['module']:
+        """Install gdown handling PEP 668 externally-managed environments.
+
+        Tries multiple installation methods in order:
+        1. pipx (preferred for CLI tools)
+        2. pip with --user flag
+        3. pip with --break-system-packages (last resort)
+
+        Returns:
+            The gdown module if successful, None otherwise
+        """
+        install_methods = [
+            # Method 1: Try pipx (best for externally-managed environments)
+            {
+                'name': 'pipx',
+                'cmd': ['pipx', 'install', 'gdown'],
+                'check_cmd': ['pipx', 'list'],
+            },
+            # Method 2: Try pip with --user flag
+            {
+                'name': 'pip --user',
+                'cmd': [sys.executable, '-m', 'pip', 'install', '--user', 'gdown'],
+                'check_cmd': None,
+            },
+            # Method 3: Try pip with --break-system-packages (last resort)
+            {
+                'name': 'pip --break-system-packages',
+                'cmd': [sys.executable, '-m', 'pip', 'install', '--break-system-packages', 'gdown'],
+                'check_cmd': None,
+            },
+        ]
+
+        for method in install_methods:
+            # Check if the tool is available (for pipx)
+            if method['check_cmd']:
+                check_result = subprocess.run(
+                    method['check_cmd'],
+                    capture_output=True,
+                    text=True
+                )
+                if check_result.returncode != 0:
+                    continue
+
+            print_info(f"Trying to install gdown via {method['name']}...")
+            result = subprocess.run(
+                method['cmd'],
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0:
+                print_success(f"Installed gdown via {method['name']}")
+                try:
+                    import gdown
+                    return gdown
+                except ImportError:
+                    # pipx installs to a different location, need to use subprocess
+                    # Check if gdown CLI is available
+                    gdown_check = subprocess.run(
+                        ['gdown', '--version'],
+                        capture_output=True,
+                        text=True
+                    )
+                    if gdown_check.returncode == 0:
+                        # gdown CLI is available, use wrapper class
+                        return self._create_gdown_cli_wrapper()
+                    continue
+            else:
+                # Check for PEP 668 error and try next method
+                if 'externally-managed-environment' in result.stderr:
+                    continue
+                # Other errors, log and try next method
+                print_warning(f"Failed with {method['name']}: {result.stderr[:100]}")
+
+        # All methods failed - provide manual instructions
+        print_error("Could not install gdown automatically.")
+        print_info("To install gdown manually, try one of these options:")
+        print("  1. Using pipx (recommended): pipx install gdown")
+        print("  2. Using pip with user flag: pip install --user gdown")
+        print("  3. In a virtual environment: python -m venv venv && source venv/bin/activate && pip install gdown")
+        return None
+
+    def _create_gdown_cli_wrapper(self):
+        """Create a wrapper object that mimics gdown module using CLI."""
+        class GdownCLIWrapper:
+            @staticmethod
+            def download(url, output, quiet=False):
+                cmd = ['gdown', url, '-O', output]
+                if quiet:
+                    cmd.append('--quiet')
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode == 0:
+                    return output
+                return None
+        return GdownCLIWrapper()
+
+    def _download_gdrive_wget(self, file_id: str, dest: Path) -> bool:
+        """Download from Google Drive using wget (fallback method).
+
+        Uses the confirmation cookie trick for large files.
+
+        Args:
+            file_id: Google Drive file ID
+            dest: Destination file path
+
+        Returns:
+            True if successful
+        """
+        # Check if wget is available
+        wget_check = subprocess.run(['which', 'wget'], capture_output=True)
+        if wget_check.returncode != 0:
+            return False
+
+        print_info("Trying wget fallback for Google Drive...")
+
+        # Google Drive download URL with confirmation bypass
+        # For large files, we need to handle the virus scan warning
+        base_url = "https://drive.google.com/uc?export=download"
+        confirm_url = f"{base_url}&id={file_id}&confirm=t"
+
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+
+            # Use wget with appropriate flags for Google Drive
+            cmd = [
+                'wget',
+                '--no-check-certificate',
+                '-q', '--show-progress',
+                '-O', str(dest),
+                confirm_url
+            ]
+
+            result = subprocess.run(cmd, capture_output=False)
+
+            if result.returncode == 0 and dest.exists() and dest.stat().st_size > 1000:
+                print_success("Downloaded via wget")
+                return True
+
+            # If file is too small, might be HTML error page
+            if dest.exists():
+                dest.unlink()
+            return False
+
+        except Exception as e:
+            print_warning(f"wget fallback failed: {e}")
+            if dest.exists():
+                dest.unlink()
+            return False
+
+    def _download_gdrive_curl(self, file_id: str, dest: Path) -> bool:
+        """Download from Google Drive using curl (fallback method).
+
+        Args:
+            file_id: Google Drive file ID
+            dest: Destination file path
+
+        Returns:
+            True if successful
+        """
+        # Check if curl is available
+        curl_check = subprocess.run(['which', 'curl'], capture_output=True)
+        if curl_check.returncode != 0:
+            return False
+
+        print_info("Trying curl fallback for Google Drive...")
+
+        # Google Drive download URL with confirmation bypass
+        confirm_url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm=t"
+
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+
+            # Use curl with appropriate flags
+            cmd = [
+                'curl',
+                '-L',  # Follow redirects
+                '-o', str(dest),
+                '--progress-bar',
+                confirm_url
+            ]
+
+            result = subprocess.run(cmd)
+
+            if result.returncode == 0 and dest.exists() and dest.stat().st_size > 1000:
+                print_success("Downloaded via curl")
+                return True
+
+            if dest.exists():
+                dest.unlink()
+            return False
+
+        except Exception as e:
+            print_warning(f"curl fallback failed: {e}")
+            if dest.exists():
+                dest.unlink()
+            return False
+
+    def _download_with_wget_auth(self, url: str, dest: Path, username: str, password: str) -> bool:
+        """Download file using wget with HTTP basic auth (fallback).
+
+        Args:
+            url: URL to download
+            dest: Destination file path
+            username: HTTP basic auth username
+            password: HTTP basic auth password
+
+        Returns:
+            True if successful
+        """
+        wget_check = subprocess.run(['which', 'wget'], capture_output=True)
+        if wget_check.returncode != 0:
+            return False
+
+        print_info("Trying wget fallback with authentication...")
+
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+
+            cmd = [
+                'wget',
+                '--no-check-certificate',
+                '-q', '--show-progress',
+                f'--user={username}',
+                f'--password={password}',
+                '-O', str(dest),
+                url
+            ]
+
+            result = subprocess.run(cmd)
+
+            if result.returncode == 0 and dest.exists() and dest.stat().st_size > 1000:
+                print_success("Downloaded via wget")
+                return True
+
+            if dest.exists():
+                dest.unlink()
+            return False
+
+        except Exception as e:
+            print_warning(f"wget auth fallback failed: {e}")
+            if dest.exists():
+                dest.unlink()
+            return False
+
+    def _download_with_curl_auth(self, url: str, dest: Path, username: str, password: str) -> bool:
+        """Download file using curl with HTTP basic auth (fallback).
+
+        Args:
+            url: URL to download
+            dest: Destination file path
+            username: HTTP basic auth username
+            password: HTTP basic auth password
+
+        Returns:
+            True if successful
+        """
+        curl_check = subprocess.run(['which', 'curl'], capture_output=True)
+        if curl_check.returncode != 0:
+            return False
+
+        print_info("Trying curl fallback with authentication...")
+
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+
+            cmd = [
+                'curl',
+                '-L',
+                '-u', f'{username}:{password}',
+                '-o', str(dest),
+                '--progress-bar',
+                url
+            ]
+
+            result = subprocess.run(cmd)
+
+            if result.returncode == 0 and dest.exists() and dest.stat().st_size > 1000:
+                print_success("Downloaded via curl")
+                return True
+
+            if dest.exists():
+                dest.unlink()
+            return False
+
+        except Exception as e:
+            print_warning(f"curl auth fallback failed: {e}")
+            if dest.exists():
+                dest.unlink()
+            return False
+
+    def _extract_gdrive_file_id(self, url: str) -> Optional[str]:
+        """Extract Google Drive file ID from various URL formats.
+
+        Args:
+            url: Google Drive URL
+
+        Returns:
+            File ID or None
+        """
+        import re
+
+        # Format: https://drive.google.com/uc?id=FILE_ID
+        match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url)
+        if match:
+            return match.group(1)
+
+        # Format: https://drive.google.com/file/d/FILE_ID/view
+        match = re.search(r'/d/([a-zA-Z0-9_-]+)', url)
+        if match:
+            return match.group(1)
+
+        return None
+
     def download_file_gdown(self, url: str, dest: Path, expected_size_mb: Optional[int] = None) -> bool:
-        """Download file from Google Drive using gdown.
+        """Download file from Google Drive using gdown with wget/curl fallbacks.
 
         Args:
             url: Google Drive URL (format: https://drive.google.com/uc?id=FILE_ID)
@@ -703,45 +1016,51 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
         Returns:
             True if successful
         """
+        print(f"  Downloading from Google Drive...")
+        print(f"  -> {dest}")
+        if expected_size_mb:
+            print(f"  Expected size: ~{expected_size_mb} MB")
+
+        # Extract file ID for fallback methods
+        file_id = self._extract_gdrive_file_id(url)
+
+        # Method 1: Try gdown (preferred)
+        gdown = None
         try:
             import gdown
         except ImportError:
             print_warning("gdown library not found, installing...")
-            result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "gdown"],
-                capture_output=True,
-                text=True
-            )
-            if result.returncode != 0:
-                print_error(f"Failed to install gdown: {result.stderr}")
-                return False
-            import gdown
+            gdown = self._install_gdown()
 
-        try:
-            print(f"  Downloading from Google Drive...")
-            print(f"  -> {dest}")
-            if expected_size_mb:
-                print(f"  Expected size: ~{expected_size_mb} MB")
+        if gdown is not None:
+            try:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                output = gdown.download(url, str(dest), quiet=False)
 
-            # Ensure directory exists
-            dest.parent.mkdir(parents=True, exist_ok=True)
+                if output is not None and dest.exists() and dest.stat().st_size > 1000:
+                    print_success(f"Downloaded {dest.name}")
+                    return True
 
-            # Use gdown to download
-            output = gdown.download(url, str(dest), quiet=False)
+                print_warning("gdown download failed, trying fallbacks...")
+                if dest.exists():
+                    dest.unlink()
 
-            if output is None:
-                print_error("Download failed - file may not exist or be inaccessible")
-                return False
+            except Exception as e:
+                print_warning(f"gdown failed: {e}")
+                if dest.exists():
+                    dest.unlink()
 
-            print_success(f"Downloaded {dest.name}")
-            return True
+        # Method 2: Try wget fallback
+        if file_id:
+            if self._download_gdrive_wget(file_id, dest):
+                return True
 
-        except Exception as e:
-            print_error(f"Download failed: {e}")
-            # Clean up partial download
-            if dest.exists():
-                dest.unlink()
-            return False
+            # Method 3: Try curl fallback
+            if self._download_gdrive_curl(file_id, dest):
+                return True
+
+        print_error("All download methods failed")
+        return False
 
     def read_smpl_credentials(self, repo_root: Path) -> Optional[Tuple[str, str]]:
         """Read SMPL-X credentials from SMPL.login.dat file.
@@ -821,7 +1140,20 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
             import requests
         except ImportError:
             print_warning("requests library not found, installing...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "requests"], check=True)
+            # Try pip with --user to handle PEP 668 externally-managed environments
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--user", "requests"],
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                # Fall back to --break-system-packages if --user fails
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--break-system-packages", "requests"],
+                    capture_output=True, text=True
+                )
+                if result.returncode != 0:
+                    print_error(f"Failed to install requests: {result.stderr}")
+                    return False
             import requests
 
         try:
@@ -841,6 +1173,16 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
             # Stream download with progress
             response = session.get(url, stream=True, timeout=30)
             response.raise_for_status()
+
+            # Check content-type to catch HTML error pages early
+            content_type = response.headers.get('content-type', '').lower()
+            if 'text/html' in content_type:
+                print_error("Server returned HTML instead of the expected file")
+                print_info("This usually means:")
+                print("  - Your credentials may be invalid or expired")
+                print("  - You may not have been approved for access yet")
+                print("  - The download URL may have changed")
+                return False
 
             total_size = int(response.headers.get('content-length', 0))
             downloaded = 0
@@ -879,13 +1221,80 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
             # Clean up partial download
             if dest.exists():
                 dest.unlink()
+            # Don't try fallbacks for auth errors
             return False
         except requests.exceptions.RequestException as e:
-            print_error(f"Download failed: {e}")
+            print_warning(f"requests download failed: {e}")
             # Clean up partial download
             if dest.exists():
                 dest.unlink()
+
+            # Try wget/curl fallbacks for basic auth
+            if auth:
+                username, password = auth
+                print_info("Trying alternative download methods...")
+
+                if self._download_with_wget_auth(url, dest, username, password):
+                    return True
+
+                if self._download_with_curl_auth(url, dest, username, password):
+                    return True
+
+            print_error("All download methods failed")
             return False
+
+    def _validate_zip_file(self, file_path: Path) -> Tuple[bool, str]:
+        """Validate that a file is actually a zip archive.
+
+        Args:
+            file_path: Path to the file to validate
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        import zipfile
+
+        # Check file exists and has content
+        if not file_path.exists():
+            return False, "File does not exist"
+
+        file_size = file_path.stat().st_size
+        if file_size == 0:
+            return False, "File is empty"
+
+        # Check magic bytes (PK signature for zip files)
+        try:
+            with open(file_path, 'rb') as f:
+                magic = f.read(4)
+
+            # Zip files start with PK\x03\x04 (regular) or PK\x05\x06 (empty archive)
+            if not (magic[:2] == b'PK'):
+                # Check if it's an HTML response (common error)
+                with open(file_path, 'rb') as f:
+                    start = f.read(500)
+
+                if b'<!DOCTYPE' in start or b'<html' in start.lower() or b'<HTML' in start:
+                    # Try to extract error message from HTML
+                    try:
+                        text = start.decode('utf-8', errors='ignore')
+                        return False, f"Server returned HTML instead of zip file. This usually means:\n" \
+                                      f"  - Authentication failed or session expired\n" \
+                                      f"  - You haven't been approved for access yet\n" \
+                                      f"  - The download link has changed"
+                    except Exception:
+                        pass
+                    return False, "Server returned HTML instead of zip file"
+
+                return False, f"File is not a zip archive (magic bytes: {magic.hex()})"
+
+            # Verify it's a valid zip structure
+            if not zipfile.is_zipfile(file_path):
+                return False, "File has zip signature but is not a valid zip archive (possibly truncated)"
+
+            return True, ""
+
+        except IOError as e:
+            return False, f"Could not read file: {e}"
 
     def extract_zip(self, zip_path: Path, dest_dir: Path) -> bool:
         """Extract zip file.
@@ -897,13 +1306,35 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
         Returns:
             True if successful
         """
+        import zipfile
+
+        # Validate the zip file first
+        is_valid, error_msg = self._validate_zip_file(zip_path)
+        if not is_valid:
+            print_error(f"Invalid zip file: {error_msg}")
+            # Show file size for debugging
+            if zip_path.exists():
+                size_kb = zip_path.stat().st_size / 1024
+                print_info(f"Downloaded file size: {size_kb:.1f} KB")
+                if size_kb < 100:
+                    # Small file - likely an error page, show first few lines
+                    try:
+                        with open(zip_path, 'r', errors='ignore') as f:
+                            preview = f.read(500)
+                        print_info(f"File preview:\n{preview[:300]}...")
+                    except Exception:
+                        pass
+            return False
+
         try:
-            import zipfile
             print(f"  Extracting {zip_path.name}...")
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(dest_dir)
             print_success(f"Extracted to {dest_dir}")
             return True
+        except zipfile.BadZipFile as e:
+            print_error(f"Extraction failed - corrupted zip file: {e}")
+            return False
         except Exception as e:
             print_error(f"Extraction failed: {e}")
             return False
