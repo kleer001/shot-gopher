@@ -676,7 +676,7 @@ cd ComfyUI && pip install -r requirements.txt
 # Install custom nodes
 cd custom_nodes
 git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
-git clone https://github.com/your-repo/ComfyUI-Depth-Anything-V3.git
+git clone https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3.git
 git clone https://github.com/your-repo/ComfyUI-SAM3.git
 
 # Start server

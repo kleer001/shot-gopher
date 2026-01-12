@@ -305,7 +305,7 @@ Please test and report results for:
 
 ### ComfyUI (if testing)
 - [ ] ComfyUI cloned successfully
-- [ ] Custom nodes installed (VideoHelperSuite, Depth-Anything-V3, SAM2)
+- [ ] Custom nodes installed (VideoHelperSuite, DepthAnythingV3, SAM2)
 - [ ] Server starts: `python main.py --listen`
 - [ ] Can load workflow from `workflows/` directory
 
