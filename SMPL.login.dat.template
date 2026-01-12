@@ -1,13 +1,28 @@
-# SMPL-X Login Credentials Template
+# SMPL-X / ICON Login Credentials Template
 #
-# To download SMPL-X models automatically:
-# 1. Register at https://smpl-x.is.tue.mpg.de/
-# 2. Wait for approval email (usually within 24 hours)
-# 3. Copy this file to SMPL.login.dat (remove .template)
-# 4. Replace the lines below with your credentials
-# 5. Run the installation wizard: python scripts/install_wizard.py
+# These credentials are used to download models for the motion capture pipeline:
 #
-# Format: Two lines, email on line 1, password on line 2
+#   SMPL-X (smpl-x.is.tue.mpg.de):
+#     Parametric body model that defines skeleton, mesh topology, and UV layout.
+#     This is the "rigged character" - a deformable human mesh with consistent
+#     vertex ordering that can be posed and animated.
+#
+#   ECON (icon.is.tue.mpg.de):
+#     Clothed human reconstruction system. Takes video frames and reconstructs
+#     a detailed 3D mesh with clothing geometry, using SMPL-X as the underlying
+#     body prior to ensure consistent topology.
+#
+# IMPORTANT: You must register at BOTH websites separately!
+#
+# Registration Steps:
+# 1. Register at https://smpl-x.is.tue.mpg.de/ (for SMPL-X body models)
+# 2. Register at https://icon.is.tue.mpg.de/ (for ECON checkpoints)
+# 3. Wait for approval emails (usually 24-48 hours for each)
+# 4. Copy this file to SMPL.login.dat (remove .template)
+# 5. Replace the lines below with your credentials
+# 6. Run the installation wizard: python scripts/install_wizard.py
+#
+# Format: Two lines - email on line 1, password on line 2
 #
 your.email@example.com
 your_password_here

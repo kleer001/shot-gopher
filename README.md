@@ -667,41 +667,66 @@ git clone https://github.com/your-repo/ComfyUI-SAM3.git
 cd .. && python main.py --listen
 ```
 
-### SAM3 Model Access (Required for Segmentation)
+### SAM2 Model Access (Required for Segmentation)
 
-**SAM3 models can now be downloaded automatically:**
+**SAM2 (Segment Anything Model 2) can be downloaded automatically:**
 
-1. Visit https://huggingface.co/facebook/sam3
-2. Click "Access repository" and accept the license
-3. Get your HuggingFace token from https://huggingface.co/settings/tokens
-4. Create `HF_TOKEN.dat` in repository root with your token:
+1. Create a HuggingFace account at https://huggingface.co/join
+2. Visit https://huggingface.co/facebook/sam2.1-hiera-large
+3. Click "Agree and access repository" to accept the license
+4. Go to https://huggingface.co/settings/tokens and create a token with "Read" access
+5. Create `HF_TOKEN.dat` in repository root with your token:
    ```
    hf_yourTokenHere1234567890abcdefghijklmnop
    ```
-5. Run the installation wizard - it will automatically download SAM3 model to `.vfx_pipeline/ComfyUI/models/sam/`
+6. Run the installation wizard - it will automatically download SAM2 model to `.vfx_pipeline/ComfyUI/models/sam/`
 
 **Template file**: Copy `HF_TOKEN.dat.template` and fill in your token.
 
-**Note**: Without SAM3 access, segmentation workflows (roto, cleanplate) will not work.
+**Note**: Without SAM2 access, segmentation workflows (roto, cleanplate) will not work.
 
-### SMPL-X Model Access (Required for Motion Capture)
+### SMPL-X and ECON Model Access (Required for Motion Capture)
 
-**SMPL-X models can now be downloaded automatically:**
+**Models can be downloaded automatically, but require TWO separate registrations.**
+
+#### What Each Component Provides
+
+**SMPL-X** (Skinned Multi-Person Linear model, eXpressive):
+- Parametric body model defining skeleton, mesh topology, and UV layout
+- The "rigged character" - a deformable human mesh with consistent vertex ordering
+- Provides the underlying body structure that can be posed and animated
+
+**ECON** (Explicit Clothed humans Obtained from Normals):
+- Clothed human reconstruction from monocular video
+- Creates detailed 3D meshes including clothing geometry from video frames
+- Uses SMPL-X as the body prior to ensure consistent topology
+
+#### Registration Sites
+
+| Site | URL | Purpose |
+|------|-----|---------|
+| SMPL-X | https://smpl-x.is.tue.mpg.de/ | Parametric body model (skeleton + mesh) |
+| ICON/ECON | https://icon.is.tue.mpg.de/ | Clothed reconstruction checkpoints |
+
+**Note**: These are **separate registrations**. Both require approval (usually 24-48 hours each).
+
+#### Setup Steps
 
 1. Register at https://smpl-x.is.tue.mpg.de/
-2. Wait for approval email (usually within 24 hours)
-3. Create `SMPL.login.dat` in repository root:
+2. Register at https://icon.is.tue.mpg.de/ (separate registration)
+3. Wait for approval emails from both sites
+4. Create `SMPL.login.dat` in repository root:
    ```
    your.email@example.com
    your_password_here
    ```
-4. Run the installation wizard - it will automatically download and extract SMPL-X models to `.vfx_pipeline/smplx_models/`
+5. Run the installation wizard - it will download:
+   - SMPL-X models to `.vfx_pipeline/smplx_models/`
+   - ECON checkpoints to `.vfx_pipeline/ECON/data/`
 
 **Template file**: Copy `SMPL.login.dat.template` and fill in your credentials.
 
-**Manual alternative**: If you prefer manual installation, download models from the SMPL-X website and place in `.vfx_pipeline/smplx_models/SMPLX_*.pkl`
-
-**Note**: Without SMPL-X models, motion capture workflows will not work.
+**Note**: Without these models, motion capture workflows will not work.
 
 ### Motion Capture Dependencies (Optional)
 

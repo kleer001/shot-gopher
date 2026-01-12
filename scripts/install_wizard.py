@@ -22,6 +22,9 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+# Import centralized environment configuration
+from env_config import CONDA_ENV_NAME, PYTHON_VERSION
+
 # Global TTY file handle for reading input when piped
 _tty_handle = None
 
@@ -184,10 +187,10 @@ def format_size_gb(size_gb: float) -> str:
 class CondaEnvironmentManager:
     """Manages conda environment creation and activation."""
 
-    def __init__(self, env_name: str = "vfx-pipeline"):
+    def __init__(self, env_name: str = CONDA_ENV_NAME):
         self.env_name = env_name
         self.conda_exe = None
-        self.python_version = "3.10"
+        self.python_version = PYTHON_VERSION
 
     def detect_conda(self) -> bool:
         """Check if conda is installed and available."""
@@ -2277,12 +2280,13 @@ class InstallationWizard:
 
         Sets up:
         - HF_TOKEN.dat for HuggingFace (SAM3, etc.)
-        - SMPL.login.dat for SMPL-X models (motion capture)
+        - SMPL.login.dat for SMPL-X/ICON models (motion capture)
         """
         print_header("Credentials Setup")
         print("Some components require authentication to download:")
         print("  - SAM3 segmentation model (HuggingFace)")
         print("  - SMPL-X body models (smpl-x.is.tue.mpg.de)")
+        print("  - ECON checkpoints (icon.is.tue.mpg.de) - SEPARATE registration!")
         print("")
 
         # Check existing credentials
@@ -2304,9 +2308,12 @@ class InstallationWizard:
         if not hf_exists:
             print(f"\n{Colors.BOLD}HuggingFace Token Setup{Colors.ENDC}")
             print("Required for: SAM3 segmentation model")
+            print("")
             print("Steps:")
-            print("  1. Request access at https://huggingface.co/facebook/sam3")
-            print("  2. Get token from https://huggingface.co/settings/tokens")
+            print("  1. Go to https://huggingface.co/facebook/sam2.1-hiera-large")
+            print("  2. Click 'Agree and access repository' to accept the license")
+            print("  3. Go to https://huggingface.co/settings/tokens")
+            print("  4. Create a new token with 'Read' access")
             print("")
 
             if ask_yes_no("Set up HuggingFace token now?", default=True):
@@ -2329,19 +2336,34 @@ class InstallationWizard:
             else:
                 print_info("Skipped - you can add HF_TOKEN.dat later")
 
-        # SMPL-X credentials setup
+        # SMPL-X / ICON credentials setup
         if not smpl_exists:
-            print(f"\n{Colors.BOLD}SMPL-X Credentials Setup{Colors.ENDC}")
-            print("Required for: Motion capture (WHAM, ECON)")
+            print(f"\n{Colors.BOLD}SMPL-X / ICON Credentials Setup{Colors.ENDC}")
+            print("Required for: Motion capture pipeline")
+            print("")
+            print(f"{Colors.WARNING}IMPORTANT: You need to register at TWO separate websites!{Colors.ENDC}")
+            print("")
+            print("What each provides:")
+            print("  SMPL-X: Parametric body model - defines the skeleton, mesh topology,")
+            print("          and UV layout. This is the 'rigged character' that gets animated.")
+            print("")
+            print("  ECON:   Clothed human reconstruction - takes video frames and creates")
+            print("          a detailed 3D mesh with clothing, using SMPL-X as the body prior.")
+            print("")
+            print("Registration sites:")
+            print("  1. SMPL-X: https://smpl-x.is.tue.mpg.de/")
+            print("  2. ECON:   https://icon.is.tue.mpg.de/")
+            print("")
             print("Steps:")
-            print("  1. Register at https://smpl-x.is.tue.mpg.de/")
-            print("  2. Wait for approval email (usually within 24 hours)")
+            print("  1. Register at both websites (separate accounts)")
+            print("  2. Wait for approval emails (usually within 24-48 hours each)")
+            print("  3. Once approved, enter your credentials below")
             print("")
 
-            if ask_yes_no("Set up SMPL-X credentials now?", default=True):
-                email = tty_input("Enter your SMPL-X email: ").strip()
+            if ask_yes_no("Set up SMPL-X/ICON credentials now?", default=True):
+                email = tty_input("Enter your registered email: ").strip()
                 if email and '@' in email:
-                    password = tty_input("Enter your SMPL-X password: ").strip()
+                    password = tty_input("Enter your password: ").strip()
                     if password:
                         with open(smpl_creds_file, 'w') as f:
                             f.write(email + '\n')

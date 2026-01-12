@@ -25,6 +25,9 @@ from typing import Optional
 
 import numpy as np
 
+# Environment check - ensure correct conda environment is active
+from env_config import check_conda_env_or_warn
+
 
 # COLMAP quality presets
 QUALITY_PRESETS = {
@@ -727,6 +730,9 @@ def run_colmap_pipeline(
 
 
 def main():
+    # Check conda environment (warn but don't exit - allow --help to work)
+    check_conda_env_or_warn()
+
     parser = argparse.ArgumentParser(
         description="Run COLMAP reconstruction on a frame sequence",
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -27,6 +27,9 @@ import urllib.error
 from pathlib import Path
 from typing import Optional, List
 
+# Environment check - ensure correct conda environment is active
+from env_config import check_conda_env_or_warn
+
 
 DEFAULT_COMFYUI_URL = "http://127.0.0.1:8188"
 
@@ -272,6 +275,9 @@ def run_segmentation(
 
 
 def main():
+    # Check conda environment (warn but don't exit - allow --help to work)
+    check_conda_env_or_warn()
+
     parser = argparse.ArgumentParser(
         description="Run video segmentation with SAM3",
         formatter_class=argparse.RawDescriptionHelpFormatter,

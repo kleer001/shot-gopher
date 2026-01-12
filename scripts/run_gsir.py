@@ -29,6 +29,9 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+# Environment check - ensure correct conda environment is active
+from env_config import require_conda_env
+
 
 # Default training parameters
 DEFAULT_ITERATIONS_STAGE1 = 30000
@@ -480,6 +483,9 @@ def run_gsir_pipeline(
 
 
 def main():
+    # Require correct conda environment for GS-IR (needs CUDA packages)
+    require_conda_env()
+
     parser = argparse.ArgumentParser(
         description="Run GS-IR material decomposition on a COLMAP reconstruction",
         formatter_class=argparse.RawDescriptionHelpFormatter,

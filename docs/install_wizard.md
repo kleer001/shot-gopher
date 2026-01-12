@@ -32,6 +32,44 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/comfyui_ingest/main/bootst
 
 This clones the repository and runs the wizard automatically.
 
+## Prerequisites: Model Access Credentials
+
+Before running the wizard, you should set up credentials for downloading licensed models.
+
+### HuggingFace Token (SAM2 Model)
+
+Required for: Video segmentation (SAM2)
+
+1. Create account: https://huggingface.co/join
+2. Accept license: https://huggingface.co/facebook/sam2.1-hiera-large
+3. Create token: https://huggingface.co/settings/tokens (Read access)
+4. Save to `HF_TOKEN.dat` in repository root
+
+### SMPL-X and ICON/ECON Credentials
+
+Required for: Motion capture pipeline
+
+**IMPORTANT: Register at BOTH websites separately!**
+
+| Site | URL | Purpose |
+|------|-----|---------|
+| SMPL-X | https://smpl-x.is.tue.mpg.de/ | Parametric body model (skeleton, mesh topology, UVs) |
+| ICON | https://icon.is.tue.mpg.de/ | ECON clothed human reconstruction checkpoints |
+
+**SMPL-X** provides the deformable body mesh that gets animated.
+**ECON** reconstructs clothed humans from video using SMPL-X as the body prior.
+
+Save credentials to `SMPL.login.dat`:
+
+```
+your.email@example.com
+your_password_here
+```
+
+**Template files**: `HF_TOKEN.dat.template` and `SMPL.login.dat.template`
+
+The wizard will prompt for credentials if files don't exist.
+
 ## Command Line Options
 
 ### Short Options

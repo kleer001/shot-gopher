@@ -38,7 +38,7 @@ The installation wizard (`scripts/install_wizard.py`) is **production-quality**:
 The wizard downloads checkpoints from:
 
 - **WHAM**: Google Drive (uses `gdown` library)
-- **ECON**: icon.is.tue.mpg.de (requires same credentials as SMPL-X)
+- **ECON**: icon.is.tue.mpg.de (requires separate registration from SMPL-X)
 
 **If downloads fail:**
 1. Visit the project GitHub pages (URLs shown in error messages)
@@ -61,42 +61,68 @@ The `run_mocap.py` script makes assumptions about WHAM and ECON CLI interfaces.
 3. Update `scripts/run_mocap.py` with correct commands
 4. Report findings so we can fix it
 
-### 3. SAM3 Model Access
+### 3. SAM2 Model Access (HuggingFace)
 **Now automated with HuggingFace token:**
 
-SAM3 requires requesting access on HuggingFace:
+SAM2 (Segment Anything Model 2) requires accepting the license on HuggingFace:
 
-1. Visit https://huggingface.co/facebook/sam3
-2. Click "Access repository" and accept the license terms
-3. Wait for approval (usually automatic or within 24 hours)
-4. Get your HuggingFace token from https://huggingface.co/settings/tokens
-5. Create `HF_TOKEN.dat` in repository root with your token:
+1. Create a HuggingFace account at https://huggingface.co/join
+2. Visit https://huggingface.co/facebook/sam2.1-hiera-large
+3. Click "Agree and access repository" to accept the license
+4. Go to https://huggingface.co/settings/tokens
+5. Create a new token with "Read" access
+6. Create `HF_TOKEN.dat` in repository root with your token:
    ```
    hf_yourTokenHere1234567890abcdefghijklmnop
    ```
-6. Run wizard - model downloads automatically to `.vfx_pipeline/ComfyUI/models/sam/`
+7. Run wizard - model downloads automatically to `.vfx_pipeline/ComfyUI/models/sam/`
 
 **Template file**: Copy `HF_TOKEN.dat.template` and fill in your token.
 
-**Without SAM3 access**: Segmentation workflows (roto, cleanplate stages) will fail.
+**Without SAM2 access**: Segmentation workflows (roto, cleanplate stages) will fail.
 
-**Testing priority**: Please report if SAM3 access approval and automated download work in your region.
+**Testing priority**: Please report if SAM2 access approval and automated download work in your region.
 
-### 4. SMPL-X Models
+### 4. SMPL-X and ECON Models (MPG)
 **Now automated with credentials file:**
 
-1. Register at https://smpl-x.is.tue.mpg.de/
-2. Wait for approval email
+**IMPORTANT: You need to register at TWO separate websites!**
+
+#### What Each Component Provides
+
+**SMPL-X** (Skinned Multi-Person Linear model, eXpressive):
+- Parametric body model that defines skeleton, mesh topology, and UV layout
+- The "rigged character" - a deformable human mesh with consistent vertex ordering
+- Provides the underlying body structure that can be posed and animated
+- Includes face and hand articulation
+
+**ECON** (Explicit Clothed humans Obtained from Normals):
+- Clothed human reconstruction from monocular video
+- Takes video frames and creates a detailed 3D mesh including clothing geometry
+- Uses SMPL-X as the body prior to ensure consistent topology under the clothes
+- Outputs meshes that match SMPL-X vertex ordering for animation compatibility
+
+#### Registration Sites
+
+1. **SMPL-X**: https://smpl-x.is.tue.mpg.de/
+2. **ECON**: https://icon.is.tue.mpg.de/
+
+These are **separate registrations** - you need accounts on both sites.
+
+#### Setup Steps
+
+1. Register at both websites
+2. Wait for approval emails (usually 24-48 hours for each site)
 3. Create `SMPL.login.dat` in repository root:
    ```
    your.email@example.com
    your_password_here
    ```
-4. Run wizard - models download automatically to `.vfx_pipeline/smplx_models/`
+4. Run wizard - models download automatically to `.vfx_pipeline/smplx_models/` and `.vfx_pipeline/ECON/data/`
 
 **Template file**: Copy `SMPL.login.dat.template` and fill in credentials.
 
-**Testing priority**: Please report if SMPL-X download succeeds with authentication.
+**Testing priority**: Please report if SMPL-X and ECON downloads succeed with authentication.
 
 ---
 

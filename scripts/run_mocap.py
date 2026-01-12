@@ -33,6 +33,9 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Dict
 
+# Environment check - ensure correct conda environment is active
+from env_config import require_conda_env
+
 
 # Dependencies check results (cached)
 _DEPS_CHECKED = {}
@@ -512,6 +515,9 @@ def main():
         print_dependency_status()
         install_instructions()
         sys.exit(0)
+
+    # Require correct conda environment for actual processing
+    require_conda_env()
 
     if not args.project_dir:
         parser.print_help()
