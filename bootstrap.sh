@@ -10,7 +10,7 @@
 set -e  # Exit on error
 
 REPO_URL="https://github.com/kleer001/comfyui_ingest.git"
-INSTALL_DIR="$HOME/comfyui_ingest"
+INSTALL_DIR="$(pwd)/comfyui_ingest"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  VFX Pipeline - Automated Installer"
