@@ -16,29 +16,52 @@ Traditional VFX prep work (roto, depth, clean plates) is tedious. Modern ML mode
 
 ## Installation
 
-**Use the interactive installation wizard** - it will guide you through the entire setup:
+### Quick Install (Recommended)
+
+**One-liner bootstrap script** - clones repository and runs wizard automatically:
 
 ```bash
-# Run the installation wizard
-python scripts/install_wizard.py
-
-# Or check what's already installed
-python scripts/install_wizard.py --check-only
+curl -fsSL https://raw.githubusercontent.com/kleer001/comfyui_ingest/main/bootstrap.sh | bash
 ```
+
+Or manually:
+
+```bash
+git clone https://github.com/kleer001/comfyui_ingest.git
+cd comfyui_ingest
+python scripts/install_wizard.py
+```
+
+### What Gets Installed
 
 The wizard will:
 - ✓ Check system requirements (Python, GPU, Git)
+- ✓ Create dedicated conda environment automatically
 - ✓ Install core dependencies (PyTorch, NumPy, OpenCV)
-- ✓ Guide you through optional components (WHAM, TAVA, ECON)
-- ✓ Provide download links for model checkpoints
-- ✓ Show next steps for ComfyUI setup
+- ✓ Download model checkpoints automatically (WHAM, TAVA, ECON)
+- ✓ Clone git repositories (WHAM, TAVA, ECON, ComfyUI)
+- ✓ Generate configuration files (`config.json`, `activate.sh`)
+- ✓ Run validation tests
 
 **Installation options:**
 1. **Core pipeline only** - COLMAP, segmentation, depth (no motion capture)
-2. **Core + Motion capture** - Everything including WHAM/TAVA/ECON
-3. **Custom selection** - Pick exactly what you need
+2. **Core + ComfyUI** - Add workflows and custom nodes
+3. **Full stack** - Everything including motion capture
+4. **Custom selection** - Pick exactly what you need
 
-See [detailed installation instructions](#manual-installation) below if you prefer manual setup.
+**Quick commands:**
+```bash
+# Check what's installed
+python scripts/install_wizard.py -c
+
+# Validate installation
+python scripts/install_wizard.py -v
+
+# Resume interrupted installation
+python scripts/install_wizard.py -r
+```
+
+See **[docs/install_wizard.md](docs/install_wizard.md)** for complete documentation or [manual installation](#manual-installation) below.
 
 ## Quick Start
 
@@ -46,18 +69,55 @@ After installation, process footage with a single command:
 
 ```bash
 # Basic pipeline - depth + camera
-python scripts/run_pipeline.py /path/to/footage.mp4 --name "My_Shot"
+python scripts/run_pipeline.py /path/to/footage.mp4 -n "My_Shot"
 
 # With segmentation and clean plates
-python scripts/run_pipeline.py footage.mp4 --stages ingest,roto,cleanplate,colmap,camera
+python scripts/run_pipeline.py footage.mp4 -s ingest,roto,cleanplate,colmap,camera
 
 # Full pipeline with motion capture
-python scripts/run_pipeline.py footage.mp4 --stages ingest,roto,colmap,mocap,camera
+python scripts/run_pipeline.py footage.mp4 -s all
+
+# Skip already-processed stages
+python scripts/run_pipeline.py footage.mp4 -s all -e
 ```
 
+**Single-letter shortcuts** available for all options (e.g., `-n` for `--name`, `-s` for `--stages`, `-e` for `--skip-existing`).
+
 **Prerequisites:**
-- ComfyUI running: `cd /path/to/ComfyUI && python main.py --listen`
+- ComfyUI running: `cd .vfx_pipeline/ComfyUI && python main.py --listen`
 - Dependencies installed via wizard (or manually)
+
+See **[docs/run_pipeline.md](docs/run_pipeline.md)** for complete documentation.
+
+## Maintenance
+
+Keep your installation healthy with the janitor tool:
+
+```bash
+# Quick health check
+python scripts/janitor.py -H
+
+# Update all components
+python scripts/janitor.py -u -y
+
+# Clean temporary files
+python scripts/janitor.py -c
+
+# Full maintenance (health + update + clean + report)
+python scripts/janitor.py -a
+```
+
+See **[docs/janitor.md](docs/janitor.md)** for complete documentation.
+
+## Documentation
+
+Complete documentation is available in the **[docs/](docs/)** folder:
+
+- **[docs/README.md](docs/README.md)** - Overview and getting started
+- **[docs/install_wizard.md](docs/install_wizard.md)** - Installation wizard reference
+- **[docs/run_pipeline.md](docs/run_pipeline.md)** - Pipeline orchestrator reference
+- **[docs/janitor.md](docs/janitor.md)** - Maintenance tool reference
+- **[docs/component_scripts.md](docs/component_scripts.md)** - Individual component scripts
 
 ## Architecture
 
