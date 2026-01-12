@@ -1619,23 +1619,23 @@ def main():
         epilog=__doc__
     )
     parser.add_argument(
-        "--component",
+        "--component", "-C",
         type=str,
         choices=['core', 'pytorch', 'colmap', 'mocap_core', 'wham', 'tava', 'econ', 'comfyui'],
         help="Install specific component"
     )
     parser.add_argument(
-        "--check-only",
+        "--check-only", "-c",
         action="store_true",
         help="Check installation status only (don't install)"
     )
     parser.add_argument(
-        "--validate",
+        "--validate", "-v",
         action="store_true",
         help="Run validation tests on existing installation"
     )
     parser.add_argument(
-        "--resume",
+        "--resume", "-r",
         action="store_true",
         help="Resume previous interrupted installation"
     )
