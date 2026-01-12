@@ -92,13 +92,20 @@ SAM3 is not fully open-source and requires requesting access:
 **Testing priority**: Please report if SAM3 access approval is fast or slow in your region.
 
 ### 4. SMPL-X Models
-Requires manual download due to registration:
+**Now automated with credentials file:**
 
 1. Register at https://smpl-x.is.tue.mpg.de/
-2. Download models
-3. Place in `~/.smplx/SMPLX_*.pkl`
+2. Wait for approval email
+3. Create `SMPL.login.dat` in repository root:
+   ```
+   your.email@example.com
+   your_password_here
+   ```
+4. Run wizard - models download automatically to `~/.smplx/`
 
-**This is intentional** - cannot be automated.
+**Template file**: Copy `SMPL.login.dat.template` and fill in credentials.
+
+**Testing priority**: Please report if SMPL-X download succeeds with authentication.
 
 ---
 

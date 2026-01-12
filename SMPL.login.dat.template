@@ -1,0 +1,13 @@
+# SMPL-X Login Credentials Template
+#
+# To download SMPL-X models automatically:
+# 1. Register at https://smpl-x.is.tue.mpg.de/
+# 2. Wait for approval email (usually within 24 hours)
+# 3. Copy this file to SMPL.login.dat (remove .template)
+# 4. Replace the lines below with your credentials
+# 5. Run the installation wizard: python scripts/install_wizard.py
+#
+# Format: Two lines, email on line 1, password on line 2
+#
+your.email@example.com
+your_password_here

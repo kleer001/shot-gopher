@@ -695,6 +695,25 @@ cd .. && python main.py --listen
 
 **Note**: Without SAM3 access, segmentation workflows (roto, cleanplate) will not work.
 
+### SMPL-X Model Access (Required for Motion Capture)
+
+**SMPL-X models can now be downloaded automatically:**
+
+1. Register at https://smpl-x.is.tue.mpg.de/
+2. Wait for approval email (usually within 24 hours)
+3. Create `SMPL.login.dat` in repository root:
+   ```
+   your.email@example.com
+   your_password_here
+   ```
+4. Run the installation wizard - it will automatically download and extract SMPL-X models to `~/.smplx/`
+
+**Template file**: Copy `SMPL.login.dat.template` and fill in your credentials.
+
+**Manual alternative**: If you prefer manual installation, download models from the SMPL-X website and place in `~/.smplx/SMPLX_*.pkl`
+
+**Note**: Without SMPL-X models, motion capture workflows will not work.
+
 ### Motion Capture Dependencies (Optional)
 
 ```bash
@@ -714,10 +733,8 @@ cd tava && pip install -e .
 git clone https://github.com/YuliangXiu/ECON.git
 cd ECON && pip install -r requirements.txt
 
-# SMPL-X models
-# 1. Register at https://smpl-x.is.tue.mpg.de/
-# 2. Download models
-# 3. Place in ~/.smplx/
+# SMPL-X models - See "SMPL-X Model Access" section above
+# Automated download with SMPL.login.dat credentials
 ```
 
 ### Verify Installation

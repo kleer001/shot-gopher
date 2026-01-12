@@ -520,6 +520,29 @@ class CheckpointDownloader:
             ],
             'dest_dir_rel': 'ECON/data/ckpt',
             'instructions': 'Visit https://github.com/YuliangXiu/ECON for additional model files'
+        },
+        'smplx': {
+            'name': 'SMPL-X Models',
+            'requires_auth': True,
+            'auth_file': 'SMPL.login.dat',
+            'files': [
+                {
+                    'url': 'https://download.is.tue.mpg.de/download.php?domain=smplx&sfile=models_smplx_v1_1.zip',
+                    'filename': 'models_smplx_v1_1.zip',
+                    'size_mb': 830,
+                    'sha256': None,
+                    'extract': True
+                }
+            ],
+            'dest_dir_rel': '.smplx',  # Relative to HOME, not install_dir
+            'use_home_dir': True,
+            'instructions': '''SMPL-X models require registration:
+1. Register at https://smpl-x.is.tue.mpg.de/
+2. Wait for approval email (usually within 24 hours)
+3. Create SMPL.login.dat in repository root with:
+   Line 1: your email
+   Line 2: your password
+4. Re-run the wizard to download models'''
         }
     }
 
@@ -616,12 +639,147 @@ class CheckpointDownloader:
             print_error(f"Could not read file for checksum: {e}")
             return False
 
-    def download_checkpoint(self, comp_id: str, state_manager: Optional['InstallationStateManager'] = None) -> bool:
+    def read_smpl_credentials(self, repo_root: Path) -> Optional[Tuple[str, str]]:
+        """Read SMPL-X credentials from SMPL.login.dat file.
+
+        Args:
+            repo_root: Repository root directory
+
+        Returns:
+            Tuple of (username, password) or None if file not found
+        """
+        cred_file = repo_root / "SMPL.login.dat"
+
+        if not cred_file.exists():
+            return None
+
+        try:
+            with open(cred_file, 'r') as f:
+                lines = f.read().strip().split('\n')
+                if len(lines) >= 2:
+                    username = lines[0].strip()
+                    password = lines[1].strip()
+                    return (username, password)
+                else:
+                    print_error("SMPL.login.dat must contain username on line 1 and password on line 2")
+                    return None
+        except IOError as e:
+            print_error(f"Could not read SMPL.login.dat: {e}")
+            return None
+
+    def download_file_with_auth(
+        self,
+        url: str,
+        dest: Path,
+        auth: Optional[Tuple[str, str]] = None,
+        expected_size_mb: Optional[int] = None
+    ) -> bool:
+        """Download file with optional HTTP authentication.
+
+        Args:
+            url: URL to download from
+            dest: Destination file path
+            auth: Optional (username, password) tuple
+            expected_size_mb: Expected file size in MB
+
+        Returns:
+            True if successful
+        """
+        try:
+            import requests
+        except ImportError:
+            print_warning("requests library not found, installing...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "requests"], check=True)
+            import requests
+
+        try:
+            print(f"  Downloading from {url}...")
+            print(f"  -> {dest}")
+
+            # Ensure directory exists
+            dest.parent.mkdir(parents=True, exist_ok=True)
+
+            # Create session with auth if provided
+            session = requests.Session()
+            if auth:
+                session.auth = auth
+
+            # Stream download with progress
+            response = session.get(url, stream=True, timeout=30)
+            response.raise_for_status()
+
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+
+            with open(dest, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+
+                        # Simple progress indicator
+                        if total_size > 0:
+                            pct = (downloaded / total_size) * 100
+                            mb_downloaded = downloaded / (1024 * 1024)
+                            mb_total = total_size / (1024 * 1024)
+                            progress_msg = f"\r  Progress: {pct:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)"
+                            print(progress_msg, end='', flush=True)
+
+            print()  # New line after progress
+            print_success(f"Downloaded {dest.name}")
+            return True
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401:
+                print_error("Authentication failed - check your SMPL.login.dat credentials")
+            elif e.response.status_code == 403:
+                print_error("Access denied - have you been approved for SMPL-X access?")
+            else:
+                print_error(f"Download failed: {e}")
+            # Clean up partial download
+            if dest.exists():
+                dest.unlink()
+            return False
+        except requests.exceptions.RequestException as e:
+            print_error(f"Download failed: {e}")
+            # Clean up partial download
+            if dest.exists():
+                dest.unlink()
+            return False
+
+    def extract_zip(self, zip_path: Path, dest_dir: Path) -> bool:
+        """Extract zip file.
+
+        Args:
+            zip_path: Path to zip file
+            dest_dir: Destination directory
+
+        Returns:
+            True if successful
+        """
+        try:
+            import zipfile
+            print(f"  Extracting {zip_path.name}...")
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(dest_dir)
+            print_success(f"Extracted to {dest_dir}")
+            return True
+        except Exception as e:
+            print_error(f"Extraction failed: {e}")
+            return False
+
+    def download_checkpoint(
+        self,
+        comp_id: str,
+        state_manager: Optional['InstallationStateManager'] = None,
+        repo_root: Optional[Path] = None
+    ) -> bool:
         """Download checkpoints for a component.
 
         Args:
-            comp_id: Component ID (e.g., 'wham', 'tava', 'econ')
+            comp_id: Component ID (e.g., 'wham', 'tava', 'econ', 'smplx')
             state_manager: Optional state manager for tracking
+            repo_root: Repository root for finding credentials
 
         Returns:
             True if successful or already downloaded
@@ -638,22 +796,45 @@ class CheckpointDownloader:
         checkpoint_info = self.CHECKPOINTS[comp_id]
         print(f"\n{Colors.BOLD}Downloading {checkpoint_info['name']}...{Colors.ENDC}")
 
-        dest_dir = self.base_dir / checkpoint_info['dest_dir_rel']
+        # Handle authentication if required
+        auth = None
+        if checkpoint_info.get('requires_auth'):
+            if not repo_root:
+                repo_root = Path.cwd()  # Fallback to current directory
+
+            auth = self.read_smpl_credentials(repo_root)
+            if not auth:
+                print_error(f"{checkpoint_info['name']} requires authentication")
+                print_info(checkpoint_info['instructions'])
+                return False
+            print_success("Loaded credentials from SMPL.login.dat")
+
+        # Determine destination directory
+        if checkpoint_info.get('use_home_dir'):
+            dest_dir = Path.home() / checkpoint_info['dest_dir_rel']
+        else:
+            dest_dir = self.base_dir / checkpoint_info['dest_dir_rel']
+
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         success = True
         for file_info in checkpoint_info['files']:
             dest_path = dest_dir / file_info['filename']
 
-            # Skip if already exists
-            if dest_path.exists():
+            # Skip if already exists (unless it needs extraction)
+            if dest_path.exists() and not file_info.get('extract'):
                 print_success(f"{file_info['filename']} already exists")
                 continue
 
-            # Download
-            if not self.download_file(file_info['url'], dest_path, file_info.get('size_mb')):
-                success = False
-                break
+            # Download with auth if needed
+            if auth:
+                if not self.download_file_with_auth(file_info['url'], dest_path, auth, file_info.get('size_mb')):
+                    success = False
+                    break
+            else:
+                if not self.download_file(file_info['url'], dest_path, file_info.get('size_mb')):
+                    success = False
+                    break
 
             # Verify checksum if provided
             if file_info.get('sha256'):
@@ -661,6 +842,15 @@ class CheckpointDownloader:
                     success = False
                     dest_path.unlink()  # Remove corrupted file
                     break
+
+            # Extract if needed
+            if file_info.get('extract'):
+                if not self.extract_zip(dest_path, dest_dir):
+                    success = False
+                    break
+                # Optionally remove zip after extraction
+                dest_path.unlink()
+                print_info(f"Removed {dest_path.name} after extraction")
 
         if success and state_manager:
             state_manager.mark_checkpoint_downloaded(comp_id, dest_dir)
@@ -674,23 +864,29 @@ class CheckpointDownloader:
     def download_all_checkpoints(
         self,
         component_ids: List[str],
-        state_manager: Optional['InstallationStateManager'] = None
+        state_manager: Optional['InstallationStateManager'] = None,
+        repo_root: Optional[Path] = None
     ) -> bool:
         """Download checkpoints for multiple components.
 
         Args:
             component_ids: List of component IDs
             state_manager: Optional state manager
+            repo_root: Repository root for credentials
 
         Returns:
             True if all downloads successful
         """
         print_header("Downloading Checkpoints")
 
+        # Auto-detect repo root if not provided
+        if not repo_root:
+            repo_root = Path(__file__).parent.parent.resolve()
+
         success = True
         for comp_id in component_ids:
             if comp_id in self.CHECKPOINTS:
-                if not self.download_checkpoint(comp_id, state_manager):
+                if not self.download_checkpoint(comp_id, state_manager, repo_root):
                     success = False
 
         return success
