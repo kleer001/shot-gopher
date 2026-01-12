@@ -1313,14 +1313,36 @@ class PythonPackageInstaller(ComponentInstaller):
         super().__init__(name, size_gb)
         self.package = package
         self.import_name = import_name or package
+        self.conda_manager: Optional['CondaEnvironmentManager'] = None
+
+    def set_conda_manager(self, conda_manager: 'CondaEnvironmentManager'):
+        """Set the conda manager for environment-aware installation."""
+        self.conda_manager = conda_manager
 
     def check(self) -> bool:
-        self.installed = check_python_package(self.package, self.import_name)
+        """Check if package is installed in the conda environment."""
+        if self.conda_manager and self.conda_manager.conda_exe:
+            # Check within the conda environment
+            success, output = run_command([
+                self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                "python", "-c", f"import {self.import_name}"
+            ], check=False, capture=True)
+            self.installed = success
+        else:
+            self.installed = check_python_package(self.package, self.import_name)
         return self.installed
 
     def install(self) -> bool:
         print(f"\nInstalling {self.name}...")
-        success, _ = run_command([sys.executable, "-m", "pip", "install", self.package])
+
+        # Use conda manager if available to install into the environment
+        if self.conda_manager and self.conda_manager.conda_exe:
+            success = self.conda_manager.install_package_pip(self.package)
+        else:
+            # Fallback to system pip (may fail on externally-managed environments)
+            print_warning("No conda environment configured, using system pip")
+            success, _ = run_command([sys.executable, "-m", "pip", "install", self.package])
+
         if success:
             print_success(f"{self.name} installed")
             self.installed = True
@@ -1336,6 +1358,11 @@ class GitRepoInstaller(ComponentInstaller):
         super().__init__(name, size_gb)
         self.repo_url = repo_url
         self.install_dir = install_dir or Path.cwd() / ".vfx_pipeline" / name.lower()
+        self.conda_manager: Optional['CondaEnvironmentManager'] = None
+
+    def set_conda_manager(self, conda_manager: 'CondaEnvironmentManager'):
+        """Set the conda manager for environment-aware installation."""
+        self.conda_manager = conda_manager
 
     def check(self) -> bool:
         self.installed = self.install_dir.exists() and (self.install_dir / ".git").exists()
@@ -1357,9 +1384,17 @@ class GitRepoInstaller(ComponentInstaller):
         setup_py = self.install_dir / "setup.py"
         if setup_py.exists():
             print(f"  Installing {self.name} package...")
-            success, _ = run_command(
-                [sys.executable, "-m", "pip", "install", "-e", str(self.install_dir)]
-            )
+            # Use conda manager if available to install into the environment
+            if self.conda_manager and self.conda_manager.conda_exe:
+                success, _ = run_command([
+                    self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                    "pip", "install", "-e", str(self.install_dir)
+                ])
+            else:
+                print_warning("No conda environment configured, using system pip")
+                success, _ = run_command(
+                    [sys.executable, "-m", "pip", "install", "-e", str(self.install_dir)]
+                )
             if not success:
                 print_warning(f"pip install failed for {self.name}")
 
@@ -1604,7 +1639,13 @@ class InstallationWizard:
         status = {}
 
         for comp_id, comp_info in self.components.items():
-            all_installed = all(installer.check() for installer in comp_info['installers'])
+            all_installed = True
+            for installer in comp_info['installers']:
+                # Set conda manager for environment-aware checking
+                if hasattr(installer, 'set_conda_manager'):
+                    installer.set_conda_manager(self.conda_manager)
+                if not installer.check():
+                    all_installed = False
             status[comp_id] = all_installed
 
         return status
@@ -1713,6 +1754,10 @@ class InstallationWizard:
         success = True
         try:
             for installer in comp_info['installers']:
+                # Set conda manager for environment-aware installation
+                if hasattr(installer, 'set_conda_manager'):
+                    installer.set_conda_manager(self.conda_manager)
+
                 if not installer.check():
                     if not installer.install():
                         success = False
