@@ -572,6 +572,70 @@ Camera {
 - **Clothing detail**: Quality depends on ECON keyframe density
 - **Occlusions**: Heavy occlusions may cause tracking drift
 
+### Animating Clothed Meshes
+
+ECON produces detailed clothed geometry at keyframes, but doesn't animate between frames.
+The `mesh_deform.py` script transfers SMPL-X animation to ECON's higher-resolution meshes
+using UV-based correspondence (avoids distance-based artifacts in folding areas like armpits).
+
+**Full workflow:**
+
+```bash
+# Step 1: Generate animated SMPL-X meshes from WHAM motion
+python scripts/smplx_from_motion.py project/ \
+    --motion mocap/wham/motion.pkl \
+    --output mocap/smplx_animated/ \
+    --rest-pose mocap/smplx_rest.obj
+
+# Step 2: Deform ECON mesh using UV-based correspondence
+python scripts/mesh_deform.py project/ \
+    --smplx-rest mocap/smplx_rest.obj \
+    --econ-rest mocap/econ/mesh_0001.obj \
+    --smplx-sequence mocap/smplx_animated/ \
+    --output mocap/econ_animated/
+```
+
+**Controlling deformation smoothness:**
+
+Create a UV-space weight map to control per-region behavior:
+
+```bash
+# Create template smoothing map
+python scripts/mesh_deform.py project/ \
+    --create-smoothing-template mocap/smoothing_weights.png
+
+# Paint in Photoshop/GIMP:
+#   White = more smoothing (soft fabric)
+#   Black = rigid (stiff clothing moves exactly with body)
+#   Gray = moderate (default)
+
+# Apply custom smoothing
+python scripts/mesh_deform.py project/ \
+    --smplx-rest mocap/smplx_rest.obj \
+    --econ-rest mocap/econ/mesh_0001.obj \
+    --smplx-sequence mocap/smplx_animated/ \
+    --output mocap/econ_animated/ \
+    --smoothing-map mocap/smoothing_weights.png
+```
+
+**Offset modes:**
+- `--offset-mode smooth`: Linear interpolation (default, fast)
+- `--offset-mode normal`: Offset projected along surface normal
+- `--offset-mode rigid`: Full local frame transformation (most accurate)
+
+**Caching correspondence:**
+
+For iterating on the same meshes, cache the correspondence computation:
+
+```bash
+python scripts/mesh_deform.py project/ \
+    --smplx-rest mocap/smplx_rest.obj \
+    --econ-rest mocap/econ/mesh_0001.obj \
+    --smplx-sequence mocap/smplx_animated/ \
+    --output mocap/econ_animated/ \
+    --cache mocap/correspondence.npz
+```
+
 ### Validation & Testing
 
 **Check motion quality:**

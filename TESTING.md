@@ -372,6 +372,72 @@ Remember dependency order:
 4. **Test stages independently:** Don't run full pipeline until each stage works
 5. **Compare to examples:** Check WHAM/ECON example outputs
 
+## Unit Tests
+
+The repository includes unit tests for core algorithms that can be run without GPU or external dependencies.
+
+### Running Unit Tests
+
+```bash
+# Install test dependencies
+pip install pytest numpy
+
+# Run all unit tests
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_mesh_deform.py -v
+pytest tests/test_smplx_from_motion.py -v
+
+# Run specific test class
+pytest tests/test_mesh_deform.py::TestUVTriangleLookup -v
+```
+
+### Test Coverage
+
+**test_mesh_deform.py** (19 tests):
+- `TestUVTriangleLookup`: UV-space triangle lookup and spatial hashing
+- `TestComputeVertexNormals`: Vertex normal computation
+- `TestComputeLocalFrame`: Local coordinate frame construction
+- `TestMeshCorrespondence`: Correspondence save/load functionality
+- `TestDeformFrame`: Per-frame mesh deformation
+- `TestBarycentricInterpolation`: Barycentric weight correctness
+
+**test_smplx_from_motion.py** (14 tests):
+- `TestLoadMotionData`: Motion.pkl loading and validation
+- `TestFindSmplxModels`: SMPL-X model directory discovery
+- `TestPoseParameterExtraction`: SMPL-X pose parameter handling
+- `TestMotionDataIntegrity`: Edge cases and data integrity
+
+### Writing New Tests
+
+When adding new functionality:
+
+1. Create test file in `tests/` directory
+2. Import the script module:
+   ```python
+   import sys
+   sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+   from your_script import function_to_test
+   ```
+3. Use pytest fixtures for shared test data
+4. Test edge cases (empty inputs, invalid data, etc.)
+
+### Expected Output
+
+```
+============================= test session starts ==============================
+platform linux -- Python 3.11.x, pytest-9.x.x
+collected 33 items
+
+tests/test_mesh_deform.py::TestUVTriangleLookup::test_simple_triangle_lookup PASSED
+tests/test_mesh_deform.py::TestUVTriangleLookup::test_point_outside_triangle PASSED
+...
+tests/test_smplx_from_motion.py::TestMotionDataIntegrity::test_motion_data_shapes_match PASSED
+
+============================== 33 passed in 0.37s ==============================
+```
+
 ## Reporting Issues
 
 When reporting bugs, include:

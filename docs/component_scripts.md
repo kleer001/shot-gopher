@@ -17,6 +17,8 @@ While `run_pipeline.py` orchestrates the full pipeline, each component can also 
 | `run_gsir.py` | Material decomposition | COLMAP model | PBR materials |
 | `export_camera.py` | Camera export | Camera JSON | Alembic/FBX |
 | `texture_projection.py` | Texture SMPL-X meshes | Meshes + frames | Textured meshes |
+| `smplx_from_motion.py` | Generate SMPL-X from WHAM | motion.pkl | Mesh sequence |
+| `mesh_deform.py` | Deform ECON with SMPL-X | SMPL-X + ECON meshes | Animated ECON |
 
 ## setup_project.py
 
@@ -519,6 +521,195 @@ python scripts/texture_projection.py \
 - Smart unwrapping usually works best
 - Requires accurate camera tracking
 - Best results with frontal views of subject
+
+---
+
+## smplx_from_motion.py
+
+Generate animated SMPL-X mesh sequences from WHAM motion data.
+
+### Usage
+
+```bash
+python scripts/smplx_from_motion.py <project_dir> [options]
+```
+
+### Arguments
+
+**Positional**:
+- `project_dir` - Project directory
+
+**Required**:
+- `--motion` - Path to WHAM motion.pkl file
+- `--output` - Output directory for mesh sequence
+
+**Optional**:
+- `--rest-pose` - Save rest pose (frame 0) to this path
+- `--model-path` - Path to SMPL-X models (auto-detected if not specified)
+- `--gender` - Body model gender: `neutral`, `male`, `female` (default: `neutral`)
+- `--device` - Torch device: `cuda`, `cpu` (default: `cuda`)
+
+### Examples
+
+**Basic mesh generation**:
+```bash
+python scripts/smplx_from_motion.py ./projects/Actor01 \
+    --motion mocap/wham/motion.pkl \
+    --output mocap/smplx_animated/
+```
+
+**With rest pose export**:
+```bash
+python scripts/smplx_from_motion.py ./projects/Actor01 \
+    --motion mocap/wham/motion.pkl \
+    --output mocap/smplx_animated/ \
+    --rest-pose mocap/smplx_rest.obj
+```
+
+**Specific gender model**:
+```bash
+python scripts/smplx_from_motion.py ./projects/Actor01 \
+    --motion mocap/wham/motion.pkl \
+    --output mocap/smplx_animated/ \
+    --gender female
+```
+
+### Input
+
+- `mocap/wham/motion.pkl` - WHAM motion data containing:
+  - `poses`: [N, 72] SMPL pose parameters
+  - `trans`: [N, 3] root translation
+  - `betas`: [10] or [N, 10] shape parameters
+
+### Output
+
+- `mocap/smplx_animated/frame_0000.obj` ... `frame_NNNN.obj` - Per-frame SMPL-X meshes
+- Optional: Rest pose mesh at specified path
+
+### Prerequisites
+
+- SMPL-X models downloaded from https://smpl-x.is.tue.mpg.de/
+- Models placed in `.vfx_pipeline/smplx_models/` or specified via `--model-path`
+- PyTorch installed with CUDA support (for GPU acceleration)
+
+### Tips
+
+- Use `--device cpu` if CUDA is unavailable (slower)
+- Rest pose is required for mesh_deform.py workflow
+- SMPL-X meshes include UV coordinates for texturing
+
+---
+
+## mesh_deform.py
+
+Transfer animation from SMPL-X to ECON clothed meshes using UV-based correspondence.
+
+### Usage
+
+```bash
+python scripts/mesh_deform.py <project_dir> [options]
+```
+
+### Arguments
+
+**Positional**:
+- `project_dir` - Project directory
+
+**Required**:
+- `--smplx-rest` - SMPL-X rest pose mesh (.obj)
+- `--econ-rest` - ECON rest pose mesh (.obj)
+- `--smplx-sequence` - Directory with animated SMPL-X meshes
+- `--output` - Output directory for deformed meshes
+
+**Optional**:
+- `--smoothing-map` - UV-space smoothing weight image (grayscale PNG)
+- `--offset-mode` - Offset transformation mode: `smooth`, `rigid`, `normal` (default: `smooth`)
+- `--cache` - Path to cache correspondence data (.npz)
+- `--create-smoothing-template` - Create a default smoothing map template
+
+### Examples
+
+**Basic deformation**:
+```bash
+python scripts/mesh_deform.py ./projects/Actor01 \
+    --smplx-rest mocap/smplx_rest.obj \
+    --econ-rest mocap/econ/mesh_0001.obj \
+    --smplx-sequence mocap/smplx_animated/ \
+    --output mocap/econ_animated/
+```
+
+**With correspondence caching** (faster iteration):
+```bash
+python scripts/mesh_deform.py ./projects/Actor01 \
+    --smplx-rest mocap/smplx_rest.obj \
+    --econ-rest mocap/econ/mesh_0001.obj \
+    --smplx-sequence mocap/smplx_animated/ \
+    --output mocap/econ_animated/ \
+    --cache mocap/correspondence.npz
+```
+
+**Create smoothing template**:
+```bash
+python scripts/mesh_deform.py ./projects/Actor01 \
+    --create-smoothing-template mocap/smoothing_weights.png
+```
+
+**With custom smoothing map**:
+```bash
+python scripts/mesh_deform.py ./projects/Actor01 \
+    --smplx-rest mocap/smplx_rest.obj \
+    --econ-rest mocap/econ/mesh_0001.obj \
+    --smplx-sequence mocap/smplx_animated/ \
+    --output mocap/econ_animated/ \
+    --smoothing-map mocap/smoothing_weights.png
+```
+
+### Input
+
+- SMPL-X rest pose mesh with UV coordinates
+- ECON rest pose mesh with matching UV coordinates
+- Animated SMPL-X mesh sequence (from smplx_from_motion.py)
+
+### Output
+
+- Deformed ECON meshes (one per input SMPL-X frame)
+- Preserves ECON mesh topology and UV coordinates
+
+### Offset Modes
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `smooth` | Linear interpolation (fastest) | Tight clothing, default |
+| `normal` | Offset along surface normal | Medium clothing |
+| `rigid` | Full local frame transformation | Loose clothing, most accurate |
+
+### Smoothing Map
+
+The smoothing map controls per-region deformation behavior:
+- **White (255)**: Maximum smoothing/damping (soft fabric)
+- **Black (0)**: Rigid offset (stiff clothing moves with body)
+- **Gray (128)**: Moderate smoothing (default)
+
+Paint the map in Photoshop/GIMP using the SMPL-X UV layout to control areas like:
+- Armpits, thighs (more smoothing to avoid artifacts)
+- Belt, shoes (rigid, moves with body)
+- Shirt, pants (moderate)
+
+### Why UV-Based (Not Distance-Based)
+
+Distance-based mesh binding creates artifacts where geometry folds (armpits, inner thighs) because vertices that are far apart on the body surface become close in 3D space when the mesh folds.
+
+UV-based correspondence avoids this because:
+- UV coordinates are pose-invariant
+- Vertices far apart on the surface stay far apart in UV space
+- Folding in 3D doesn't affect UV-space relationships
+
+### Tips
+
+- Use `--cache` to speed up iteration (correspondence is expensive to compute)
+- Start with `smooth` mode, try `rigid` if clothing looks too damped
+- Low UV coverage (<90%) indicates UV mismatch between meshes
+- ECON and SMPL-X must have compatible UV layouts
 
 ---
 
