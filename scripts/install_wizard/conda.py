@@ -1,0 +1,182 @@
+"""Conda environment management for the installation wizard.
+
+This module handles conda environment detection, creation, and package
+installation within conda environments.
+"""
+
+import os
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+# Import centralized environment configuration
+from env_config import CONDA_ENV_NAME, PYTHON_VERSION
+
+from .utils import print_error, print_success, print_warning, run_command
+
+
+class CondaEnvironmentManager:
+    """Manages conda environment creation and activation."""
+
+    def __init__(self, env_name: str = CONDA_ENV_NAME):
+        self.env_name = env_name
+        self.conda_exe = None
+        self.python_version = PYTHON_VERSION
+
+    def detect_conda(self) -> bool:
+        """Check if conda is installed and available."""
+        # Try conda command
+        success, output = run_command(["conda", "--version"], check=False, capture=True)
+        if success:
+            self.conda_exe = "conda"
+            return True
+
+        # Try mamba
+        success, output = run_command(["mamba", "--version"], check=False, capture=True)
+        if success:
+            self.conda_exe = "mamba"
+            return True
+
+        return False
+
+    def get_current_env(self) -> Optional[str]:
+        """Get name of currently active conda environment."""
+        env = os.environ.get('CONDA_DEFAULT_ENV')
+        return env
+
+    def list_environments(self) -> List[str]:
+        """List all conda environments."""
+        if not self.conda_exe:
+            return []
+
+        success, output = run_command(
+            [self.conda_exe, "env", "list"],
+            check=False,
+            capture=True
+        )
+        if not success:
+            return []
+
+        # Parse output
+        envs = []
+        for line in output.split('\n'):
+            line = line.strip()
+            if line and not line.startswith('#'):
+                # Format: "envname    /path/to/env"
+                parts = line.split()
+                if parts:
+                    envs.append(parts[0])
+        return envs
+
+    def environment_exists(self, env_name: str) -> bool:
+        """Check if a conda environment exists."""
+        return env_name in self.list_environments()
+
+    def create_environment(self, python_version: Optional[str] = None) -> bool:
+        """Create new conda environment.
+
+        Args:
+            python_version: Python version (e.g., "3.10"), uses default if None
+
+        Returns:
+            True if successful
+        """
+        if not self.conda_exe:
+            print_error("Conda not available")
+            return False
+
+        py_ver = python_version or self.python_version
+        print(f"\nCreating conda environment '{self.env_name}' with Python {py_ver}...")
+
+        success, _ = run_command([
+            self.conda_exe, "create",
+            "-n", self.env_name,
+            f"python={py_ver}",
+            "-y"
+        ])
+
+        if success:
+            print_success(f"Environment '{self.env_name}' created")
+        else:
+            print_error(f"Failed to create environment '{self.env_name}'")
+
+        return success
+
+    def get_activation_command(self) -> str:
+        """Get command to activate the environment."""
+        return f"conda activate {self.env_name}"
+
+    def get_python_executable(self) -> Optional[Path]:
+        """Get path to Python executable in the environment."""
+        if not self.conda_exe:
+            return None
+
+        success, output = run_command(
+            [self.conda_exe, "run", "-n", self.env_name, "which", "python"],
+            check=False,
+            capture=True
+        )
+
+        if success and output.strip():
+            return Path(output.strip())
+        return None
+
+    def install_package_conda(self, package: str, channel: Optional[str] = None) -> bool:
+        """Install package via conda in the environment.
+
+        Args:
+            package: Package name (e.g., "pytorch")
+            channel: Conda channel (e.g., "pytorch", "conda-forge")
+
+        Returns:
+            True if successful
+        """
+        if not self.conda_exe:
+            return False
+
+        cmd = [self.conda_exe, "install", "-n", self.env_name, package, "-y"]
+        if channel:
+            cmd.extend(["-c", channel])
+
+        print(f"  Installing {package} via conda...")
+        success, _ = run_command(cmd)
+        return success
+
+    def install_package_pip(self, package: str) -> bool:
+        """Install package via pip in the environment.
+
+        Args:
+            package: Package name or pip install spec
+
+        Returns:
+            True if successful
+        """
+        if not self.conda_exe:
+            return False
+
+        print(f"  Installing {package} via pip...")
+        success, _ = run_command([
+            self.conda_exe, "run", "-n", self.env_name,
+            "pip", "install", package
+        ])
+        return success
+
+    def check_setup(self) -> Tuple[bool, str]:
+        """Check conda setup and recommend action.
+
+        Returns:
+            (is_ready, message)
+        """
+        if not self.detect_conda():
+            return False, "Conda not installed. Please install Miniconda or Anaconda first."
+
+        current_env = self.get_current_env()
+
+        # Check if vfx-pipeline exists
+        if self.environment_exists(self.env_name):
+            if current_env == self.env_name:
+                return True, f"Using existing environment '{self.env_name}'"
+            else:
+                return True, f"Environment '{self.env_name}' exists but not activated. Will use it."
+
+        # Need to create environment
+        return True, f"Will create new environment '{self.env_name}'"
