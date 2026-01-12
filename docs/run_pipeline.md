@@ -11,7 +11,7 @@ Automated end-to-end VFX processing pipeline.
 3. **Roto** - Segmentation masks (ComfyUI + SAM2)
 4. **Cleanplate** - Clean plate generation (ComfyUI)
 5. **COLMAP** - Camera tracking and 3D reconstruction
-6. **Mocap** - Human motion capture (WHAM + TAVA + ECON)
+6. **Mocap** - Human motion capture (WHAM + ECON)
 7. **GS-IR** - Material decomposition (Gaussian splatting)
 8. **Camera** - Export camera to Alembic format
 
@@ -110,7 +110,7 @@ python scripts/run_pipeline.py footage.mp4 -n "Actor01" -s all
 ```
 
 Requires:
-- WHAM, TAVA, ECON installed
+- WHAM, ECON installed
 - Camera data (from COLMAP or Depth-Anything-V3)
 
 ### Example 4: High-Quality COLMAP
@@ -276,7 +276,7 @@ If `roto/*.png` exists, COLMAP automatically uses masks to ignore moving objects
 
 ### mocap - Motion Capture
 
-Human motion capture using WHAM + TAVA + ECON.
+Human motion capture using WHAM + ECON.
 
 **Input**:
 - `source/frames/*.png`
@@ -284,11 +284,11 @@ Human motion capture using WHAM + TAVA + ECON.
 
 **Output**:
 - `mocap/wham/` - WHAM pose estimates
-- `mocap/tava/` - TAVA avatar mesh sequences
 - `mocap/econ/` - ECON 3D reconstructions
+- `mocap/mesh_sequence/` - Exported mesh sequence
 
 **Requirements**:
-- WHAM, TAVA, ECON installed
+- WHAM, ECON installed
 - Camera data (run `colmap` or `depth` stage first)
 
 **Example**:
@@ -297,10 +297,9 @@ python scripts/run_pipeline.py actor_footage.mp4 -s colmap,mocap
 ```
 
 **Pipeline**:
-1. WHAM extracts pose from video
-2. TAVA generates animatable avatar
-3. ECON reconstructs detailed 3D clothed human
-4. Texture projection (optional, use `--skip-texture` to disable)
+1. WHAM extracts pose from video (world-grounded motion)
+2. ECON reconstructs detailed 3D clothed human with SMPL-X compatibility
+3. Texture projection (optional, use `--skip-texture` to disable)
 
 ### gsir - Material Decomposition
 
@@ -384,9 +383,9 @@ Pipeline creates this directory structure:
 ├── mocap/                       # Motion capture
 │   ├── wham/
 │   │   └── poses.pkl
-│   ├── tava/
-│   │   └── mesh_sequence.pkl
-│   └── econ/
+│   ├── econ/
+│   │   └── mesh_*.obj
+│   └── mesh_sequence/
 │       └── textured_meshes/
 ├── gsir/                        # GS-IR materials
 │   ├── model/

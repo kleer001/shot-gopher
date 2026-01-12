@@ -212,7 +212,7 @@ Scene boundaries prevent mask propagation across cuts.
 
 ## run_mocap.py
 
-Human motion capture pipeline using WHAM + TAVA + ECON.
+Human motion capture pipeline using WHAM + ECON.
 
 ### Usage
 
@@ -228,8 +228,7 @@ python scripts/run_mocap.py <project_dir> [options]
 **Options**:
 - `--skip-texture` - Skip texture projection (faster)
 - `--keyframe-interval` - ECON keyframe interval (default: 25)
-- `--fps` - Frame rate (default: 24.0)
-- `--gender` - SMPL-X gender: `neutral`, `male`, `female` (default: `neutral`)
+- `--test-stage` - Test specific stage: `motion`, `econ`, `texture`
 - `--check` - Validate installation without processing
 
 ### Examples
@@ -265,19 +264,16 @@ python scripts/run_mocap.py ./projects/Actor01 --check
 - `mocap/wham/` - WHAM pose estimates
   - `poses.pkl` - Per-frame poses
   - `tracking.json` - Tracking metadata
-- `mocap/tava/` - TAVA avatars
-  - `mesh_sequence.pkl` - Animated mesh sequence
-  - `params.json` - Avatar parameters
 - `mocap/econ/` - ECON 3D reconstructions
-  - `textured_meshes/*.obj` - Textured mesh per keyframe
-  - `reconstruction.pkl` - 3D reconstruction data
+  - `mesh_*.obj` - Clothed mesh per keyframe
+- `mocap/mesh_sequence/` - Exported mesh sequence
+  - `mesh_*.obj` - OBJ mesh files
 
 ### Pipeline
 
-1. **WHAM** extracts 3D pose from video
-2. **TAVA** generates animatable avatar from pose sequence
-3. **ECON** reconstructs detailed clothed human at keyframes
-4. **Texture Projection** (optional) projects video texture onto meshes
+1. **WHAM** extracts 3D pose from video (world-grounded motion)
+2. **ECON** reconstructs detailed clothed human with SMPL-X compatibility
+3. **Texture Projection** (optional) projects video texture onto meshes
 
 ### Tips
 

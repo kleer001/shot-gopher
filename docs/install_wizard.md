@@ -8,7 +8,7 @@ The installation wizard provides a guided, menu-driven interface for installing 
 
 - Conda environment management (automatic)
 - Dependency installation (PyTorch, COLMAP, etc.)
-- Git repository cloning (WHAM, TAVA, ECON, ComfyUI)
+- Git repository cloning (WHAM, ECON, ComfyUI)
 - Checkpoint downloading (automatic with progress bars)
 - Installation validation (smoke tests)
 - Configuration file generation
@@ -71,7 +71,6 @@ Output:
 
 [Motion Capture]
   ✗ WHAM
-  ✗ TAVA
   ✗ ECON
 ```
 
@@ -115,7 +114,6 @@ Valid components:
 - `colmap` - COLMAP (built from source)
 - `mocap_core` - All motion capture tools
 - `wham` - WHAM pose estimation
-- `tava` - TAVA avatar generation
 - `econ` - ECON 3D reconstruction
 - `comfyui` - ComfyUI and custom nodes
 
@@ -145,7 +143,6 @@ What would you like to install?
 
 **Option 3** adds:
 - WHAM (motion capture)
-- TAVA (avatar generation)
 - ECON (3D reconstruction)
 - All checkpoints (automatic download)
 
@@ -171,7 +168,6 @@ Choose individual components:
 
 [Motion Capture]
   [ ] WHAM (pose estimation)
-  [ ] TAVA (avatar generation)
   [ ] ECON (3D reconstruction)
 ```
 
@@ -228,10 +224,6 @@ Checkpoints are downloaded automatically:
 **WHAM:**
 - `wham_vit_w_3dpw.pth.tar` (1.2 GB)
 
-**TAVA:**
-- `FLAME_NEUTRAL_NT_V5.pkl` (15 MB)
-- `tava_model.tar` (800 MB)
-
 **ECON:**
 - `econ_model.tar` (500 MB)
 - `smplx_model.pkl` (100 MB)
@@ -263,7 +255,6 @@ Generated configuration with all paths:
   "python_executable": "/home/user/miniconda3/envs/vfx-pipeline/bin/python",
   "install_dir": "/home/user/comfyui_ingest/.vfx_pipeline",
   "wham_dir": "/home/user/comfyui_ingest/.vfx_pipeline/WHAM",
-  "tava_dir": "/home/user/comfyui_ingest/.vfx_pipeline/tava",
   "econ_dir": "/home/user/comfyui_ingest/.vfx_pipeline/ECON",
   "comfyui_dir": "/home/user/comfyui_ingest/.vfx_pipeline/ComfyUI",
   "cuda_available": true,
@@ -283,12 +274,11 @@ Environment activation script:
 conda activate vfx-pipeline
 
 # Set up Python path
-export PYTHONPATH="${PYTHONPATH}:/path/to/.vfx_pipeline/WHAM:/path/to/.vfx_pipeline/tava:/path/to/.vfx_pipeline/ECON"
+export PYTHONPATH="${PYTHONPATH}:/path/to/.vfx_pipeline/WHAM:/path/to/.vfx_pipeline/ECON"
 
 # Set up environment variables
 export VFX_PIPELINE_BASE="/path/to/.vfx_pipeline"
 export WHAM_DIR="/path/to/.vfx_pipeline/WHAM"
-export TAVA_DIR="/path/to/.vfx_pipeline/tava"
 export ECON_DIR="/path/to/.vfx_pipeline/ECON"
 export SMPLX_MODEL_DIR="${VFX_PIPELINE_BASE}/smplx_models"
 
@@ -311,7 +301,6 @@ Tracks installation progress:
     "pytorch": "completed",
     "colmap": "completed",
     "wham": "in_progress",
-    "tava": "pending",
     "econ": "pending",
     "comfyui": "completed"
   },
@@ -345,7 +334,7 @@ Previous installation detected (incomplete)
 
 Completed: pytorch, colmap, comfyui
 In progress: wham
-Pending: tava, econ
+Pending: econ
 
 Resume installation? [Y/n]: y
 ```
@@ -380,7 +369,6 @@ Verifies checkpoint files exist and have correct size:
 ```
 [Checkpoint Validation]
   ✓ WHAM checkpoint found (1.2 GB)
-  ✓ TAVA checkpoint found (800 MB)
   ✗ ECON checkpoint missing
 ```
 
@@ -391,7 +379,6 @@ Checks git repositories are clean:
 ```
 [Repository Status]
   ✓ WHAM: Clean working directory
-  ✓ TAVA: Clean working directory
   ✓ ComfyUI: Clean working directory
 ```
 
@@ -435,8 +422,7 @@ Clean up space or choose a different installation directory.
 URLs may be outdated. Manually download and place in correct directories:
 
 - WHAM: `.vfx_pipeline/WHAM/checkpoints/`
-- TAVA: `.vfx_pipeline/tava/checkpoints/`
-- ECON: `.vfx_pipeline/ECON/checkpoints/`
+- ECON: `.vfx_pipeline/ECON/data/`
 
 ### "Import errors after installation"
 

@@ -4,7 +4,7 @@
 Guides users through installing all dependencies for:
 - Core pipeline (ComfyUI workflows, COLMAP, etc.)
 - Dynamic scene segmentation (SAM3)
-- Human motion capture (WHAM, TAVA, ECON)
+- Human motion capture (WHAM, ECON)
 
 Usage:
     python scripts/install_wizard.py
@@ -511,42 +511,46 @@ class CheckpointDownloader:
     CHECKPOINTS = {
         'wham': {
             'name': 'WHAM Checkpoints',
+            'use_gdown': True,  # Use gdown for Google Drive downloads
             'files': [
                 {
-                    'url': 'https://github.com/yohanshin/WHAM/releases/download/v1.0/wham_vit_w_3dpw.pth.tar',
+                    'url': 'https://drive.google.com/uc?id=1i7kt9RlCCCNEW2aYaDWVr-G778JkLNcB',
                     'filename': 'wham_vit_w_3dpw.pth.tar',
                     'size_mb': 1200,
                     'sha256': None  # TODO: Add checksums
                 }
             ],
             'dest_dir_rel': 'WHAM/checkpoints',
-            'instructions': 'Visit https://github.com/yohanshin/WHAM for more checkpoint options'
-        },
-        'tava': {
-            'name': 'TAVA Checkpoints',
-            'files': [
-                {
-                    'url': 'https://dl.fbaipublicfiles.com/tava/tava_model.pth',
-                    'filename': 'tava_model.pth',
-                    'size_mb': 800,
-                    'sha256': None
-                }
-            ],
-            'dest_dir_rel': 'tava/checkpoints',
-            'instructions': 'Visit https://github.com/facebookresearch/tava for more details'
+            'instructions': '''WHAM checkpoints are hosted on Google Drive.
+If automatic download fails, manually download from:
+  https://drive.google.com/file/d/1i7kt9RlCCCNEW2aYaDWVr-G778JkLNcB/view
+Or run the fetch_demo_data.sh script from the WHAM repository:
+  cd .vfx_pipeline/WHAM && bash fetch_demo_data.sh'''
         },
         'econ': {
             'name': 'ECON Checkpoints',
+            'requires_auth': True,
+            'auth_type': 'basic',
+            'auth_file': 'SMPL.login.dat',
             'files': [
                 {
-                    'url': 'https://github.com/YuliangXiu/ECON/releases/download/v1.0/econ_model.tar',
-                    'filename': 'econ_model.tar',
+                    'url': 'https://download.is.tue.mpg.de/download.php?domain=icon&sfile=econ_data.zip&resume=1',
+                    'filename': 'econ_data.zip',
                     'size_mb': 2500,
-                    'sha256': None
+                    'sha256': None,
+                    'extract': True
                 }
             ],
-            'dest_dir_rel': 'ECON/data/ckpt',
-            'instructions': 'Visit https://github.com/YuliangXiu/ECON for additional model files'
+            'dest_dir_rel': 'ECON/data',
+            'instructions': '''ECON checkpoints require registration (same as SMPL-X):
+1. Register at https://icon.is.tue.mpg.de/
+2. Wait for approval email (usually within 24 hours)
+3. Create SMPL.login.dat in repository root with:
+   Line 1: your email
+   Line 2: your password
+4. Re-run the wizard to download models
+
+Alternatively, run the fetch_data.sh script from the ECON repository.'''
         },
         'smplx': {
             'name': 'SMPL-X Models',
@@ -686,6 +690,57 @@ class CheckpointDownloader:
 
         except IOError as e:
             print_error(f"Could not read file for checksum: {e}")
+            return False
+
+    def download_file_gdown(self, url: str, dest: Path, expected_size_mb: Optional[int] = None) -> bool:
+        """Download file from Google Drive using gdown.
+
+        Args:
+            url: Google Drive URL (format: https://drive.google.com/uc?id=FILE_ID)
+            dest: Destination file path
+            expected_size_mb: Expected file size in MB (for info only)
+
+        Returns:
+            True if successful
+        """
+        try:
+            import gdown
+        except ImportError:
+            print_warning("gdown library not found, installing...")
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "gdown"],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                print_error(f"Failed to install gdown: {result.stderr}")
+                return False
+            import gdown
+
+        try:
+            print(f"  Downloading from Google Drive...")
+            print(f"  -> {dest}")
+            if expected_size_mb:
+                print(f"  Expected size: ~{expected_size_mb} MB")
+
+            # Ensure directory exists
+            dest.parent.mkdir(parents=True, exist_ok=True)
+
+            # Use gdown to download
+            output = gdown.download(url, str(dest), quiet=False)
+
+            if output is None:
+                print_error("Download failed - file may not exist or be inaccessible")
+                return False
+
+            print_success(f"Downloaded {dest.name}")
+            return True
+
+        except Exception as e:
+            print_error(f"Download failed: {e}")
+            # Clean up partial download
+            if dest.exists():
+                dest.unlink()
             return False
 
     def read_smpl_credentials(self, repo_root: Path) -> Optional[Tuple[str, str]]:
@@ -862,7 +917,7 @@ class CheckpointDownloader:
         """Download checkpoints for a component.
 
         Args:
-            comp_id: Component ID (e.g., 'wham', 'tava', 'econ', 'smplx')
+            comp_id: Component ID (e.g., 'wham', 'econ', 'smplx')
             state_manager: Optional state manager for tracking
             repo_root: Repository root for finding credentials
 
@@ -881,9 +936,16 @@ class CheckpointDownloader:
         checkpoint_info = self.CHECKPOINTS[comp_id]
         print(f"\n{Colors.BOLD}Downloading {checkpoint_info['name']}...{Colors.ENDC}")
 
+        # Handle skip_download flag (for components without available checkpoints)
+        if checkpoint_info.get('skip_download'):
+            print_warning(f"Automatic download not available for {checkpoint_info['name']}")
+            print_info(checkpoint_info['instructions'])
+            return True  # Not a failure, just manual setup required
+
         # Handle authentication if required
         auth = None
         token = None
+        use_gdown = checkpoint_info.get('use_gdown', False)
         if checkpoint_info.get('requires_auth'):
             if not repo_root:
                 repo_root = Path.cwd()  # Fallback to current directory
@@ -923,8 +985,19 @@ class CheckpointDownloader:
                 print_success(f"{file_info['filename']} already exists")
                 continue
 
-            # Download with auth/token if needed
-            if auth or token:
+            # Download with appropriate method
+            if use_gdown:
+                # Use gdown for Google Drive downloads
+                if not self.download_file_gdown(
+                    file_info['url'],
+                    dest_path,
+                    expected_size_mb=file_info.get('size_mb')
+                ):
+                    success = False
+                    print_info(checkpoint_info['instructions'])
+                    break
+            elif auth or token:
+                # Use authenticated download
                 if not self.download_file_with_auth(
                     file_info['url'],
                     dest_path,
@@ -935,6 +1008,7 @@ class CheckpointDownloader:
                     success = False
                     break
             else:
+                # Standard download
                 if not self.download_file(file_info['url'], dest_path, file_info.get('size_mb')):
                     success = False
                     break
@@ -1073,14 +1147,20 @@ class InstallationValidator:
 
         results = {}
 
-        checkpoints = {
-            'wham': base_dir / "WHAM" / "checkpoints" / "wham_vit_w_3dpw.pth.tar",
-            'tava': base_dir / "tava" / "checkpoints" / "tava_model.pth",
-            'econ': base_dir / "ECON" / "data" / "ckpt" / "econ_model.tar",
-        }
+        # WHAM: Check for the main checkpoint file
+        wham_ckpt = base_dir / "WHAM" / "checkpoints" / "wham_vit_w_3dpw.pth.tar"
+        results['wham'] = wham_ckpt.exists()
 
-        for comp_id, checkpoint_path in checkpoints.items():
-            results[comp_id] = checkpoint_path.exists()
+        # ECON: Check for extracted data from econ_data.zip
+        econ_data_dir = base_dir / "ECON" / "data"
+        if econ_data_dir.exists():
+            # Check for any model/data files in the extracted directory
+            has_data = any(econ_data_dir.glob("**/*.pkl")) or \
+                       any(econ_data_dir.glob("**/*.pth")) or \
+                       any(econ_data_dir.glob("**/smpl_related"))
+            results['econ'] = has_data
+        else:
+            results['econ'] = False
 
         return results
 
@@ -1191,7 +1271,6 @@ class ConfigurationGenerator:
             "paths": {
                 "base": str(self.base_dir),
                 "wham": str(self.base_dir / "WHAM"),
-                "tava": str(self.base_dir / "tava"),
                 "econ": str(self.base_dir / "ECON"),
                 "smplx_models": str(self.base_dir / "smplx_models"),
             },
@@ -1232,12 +1311,11 @@ class ConfigurationGenerator:
 {self.conda_manager.get_activation_command()}
 
 # Set up Python path
-export PYTHONPATH="${{PYTHONPATH}}:{self.base_dir / "WHAM"}:{self.base_dir / "tava"}:{self.base_dir / "ECON"}"
+export PYTHONPATH="${{PYTHONPATH}}:{self.base_dir / "WHAM"}:{self.base_dir / "ECON"}"
 
 # Set up environment variables
 export VFX_PIPELINE_BASE="{self.base_dir}"
 export WHAM_DIR="{self.base_dir / "WHAM"}"
-export TAVA_DIR="{self.base_dir / "tava"}"
 export ECON_DIR="{self.base_dir / "ECON"}"
 export SMPLX_MODEL_DIR="{self.base_dir / "smplx_models"}"
 
@@ -1470,20 +1548,6 @@ class InstallationWizard:
                     'https://github.com/yohanshin/WHAM.git',
                     self.install_dir / "WHAM",
                     size_gb=3.0  # Code + checkpoints
-                )
-            ]
-        }
-
-        # TAVA (code ~0.05GB + checkpoints ~1.5GB)
-        self.components['tava'] = {
-            'name': 'TAVA',
-            'required': False,
-            'installers': [
-                GitRepoInstaller(
-                    'TAVA',
-                    'https://github.com/facebookresearch/tava.git',
-                    self.install_dir / "tava",
-                    size_gb=2.0  # Code + checkpoints
                 )
             ]
         }
@@ -1837,7 +1901,7 @@ class InstallationWizard:
         # SMPL-X credentials setup
         if not smpl_exists:
             print(f"\n{Colors.BOLD}SMPL-X Credentials Setup{Colors.ENDC}")
-            print("Required for: Motion capture (WHAM, TAVA, ECON)")
+            print("Required for: Motion capture (WHAM, ECON)")
             print("Steps:")
             print("  1. Register at https://smpl-x.is.tue.mpg.de/")
             print("  2. Wait for approval email (usually within 24 hours)")
@@ -1926,7 +1990,7 @@ class InstallationWizard:
                     to_install = ['core', 'pytorch', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'pytorch', 'comfyui', 'mocap_core', 'wham', 'tava', 'econ']
+                    to_install = ['core', 'pytorch', 'comfyui', 'mocap_core', 'wham', 'econ']
                     break
                 elif choice == '4':
                     to_install = []
@@ -1961,7 +2025,7 @@ class InstallationWizard:
                         return False
 
         # Download checkpoints for motion capture components
-        mocap_components = [cid for cid in to_install if cid in ['wham', 'tava', 'econ']]
+        mocap_components = [cid for cid in to_install if cid in ['wham', 'econ']]
         if mocap_components:
             if ask_yes_no("\nDownload checkpoints for motion capture components?", default=True):
                 self.checkpoint_downloader.download_all_checkpoints(mocap_components, self.state_manager)
@@ -1996,7 +2060,7 @@ class InstallationWizard:
             print("     mkdir -p .vfx_pipeline/smplx_models && cp SMPLX_*.pkl .vfx_pipeline/smplx_models/")
 
         # Checkpoints status
-        has_mocap = status.get('wham', False) or status.get('tava', False) or status.get('econ', False)
+        has_mocap = status.get('wham', False) or status.get('econ', False)
         if has_mocap:
             print("\n📦 Motion Capture Checkpoints:")
             if status.get('wham', False):
@@ -2005,13 +2069,6 @@ class InstallationWizard:
                 else:
                     print("  ⚠ WHAM checkpoints not downloaded - run wizard again or visit:")
                     print("    https://github.com/yohanshin/WHAM")
-
-            if status.get('tava', False):
-                if self.state_manager.is_checkpoint_downloaded('tava'):
-                    print("  ✓ TAVA checkpoints downloaded")
-                else:
-                    print("  ⚠ TAVA checkpoints not downloaded - run wizard again or visit:")
-                    print("    https://github.com/facebookresearch/tava")
 
             if status.get('econ', False):
                 if self.state_manager.is_checkpoint_downloaded('econ'):
@@ -2054,7 +2111,7 @@ def main():
     parser.add_argument(
         "--component", "-C",
         type=str,
-        choices=['core', 'pytorch', 'colmap', 'mocap_core', 'wham', 'tava', 'econ', 'comfyui'],
+        choices=['core', 'pytorch', 'colmap', 'mocap_core', 'wham', 'econ', 'comfyui'],
         help="Install specific component"
     )
     parser.add_argument(

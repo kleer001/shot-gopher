@@ -35,7 +35,7 @@ STAGES = {
     "roto": "Run segmentation (02_segmentation.json)",
     "cleanplate": "Run clean plate generation (03_cleanplate.json)",
     "colmap": "Run COLMAP SfM reconstruction",
-    "mocap": "Run human motion capture (WHAM + TAVA)",
+    "mocap": "Run human motion capture (WHAM + ECON)",
     "gsir": "Run GS-IR material decomposition",
     "camera": "Export camera to Alembic",
 }
@@ -337,15 +337,13 @@ def run_mocap(
     project_dir: Path,
     skip_texture: bool = False,
     keyframe_interval: int = 25,
-    fps: float = 24.0
 ) -> bool:
-    """Run human motion capture with WHAM + TAVA.
+    """Run human motion capture with WHAM + ECON.
 
     Args:
         project_dir: Project directory with frames and camera data
         skip_texture: Skip texture projection (faster)
         keyframe_interval: ECON keyframe interval
-        fps: Frame rate for export
 
     Returns:
         True if mocap succeeded
@@ -360,7 +358,6 @@ def run_mocap(
         sys.executable, str(script_path),
         str(project_dir),
         "--keyframe-interval", str(keyframe_interval),
-        "--fps", str(fps),
     ]
 
     if skip_texture:
@@ -576,7 +573,7 @@ def run_pipeline(
     # Stage: Motion capture
     if "mocap" in stages:
         print("\n[Motion Capture]")
-        mocap_output = project_dir / "mocap" / "tava" / "mesh_sequence.pkl"
+        mocap_output = project_dir / "mocap" / "econ" / "mesh_sequence"
         camera_dir = project_dir / "camera"
         if not camera_dir.exists() or not (camera_dir / "extrinsics.json").exists():
             print("  → Skipping (camera data required - run colmap stage first)")
@@ -587,7 +584,6 @@ def run_pipeline(
                 project_dir,
                 skip_texture=False,  # Could add as pipeline option
                 keyframe_interval=25,
-                fps=fps
             ):
                 print("  → Motion capture failed", file=sys.stderr)
                 # Non-fatal - continue to other stages

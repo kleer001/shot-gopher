@@ -199,7 +199,6 @@ class DiskUsageAnalyzer:
         """
         components = {
             "WHAM": self.install_dir / "WHAM",
-            "TAVA": self.install_dir / "tava",
             "ECON": self.install_dir / "ECON",
             "ComfyUI": self.install_dir / "ComfyUI",
             "State files": self.install_dir / "install_state.json",
@@ -236,7 +235,6 @@ class Janitor:
         # Git repos
         self.repos = {
             'WHAM': GitRepoChecker(self.install_dir / "WHAM", "WHAM"),
-            'TAVA': GitRepoChecker(self.install_dir / "tava", "TAVA"),
             'ECON': GitRepoChecker(self.install_dir / "ECON", "ECON"),
             'ComfyUI': GitRepoChecker(self.install_dir / "ComfyUI", "ComfyUI"),
         }

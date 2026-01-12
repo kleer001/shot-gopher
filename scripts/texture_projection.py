@@ -16,7 +16,7 @@ Usage:
 Example:
     # Full texture projection
     python texture_projection.py /path/to/projects/My_Shot \
-        --mesh-sequence mocap/tava/mesh_sequence.pkl \
+        --mesh-sequence mocap/econ/mesh_sequence/mesh_sequence.pkl \
         --output mocap/texture.png
 
     # Test visibility on single frame
@@ -86,7 +86,7 @@ def load_cameras(camera_dir: Path) -> Tuple[np.ndarray, dict]:
 
 
 def load_mesh_sequence(mesh_sequence_file: Path):
-    """Load mesh sequence from TAVA output.
+    """Load mesh sequence from ECON output.
 
     Args:
         mesh_sequence_file: Path to mesh_sequence.pkl
@@ -271,7 +271,7 @@ def project_textures(
 
     Args:
         project_dir: Project directory
-        mesh_sequence_file: Path to TAVA mesh sequence
+        mesh_sequence_file: Path to ECON mesh sequence
         output_texture: Output texture file path
         resolution: Texture resolution (square)
         test_frame: If set, only process this frame (for testing)
@@ -387,7 +387,7 @@ def main():
         "--mesh-sequence",
         type=Path,
         required=True,
-        help="Path to TAVA mesh sequence file (.pkl)"
+        help="Path to ECON mesh sequence file (.pkl)"
     )
     parser.add_argument(
         "--output",

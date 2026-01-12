@@ -38,8 +38,8 @@ The wizard will:
 - ✓ Check system requirements (Python, GPU, Git)
 - ✓ Create dedicated conda environment automatically
 - ✓ Install core dependencies (PyTorch, NumPy, OpenCV)
-- ✓ Download model checkpoints automatically (WHAM, TAVA, ECON)
-- ✓ Clone git repositories (WHAM, TAVA, ECON, ComfyUI)
+- ✓ Download model checkpoints automatically (WHAM, ECON)
+- ✓ Clone git repositories (WHAM, ECON, ComfyUI)
 - ✓ Generate configuration files (`config.json`, `activate.sh`)
 - ✓ Run validation tests
 
@@ -420,9 +420,9 @@ projects/My_Shot/
 
 ## Human Motion Capture (Experimental)
 
-**Status:** Experimental - requires additional dependencies (WHAM, TAVA, ECON)
+**Status:** Experimental - requires additional dependencies (WHAM, ECON)
 
-Reconstruct people from video with temporally consistent geometry and textures ready for VFX matchmove.
+Reconstruct people from monocular video with SMPL-X compatible geometry and textures ready for VFX matchmove.
 
 ### What It Produces
 
@@ -434,17 +434,15 @@ mocap/
 │   ├── mesh_0001.obj           # Clothed geometry keyframes
 │   ├── mesh_0025.obj
 │   └── ...
-├── tava/
-│   └── mesh_sequence.pkl       # Consistent topology sequence
-├── obj_sequence/               # Exported mesh per frame
-│   ├── frame_0001.obj          # SMPL-X topology (10,475 verts)
-│   ├── frame_0002.obj          # Same vertex IDs across frames
+├── mesh_sequence/              # Exported mesh sequence
+│   ├── mesh_0001.obj           # SMPL-X compatible meshes
+│   ├── mesh_0025.obj
 │   └── ...
 └── texture.png                 # Canonical UV texture (1024x1024)
 ```
 
 **Key features:**
-- **Consistent topology**: Same vertex count/connectivity across all frames (SMPL-X: 10,475 vertices)
+- **SMPL-X compatibility**: Meshes compatible with SMPL-X parametrization
 - **Standard UV layout**: SMPL-X UV coordinates - no texture swimming
 - **World-space alignment**: Matches COLMAP camera/scene coordinates
 - **Clothed geometry**: Captures actual clothing, not template body
@@ -452,10 +450,10 @@ mocap/
 ### Pipeline Stages
 
 ```
-Frames → WHAM (motion) → ECON (geometry) → TAVA (tracking) → Textured mesh
-           ↓                  ↓                  ↓
-    World-space         Clothed body      Consistent topology
-    skeleton            keyframes         + UV texture
+Frames → WHAM (motion) → ECON (geometry) → Textured mesh
+           ↓                  ↓
+    World-space         Clothed body
+    skeleton            + SMPL-X compat
 ```
 
 1. **WHAM**: World-grounded motion tracking
@@ -466,17 +464,11 @@ Frames → WHAM (motion) → ECON (geometry) → TAVA (tracking) → Textured me
 2. **ECON**: Clothed body reconstruction
    - Captures actual clothing geometry (not template)
    - Runs on keyframes (every 25 frames by default)
-   - Produces high-quality meshes
+   - SMPL-X compatible output
 
-3. **TAVA**: Temporal tracking
-   - Registers ECON geometry to SMPL-X topology
-   - Tracks consistent vertex IDs through time
-   - Interpolates between keyframes
-
-4. **Texture projection**: Multi-view texturing
+3. **Texture projection**: Multi-view texturing
    - Projects camera images to canonical UV space
    - Weighted by viewing angle + visibility
-   - Temporal consistency filtering
 
 ### Usage
 
@@ -488,16 +480,12 @@ python scripts/run_mocap.py --check
 # Install WHAM
 git clone https://github.com/yohanshin/WHAM.git
 cd WHAM && pip install -e .
-# Download WHAM checkpoints from project page
-
-# Install TAVA
-git clone https://github.com/facebookresearch/tava.git
-cd tava && pip install -e .
+# Download WHAM checkpoints (Google Drive)
 
 # Install ECON
 git clone https://github.com/YuliangXiu/ECON.git
 cd ECON && pip install -r requirements.txt
-# Download SMPL-X models + ECON checkpoints
+# Register at icon.is.tue.mpg.de for ECON checkpoints
 
 # Core dependencies
 pip install numpy torch smplx trimesh opencv-python pillow
@@ -526,9 +514,6 @@ python scripts/run_mocap.py project/ --test-stage motion
 
 # Test ECON reconstruction
 python scripts/run_mocap.py project/ --test-stage econ
-
-# Test TAVA tracking
-python scripts/run_mocap.py project/ --test-stage tava
 
 # Test texture projection
 python scripts/run_mocap.py project/ --test-stage texture
@@ -583,7 +568,6 @@ Camera {
 
 - **Experimental**: Requires installing multiple research codebases
 - **GPU intensive**: Needs 12GB+ VRAM for ECON/WHAM
-- **Slow**: Full pipeline can take hours (TAVA training is bottleneck)
 - **Single person**: Multi-person support requires per-person segmentation
 - **Clothing detail**: Quality depends on ECON keyframe density
 - **Occlusions**: Heavy occlusions may cause tracking drift
@@ -728,15 +712,12 @@ pip install smplx trimesh
 # WHAM (world-grounded motion)
 git clone https://github.com/yohanshin/WHAM.git
 cd WHAM && pip install -e .
-# Download checkpoints from project page
-
-# TAVA (consistent topology)
-git clone https://github.com/facebookresearch/tava.git
-cd tava && pip install -e .
+# Download checkpoints from Google Drive
 
 # ECON (clothed reconstruction)
 git clone https://github.com/YuliangXiu/ECON.git
 cd ECON && pip install -r requirements.txt
+# Register at icon.is.tue.mpg.de for checkpoints
 
 # SMPL-X models - See "SMPL-X Model Access" section above
 # Automated download with SMPL.login.dat credentials

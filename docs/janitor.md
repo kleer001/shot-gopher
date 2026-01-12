@@ -93,7 +93,7 @@ python scripts/janitor.py -H
    - Verifies `vfx-pipeline` environment exists
 
 3. **Git Repositories**
-   - WHAM, TAVA, ECON, ComfyUI
+   - WHAM, ECON, ComfyUI
    - Checks working directory is clean
    - Shows current commit hash
 
@@ -122,13 +122,11 @@ HEALTH CHECK
 
 [Git Repositories]
 ✓ WHAM: Clean (a3f2b4c)
-✓ TAVA: Clean (8d7e1f9)
 ✓ ECON: Clean (2c9a6b3)
 ⚠ ComfyUI: Uncommitted changes
 
 [Checkpoints]
 ✓ WHAM: Found
-✓ TAVA: Found
 ⚠ ECON: Missing
 
 [Validation Tests]
@@ -172,17 +170,13 @@ UPDATE CHECK
 [WHAM] Checking for updates...
 ✓ → Up to date
 
-[TAVA] Checking for updates...
-⚠ → 3 commit(s) behind
-
 [ECON] Checking for updates...
 ✓ → Up to date
 
 [ComfyUI] Checking for updates...
 ⚠ → 12 commit(s) behind
 
-2 component(s) have updates available:
-  - TAVA: 3 commit(s) behind
+1 component(s) have updates available:
   - ComfyUI: 12 commit(s) behind
 
 Apply updates? [y/N]: y
@@ -190,9 +184,6 @@ Apply updates? [y/N]: y
 ============================================================
 APPLYING UPDATES
 ============================================================
-
-[TAVA] Updating...
-✓ → Updated successfully
 
 [ComfyUI] Updating...
 ✓ → Updated successfully
@@ -238,7 +229,7 @@ CLEANUP
 
 Found 47 temporary file(s) (234.56 MB):
   - WHAM/__pycache__/utils.cpython-310.pyc
-  - tava/temp_cache.tmp
+  - ECON/temp_cache.tmp
   - ComfyUI/custom_nodes/__pycache__/
   ... and 44 more
 
@@ -290,9 +281,8 @@ REPAIR
 
 [Checking for issues...]
 
-Found 2 issue(s):
+Found 1 issue(s):
   - ECON checkpoint missing
-  - TAVA checkpoint corrupted
 
 Attempt repairs? [Y/n]: y
 
@@ -300,9 +290,6 @@ Attempt repairs? [Y/n]: y
 
 Repairing: ECON checkpoint missing
   → Checkpoint downloaded
-
-Repairing: TAVA checkpoint corrupted
-  → Checkpoint re-downloaded
 ```
 
 **Auto-confirm**:
@@ -341,7 +328,6 @@ Install directory: /home/user/comfyui_ingest/.vfx_pipeline
 [Disk Usage]
   ComfyUI              8.45 GB
   WHAM                 3.21 GB
-  TAVA                 2.87 GB
   ECON                 1.93 GB
   State files         12.34 KB
   Config files         3.45 KB
@@ -352,13 +338,11 @@ Install directory: /home/user/comfyui_ingest/.vfx_pipeline
   pytorch              completed
   colmap               completed
   wham                 completed
-  tava                 completed
   econ                 completed
   comfyui              completed
 
 [Git Repositories]
   WHAM                  a3f2b4c ✓
-  TAVA                  8d7e1f9 ✓
   ECON                  2c9a6b3 ✓
   ComfyUI               f4d8a1b ✗
 
@@ -534,7 +518,6 @@ Janitor tracks disk usage by component:
 | Component | Typical Size | Notes |
 |-----------|--------------|-------|
 | WHAM | 2-4 GB | Includes checkpoints (~1.2 GB) |
-| TAVA | 2-3 GB | Includes checkpoints (~800 MB) |
 | ECON | 1-2 GB | Includes checkpoints (~500 MB) |
 | ComfyUI | 5-10 GB | Depends on custom nodes |
 | State/Config | < 1 MB | Negligible |
@@ -621,8 +604,7 @@ python scripts/janitor.py -r
 
 If repair fails, manually download and place in:
 - WHAM: `.vfx_pipeline/WHAM/checkpoints/`
-- TAVA: `.vfx_pipeline/tava/checkpoints/`
-- ECON: `.vfx_pipeline/ECON/checkpoints/`
+- ECON: `.vfx_pipeline/ECON/data/`
 
 ### "Permission denied" during cleanup
 

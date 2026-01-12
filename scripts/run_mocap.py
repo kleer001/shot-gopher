@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Human motion capture with consistent topology and UV mapping.
+"""Human motion capture with SMPL-X topology and UV mapping.
 
-Reconstructs people from video with:
+Reconstructs people from monocular video with:
 - SMPL-X body model (standard topology + UVs)
-- Temporally consistent mesh sequence
-- World-space alignment with COLMAP
+- World-space motion tracking
+- Clothed body geometry
 - Textured output ready for VFX
 
 Pipeline:
 1. Motion tracking (WHAM) → skeleton animation in world space
-2. Geometry reconstruction (ECON) → clothed body geometry
-3. Topology registration (TAVA) → consistent SMPL-X mesh
-4. Texture projection → UV texture from camera views
+2. Geometry reconstruction (ECON) → clothed body with SMPL-X compatibility
+3. Texture projection → UV texture from camera views
 
 Usage:
     python run_mocap.py <project_dir> [options]
@@ -28,14 +27,11 @@ Example:
 """
 
 import argparse
-import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
-
-import numpy as np
+from typing import Optional, List, Dict
 
 
 # Dependencies check results (cached)
@@ -97,7 +93,6 @@ def check_all_dependencies() -> Dict[str, bool]:
 
     # Optional dependencies (for specific methods)
     deps["wham"] = check_dependency("wham", command=["python", "-c", "import wham"])
-    deps["tava"] = check_dependency("tava", command=["python", "-c", "import tava"])
     deps["econ"] = check_dependency("econ", command=["python", "-c", "import econ"])
 
     return deps
@@ -118,7 +113,7 @@ def print_dependency_status():
 
     # Optional dependencies
     print("\nOptional (for specific methods):")
-    for name in ["wham", "tava", "econ"]:
+    for name in ["wham", "econ"]:
         status = "✓" if deps[name] else "✗"
         print(f"  {status} {name}")
 
@@ -138,10 +133,6 @@ def install_instructions():
     print("  git clone https://github.com/yohanshin/WHAM.git")
     print("  cd WHAM && pip install -e .")
     print("  # Download checkpoints from project page")
-
-    print("\nTAVA (consistent topology tracking):")
-    print("  git clone https://github.com/facebookresearch/tava.git")
-    print("  cd tava && pip install -e .")
 
     print("\nECON (clothed reconstruction):")
     print("  git clone https://github.com/YuliangXiu/ECON.git")
@@ -311,152 +302,44 @@ def run_econ_reconstruction(
         return False
 
 
-def run_tava_tracking(
-    project_dir: Path,
-    motion_file: Path,
+def export_econ_meshes_to_sequence(
     econ_dir: Path,
-    output_dir: Optional[Path] = None
+    output_dir: Path
 ) -> bool:
-    """Run TAVA for consistent topology tracking.
+    """Export ECON meshes as an OBJ sequence.
 
     Args:
-        project_dir: Project directory
-        motion_file: WHAM motion file (.pkl)
         econ_dir: Directory with ECON keyframe meshes
-        output_dir: Output directory for consistent mesh sequence
+        output_dir: Output directory for mesh sequence
 
     Returns:
         True if successful
     """
-    if not check_dependency("tava"):
-        print("Error: TAVA not available", file=sys.stderr)
-        return False
-
-    output_dir = output_dir or project_dir / "mocap" / "tava"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     print(f"\n{'=' * 60}")
-    print("TAVA Consistent Tracking")
+    print("Mesh Sequence Export")
     print("=" * 60)
-    print(f"Motion: {motion_file}")
-    print(f"Geometry: {econ_dir}")
+    print(f"Input: {econ_dir}")
     print(f"Output: {output_dir}")
     print()
 
     try:
-        # TAVA command - adjust based on actual TAVA CLI
-        cmd = [
-            "python", "-m", "tava.track",
-            "--motion", str(motion_file),
-            "--geometry", str(econ_dir),
-            "--output", str(output_dir),
-            "--topology", "smplx",  # Use SMPL-X topology + UVs
-        ]
-
-        print(f"  → Running TAVA...")
-        print(f"    $ {' '.join(cmd)}")
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=7200)
-
-        if result.returncode != 0:
-            print(f"Error: TAVA failed", file=sys.stderr)
-            print(result.stderr, file=sys.stderr)
+        mesh_files = sorted(econ_dir.glob("mesh_*.obj"))
+        if not mesh_files:
+            print("Error: No ECON meshes found", file=sys.stderr)
             return False
 
-        # Check output
-        mesh_sequence = output_dir / "mesh_sequence.pkl"
-        if not mesh_sequence.exists():
-            print(f"Error: TAVA output not found: {mesh_sequence}", file=sys.stderr)
-            return False
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"  ✓ Tracking complete")
-        print(f"    Output: {mesh_sequence}")
+        # Copy meshes to output sequence directory
+        for mesh_file in mesh_files:
+            dest = output_dir / mesh_file.name
+            shutil.copy2(mesh_file, dest)
 
-        return True
-
-    except subprocess.TimeoutExpired:
-        print("Error: TAVA timed out (this can take hours)", file=sys.stderr)
-        return False
-    except Exception as e:
-        print(f"Error running TAVA: {e}", file=sys.stderr)
-        return False
-
-
-def export_mesh_sequence_to_alembic(
-    mesh_sequence_file: Path,
-    output_file: Path,
-    fps: float = 24.0
-) -> bool:
-    """Export mesh sequence to Alembic format.
-
-    Args:
-        mesh_sequence_file: TAVA mesh sequence (.pkl)
-        output_file: Output Alembic file (.abc)
-        fps: Frame rate
-
-    Returns:
-        True if successful
-    """
-    print(f"\n{'=' * 60}")
-    print("Alembic Export")
-    print("=" * 60)
-    print(f"Input: {mesh_sequence_file}")
-    print(f"Output: {output_file}")
-    print(f"FPS: {fps}")
-    print()
-
-    try:
-        import pickle
-        import trimesh
-
-        # Load mesh sequence
-        with open(mesh_sequence_file, "rb") as f:
-            data = pickle.load(f)
-
-        meshes = data.get("meshes", [])
-        if not meshes:
-            print("Error: No meshes in sequence file", file=sys.stderr)
-            return False
-
-        print(f"  Frames: {len(meshes)}")
-        print(f"  Vertices: {len(meshes[0].vertices)}")
-        print(f"  Faces: {len(meshes[0].faces)}")
-
-        # Check for Alembic support
-        if not check_dependency("alembic", "alembic"):
-            print("Warning: Alembic support not available", file=sys.stderr)
-            print("Falling back to OBJ sequence export", file=sys.stderr)
-
-            # Export as OBJ sequence
-            obj_dir = output_file.parent / "obj_sequence"
-            obj_dir.mkdir(exist_ok=True)
-
-            for i, mesh in enumerate(meshes):
-                obj_file = obj_dir / f"frame_{i+1:04d}.obj"
-                mesh.export(str(obj_file))
-
-            print(f"  ✓ Exported to OBJ sequence: {obj_dir}")
-            return True
-
-        # TODO: Implement actual Alembic export
-        # This would use alembic-python or similar
-        print("  Note: Alembic export not yet implemented")
-        print("  Exporting as OBJ sequence instead")
-
-        obj_dir = output_file.parent / "obj_sequence"
-        obj_dir.mkdir(exist_ok=True)
-
-        for i, mesh in enumerate(meshes):
-            obj_file = obj_dir / f"frame_{i+1:04d}.obj"
-            mesh.export(str(obj_file))
-
-        print(f"  ✓ Exported: {obj_dir}")
+        print(f"  ✓ Exported {len(mesh_files)} meshes to {output_dir}")
         return True
 
     except Exception as e:
-        print(f"Error exporting mesh: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
+        print(f"Error exporting meshes: {e}", file=sys.stderr)
         return False
 
 
@@ -464,7 +347,6 @@ def run_mocap_pipeline(
     project_dir: Path,
     skip_texture: bool = False,
     keyframe_interval: int = 25,
-    fps: float = 24.0,
     test_stage: Optional[str] = None
 ) -> bool:
     """Run full motion capture pipeline.
@@ -473,8 +355,7 @@ def run_mocap_pipeline(
         project_dir: Project directory
         skip_texture: Skip texture projection (faster)
         keyframe_interval: ECON keyframe interval
-        fps: Frame rate for export
-        test_stage: Test only specific stage (motion, econ, tava, texture)
+        test_stage: Test only specific stage (motion, econ, texture)
 
     Returns:
         True if successful
@@ -548,34 +429,13 @@ def run_mocap_pipeline(
         print("Run ECON stage first: --test-stage econ", file=sys.stderr)
         return False
 
-    # Stage 3: Consistent topology tracking (TAVA)
-    if not test_stage or test_stage == "tava":
-        if not run_tava_tracking(
-            project_dir,
-            motion_file=motion_file,
-            econ_dir=econ_dir,
-            output_dir=mocap_dir / "tava"
-        ):
-            print("Topology tracking failed", file=sys.stderr)
-            return False
-
-        if test_stage == "tava":
-            print("\n✓ TAVA stage test complete")
-            return True
-
-    mesh_sequence_file = mocap_dir / "tava" / "mesh_sequence.pkl"
-    if not mesh_sequence_file.exists():
-        print(f"Error: Mesh sequence not found: {mesh_sequence_file}", file=sys.stderr)
-        print("Run TAVA stage first: --test-stage tava", file=sys.stderr)
+    # Stage 3: Export mesh sequence
+    mesh_output_dir = mocap_dir / "mesh_sequence"
+    if not export_econ_meshes_to_sequence(econ_dir, mesh_output_dir):
+        print("Mesh export failed", file=sys.stderr)
         return False
 
-    # Stage 4: Export to Alembic
-    output_abc = mocap_dir / "body.abc"
-    if not export_mesh_sequence_to_alembic(mesh_sequence_file, output_abc, fps):
-        print("Export failed", file=sys.stderr)
-        return False
-
-    # Stage 5: Texture projection (optional)
+    # Stage 4: Texture projection (optional)
     if not skip_texture and (not test_stage or test_stage == "texture"):
         texture_script = Path(__file__).parent / "texture_projection.py"
         if texture_script.exists():
@@ -586,7 +446,7 @@ def run_mocap_pipeline(
             cmd = [
                 sys.executable, str(texture_script),
                 str(project_dir),
-                "--mesh-sequence", str(mesh_sequence_file),
+                "--mesh-dir", str(mesh_output_dir),
                 "--output", str(mocap_dir / "texture.png")
             ]
 
@@ -603,7 +463,8 @@ def run_mocap_pipeline(
     print("Motion Capture Complete")
     print("=" * 60)
     print(f"Output directory: {mocap_dir}")
-    print(f"Mesh sequence: {mesh_sequence_file}")
+    print(f"Motion data: {motion_file}")
+    print(f"Mesh sequence: {mesh_output_dir}")
     if not skip_texture and (mocap_dir / "texture.png").exists():
         print(f"Texture: {mocap_dir / 'texture.png'}")
     print()
@@ -613,7 +474,7 @@ def run_mocap_pipeline(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Human motion capture with consistent topology",
+        description="Human motion capture with SMPL-X topology",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
@@ -640,14 +501,8 @@ def main():
         help="ECON keyframe interval in frames (default: 25)"
     )
     parser.add_argument(
-        "--fps",
-        type=float,
-        default=24.0,
-        help="Frame rate for export (default: 24.0)"
-    )
-    parser.add_argument(
         "--test-stage",
-        choices=["motion", "econ", "tava", "texture"],
+        choices=["motion", "econ", "texture"],
         help="Test only specific stage (for debugging)"
     )
 
@@ -672,7 +527,6 @@ def main():
         project_dir=project_dir,
         skip_texture=args.skip_texture,
         keyframe_interval=args.keyframe_interval,
-        fps=args.fps,
         test_stage=args.test_stage
     )
 

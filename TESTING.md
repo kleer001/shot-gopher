@@ -4,12 +4,11 @@ This guide explains how to test each component of the motion capture pipeline in
 
 ## Overview
 
-The mocap pipeline has 4 main stages that can be tested independently:
+The mocap pipeline has 3 main stages that can be tested independently:
 
 1. **Motion tracking** (WHAM) - Skeleton animation in world space
-2. **Geometry reconstruction** (ECON) - Clothed body meshes from keyframes
-3. **Topology tracking** (TAVA) - Consistent mesh sequence
-4. **Texture projection** - Multi-view UV texturing
+2. **Geometry reconstruction** (ECON) - Clothed body meshes with SMPL-X topology
+3. **Texture projection** - Multi-view UV texturing
 
 Each stage has specific input requirements, outputs, and validation steps.
 
@@ -31,7 +30,6 @@ python scripts/run_mocap.py --check
 #   ✓ pillow
 # Optional (for specific methods):
 #   ✓ wham
-#   ✓ tava
 #   ✓ econ
 ```
 
@@ -196,91 +194,7 @@ assert mesh.is_watertight, 'Mesh has holes'
 - Increase keyframe density (lower `--keyframe-interval`)
 - Verify ECON checkpoint is correct version
 
-## Stage 3: Topology Tracking (TAVA)
-
-**Purpose:** Register ECON geometry to consistent SMPL-X topology
-
-### Test Command
-
-```bash
-# Requires: motion.pkl and ECON meshes from previous stages
-python scripts/run_mocap.py projects/Test_Shot --test-stage tava
-```
-
-### Expected Behavior
-
-1. Loads WHAM motion from `mocap/wham/motion.pkl`
-2. Loads ECON keyframe meshes from `mocap/econ/`
-3. Runs TAVA tracking (can take 1-2 hours)
-4. Saves result to `mocap/tava/mesh_sequence.pkl`
-
-### Success Criteria
-
-```bash
-# Check output file
-ls projects/Test_Shot/mocap/tava/mesh_sequence.pkl
-
-# Validate mesh sequence
-python -c "
-import pickle
-import numpy as np
-
-with open('projects/Test_Shot/mocap/tava/mesh_sequence.pkl', 'rb') as f:
-    data = pickle.load(f)
-
-meshes = data.get('meshes', [])
-print(f'✓ Frames: {len(meshes)}')
-
-# Check topology consistency
-vertex_counts = [len(m.vertices) for m in meshes]
-face_counts = [len(m.faces) for m in meshes]
-
-assert len(set(vertex_counts)) == 1, 'Vertex count not consistent!'
-assert len(set(face_counts)) == 1, 'Face count not consistent!'
-
-print(f'✓ Consistent topology: {vertex_counts[0]} vertices, {face_counts[0]} faces')
-
-# SMPL-X has 10,475 vertices
-if vertex_counts[0] == 10475:
-    print('✓ Using SMPL-X topology')
-else:
-    print(f'  Warning: Non-standard vertex count (expected 10,475, got {vertex_counts[0]})')
-
-# Check UVs exist
-if hasattr(meshes[0], 'visual') and hasattr(meshes[0].visual, 'uv'):
-    print('✓ UV coordinates present')
-else:
-    print('  Warning: No UV coordinates')
-"
-```
-
-### Validation Checklist
-
-- [ ] Mesh sequence file created
-- [ ] All frames have identical vertex count
-- [ ] All frames have identical face count
-- [ ] Vertex count is 10,475 (SMPL-X standard)
-- [ ] UV coordinates are present
-- [ ] No NaN or inf values in vertices
-
-### Troubleshooting
-
-**"Timeout waiting for TAVA":**
-- TAVA training can take hours - this is normal
-- Consider testing on shorter sequence first
-- Check GPU usage - should be near 100%
-
-**"TAVA failed":**
-- Check WHAM motion file exists
-- Check ECON meshes exist (at least 2 keyframes required)
-- Verify TAVA installation and checkpoints
-
-**Topology not consistent:**
-- This is a critical failure - TAVA should guarantee consistency
-- Check TAVA logs for errors
-- Try re-running with different keyframe density
-
-## Stage 4: Texture Projection
+## Stage 3: Texture Projection
 
 **Purpose:** Project camera views to canonical UV texture
 
@@ -289,20 +203,20 @@ else:
 ```bash
 # Test on single frame first
 python scripts/texture_projection.py projects/Test_Shot \
-  --mesh-sequence mocap/tava/mesh_sequence.pkl \
+  --mesh-sequence mocap/econ/mesh_sequence/mesh_sequence.pkl \
   --output mocap/texture_test.png \
   --test-frame 10
 
 # Full multi-view aggregation
 python scripts/texture_projection.py projects/Test_Shot \
-  --mesh-sequence mocap/tava/mesh_sequence.pkl \
+  --mesh-sequence mocap/econ/mesh_sequence/mesh_sequence.pkl \
   --output mocap/texture.png \
   --resolution 1024
 ```
 
 ### Expected Behavior
 
-1. Loads mesh sequence from TAVA
+1. Loads mesh sequence from ECON
 2. Loads camera data (extrinsics + intrinsics)
 3. Loads source frames
 4. Projects each frame to UV space
@@ -375,8 +289,7 @@ python scripts/run_mocap.py projects/Test_Shot
 # mocap/
 # ├── wham/motion.pkl
 # ├── econ/mesh_*.obj
-# ├── tava/mesh_sequence.pkl
-# ├── obj_sequence/frame_*.obj
+# ├── econ/mesh_sequence/mesh_sequence.pkl
 # └── texture.png
 ```
 
@@ -386,12 +299,11 @@ python scripts/run_mocap.py projects/Test_Shot
 # Check all outputs exist
 test -f projects/Test_Shot/mocap/wham/motion.pkl && echo "✓ Motion"
 test -d projects/Test_Shot/mocap/econ && echo "✓ Geometry"
-test -f projects/Test_Shot/mocap/tava/mesh_sequence.pkl && echo "✓ Tracking"
-test -d projects/Test_Shot/mocap/obj_sequence && echo "✓ Export"
+test -d projects/Test_Shot/mocap/econ/mesh_sequence && echo "✓ Mesh Sequence"
 test -f projects/Test_Shot/mocap/texture.png && echo "✓ Texture"
 
 # Import test (requires Maya/Blender/Houdini)
-# Load obj_sequence/frame_0001.obj
+# Load econ/mesh_sequence/mesh_*.obj
 # Apply texture.png with SMPL-X UV layout
 # Verify mesh animates correctly
 ```
@@ -404,10 +316,9 @@ Typical processing times on GPU (RTX 3090):
 |-------|------------------|-------|
 | WHAM | ~2-3 minutes | GPU inference |
 | ECON | ~2-3 minutes (4 keyframes) | ~30s per keyframe |
-| TAVA | 1-2 hours | Training step, very slow |
 | Texture | ~5-10 minutes | Depends on resolution |
 
-**Total:** ~1.5-2.5 hours for 100-frame sequence
+**Total:** ~10-20 minutes for 100-frame sequence
 
 ## Common Issues
 
@@ -449,10 +360,9 @@ print('Person position:', motion['trans'][0])
 Remember dependency order:
 1. Ingest → frames
 2. COLMAP → camera data
-3. Motion → requires frames
+3. Motion (WHAM) → requires frames
 4. ECON → requires frames
-5. TAVA → requires motion + ECON
-6. Texture → requires TAVA + camera + frames
+5. Texture → requires ECON mesh sequence + camera + frames
 
 ## Debugging Tips
 
@@ -460,7 +370,7 @@ Remember dependency order:
 2. **Visualize intermediate results:** View ECON meshes in Blender
 3. **Check data formats:** Print shapes/types of all loaded data
 4. **Test stages independently:** Don't run full pipeline until each stage works
-5. **Compare to examples:** Check WHAM/TAVA/ECON example outputs
+5. **Compare to examples:** Check WHAM/ECON example outputs
 
 ## Reporting Issues
 

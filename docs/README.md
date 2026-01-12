@@ -15,7 +15,7 @@ This VFX pipeline provides a complete workflow for processing footage through:
 - Depth analysis (ComfyUI + Depth-Anything-V3)
 - Segmentation/rotoscoping (ComfyUI + SAM2)
 - Camera tracking (COLMAP or Depth-Anything-V3)
-- Human motion capture (WHAM + TAVA + ECON)
+- Human motion capture (WHAM + ECON)
 - Material decomposition (GS-IR)
 - Camera export (Alembic format)
 
@@ -98,7 +98,6 @@ comfyui_ingest/
 │   └── 03_cleanplate.json   # Clean plate generation
 ├── .vfx_pipeline/           # Installation directory (created by wizard)
 │   ├── WHAM/                # Motion capture - pose estimation
-│   ├── tava/                # Motion capture - avatar generation
 │   ├── ECON/                # Motion capture - 3D reconstruction
 │   ├── ComfyUI/             # ComfyUI and custom nodes
 │   ├── config.json          # Generated configuration
@@ -124,8 +123,8 @@ When you process footage, the pipeline creates this structure:
 │   └── meshed/              # Mesh (optional)
 ├── mocap/                   # Motion capture data
 │   ├── wham/                # WHAM pose estimates
-│   ├── tava/                # TAVA avatars
-│   └── econ/                # ECON 3D meshes
+│   ├── econ/                # ECON 3D meshes
+│   └── mesh_sequence/       # Exported mesh sequence
 ├── gsir/                    # GS-IR material decomposition
 └── camera/                  # Exported camera data
     ├── extrinsics.json      # Camera transforms
@@ -229,7 +228,7 @@ source .vfx_pipeline/activate.sh
 
 This sets up:
 - Conda environment (`vfx-pipeline`)
-- Python paths for WHAM, TAVA, ECON
+- Python paths for WHAM, ECON
 - Environment variables for checkpoint paths
 
 ## Contributing

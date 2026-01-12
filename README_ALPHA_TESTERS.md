@@ -34,37 +34,21 @@ The installation wizard (`scripts/install_wizard.py`) is **production-quality**:
 
 ## What Needs Real-World Validation ⚠️
 
-### 1. Checkpoint URLs
-The wizard attempts to download checkpoints from these URLs:
+### 1. Checkpoint Downloads
+The wizard downloads checkpoints from:
 
-```python
-# WHAM
-https://github.com/yohanshin/WHAM/releases/download/v1.0/wham_vit_w_3dpw.pth.tar
-
-# TAVA
-https://dl.fbaipublicfiles.com/tava/tava_model.pth
-
-# ECON
-https://github.com/YuliangXiu/ECON/releases/download/v1.0/econ_model.tar
-```
-
-**Potential Issue**: These URLs might be incorrect, outdated, or require authentication.
+- **WHAM**: Google Drive (uses `gdown` library)
+- **ECON**: icon.is.tue.mpg.de (requires same credentials as SMPL-X)
 
 **If downloads fail:**
 1. Visit the project GitHub pages (URLs shown in error messages)
 2. Download checkpoints manually
-3. Place in `<repo>/.vfx_pipeline/{WHAM,tava,ECON}/checkpoints/`
-4. Or update URLs in `scripts/install_wizard.py` (lines 487, 500, 513)
+3. Place in:
+   - WHAM: `<repo>/.vfx_pipeline/WHAM/checkpoints/`
+   - ECON: `<repo>/.vfx_pipeline/ECON/data/`
 
 ### 2. Motion Capture Integration
-The `run_mocap.py` script makes assumptions about CLI interfaces:
-
-```python
-# These might not match actual interfaces
-wham_exe = wham_dir / "demo.py"
-tava_exe = tava_dir / "infer.py"
-econ_exe = econ_dir / "infer.py"
-```
+The `run_mocap.py` script makes assumptions about WHAM and ECON CLI interfaces.
 
 **Expected Issues**:
 - Actual entry points might have different names
@@ -72,8 +56,8 @@ econ_exe = econ_dir / "infer.py"
 - Models might need specific preprocessing
 
 **If mocap fails:**
-1. Check `--test-stage motion` to isolate which component fails
-2. Run WHAM/TAVA/ECON manually to understand their CLI
+1. Check `--test-stage motion` or `--test-stage econ` to isolate which component fails
+2. Run WHAM/ECON manually to understand their CLI
 3. Update `scripts/run_mocap.py` with correct commands
 4. Report findings so we can fix it
 
@@ -311,7 +295,6 @@ Please test and report results for:
 
 ### Motion Capture (if testing)
 - [ ] WHAM checkpoint downloads
-- [ ] TAVA checkpoint downloads
 - [ ] ECON checkpoint downloads
 - [ ] `run_mocap.py --check` passes
 - [ ] Motion tracking works on test video
@@ -340,7 +323,7 @@ Please test and report results for:
 
 ### Issue: "Out of VRAM"
 **Cause**: GPU too small for mocap
-**Expected**: Need 12GB+ VRAM for WHAM/ECON/TAVA
+**Expected**: Need 12GB+ VRAM for WHAM/ECON
 
 ---
 
