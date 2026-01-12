@@ -524,6 +524,7 @@ class CheckpointDownloader:
         'smplx': {
             'name': 'SMPL-X Models',
             'requires_auth': True,
+            'auth_type': 'basic',
             'auth_file': 'SMPL.login.dat',
             'files': [
                 {
@@ -543,6 +544,27 @@ class CheckpointDownloader:
    Line 1: your email
    Line 2: your password
 4. Re-run the wizard to download models'''
+        },
+        'sam3': {
+            'name': 'SAM3 Model',
+            'requires_auth': True,
+            'auth_type': 'bearer',
+            'auth_file': 'HF_TOKEN.dat',
+            'files': [
+                {
+                    'url': 'https://huggingface.co/facebook/sam3/resolve/main/model.safetensors',
+                    'filename': 'sam3_model.safetensors',
+                    'size_mb': 2400,
+                    'sha256': None
+                }
+            ],
+            'dest_dir_rel': 'ComfyUI/models/sam',
+            'instructions': '''SAM3 model requires HuggingFace access:
+1. Visit https://huggingface.co/facebook/sam3
+2. Click "Access repository" and accept the license
+3. Get your HuggingFace token from https://huggingface.co/settings/tokens
+4. Create HF_TOKEN.dat in repository root with your token
+5. Re-run the wizard to download the model'''
         }
     }
 
@@ -667,11 +689,38 @@ class CheckpointDownloader:
             print_error(f"Could not read SMPL.login.dat: {e}")
             return None
 
+    def read_hf_token(self, repo_root: Path) -> Optional[str]:
+        """Read HuggingFace token from HF_TOKEN.dat file.
+
+        Args:
+            repo_root: Repository root directory
+
+        Returns:
+            HuggingFace token or None if file not found
+        """
+        token_file = repo_root / "HF_TOKEN.dat"
+
+        if not token_file.exists():
+            return None
+
+        try:
+            with open(token_file, 'r') as f:
+                token = f.read().strip()
+                if token:
+                    return token
+                else:
+                    print_error("HF_TOKEN.dat is empty")
+                    return None
+        except IOError as e:
+            print_error(f"Could not read HF_TOKEN.dat: {e}")
+            return None
+
     def download_file_with_auth(
         self,
         url: str,
         dest: Path,
         auth: Optional[Tuple[str, str]] = None,
+        token: Optional[str] = None,
         expected_size_mb: Optional[int] = None
     ) -> bool:
         """Download file with optional HTTP authentication.
@@ -679,7 +728,8 @@ class CheckpointDownloader:
         Args:
             url: URL to download from
             dest: Destination file path
-            auth: Optional (username, password) tuple
+            auth: Optional (username, password) tuple for basic auth
+            token: Optional bearer token for token-based auth
             expected_size_mb: Expected file size in MB
 
         Returns:
@@ -703,6 +753,8 @@ class CheckpointDownloader:
             session = requests.Session()
             if auth:
                 session.auth = auth
+            elif token:
+                session.headers.update({'Authorization': f'Bearer {token}'})
 
             # Stream download with progress
             response = session.get(url, stream=True, timeout=30)
@@ -731,9 +783,15 @@ class CheckpointDownloader:
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401:
-                print_error("Authentication failed - check your SMPL.login.dat credentials")
+                if token:
+                    print_error("Authentication failed - check your HF_TOKEN.dat")
+                else:
+                    print_error("Authentication failed - check your credentials")
             elif e.response.status_code == 403:
-                print_error("Access denied - have you been approved for SMPL-X access?")
+                if token:
+                    print_error("Access denied - have you accepted the model license on HuggingFace?")
+                else:
+                    print_error("Access denied - have you been approved for access?")
             else:
                 print_error(f"Download failed: {e}")
             # Clean up partial download
@@ -798,16 +856,28 @@ class CheckpointDownloader:
 
         # Handle authentication if required
         auth = None
+        token = None
         if checkpoint_info.get('requires_auth'):
             if not repo_root:
                 repo_root = Path.cwd()  # Fallback to current directory
 
-            auth = self.read_smpl_credentials(repo_root)
-            if not auth:
-                print_error(f"{checkpoint_info['name']} requires authentication")
-                print_info(checkpoint_info['instructions'])
-                return False
-            print_success("Loaded credentials from SMPL.login.dat")
+            auth_type = checkpoint_info.get('auth_type', 'basic')
+            auth_file = checkpoint_info.get('auth_file', '')
+
+            if auth_type == 'basic':
+                auth = self.read_smpl_credentials(repo_root)
+                if not auth:
+                    print_error(f"{checkpoint_info['name']} requires authentication")
+                    print_info(checkpoint_info['instructions'])
+                    return False
+                print_success(f"Loaded credentials from {auth_file}")
+            elif auth_type == 'bearer':
+                token = self.read_hf_token(repo_root)
+                if not token:
+                    print_error(f"{checkpoint_info['name']} requires HuggingFace token")
+                    print_info(checkpoint_info['instructions'])
+                    return False
+                print_success(f"Loaded token from {auth_file}")
 
         # Determine destination directory
         if checkpoint_info.get('use_home_dir'):
@@ -826,9 +896,15 @@ class CheckpointDownloader:
                 print_success(f"{file_info['filename']} already exists")
                 continue
 
-            # Download with auth if needed
-            if auth:
-                if not self.download_file_with_auth(file_info['url'], dest_path, auth, file_info.get('size_mb')):
+            # Download with auth/token if needed
+            if auth or token:
+                if not self.download_file_with_auth(
+                    file_info['url'],
+                    dest_path,
+                    auth=auth,
+                    token=token,
+                    expected_size_mb=file_info.get('size_mb')
+                ):
                     success = False
                     break
             else:

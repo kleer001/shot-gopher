@@ -78,18 +78,25 @@ econ_exe = econ_dir / "infer.py"
 4. Report findings so we can fix it
 
 ### 3. SAM3 Model Access
-**Requires requesting access on Hugging Face:**
+**Now automated with HuggingFace token:**
 
-SAM3 is not fully open-source and requires requesting access:
+SAM3 requires requesting access on HuggingFace:
 
-1. Visit the SAM3 model page on Hugging Face
-2. Click "Request Access" and accept the license terms
+1. Visit https://huggingface.co/facebook/sam3
+2. Click "Access repository" and accept the license terms
 3. Wait for approval (usually automatic or within 24 hours)
-4. Once approved, the ComfyUI-SAM3 node can download the model
+4. Get your HuggingFace token from https://huggingface.co/settings/tokens
+5. Create `HF_TOKEN.dat` in repository root with your token:
+   ```
+   hf_yourTokenHere1234567890abcdefghijklmnop
+   ```
+6. Run wizard - model downloads automatically to `.vfx_pipeline/ComfyUI/models/sam/`
+
+**Template file**: Copy `HF_TOKEN.dat.template` and fill in your token.
 
 **Without SAM3 access**: Segmentation workflows (roto, cleanplate stages) will fail.
 
-**Testing priority**: Please report if SAM3 access approval is fast or slow in your region.
+**Testing priority**: Please report if SAM3 access approval and automated download work in your region.
 
 ### 4. SMPL-X Models
 **Now automated with credentials file:**
