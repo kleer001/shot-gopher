@@ -235,7 +235,13 @@ def wait_for_completion(
     check_interval = 2  # seconds
     last_file_count = 0
 
+    # Braille spinner characters for visual feedback
+    spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    spin_idx = 0
+
     while time.time() - start_time < timeout:
+        elapsed = int(time.time() - start_time)
+
         try:
             with urllib.request.urlopen(f"{comfyui_url}/history/{prompt_id}") as response:
                 history = json.loads(response.read().decode())
@@ -243,34 +249,36 @@ def wait_for_completion(
                 if prompt_id in history:
                     status = history[prompt_id].get("status", {})
                     if status.get("completed", False):
+                        print("\r    Done!                              ")
                         return True
                     if status.get("status_str") == "error":
-                        print(f"    Workflow error: {status}", file=sys.stderr)
+                        print(f"\r    Workflow error: {status}", file=sys.stderr)
                         return False
 
         except urllib.error.URLError:
             pass
 
         # File-based progress monitoring
+        file_info = ""
         if output_dir and output_dir.exists():
             current_files = len(list(output_dir.glob("*.png")))
             if current_files != last_file_count:
                 last_file_count = current_files
+            if current_files > 0:
                 if total_frames > 0:
-                    print(f"[ComfyUI] {stage_name} frame {current_files}/{total_frames}")
+                    file_info = f" | {current_files}/{total_frames} frames"
                 else:
-                    print(f"[ComfyUI] {stage_name} frame {current_files}")
-                sys.stdout.flush()
+                    file_info = f" | {current_files} frames"
 
-        # Also print elapsed time periodically
-        elapsed = int(time.time() - start_time)
-        if elapsed > 0 and elapsed % 30 == 0:
-            print(f"    Elapsed: {elapsed}s")
-            sys.stdout.flush()
+        # Show spinner with elapsed time
+        spin_char = spinner[spin_idx % len(spinner)]
+        spin_idx += 1
+        status_line = f"\r    {spin_char} Processing{file_info} [{elapsed}s]"
+        print(status_line, end="", flush=True)
 
         time.sleep(check_interval)
 
-    print("    Timeout waiting for workflow completion", file=sys.stderr)
+    print(f"\r    Timeout waiting for workflow completion ({timeout}s)", file=sys.stderr)
     return False
 
 
