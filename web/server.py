@@ -1,6 +1,8 @@
 """FastAPI server for VFX Pipeline web interface."""
 
+import asyncio
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 # Add scripts to path for imports
@@ -12,13 +14,23 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 
 from .api import router as api_router
-from .websocket import router as ws_router
+from .websocket import router as ws_router, set_main_loop
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for app startup/shutdown."""
+    # Capture the main event loop for thread-safe WebSocket updates
+    set_main_loop(asyncio.get_running_loop())
+    yield
+
 
 # Create FastAPI app
 app = FastAPI(
     title="VFX Pipeline",
     description="Web interface for automated VFX processing",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Get paths

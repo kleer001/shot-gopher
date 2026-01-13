@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -13,6 +13,15 @@ connections: Dict[str, Set[WebSocket]] = {}
 
 # Store for progress updates (set by pipeline_runner)
 progress_updates: Dict[str, dict] = {}
+
+# Store reference to main event loop for thread-safe updates
+_main_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def set_main_loop(loop: asyncio.AbstractEventLoop):
+    """Store reference to the main event loop for thread-safe updates."""
+    global _main_loop
+    _main_loop = loop
 
 
 class ConnectionManager:
@@ -164,14 +173,15 @@ def update_progress(project_id: str, data: dict):
     """Update stored progress (called from pipeline_runner synchronously).
 
     This stores the update for new connections and triggers async broadcast.
+    Thread-safe: can be called from background threads.
     """
     progress_updates[project_id] = data
 
-    # Schedule async broadcast
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.create_task(send_progress(project_id, data))
-    except RuntimeError:
-        # No event loop, skip broadcast
-        pass
+    # Schedule async broadcast using thread-safe method
+    if _main_loop is not None:
+        try:
+            # run_coroutine_threadsafe is safe to call from any thread
+            asyncio.run_coroutine_threadsafe(send_progress(project_id, data), _main_loop)
+        except RuntimeError:
+            # Loop closed or other issue
+            pass
