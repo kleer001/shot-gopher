@@ -142,14 +142,20 @@ def start_comfyui(
         print("Run the install wizard to install ComfyUI", file=sys.stderr)
         return False
 
-    # Always try to apply the logger patch (fixes BrokenPipeError)
-    patch_applied = _patch_comfyui_logger(comfyui_path)
+    # Check and apply logger patch if needed (fixes BrokenPipeError)
+    needs_patch, reason = _check_comfyui_needs_patch(comfyui_path)
+    patch_applied = False
+
+    if needs_patch:
+        print(f"  ComfyUI logger needs patch: {reason}")
+        patch_applied = _patch_comfyui_logger(comfyui_path)
 
     # Check if already running
     if is_comfyui_running(url):
         print("ComfyUI already running")
         if patch_applied:
-            print("  Note: Logger patch applied - restart ComfyUI to take effect")
+            print("  Warning: Logger patch applied - restart ComfyUI to take effect!")
+            print("  Run: pkill -f 'ComfyUI/main.py' && restart the pipeline")
         return True
 
     print(f"Starting ComfyUI from {comfyui_path}...")
