@@ -19,8 +19,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# Environment check - ensure correct conda environment is active
-from env_config import check_conda_env_or_warn
+# Environment check and configuration
+from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR
 
 # ComfyUI utilities (shared with run_segmentation.py)
 from comfyui_utils import (
@@ -28,9 +28,6 @@ from comfyui_utils import (
     check_comfyui_running,
     run_comfyui_workflow,
 )
-
-# Pipeline configuration
-DEFAULT_PROJECTS_DIR = Path.cwd() / "projects"
 START_FRAME = 1001
 SUPPORTED_FORMATS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf", ".exr", ".dpx", ".jpg", ".png"}
 

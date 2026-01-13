@@ -35,6 +35,9 @@ PYTHON_VERSION = "3.10"
 # Base installation directory
 VFX_PIPELINE_BASE = Path.home() / ".vfx_pipeline"
 
+# Default location for VFX projects (outside the repo)
+DEFAULT_PROJECTS_DIR = VFX_PIPELINE_BASE / "projects"
+
 # Path to the generated activation script (created by install_wizard)
 ACTIVATION_SCRIPT = VFX_PIPELINE_BASE / "activate.sh"
 
