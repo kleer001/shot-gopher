@@ -32,14 +32,14 @@ CONDA_ENV_NAME = "vfx-pipeline"
 # Python version requirement
 PYTHON_VERSION = "3.10"
 
-# Base installation directory
-VFX_PIPELINE_BASE = Path.home() / "vfx_pipeline"
+# Repo root directory (comfyui_ingest/)
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Default location for VFX projects (outside the repo)
-DEFAULT_PROJECTS_DIR = VFX_PIPELINE_BASE / "projects"
+# Default location for VFX projects (sibling to repo, not inside it)
+DEFAULT_PROJECTS_DIR = _REPO_ROOT.parent / "vfx_projects"
 
-# Path to the generated activation script (created by install_wizard)
-ACTIVATION_SCRIPT = VFX_PIPELINE_BASE / "activate.sh"
+# Path to the generated activation script (inside repo)
+ACTIVATION_SCRIPT = _REPO_ROOT / "activate.sh"
 
 
 # =============================================================================
