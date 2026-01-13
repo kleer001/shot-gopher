@@ -76,13 +76,13 @@ def start_comfyui(
 
     try:
         # Start ComfyUI as subprocess
+        # Don't pipe stdout/stderr - let them flow to terminal to avoid
+        # "Broken pipe" errors when tqdm/progress bars write output
         _comfyui_process = subprocess.Popen(
             cmd,
             cwd=str(comfyui_path),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
+            stdout=None,  # Inherit from parent (shows in terminal)
+            stderr=None,  # Inherit from parent (shows in terminal)
             env=env,
         )
 
@@ -96,11 +96,7 @@ def start_comfyui(
             # Check if process died
             if _comfyui_process.poll() is not None:
                 print("ComfyUI process exited unexpectedly", file=sys.stderr)
-                # Try to get some output
-                if _comfyui_process.stdout:
-                    output = _comfyui_process.stdout.read()
-                    if output:
-                        print(f"Output: {output[:500]}", file=sys.stderr)
+                print(f"Exit code: {_comfyui_process.returncode}", file=sys.stderr)
                 return False
 
             time.sleep(1)
