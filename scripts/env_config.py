@@ -33,7 +33,7 @@ CONDA_ENV_NAME = "vfx-pipeline"
 PYTHON_VERSION = "3.10"
 
 # Base installation directory
-VFX_PIPELINE_BASE = Path.home() / ".vfx_pipeline"
+VFX_PIPELINE_BASE = Path.home() / "vfx_pipeline"
 
 # Default location for VFX projects (outside the repo)
 DEFAULT_PROJECTS_DIR = VFX_PIPELINE_BASE / "projects"
