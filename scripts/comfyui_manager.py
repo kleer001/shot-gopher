@@ -1,4 +1,8 @@
-"""ComfyUI process management for automatic startup."""
+"""ComfyUI process management for automatic startup.
+
+Provides functions to start/stop ComfyUI automatically.
+Used by both run_pipeline.py and the web interface.
+"""
 
 import os
 import subprocess
@@ -7,8 +11,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-# Import config
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from env_config import INSTALL_DIR
 from comfyui_utils import DEFAULT_COMFYUI_URL, check_comfyui_running
 
@@ -147,3 +149,12 @@ def get_comfyui_status() -> dict:
         "managed": _comfyui_process is not None,
         "pid": _comfyui_process.pid if _comfyui_process else None,
     }
+
+
+def ensure_comfyui(url: str = DEFAULT_COMFYUI_URL, timeout: int = 60) -> bool:
+    """Ensure ComfyUI is running, starting it if necessary.
+
+    This is a convenience function for scripts that need ComfyUI.
+    Returns True if ComfyUI is available, False otherwise.
+    """
+    return start_comfyui(url=url, timeout=timeout)

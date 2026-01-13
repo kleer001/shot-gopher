@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse
 
 from .api import router as api_router
 from .websocket import router as ws_router, set_main_loop
-from .comfyui_manager import start_comfyui, stop_comfyui
+from comfyui_manager import start_comfyui, stop_comfyui
 
 
 @asynccontextmanager

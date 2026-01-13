@@ -28,6 +28,7 @@ from comfyui_utils import (
     check_comfyui_running,
     run_comfyui_workflow,
 )
+from comfyui_manager import ensure_comfyui, stop_comfyui
 START_FRAME = 1001
 SUPPORTED_FORMATS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf", ".exr", ".dpx", ".jpg", ".png"}
 
@@ -348,6 +349,7 @@ def run_pipeline(
     colmap_use_masks: bool = True,
     gsir_iterations: int = 35000,
     gsir_path: Optional[str] = None,
+    auto_start_comfyui: bool = True,
 ) -> bool:
     """Run the full VFX pipeline.
 
@@ -365,11 +367,27 @@ def run_pipeline(
         colmap_use_masks: Use segmentation masks for COLMAP (if available)
         gsir_iterations: Total GS-IR training iterations
         gsir_path: Path to GS-IR installation
+        auto_start_comfyui: Auto-start ComfyUI if not running (default: True)
 
     Returns:
         True if all stages successful
     """
     stages = stages or list(STAGES.keys())
+
+    # Check if any stage requires ComfyUI
+    comfyui_stages = {"depth", "roto", "cleanplate"}
+    needs_comfyui = bool(comfyui_stages & set(stages))
+
+    # Auto-start ComfyUI if needed
+    comfyui_was_started = False
+    if needs_comfyui and auto_start_comfyui:
+        if not check_comfyui_running(comfyui_url):
+            print("\n[ComfyUI] Starting ComfyUI automatically...")
+            if not ensure_comfyui(url=comfyui_url):
+                print("Error: Failed to start ComfyUI", file=sys.stderr)
+                print("Install ComfyUI with the install wizard or start it manually", file=sys.stderr)
+                return False
+            comfyui_was_started = True
 
     # Derive project name from input if not specified
     if not project_name:
@@ -548,6 +566,12 @@ def run_pipeline(
     print(f"\n{'='*60}")
     print(f"Pipeline complete: {project_dir}")
     print(f"{'='*60}\n")
+
+    # Stop ComfyUI if we started it
+    if comfyui_was_started:
+        print("[ComfyUI] Stopping ComfyUI...")
+        stop_comfyui()
+
     return True
 
 
@@ -642,6 +666,11 @@ def main():
         default=None,
         help="Path to GS-IR installation (default: auto-detect)"
     )
+    parser.add_argument(
+        "--no-auto-comfyui",
+        action="store_true",
+        help="Don't auto-start ComfyUI (assume it's already running)"
+    )
 
     args = parser.parse_args()
 
@@ -683,6 +712,7 @@ def main():
         colmap_use_masks=not args.colmap_no_masks,
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
+        auto_start_comfyui=not args.no_auto_comfyui,
     )
 
     sys.exit(0 if success else 1)
