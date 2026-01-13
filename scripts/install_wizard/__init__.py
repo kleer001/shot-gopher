@@ -20,6 +20,7 @@ from .downloader import CheckpointDownloader
 from .installers import ComponentInstaller, GitRepoInstaller, PythonPackageInstaller
 from .progress import ProgressBarManager
 from .state import InstallationStateManager
+from .utils import print_success, print_warning, print_error, print_info, run_command
 from .validator import InstallationValidator
 from .wizard import InstallationWizard
 
@@ -35,4 +36,10 @@ __all__ = [
     'InstallationStateManager',
     'InstallationValidator',
     'InstallationWizard',
+    # Utility functions used by other scripts (e.g., janitor.py)
+    'print_success',
+    'print_warning',
+    'print_error',
+    'print_info',
+    'run_command',
 ]

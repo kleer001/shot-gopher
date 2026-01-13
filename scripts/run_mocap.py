@@ -33,8 +33,8 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Dict
 
-# Environment check - ensure correct conda environment is active
-from env_config import require_conda_env
+# Environment check and configuration
+from env_config import require_conda_env, INSTALL_DIR
 
 
 # Dependencies check results (cached)
@@ -144,7 +144,7 @@ def install_instructions():
 
     print("\nSMPL-X body model:")
     print("  1. Register at https://smpl-x.is.tue.mpg.de/")
-    print("  2. Download models → place in .vfx_pipeline/smplx_models/")
+    print(f"  2. Download models → place in {INSTALL_DIR}/smplx_models/")
     print()
 
 

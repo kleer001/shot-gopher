@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from env_config import INSTALL_DIR
+
 from .utils import check_python_package, print_error, print_success, print_warning, run_command
 
 if TYPE_CHECKING:
@@ -86,7 +88,7 @@ class GitRepoInstaller(ComponentInstaller):
     def __init__(self, name: str, repo_url: str, install_dir: Optional[Path] = None, size_gb: float = 0.0):
         super().__init__(name, size_gb)
         self.repo_url = repo_url
-        self.install_dir = install_dir or Path.cwd() / ".vfx_pipeline" / name.lower()
+        self.install_dir = install_dir or INSTALL_DIR / name.lower()
         self.conda_manager: Optional['CondaEnvironmentManager'] = None
 
     def set_conda_manager(self, conda_manager: 'CondaEnvironmentManager'):

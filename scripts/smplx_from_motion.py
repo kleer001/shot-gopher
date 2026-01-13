@@ -29,6 +29,8 @@ from typing import Optional, Dict, Any
 
 import numpy as np
 
+from env_config import INSTALL_DIR
+
 
 def check_dependencies() -> bool:
     """Check if required dependencies are available."""
@@ -64,7 +66,7 @@ def find_smplx_models() -> Optional[Path]:
         Path to SMPL-X model directory, or None if not found
     """
     search_paths = [
-        Path(".vfx_pipeline/smplx_models"),
+        INSTALL_DIR / "smplx_models",
         Path.home() / ".smplx_models",
         Path("/data/smplx_models"),
         Path("smplx_models"),
@@ -172,7 +174,7 @@ def generate_smplx_meshes(
         print(f"Error initializing SMPL-X: {e}", file=sys.stderr)
         print("\nMake sure SMPL-X models are downloaded:", file=sys.stderr)
         print("  1. Register at https://smpl-x.is.tue.mpg.de/", file=sys.stderr)
-        print("  2. Download models to .vfx_pipeline/smplx_models/", file=sys.stderr)
+        print(f"  2. Download models to {INSTALL_DIR}/smplx_models/", file=sys.stderr)
         return False
 
     # Get model properties
@@ -309,7 +311,7 @@ def run_generation_pipeline(
             print("Error: SMPL-X models not found", file=sys.stderr)
             print("\nDownload SMPL-X models:", file=sys.stderr)
             print("  1. Register at https://smpl-x.is.tue.mpg.de/", file=sys.stderr)
-            print("  2. Download and extract to .vfx_pipeline/smplx_models/", file=sys.stderr)
+            print(f"  2. Download and extract to {INSTALL_DIR}/smplx_models/", file=sys.stderr)
             return False
 
         print(f"  SMPL-X models: {model_path}")

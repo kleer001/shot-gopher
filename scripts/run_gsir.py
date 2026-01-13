@@ -29,8 +29,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# Environment check - ensure correct conda environment is active
-from env_config import require_conda_env
+# Environment check and configuration
+from env_config import require_conda_env, INSTALL_DIR
 
 
 # Default training parameters
@@ -61,7 +61,7 @@ def check_gsir_available() -> tuple[bool, Optional[Path]]:
 
     # Check common installation locations
     common_paths = [
-        Path.cwd() / ".vfx_pipeline" / "GS-IR",
+        INSTALL_DIR / "GS-IR",
         Path.cwd() / "GS-IR",
         Path("/opt/GS-IR"),
     ]

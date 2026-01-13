@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from env_config import INSTALL_DIR
+
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
@@ -35,9 +37,8 @@ class InstallationWizard:
 
     def __init__(self):
         self.components = {}
-        # Get repository root (parent of scripts/install_wizard directory)
-        self.repo_root = Path(__file__).parent.parent.parent.resolve()
-        self.install_dir = self.repo_root / ".vfx_pipeline"
+        self.repo_root = INSTALL_DIR.parent
+        self.install_dir = INSTALL_DIR
 
         self.conda_manager = CondaEnvironmentManager()
         self.state_manager = InstallationStateManager(self.install_dir / "install_state.json")
@@ -656,8 +657,8 @@ class InstallationWizard:
             print("\n📦 SMPL-X Body Models (Manual Download Required):")
             print("  1. Register at https://smpl-x.is.tue.mpg.de/")
             print("  2. Download SMPL-X models")
-            print("  3. Place in .vfx_pipeline/smplx_models/")
-            print("     mkdir -p .vfx_pipeline/smplx_models && cp SMPLX_*.pkl .vfx_pipeline/smplx_models/")
+            print(f"  3. Place in {INSTALL_DIR}/smplx_models/")
+            print(f"     mkdir -p {INSTALL_DIR}/smplx_models && cp SMPLX_*.pkl {INSTALL_DIR}/smplx_models/")
 
         # Checkpoints status
         has_mocap = status.get('wham', False) or status.get('econ', False)

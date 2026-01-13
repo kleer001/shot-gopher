@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 
+from env_config import INSTALL_DIR
+
 from .utils import Colors, print_header, print_info, print_success
 
 if TYPE_CHECKING:
@@ -19,7 +21,7 @@ class ConfigurationGenerator:
 
     def __init__(self, conda_manager: 'CondaEnvironmentManager', base_dir: Optional[Path] = None):
         self.conda_manager = conda_manager
-        self.base_dir = base_dir or Path.cwd() / ".vfx_pipeline"
+        self.base_dir = base_dir or INSTALL_DIR
 
     def generate_config_dict(self) -> Dict:
         """Generate configuration dictionary.

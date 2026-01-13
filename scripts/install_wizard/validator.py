@@ -7,6 +7,8 @@ are properly installed and functional.
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
+from env_config import INSTALL_DIR
+
 from .utils import (
     print_error,
     print_header,
@@ -26,7 +28,7 @@ class InstallationValidator:
     def __init__(self, conda_manager: 'CondaEnvironmentManager', install_dir: Optional[Path] = None):
         self.conda_manager = conda_manager
         self.install_dir = install_dir
-        self.base_dir = install_dir or Path.cwd() / ".vfx_pipeline"
+        self.base_dir = install_dir or INSTALL_DIR
 
     def validate_python_imports(self) -> Dict[str, bool]:
         """Test importing key Python packages.
@@ -124,7 +126,7 @@ class InstallationValidator:
         """
         smplx_dir = self.base_dir / "smplx_models"
         if not smplx_dir.exists():
-            return False, "SMPL-X directory not found (.vfx_pipeline/smplx_models/)"
+            return False, f"SMPL-X directory not found ({INSTALL_DIR}/smplx_models/)"
 
         # Look for model files
         model_files = list(smplx_dir.glob("SMPLX_*.pkl"))

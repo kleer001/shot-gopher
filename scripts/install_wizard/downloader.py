@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
+from env_config import INSTALL_DIR
+
 from .utils import Colors, print_error, print_header, print_info, print_success, print_warning
 
 if TYPE_CHECKING:
@@ -33,11 +35,11 @@ class CheckpointDownloader:
                 }
             ],
             'dest_dir_rel': 'WHAM/checkpoints',
-            'instructions': '''WHAM checkpoints are hosted on Google Drive.
+            'instructions': f'''WHAM checkpoints are hosted on Google Drive.
 If automatic download fails, manually download from:
   https://drive.google.com/file/d/1i7kt9RlCCCNEW2aYaDWVr-G778JkLNcB/view
 Or run the fetch_demo_data.sh script from the WHAM repository:
-  cd .vfx_pipeline/WHAM && bash fetch_demo_data.sh'''
+  cd {INSTALL_DIR}/WHAM && bash fetch_demo_data.sh'''
         },
         'econ': {
             'name': 'ECON Checkpoints',
@@ -112,7 +114,7 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
     }
 
     def __init__(self, base_dir: Optional[Path] = None):
-        self.base_dir = base_dir or Path.cwd() / ".vfx_pipeline"
+        self.base_dir = base_dir or INSTALL_DIR
 
     def download_file(self, url: str, dest: Path, expected_size_mb: Optional[int] = None) -> bool:
         """Download file with progress tracking.

@@ -21,77 +21,20 @@ Example:
 import argparse
 import json
 import sys
-import time
 import urllib.request
-import urllib.error
 from pathlib import Path
 from typing import Optional, List
 
 # Environment check - ensure correct conda environment is active
 from env_config import check_conda_env_or_warn
 
-
-DEFAULT_COMFYUI_URL = "http://127.0.0.1:8188"
-
-
-def check_comfyui_running(url: str) -> bool:
-    """Check if ComfyUI server is accessible."""
-    try:
-        urllib.request.urlopen(f"{url}/system_stats", timeout=5)
-        return True
-    except (urllib.error.URLError, TimeoutError):
-        return False
-
-
-def convert_workflow_to_api_format(workflow: dict) -> dict:
-    """Convert ComfyUI workflow format to API format if needed.
-
-    Note: For segmentation workflow, it should already be in API format.
-    """
-    if "nodes" not in workflow:
-        return workflow
-
-    # Basic conversion (same as in run_pipeline.py)
-    print("  Warning: Workflow in UI format, attempting conversion...", file=sys.stderr)
-
-    nodes = workflow.get("nodes", [])
-    links = workflow.get("links", [])
-
-    link_lookup = {}
-    for link in links:
-        if len(link) >= 5:
-            link_id, src_node, src_slot, dst_node, dst_slot = link[:5]
-            link_lookup[link_id] = (src_node, src_slot)
-
-    api_workflow = {}
-
-    for node in nodes:
-        node_id = str(node.get("id"))
-        node_type = node.get("type")
-
-        if node_type in ("Note", "Reroute"):
-            continue
-
-        inputs = {}
-
-        node_inputs = node.get("inputs", [])
-        for inp in node_inputs:
-            inp_name = inp.get("name")
-            link_id = inp.get("link")
-
-            if link_id is not None and link_id in link_lookup:
-                src_node, src_slot = link_lookup[link_id]
-                inputs[inp_name] = [str(src_node), src_slot]
-
-        api_workflow[node_id] = {
-            "class_type": node_type,
-            "inputs": inputs
-        }
-
-        if node.get("title"):
-            api_workflow[node_id]["_meta"] = {"title": node.get("title")}
-
-    return api_workflow
+# ComfyUI utilities (shared with run_pipeline.py)
+from comfyui_utils import (
+    DEFAULT_COMFYUI_URL,
+    check_comfyui_running,
+    convert_workflow_to_api_format,
+    wait_for_completion,
+)
 
 
 def update_segmentation_prompt(workflow: dict, prompt: str) -> dict:
@@ -150,37 +93,6 @@ def queue_workflow(workflow_path: Path, comfyui_url: str, prompt: Optional[str] 
     with urllib.request.urlopen(req) as response:
         result = json.loads(response.read().decode())
         return result.get("prompt_id", "")
-
-
-def wait_for_completion(prompt_id: str, comfyui_url: str, timeout: int = 3600) -> bool:
-    """Wait for a queued workflow to complete.
-
-    Returns:
-        True if completed successfully, False otherwise
-    """
-    start_time = time.time()
-    check_interval = 2
-
-    while time.time() - start_time < timeout:
-        try:
-            with urllib.request.urlopen(f"{comfyui_url}/history/{prompt_id}") as response:
-                history = json.loads(response.read().decode())
-
-                if prompt_id in history:
-                    status = history[prompt_id].get("status", {})
-                    if status.get("completed", False):
-                        return True
-                    if status.get("status_str") == "error":
-                        print(f"    Workflow error: {status}", file=sys.stderr)
-                        return False
-
-        except urllib.error.URLError:
-            pass
-
-        time.sleep(check_interval)
-
-    print(f"    Timeout waiting for workflow completion", file=sys.stderr)
-    return False
 
 
 def run_segmentation(

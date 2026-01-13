@@ -25,9 +25,10 @@ import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-# Import utilities from install_wizard
+# Import configuration and utilities
 sys.path.insert(0, str(Path(__file__).parent))
 try:
+    from env_config import INSTALL_DIR
     from install_wizard import (
         CondaEnvironmentManager,
         InstallationStateManager,
@@ -39,8 +40,8 @@ try:
         run_command
     )
 except ImportError:
-    print("Error: Could not import from install_wizard.py", file=sys.stderr)
-    print("Ensure janitor.py is in the same directory as install_wizard.py")
+    print("Error: Could not import from install_wizard", file=sys.stderr)
+    print("Ensure janitor.py is in the scripts directory")
     sys.exit(1)
 
 
@@ -221,9 +222,7 @@ class Janitor:
     """Main janitor class for maintenance operations."""
 
     def __init__(self, install_dir: Optional[Path] = None):
-        # Detect installation directory
-        repo_root = Path(__file__).parent.parent.resolve()
-        self.install_dir = install_dir or (repo_root / ".vfx_pipeline")
+        self.install_dir = install_dir or INSTALL_DIR
 
         # Initialize managers
         self.conda_manager = CondaEnvironmentManager()

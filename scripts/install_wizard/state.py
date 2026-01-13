@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from env_config import INSTALL_DIR
+
 from .utils import print_warning
 
 
@@ -16,7 +18,7 @@ class InstallationStateManager:
     """Manages installation state for resume/recovery."""
 
     def __init__(self, state_file: Optional[Path] = None):
-        self.state_file = state_file or Path.cwd() / ".vfx_pipeline" / "install_state.json"
+        self.state_file = state_file or INSTALL_DIR / "install_state.json"
         self.state = self.load_state()
 
     def load_state(self) -> Dict:
