@@ -139,6 +139,22 @@ python scripts/run_pipeline.py footage.mp4 -s all -e
 
 See **[docs/run_pipeline.md](docs/run_pipeline.md)** for complete documentation.
 
+## Web Interface
+
+Prefer a GUI? Launch the web interface:
+
+```bash
+./start_web.py
+```
+
+This opens a browser-based interface where you can:
+- **Drag-and-drop** or **browse** to upload videos
+- Select processing stages with presets (Quick/Full/Everything)
+- Monitor real-time progress with WebSocket updates
+- Browse and download outputs when complete
+
+The web server runs locally at `http://localhost:5000`. See **[docs/web_gui_plan.md](docs/web_gui_plan.md)** for architecture details.
+
 ## Maintenance
 
 Keep your installation healthy with the janitor tool:
@@ -190,9 +206,9 @@ movie.mp4 → run_pipeline.py → project folder → VFX passes
 - **VideoHelperSuite** - Frame I/O handling
 - **COLMAP** - Structure-from-Motion for accurate camera reconstruction and 3D geometry
 
-**Project structure** (per-shot):
+**Project structure** (per-shot, created in sibling `vfx_projects/` directory):
 ```
-projects/My_Shot_Name/
+../vfx_projects/My_Shot_Name/    # Sibling to repo, not inside it
 ├── source/frames/    # Input frames (frame_1001.png, ...)
 ├── depth/            # Depth maps
 ├── roto/             # Segmentation masks
@@ -210,6 +226,8 @@ projects/My_Shot_Name/
 │   └── dense/        # Dense reconstruction (if --colmap-dense)
 └── workflows/        # Project-specific workflows (with absolute paths)
 ```
+
+Override the default projects location with `--projects-dir`.
 
 ## Current State
 
