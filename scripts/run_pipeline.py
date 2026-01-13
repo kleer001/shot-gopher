@@ -416,16 +416,25 @@ def run_pipeline(
             frame_count = extract_frames(input_path, source_frames, START_FRAME, fps)
             print(f"  → Extracted {frame_count} frames")
 
+    # Count total frames for progress reporting
+    total_frames = len(list(source_frames.glob("frame_*.png")))
+
     # Stage: Depth
     if "depth" in stages:
         print("\n=== Stage: depth ===")
         workflow_path = project_dir / "workflows" / "01_analysis.json"
+        depth_dir = project_dir / "depth"
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
-        elif skip_existing and list((project_dir / "depth").glob("*.png")):
+        elif skip_existing and list(depth_dir.glob("*.png")):
             print("  → Skipping (depth maps exist)")
         else:
-            if not run_comfyui_workflow(workflow_path, comfyui_url):
+            if not run_comfyui_workflow(
+                workflow_path, comfyui_url,
+                output_dir=depth_dir,
+                total_frames=total_frames,
+                stage_name="depth",
+            ):
                 print("  → Depth stage failed", file=sys.stderr)
                 return False
 
@@ -433,12 +442,18 @@ def run_pipeline(
     if "roto" in stages:
         print("\n=== Stage: roto ===")
         workflow_path = project_dir / "workflows" / "02_segmentation.json"
+        roto_dir = project_dir / "roto"
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
-        elif skip_existing and list((project_dir / "roto").glob("*.png")):
+        elif skip_existing and list(roto_dir.glob("*.png")):
             print("  → Skipping (masks exist)")
         else:
-            if not run_comfyui_workflow(workflow_path, comfyui_url):
+            if not run_comfyui_workflow(
+                workflow_path, comfyui_url,
+                output_dir=roto_dir,
+                total_frames=total_frames,
+                stage_name="roto",
+            ):
                 print("  → Segmentation stage failed", file=sys.stderr)
                 return False
 
@@ -446,12 +461,18 @@ def run_pipeline(
     if "cleanplate" in stages:
         print("\n=== Stage: cleanplate ===")
         workflow_path = project_dir / "workflows" / "03_cleanplate.json"
+        cleanplate_dir = project_dir / "cleanplate"
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
-        elif skip_existing and list((project_dir / "cleanplate").glob("*.png")):
+        elif skip_existing and list(cleanplate_dir.glob("*.png")):
             print("  → Skipping (cleanplates exist)")
         else:
-            if not run_comfyui_workflow(workflow_path, comfyui_url):
+            if not run_comfyui_workflow(
+                workflow_path, comfyui_url,
+                output_dir=cleanplate_dir,
+                total_frames=total_frames,
+                stage_name="cleanplate",
+            ):
                 print("  → Cleanplate stage failed", file=sys.stderr)
                 return False
 

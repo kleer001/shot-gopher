@@ -46,6 +46,12 @@ def parse_progress_line(line: str, current_stage: str, stages: list) -> Optional
         "colmap_progress": r"Registered\s+(\d+)\s*/\s*(\d+)\s+images",
         # FFmpeg progress: "frame=  142 fps=..." or "[FFmpeg] Extracting frame 42/200"
         "ffmpeg_progress": r"\[FFmpeg\]\s*Extracting\s+frame\s+(\d+)\s*/\s*(\d+)",
+        # ComfyUI file-based progress: "[ComfyUI] depth frame 42/200"
+        "comfyui_file_progress": r"\[ComfyUI\]\s*(\w+)\s+frame\s+(\d+)/(\d+)",
+        # Mocap/ECON keyframe progress: "[1/5] Processing frame_0001.png"
+        "bracket_progress": r"\[(\d+)/(\d+)\]",
+        # GS-IR training: "Iteration 1000/30000"
+        "gsir_progress": r"[Ii]teration\s+(\d+)\s*/\s*(\d+)",
     }
 
     result = {}
@@ -88,6 +94,35 @@ def parse_progress_line(line: str, current_stage: str, stages: list) -> Optional
 
     # Check for FFmpeg progress
     match = re.search(patterns["ffmpeg_progress"], line)
+    if match:
+        current = int(match.group(1))
+        total = int(match.group(2))
+        result["frame"] = current
+        result["total_frames"] = total
+        result["progress"] = current / total if total > 0 else 0
+
+    # Check for ComfyUI file-based progress
+    match = re.search(patterns["comfyui_file_progress"], line)
+    if match:
+        stage = match.group(1).lower()
+        current = int(match.group(2))
+        total = int(match.group(3))
+        result["frame"] = current
+        result["total_frames"] = total
+        result["progress"] = current / total if total > 0 else 0
+        result["current_stage"] = stage  # Update stage if detected
+
+    # Check for bracket progress [1/5] style
+    match = re.search(patterns["bracket_progress"], line)
+    if match and "progress" not in result:
+        current = int(match.group(1))
+        total = int(match.group(2))
+        result["frame"] = current
+        result["total_frames"] = total
+        result["progress"] = current / total if total > 0 else 0
+
+    # Check for GS-IR training progress
+    match = re.search(patterns["gsir_progress"], line)
     if match:
         current = int(match.group(1))
         total = int(match.group(2))
