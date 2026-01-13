@@ -39,8 +39,9 @@ DEFAULT_DA3_MODEL = "da3metric_large.safetensors"
 def _predownload_depth_model(comfyui_path: Path, model_name: str = DEFAULT_DA3_MODEL) -> bool:
     """Pre-download Depth Anything V3 model to avoid HuggingFace download during workflow.
 
-    Downloads the model with progress bars disabled to avoid BrokenPipeError
-    that occurs when tqdm tries to flush stderr during ComfyUI execution.
+    Downloads BEFORE ComfyUI starts, so tqdm progress bars work normally.
+    This avoids the BrokenPipeError that occurs when HuggingFace downloads
+    happen during ComfyUI workflow execution (when stderr is wrapped).
 
     Args:
         comfyui_path: Path to ComfyUI installation
@@ -61,7 +62,7 @@ def _predownload_depth_model(comfyui_path: Path, model_name: str = DEFAULT_DA3_M
         return True
 
     repo_id = DA3_MODEL_REPOS[model_name]
-    print(f"  Pre-downloading {model_name} from {repo_id}...")
+    print(f"  Downloading {model_name} from HuggingFace ({repo_id})...")
 
     # Ensure models directory exists
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -70,26 +71,15 @@ def _predownload_depth_model(comfyui_path: Path, model_name: str = DEFAULT_DA3_M
         # Import here to avoid import errors if huggingface_hub not installed
         from huggingface_hub import hf_hub_download
 
-        # Disable progress bars via environment (backup)
-        old_env = os.environ.get("HF_HUB_DISABLE_PROGRESS_BARS")
-        os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
-
-        try:
-            # Download the model file
-            downloaded_path = hf_hub_download(
-                repo_id=repo_id,
-                filename=model_name,
-                local_dir=str(models_dir),
-                local_dir_use_symlinks=False,
-            )
-            print(f"  Downloaded: {model_name}")
-            return True
-        finally:
-            # Restore environment
-            if old_env is None:
-                os.environ.pop("HF_HUB_DISABLE_PROGRESS_BARS", None)
-            else:
-                os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = old_env
+        # Download with progress bars enabled (safe before ComfyUI starts)
+        downloaded_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=model_name,
+            local_dir=str(models_dir),
+            local_dir_use_symlinks=False,
+        )
+        print(f"  Model downloaded: {model_name}")
+        return True
 
     except ImportError:
         print("  Warning: huggingface_hub not installed, skipping pre-download", file=sys.stderr)
