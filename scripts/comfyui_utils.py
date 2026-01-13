@@ -87,17 +87,26 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
         optional_inputs = input_def.get("optional", {})
 
         # Collect widget names in order (required first, then optional)
-        # Skip inputs that are connection types (IMAGE, MODEL, etc.)
+        # Connection types come from links, not widgets - skip these
         connection_types = {"IMAGE", "MASK", "MODEL", "CLIP", "VAE", "CONDITIONING",
-                          "LATENT", "CONTROL_NET", "DA3MODEL", "SAM2MODEL", "BBOX_LIST"}
+                          "LATENT", "CONTROL_NET", "DA3MODEL", "SAM2MODEL", "BBOX_LIST",
+                          "SIGMAS", "SAMPLER", "UPSCALE_MODEL", "NOISE", "GUIDER"}
         widget_names = []
         for name, spec in required_inputs.items():
             if isinstance(spec, list) and len(spec) > 0:
-                if spec[0] not in connection_types:
-                    widget_names.append(name)
+                # spec[0] is either a type string like "IMAGE" or a list of options for dropdown
+                first = spec[0]
+                # If it's a list (dropdown options) or a basic widget type, include it
+                if isinstance(first, list):
+                    widget_names.append(name)  # Dropdown widget
+                elif isinstance(first, str) and first not in connection_types:
+                    widget_names.append(name)  # Basic widget (INT, FLOAT, STRING, BOOLEAN, etc.)
         for name, spec in optional_inputs.items():
             if isinstance(spec, list) and len(spec) > 0:
-                if spec[0] not in connection_types:
+                first = spec[0]
+                if isinstance(first, list):
+                    widget_names.append(name)
+                elif isinstance(first, str) and first not in connection_types:
                     widget_names.append(name)
 
         # Process linked inputs (connections)
