@@ -59,6 +59,9 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
 
     # Get node definitions from ComfyUI to map widget values
     node_defs = get_node_definitions(comfyui_url)
+    if not node_defs:
+        print("  Warning: Could not fetch node definitions from ComfyUI", file=sys.stderr)
+        print("  Widget values may not be mapped correctly", file=sys.stderr)
 
     # Build link lookup: link_id -> (source_node_id, source_slot)
     link_lookup = {}
@@ -86,31 +89,45 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
         required_inputs = input_def.get("required", {})
         optional_inputs = input_def.get("optional", {})
 
+        # First, identify which inputs have connections (from the node's inputs array)
+        connected_input_names = set()
+        node_inputs = node.get("inputs", [])
+        for inp in node_inputs:
+            if inp.get("link") is not None:
+                connected_input_names.add(inp.get("name"))
+
         # Collect widget names in order (required first, then optional)
-        # Connection types come from links, not widgets - skip these
-        connection_types = {"IMAGE", "MASK", "MODEL", "CLIP", "VAE", "CONDITIONING",
-                          "LATENT", "CONTROL_NET", "DA3MODEL", "SAM2MODEL", "BBOX_LIST",
-                          "SIGMAS", "SAMPLER", "UPSCALE_MODEL", "NOISE", "GUIDER"}
+        # Skip connection-type inputs - they're handled via links
         widget_names = []
         for name, spec in required_inputs.items():
             if isinstance(spec, list) and len(spec) > 0:
-                # spec[0] is either a type string like "IMAGE" or a list of options for dropdown
                 first = spec[0]
-                # If it's a list (dropdown options) or a basic widget type, include it
+                # If first element is a list, it's a dropdown (widget)
+                # If first element is a string that's ALL_CAPS, it's likely a connection type
                 if isinstance(first, list):
                     widget_names.append(name)  # Dropdown widget
-                elif isinstance(first, str) and first not in connection_types:
-                    widget_names.append(name)  # Basic widget (INT, FLOAT, STRING, BOOLEAN, etc.)
+                elif isinstance(first, str):
+                    # Connection types are typically ALL_CAPS custom types
+                    # Widget types: INT, FLOAT, STRING, BOOLEAN, or mixed-case
+                    if first in ("INT", "FLOAT", "STRING", "BOOLEAN"):
+                        widget_names.append(name)
+                    elif not first.isupper():
+                        # Mixed case = widget type
+                        widget_names.append(name)
+                    # else: ALL_CAPS = connection type, skip
+
         for name, spec in optional_inputs.items():
             if isinstance(spec, list) and len(spec) > 0:
                 first = spec[0]
                 if isinstance(first, list):
                     widget_names.append(name)
-                elif isinstance(first, str) and first not in connection_types:
-                    widget_names.append(name)
+                elif isinstance(first, str):
+                    if first in ("INT", "FLOAT", "STRING", "BOOLEAN"):
+                        widget_names.append(name)
+                    elif not first.isupper():
+                        widget_names.append(name)
 
         # Process linked inputs (connections)
-        node_inputs = node.get("inputs", [])
         for inp in node_inputs:
             inp_name = inp.get("name")
             link_id = inp.get("link")
@@ -120,11 +137,15 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
                 inputs[inp_name] = [str(src_node), src_slot]
 
         # Process widget values
+        # Filter out widgets that have connections (they're not in widgets_values)
         widget_values = node.get("widgets_values", [])
-        if widget_values and widget_names:
+        if widget_values:
+            # Only map to widgets that don't have connections
+            non_connected_widgets = [n for n in widget_names if n not in connected_input_names]
+
             for i, value in enumerate(widget_values):
-                if i < len(widget_names) and value is not None:
-                    inputs[widget_names[i]] = value
+                if i < len(non_connected_widgets) and value is not None:
+                    inputs[non_connected_widgets[i]] = value
 
         api_workflow[node_id] = {
             "class_type": node_type,
@@ -145,7 +166,7 @@ def queue_workflow(workflow_path: Path, comfyui_url: str = DEFAULT_COMFYUI_URL) 
         comfyui_url: ComfyUI API URL
 
     Returns:
-        Prompt ID for tracking
+        Prompt ID for tracking, or empty string on failure
     """
     with open(workflow_path) as f:
         workflow = json.load(f)
@@ -163,9 +184,27 @@ def queue_workflow(workflow_path: Path, comfyui_url: str = DEFAULT_COMFYUI_URL) 
         headers={"Content-Type": "application/json"}
     )
 
-    with urllib.request.urlopen(req) as response:
-        result = json.loads(response.read().decode())
-        return result.get("prompt_id", "")
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode())
+            return result.get("prompt_id", "")
+    except urllib.error.HTTPError as e:
+        # Read error response body for details
+        error_body = ""
+        try:
+            error_body = e.read().decode()
+            error_json = json.loads(error_body)
+            if "error" in error_json:
+                error_msg = error_json["error"].get("message", str(error_json["error"]))
+                print(f"    ComfyUI error: {error_msg}", file=sys.stderr)
+                if "node_errors" in error_json:
+                    for node_id, node_err in error_json["node_errors"].items():
+                        print(f"      Node {node_id}: {node_err}", file=sys.stderr)
+        except Exception:
+            if error_body:
+                print(f"    ComfyUI response: {error_body[:500]}", file=sys.stderr)
+        print(f"    HTTP {e.code}: {e.reason}", file=sys.stderr)
+        return ""
 
 
 def wait_for_completion(
