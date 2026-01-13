@@ -33,15 +33,16 @@ The web GUI provides a browser-based interface to the existing pipeline, served 
 1. **Minimal new code** - Reuse existing scripts, don't rewrite pipeline logic
 2. **No external services** - Everything runs locally, no cloud dependencies
 3. **No build step** - Vanilla HTML/CSS/JS, no npm/webpack
-4. **Single entry point** - One command to start: `python scripts/start_web.py`
+4. **Single entry point** - One command from repo root: `./start_web.py` (auto-launches browser)
 5. **Respect existing config** - Use `env_config.py` for all paths
+6. **Sensible defaults** - Roto prompt defaults to "person" (covers 80% of use cases)
 
 ## MVP Features
 
 ### Must Have
-- [ ] Drag-and-drop video upload
+- [ ] Video upload: drag-and-drop **and** browse button (not everyone likes drag-and-drop)
 - [ ] Stage selection (checkboxes or preset)
-- [ ] Roto prompt text input (when roto enabled)
+- [ ] Roto prompt text input (defaults to "person", editable)
 - [ ] "Start Processing" button
 - [ ] Progress display (current stage, percentage)
 - [ ] "Done" state with output file listing
@@ -59,6 +60,7 @@ The web GUI provides a browser-based interface to the existing pipeline, served 
 
 ```
 comfyui_ingest/
+├── start_web.py                  # NEW: Root entry point (launches browser)
 ├── web/                          # NEW: Web UI package
 │   ├── __init__.py
 │   ├── server.py                 # FastAPI application
@@ -73,8 +75,8 @@ comfyui_ingest/
 │   └── templates/
 │       └── index.html            # Main page
 ├── scripts/
-│   ├── start_web.py              # NEW: Entry point
-│   └── ...
+│   └── ...                       # Existing scripts unchanged
+└── requirements.txt              # Updated with web dependencies
 ```
 
 ## API Design
@@ -165,7 +167,8 @@ Content-Type: application/json
 │         ┌─────────────────────────────────┐            │
 │         │                                 │            │
 │         │      Drop video here            │            │
-│         │      or click to browse         │            │
+│         │             or                  │            │
+│         │      [Browse Files...]          │            │
 │         │                                 │            │
 │         │      Supported: mp4, mov, avi   │            │
 │         │                                 │            │
@@ -324,39 +327,57 @@ pillow>=9.0.0            # Already in requirements
 
 ## Entry Point
 
-`scripts/start_web.py`:
+Root-level `start_web.py` (in repo root for easy access):
 ```python
 #!/usr/bin/env python3
-"""Launch the VFX Pipeline web interface."""
+"""Launch the VFX Pipeline web interface.
 
+Usage:
+    ./start_web.py           # Start server and open browser
+    ./start_web.py --no-browser  # Start server only
+    ./start_web.py --port 8080   # Use custom port
+"""
+
+import argparse
+import sys
 import webbrowser
+from pathlib import Path
+
+# Add scripts to path for imports
+sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+
 import uvicorn
 from env_config import check_conda_env_or_warn
 
 def main():
+    parser = argparse.ArgumentParser(description="Launch VFX Pipeline web interface")
+    parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser")
+    parser.add_argument("--port", type=int, default=5000, help="Server port (default: 5000)")
+    parser.add_argument("--host", default="127.0.0.1", help="Server host (default: 127.0.0.1)")
+    args = parser.parse_args()
+
     check_conda_env_or_warn()
 
-    host = "127.0.0.1"
-    port = 5000
-    url = f"http://{host}:{port}"
+    url = f"http://{args.host}:{args.port}"
 
     print(f"""
 ╔════════════════════════════════════════════════════════╗
 ║           VFX Pipeline Web Interface                   ║
 ╠════════════════════════════════════════════════════════╣
 ║                                                        ║
-║   Server running at: {url}                     ║
+║   Server running at: {url:<29} ║
 ║                                                        ║
 ║   Press Ctrl+C to stop                                 ║
 ║                                                        ║
 ╚════════════════════════════════════════════════════════╝
 """)
 
-    # Open browser
-    webbrowser.open(url)
+    # Open browser (unless disabled)
+    if not args.no_browser:
+        webbrowser.open(url)
 
     # Start server
-    uvicorn.run("web.server:app", host=host, port=port, reload=False)
+    uvicorn.run("web.server:app", host=args.host, port=args.port, reload=False)
 
 if __name__ == "__main__":
     main()
@@ -395,13 +416,124 @@ The web server will:
 
 4. **Authentication?** - MVP has none. Add basic auth if exposing to network.
 
+## Installation Integration
+
+The web GUI components must be included in the existing installation and update procedures.
+
+### New Installation (install_wizard.py)
+
+Add to the installation wizard's component list:
+
+```python
+# In scripts/install_wizard/installers.py or wizard.py
+
+WEB_DEPENDENCIES = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "python-multipart>=0.0.6",
+    "websockets>=11.0",
+]
+
+def install_web_dependencies():
+    """Install web GUI dependencies into conda environment."""
+    # pip install within the vfx-pipeline conda env
+    ...
+```
+
+**Wizard flow addition:**
+```
+Step N: Web Interface
+  Installing web GUI dependencies...
+  ✓ fastapi
+  ✓ uvicorn
+  ✓ python-multipart
+  ✓ websockets
+```
+
+### Updating Existing Installation (janitor.py)
+
+Add web GUI to the janitor's update and health check routines:
+
+```python
+# In scripts/janitor.py
+
+def check_web_dependencies():
+    """Verify web GUI dependencies are installed."""
+    required = ["fastapi", "uvicorn", "python-multipart", "websockets"]
+    missing = []
+    for pkg in required:
+        try:
+            __import__(pkg.replace("-", "_"))
+        except ImportError:
+            missing.append(pkg)
+    return missing
+
+def update_web_dependencies():
+    """Update web GUI dependencies to latest compatible versions."""
+    # pip install --upgrade within conda env
+    ...
+```
+
+**Janitor health check output:**
+```
+Web Interface:
+  ✓ fastapi 0.109.0
+  ✓ uvicorn 0.27.0
+  ✓ python-multipart 0.0.6
+  ✓ websockets 12.0
+  ✓ start_web.py exists
+  ✓ web/ package exists
+```
+
+**Janitor update command:**
+```bash
+python scripts/janitor.py -u  # Now also updates web dependencies
+```
+
+### requirements.txt Update
+
+Add web dependencies to the main requirements file:
+
+```
+# requirements.txt (additions)
+
+# Web GUI
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.6
+websockets>=11.0
+```
+
+### Post-Update Validation
+
+After `git pull` or janitor update, validate web components:
+
+```python
+def validate_web_installation():
+    """Check web GUI is properly installed."""
+    checks = [
+        ("start_web.py exists", Path("start_web.py").exists()),
+        ("web/ package exists", Path("web/__init__.py").exists()),
+        ("Dependencies installed", len(check_web_dependencies()) == 0),
+    ]
+    return all(ok for _, ok in checks)
+```
+
+### Backward Compatibility
+
+- Web GUI is **optional** - CLI pipeline works without it
+- If web dependencies missing, `start_web.py` prints helpful install instructions
+- Janitor `-H` reports web status but doesn't fail if missing
+
 ## Success Criteria
 
 MVP is complete when:
-- [ ] User can drag video onto page
-- [ ] User can select stages and enter roto prompt
+- [ ] User can upload video (drag-and-drop OR browse button)
+- [ ] User can select stages with roto prompt defaulting to "person"
 - [ ] User can start processing
-- [ ] User sees progress updates
-- [ ] User sees completion with output listing
+- [ ] User sees progress updates in real-time
+- [ ] User sees completion with output file listing
 - [ ] User can click to open output folder
-- [ ] All without touching command line (after initial `start_web.py`)
+- [ ] `./start_web.py` from repo root launches server and opens browser
+- [ ] `python scripts/janitor.py -u` installs/updates web dependencies
+- [ ] All without touching command line after initial setup
