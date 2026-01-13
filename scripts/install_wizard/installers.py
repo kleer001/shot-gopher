@@ -85,11 +85,12 @@ class PythonPackageInstaller(ComponentInstaller):
 class GitRepoInstaller(ComponentInstaller):
     """Installer for Git repositories."""
 
-    def __init__(self, name: str, repo_url: str, install_dir: Optional[Path] = None, size_gb: float = 0.0):
+    def __init__(self, name: str, repo_url: str, install_dir: Optional[Path] = None, size_gb: float = 0.0, extra_packages: list = None):
         super().__init__(name, size_gb)
         self.repo_url = repo_url
         self.install_dir = install_dir or INSTALL_DIR / name.lower()
         self.conda_manager: Optional['CondaEnvironmentManager'] = None
+        self.extra_packages = extra_packages or []
 
     def set_conda_manager(self, conda_manager: 'CondaEnvironmentManager'):
         """Set the conda manager for environment-aware installation."""
@@ -145,6 +146,20 @@ class GitRepoInstaller(ComponentInstaller):
                 )
             if not success:
                 print_warning(f"pip install failed for {self.name}")
+
+        # Install extra packages (missing from requirements.txt)
+        if self.extra_packages:
+            print(f"  Installing extra packages for {self.name}...")
+            for pkg in self.extra_packages:
+                if self.conda_manager and self.conda_manager.conda_exe:
+                    success, _ = run_command([
+                        self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                        "pip", "install", pkg
+                    ])
+                else:
+                    success, _ = run_command([sys.executable, "-m", "pip", "install", pkg])
+                if not success:
+                    print_warning(f"Failed to install {pkg}")
 
         self.installed = True
         print_success(f"{self.name} cloned to {self.install_dir}")

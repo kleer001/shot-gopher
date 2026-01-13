@@ -158,7 +158,8 @@ class InstallationWizard:
                     'ComfyUI-SAM2',
                     'https://github.com/neverbiasu/ComfyUI-SAM2.git',
                     comfyui_dir / "custom_nodes" / "ComfyUI-SAM2",
-                    size_gb=1.0
+                    size_gb=1.0,
+                    extra_packages=['yapf']  # Missing from SAM2's requirements.txt
                 )
             ]
         }
