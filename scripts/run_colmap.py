@@ -110,7 +110,8 @@ def run_colmap_command(
         # Pattern: "Registering image #142 (150)"
         register_pattern = re.compile(r'Registering image #(\d+)\s*\((\d+)\)')
 
-        for line in process.stdout:
+        # Use iter(readline, '') to avoid Python's internal buffering
+        for line in iter(process.stdout.readline, ''):
             stdout_lines.append(line)
             line = line.strip()
 

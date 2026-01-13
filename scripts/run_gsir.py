@@ -192,7 +192,8 @@ def run_gsir_command(
     last_reported = 0
     report_interval = 500  # Report every 500 iterations
 
-    for line in process.stdout:
+    # Use iter(readline, '') to avoid Python's internal buffering
+    for line in iter(process.stdout.readline, ''):
         stdout_lines.append(line)
         line = line.strip()
 

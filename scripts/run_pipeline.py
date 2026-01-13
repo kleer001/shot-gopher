@@ -126,7 +126,8 @@ def extract_frames(
     last_reported = 0
     report_interval = max(1, total_frames // 100) if total_frames > 0 else 10
 
-    for line in process.stdout:
+    # Use iter(readline, '') to avoid Python's internal buffering on pipe iteration
+    for line in iter(process.stdout.readline, ''):
         line = line.strip()
         if line.startswith("frame="):
             try:
