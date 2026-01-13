@@ -111,20 +111,20 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
 4. Create HF_TOKEN.dat in repository root with your token
 5. Re-run the wizard to download the model'''
         },
-        'depth_anything': {
-            'name': 'Depth Anything V3 Model',
+        'video_depth_anything': {
+            'name': 'Video Depth Anything Model',
             'requires_auth': False,  # Public model
             'use_huggingface': True,  # Use huggingface_hub snapshot_download
-            'hf_repo_id': 'depth-anything/DA3METRIC-LARGE',
+            'hf_repo_id': 'depth-anything/Metric-Video-Depth-Anything-Large',
             'files': [
                 {
-                    'filename': 'da3metric_large.safetensors',
-                    'size_mb': 1400,
+                    'filename': 'metric_video_depth_anything_vitl.pth',
+                    'size_mb': 1000,
                 }
             ],
-            'dest_dir_rel': 'ComfyUI/models/depthanything3',
-            'instructions': '''Depth Anything V3 model will be downloaded from HuggingFace.
-This is a public model and does not require authentication.'''
+            'dest_dir_rel': 'ComfyUI/models/videodepthanything',
+            'instructions': '''Video Depth Anything model will be downloaded from HuggingFace.
+This is a public model designed for temporally consistent video depth estimation.'''
         }
     }
 
@@ -139,13 +139,13 @@ This is a public model and does not require authentication.'''
     ) -> bool:
         """Download model from HuggingFace using snapshot_download.
 
-        Downloads to HuggingFace cache, then copies the safetensors file
+        Downloads to HuggingFace cache, then copies the model file
         to the destination directory with the specified filename.
 
         Args:
-            repo_id: HuggingFace repository ID (e.g., 'depth-anything/DA3METRIC-LARGE')
+            repo_id: HuggingFace repository ID (e.g., 'depth-anything/Metric-Video-Depth-Anything-Large')
             dest_dir: Destination directory for the model file
-            target_filename: Filename to save as (e.g., 'da3metric_large.safetensors')
+            target_filename: Filename to save as (e.g., 'metric_video_depth_anything_vitl.pth')
 
         Returns:
             True if successful
@@ -161,30 +161,34 @@ This is a public model and does not require authentication.'''
 
         print(f"  Downloading {repo_id} from HuggingFace...")
 
+        # Determine file pattern based on target extension
+        ext = Path(target_filename).suffix  # .pth, .safetensors, etc.
+        pattern = f"*{ext}" if ext else "*.pth"
+
         try:
             from huggingface_hub import snapshot_download
 
             # Download to HuggingFace cache (shows progress bar)
             cache_dir = snapshot_download(
                 repo_id=repo_id,
-                allow_patterns=["*.safetensors"],
+                allow_patterns=[pattern],
             )
 
-            # Find the downloaded safetensors file
+            # Find the downloaded model file
             cache_path = Path(cache_dir)
-            safetensor_files = list(cache_path.glob("*.safetensors"))
+            model_files = list(cache_path.glob(pattern))
 
-            if safetensor_files:
+            if model_files:
                 # Ensure destination directory exists
                 dest_dir.mkdir(parents=True, exist_ok=True)
 
-                # Copy the file (repos typically have one safetensors file)
-                src_file = safetensor_files[0]
+                # Copy the file (repos typically have one model file)
+                src_file = model_files[0]
                 shutil.copy2(src_file, dest_path)
                 print_success(f"Downloaded: {target_filename}")
                 return True
             else:
-                print_error(f"No safetensors file found in {repo_id}")
+                print_error(f"No {ext} file found in {repo_id}")
                 return False
 
         except ImportError:

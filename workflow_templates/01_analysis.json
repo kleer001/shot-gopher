@@ -1,8 +1,8 @@
 {
   "id": "00000000-0000-0000-0000-000000000001",
-  "revision": 0,
+  "revision": 1,
   "last_node_id": 7,
-  "last_link_id": 4,
+  "last_link_id": 5,
   "nodes": [
     {
       "id": 1,
@@ -19,69 +19,64 @@
       ],
       "properties": {"Node name for S&R": "VHS_LoadImagesPath"},
       "widgets_values": ["source/frames", 0, 0, 1, "Disabled", 1920, 1080, null, null],
-      "title": "📁 Load Source Frames"
+      "title": "Load Source Frames"
     },
     {
       "id": 2,
-      "type": "DownloadAndLoadDepthAnythingV3Model",
+      "type": "LoadVideoDepthAnythingModel",
       "pos": [100, 560],
       "size": [320, 100],
       "flags": {},
       "order": 1,
       "mode": 0,
       "outputs": [
-        {"name": "DA3MODEL", "type": "DA3MODEL", "links": [2], "slot_index": 0}
+        {"name": "VDAMODEL", "type": "VDAMODEL", "links": [2], "slot_index": 0}
       ],
-      "properties": {"Node name for S&R": "DownloadAndLoadDepthAnythingV3Model"},
-      "widgets_values": ["da3metric_large.safetensors", "auto"],
-      "title": "🧠 Load DA3 Model (Metric)"
+      "properties": {"Node name for S&R": "LoadVideoDepthAnythingModel"},
+      "widgets_values": ["metric_video_depth_anything_vitl.pth"],
+      "title": "Load Video Depth Model"
     },
     {
       "id": 3,
-      "type": "DepthAnythingV3_MultiView",
+      "type": "VideoDepthAnythingProcess",
       "pos": [500, 300],
-      "size": [350, 300],
+      "size": [350, 150],
       "flags": {},
       "order": 2,
       "mode": 0,
       "inputs": [
-        {"name": "da3_model", "type": "DA3MODEL", "link": 2},
+        {"name": "vda_model", "type": "VDAMODEL", "link": 2},
         {"name": "images", "type": "IMAGE", "link": 1}
       ],
       "outputs": [
-        {"name": "depth", "type": "IMAGE", "links": [3, 4], "slot_index": 0},
-        {"name": "confidence", "type": "IMAGE", "links": null, "slot_index": 1},
-        {"name": "ray_origin", "type": "IMAGE", "links": null, "slot_index": 2},
-        {"name": "ray_direction", "type": "IMAGE", "links": null, "slot_index": 3},
-        {"name": "extrinsics", "type": "STRING", "links": null, "slot_index": 4},
-        {"name": "intrinsics", "type": "STRING", "links": null, "slot_index": 5},
-        {"name": "sky_mask", "type": "MASK", "links": null, "slot_index": 6},
-        {"name": "resized_rgb_image", "type": "IMAGE", "links": null, "slot_index": 7},
-        {"name": "gaussian_ply_path", "type": "STRING", "links": null, "slot_index": 8}
+        {"name": "DEPTHS", "type": "DEPTHS", "links": [3], "slot_index": 0}
       ],
-      "properties": {"Node name for S&R": "DepthAnythingV3_MultiView"},
-      "widgets_values": ["V2-Style", "resize", false, false],
-      "title": "🔬 Depth Anything V3 MultiView"
+      "properties": {"Node name for S&R": "VideoDepthAnythingProcess"},
+      "widgets_values": [518, 1280, "fp16"],
+      "title": "Video Depth Process"
     },
     {
       "id": 4,
-      "type": "SaveImage",
-      "pos": [940, 100],
-      "size": [320, 280],
+      "type": "VideoDepthAnythingOutput",
+      "pos": [500, 500],
+      "size": [350, 100],
       "flags": {},
       "order": 3,
       "mode": 0,
       "inputs": [
-        {"name": "images", "type": "IMAGE", "link": 3}
+        {"name": "depths", "type": "DEPTHS", "link": 3}
       ],
-      "properties": {},
-      "widgets_values": ["depth/depth"],
-      "title": "💾 Save Depth Maps"
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [4, 5], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "VideoDepthAnythingOutput"},
+      "widgets_values": ["gray"],
+      "title": "Depth Output (Gray)"
     },
     {
       "id": 5,
-      "type": "PreviewImage",
-      "pos": [940, 420],
+      "type": "SaveImage",
+      "pos": [940, 100],
       "size": [320, 280],
       "flags": {},
       "order": 4,
@@ -90,56 +85,58 @@
         {"name": "images", "type": "IMAGE", "link": 4}
       ],
       "properties": {},
-      "title": "👁️ Preview Depth"
+      "widgets_values": ["depth/depth"],
+      "title": "Save Depth Maps"
     },
     {
       "id": 6,
-      "type": "Note",
-      "pos": [100, 100],
-      "size": [320, 150],
+      "type": "PreviewImage",
+      "pos": [940, 420],
+      "size": [320, 280],
       "flags": {},
       "order": 5,
       "mode": 0,
-      "properties": {"text": ""},
-      "widgets_values": ["📋 DEPTH ANALYSIS WORKFLOW\n\nInput: source/frames/*.png\nOutput: depth/*.png\n\nSet folder path to your project's\nsource/frames/ directory.\n\nUses MultiView for temporal consistency."],
-      "title": "📋 Instructions",
-      "color": "#233",
-      "bgcolor": "#355"
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 5}
+      ],
+      "properties": {},
+      "title": "Preview Depth"
     },
     {
       "id": 7,
       "type": "Note",
-      "pos": [500, 640],
-      "size": [350, 100],
+      "pos": [100, 100],
+      "size": [320, 150],
       "flags": {},
       "order": 6,
       "mode": 0,
       "properties": {"text": ""},
-      "widgets_values": ["💡 Model Options:\n• da3metric_large.safetensors (recommended)\n• da3_large.safetensors - general purpose\n• da3mono_large.safetensors - monocular"],
-      "title": "💡 Model Selection",
-      "color": "#332",
-      "bgcolor": "#553"
+      "widgets_values": ["DEPTH ANALYSIS WORKFLOW\n\nInput: source/frames/*.png\nOutput: depth/*.png\n\nUses Video Depth Anything for\ntemporally consistent depth maps\nacross long video sequences."],
+      "title": "Instructions",
+      "color": "#233",
+      "bgcolor": "#355"
     }
   ],
   "links": [
     [1, 1, 0, 3, 1, "IMAGE"],
-    [2, 2, 0, 3, 0, "DA3MODEL"],
-    [3, 3, 0, 4, 0, "IMAGE"],
-    [4, 3, 0, 5, 0, "IMAGE"]
+    [2, 2, 0, 3, 0, "VDAMODEL"],
+    [3, 3, 0, 4, 0, "DEPTHS"],
+    [4, 4, 0, 5, 0, "IMAGE"],
+    [5, 4, 0, 6, 0, "IMAGE"]
   ],
   "groups": [
     {
-      "title": "📥 INPUT",
+      "title": "INPUT",
       "bounding": [80, 80, 380, 620],
       "color": "#3f789e"
     },
     {
-      "title": "🔬 DEPTH ANALYSIS",
-      "bounding": [480, 280, 400, 480],
+      "title": "DEPTH ANALYSIS",
+      "bounding": [480, 280, 400, 340],
       "color": "#8f3e9e"
     },
     {
-      "title": "💾 OUTPUT",
+      "title": "OUTPUT",
       "bounding": [920, 80, 380, 660],
       "color": "#3e9e5f"
     }
@@ -153,7 +150,7 @@
     "info": {
       "name": "VFX Pipeline - Depth Analysis",
       "author": "VFX Pipeline",
-      "description": "Depth Anything V3 MultiView for temporally consistent depth maps"
+      "description": "Video Depth Anything for temporally consistent depth maps on long videos"
     }
   },
   "version": 0.4

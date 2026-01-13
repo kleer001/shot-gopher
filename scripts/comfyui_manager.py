@@ -20,24 +20,15 @@ COMFYUI_DIR = INSTALL_DIR / "ComfyUI"
 # Global process handle
 _comfyui_process: Optional[subprocess.Popen] = None
 
-# Depth Anything V3 model configuration
-# HuggingFace repos for each model variant
-DA3_MODEL_REPOS = {
-    "da3_small.safetensors": "depth-anything/DA3-SMALL",
-    "da3_base.safetensors": "depth-anything/DA3-BASE",
-    "da3_large.safetensors": "depth-anything/DA3-LARGE-1.1",
-    "da3_giant.safetensors": "depth-anything/DA3-GIANT-1.1",
-    "da3mono_large.safetensors": "depth-anything/DA3MONO-LARGE",
-    "da3metric_large.safetensors": "depth-anything/DA3METRIC-LARGE",
-    "da3nested_giant_large.safetensors": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
-}
-
-# Default model used in our workflows
-DEFAULT_DA3_MODEL = "da3metric_large.safetensors"
+# Video Depth Anything model configuration
+# For temporally consistent depth estimation on long videos
+VIDEO_DEPTH_MODEL_REPO = "depth-anything/Metric-Video-Depth-Anything-Large"
+VIDEO_DEPTH_MODEL_NAME = "metric_video_depth_anything_vitl.pth"
+VIDEO_DEPTH_MODEL_DIR = "videodepthanything"
 
 
-def _predownload_depth_model(comfyui_path: Path, model_name: str = DEFAULT_DA3_MODEL) -> bool:
-    """Ensure Depth Anything V3 model is available before ComfyUI starts.
+def _predownload_depth_model(comfyui_path: Path) -> bool:
+    """Ensure Video Depth Anything model is available before ComfyUI starts.
 
     This is a fallback for when the model wasn't downloaded via the install wizard.
     Downloads BEFORE ComfyUI starts to avoid BrokenPipeError during workflow
@@ -47,25 +38,19 @@ def _predownload_depth_model(comfyui_path: Path, model_name: str = DEFAULT_DA3_M
 
     Args:
         comfyui_path: Path to ComfyUI installation
-        model_name: Model filename (e.g., "da3metric_large.safetensors")
 
     Returns:
         True if model is available (downloaded or already exists)
     """
     import shutil
 
-    if model_name not in DA3_MODEL_REPOS:
-        print(f"  Unknown model: {model_name}", file=sys.stderr)
-        return False
-
     # Check if model already exists in ComfyUI models folder
-    models_dir = comfyui_path / "models" / "depthanything3"
-    model_path = models_dir / model_name
+    models_dir = comfyui_path / "models" / VIDEO_DEPTH_MODEL_DIR
+    model_path = models_dir / VIDEO_DEPTH_MODEL_NAME
     if model_path.exists():
         return True
 
-    repo_id = DA3_MODEL_REPOS[model_name]
-    print(f"  Pre-downloading {model_name} from HuggingFace ({repo_id})...")
+    print(f"  Pre-downloading {VIDEO_DEPTH_MODEL_NAME} from HuggingFace...")
 
     try:
         # Import here to avoid import errors if huggingface_hub not installed
@@ -73,25 +58,32 @@ def _predownload_depth_model(comfyui_path: Path, model_name: str = DEFAULT_DA3_M
 
         # Download to HF cache (with progress bar - safe before ComfyUI starts)
         cache_dir = snapshot_download(
-            repo_id=repo_id,
-            allow_patterns=["*.safetensors"],
+            repo_id=VIDEO_DEPTH_MODEL_REPO,
+            allow_patterns=["*.pth"],
         )
 
-        # Find the downloaded safetensors file and copy to ComfyUI models folder
+        # Find the downloaded .pth file and copy to ComfyUI models folder
         cache_path = Path(cache_dir)
-        safetensor_files = list(cache_path.glob("*.safetensors"))
+        pth_files = list(cache_path.glob("*.pth"))
 
-        if safetensor_files:
+        if pth_files:
             # Ensure models directory exists
             models_dir.mkdir(parents=True, exist_ok=True)
 
-            # Copy the first safetensors file (repos typically have one)
-            src_file = safetensor_files[0]
+            # Find the correct model file
+            src_file = None
+            for f in pth_files:
+                if f.name == VIDEO_DEPTH_MODEL_NAME:
+                    src_file = f
+                    break
+            if src_file is None:
+                src_file = pth_files[0]
+
             shutil.copy2(src_file, model_path)
-            print(f"  Model ready: {model_name}")
+            print(f"  Model ready: {VIDEO_DEPTH_MODEL_NAME}")
             return True
         else:
-            print(f"  Warning: No safetensors file found in {repo_id}", file=sys.stderr)
+            print(f"  Warning: No .pth file found in {VIDEO_DEPTH_MODEL_REPO}", file=sys.stderr)
             return False
 
     except ImportError:

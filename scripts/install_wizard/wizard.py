@@ -134,7 +134,7 @@ class InstallationWizard:
         self.components['comfyui'] = {
             'name': 'ComfyUI',
             'required': False,
-            'size_gb': 1.4,  # Depth Anything V3 model (downloaded automatically)
+            'size_gb': 1.0,  # Video Depth Anything model (downloaded automatically)
             'installers': [
                 GitRepoInstaller(
                     'ComfyUI',
@@ -149,10 +149,10 @@ class InstallationWizard:
                     size_gb=0.1
                 ),
                 GitRepoInstaller(
-                    'ComfyUI-DepthAnythingV3',
-                    'https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3.git',
-                    comfyui_dir / "custom_nodes" / "ComfyUI-DepthAnythingV3",
-                    size_gb=0.5
+                    'ComfyUI-Video-Depth-Anything',
+                    'https://github.com/yuvraj108c/ComfyUI-Video-Depth-Anything.git',
+                    comfyui_dir / "custom_nodes" / "ComfyUI-Video-Depth-Anything",
+                    size_gb=0.1
                 ),
                 GitRepoInstaller(
                     'ComfyUI-SAM2',
@@ -639,10 +639,10 @@ class InstallationWizard:
                     if self.components[comp_id]['required']:
                         return False
 
-        # Download Depth Anything V3 model (required for ComfyUI workflows)
+        # Download Video Depth Anything model (required for ComfyUI depth workflows)
         if 'comfyui' in to_install:
-            print("\nDownloading Depth Anything V3 model (required for depth workflows)...")
-            self.checkpoint_downloader.download_all_checkpoints(['depth_anything'], self.state_manager)
+            print("\nDownloading Video Depth Anything model (for temporally consistent depth)...")
+            self.checkpoint_downloader.download_all_checkpoints(['video_depth_anything'], self.state_manager)
 
         # Download checkpoints for motion capture components
         mocap_components = [cid for cid in to_install if cid in ['wham', 'econ']]
