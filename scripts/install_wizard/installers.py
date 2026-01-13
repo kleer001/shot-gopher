@@ -111,6 +111,23 @@ class GitRepoInstaller(ComponentInstaller):
             print_error(f"Failed to clone {self.name}")
             return False
 
+        # Install dependencies from requirements.txt if exists
+        requirements_txt = self.install_dir / "requirements.txt"
+        if requirements_txt.exists():
+            print(f"  Installing {self.name} dependencies...")
+            if self.conda_manager and self.conda_manager.conda_exe:
+                success, _ = run_command([
+                    self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                    "pip", "install", "-r", str(requirements_txt)
+                ])
+            else:
+                print_warning("No conda environment configured, using system pip")
+                success, _ = run_command(
+                    [sys.executable, "-m", "pip", "install", "-r", str(requirements_txt)]
+                )
+            if not success:
+                print_warning(f"requirements.txt install failed for {self.name}")
+
         # Run pip install if setup.py exists
         setup_py = self.install_dir / "setup.py"
         if setup_py.exists():

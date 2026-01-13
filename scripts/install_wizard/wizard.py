@@ -370,11 +370,22 @@ class InstallationWizard:
 
         print(f"\n{Colors.BOLD}Installing {comp_info['name']}...{Colors.ENDC}")
 
-        # Check if already completed
+        # Check if already completed AND actually present on disk
         status = self.state_manager.get_component_status(comp_id)
         if status == "completed":
-            print_success(f"{comp_info['name']} already installed (from previous run)")
-            return True
+            # Verify files actually exist before trusting state
+            all_present = True
+            for installer in comp_info['installers']:
+                if hasattr(installer, 'set_conda_manager'):
+                    installer.set_conda_manager(self.conda_manager)
+                if not installer.check():
+                    all_present = False
+                    break
+            if all_present:
+                print_success(f"{comp_info['name']} already installed (from previous run)")
+                return True
+            else:
+                print_warning(f"{comp_info['name']} marked complete but files missing, reinstalling...")
 
         # Mark as started
         self.state_manager.mark_component_started(comp_id)
