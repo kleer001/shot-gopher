@@ -83,14 +83,44 @@ These are called by `run_pipeline.py` but can also be used standalone:
 | `export_camera.py` | Export camera data to Alembic |
 | `texture_projection.py` | Project textures onto SMPL-X meshes |
 
+### Shared Modules
+
+These modules provide centralized configuration and utilities used across all scripts:
+
+| Module | Purpose |
+|--------|---------|
+| `env_config.py` | Centralized conda environment configuration, paths, and activation helpers |
+| `comfyui_utils.py` | Shared ComfyUI API utilities (workflow queuing, progress monitoring) |
+
+**env_config.py** defines:
+- `CONDA_ENV_NAME` - The conda environment name (`vfx-pipeline`)
+- `INSTALL_DIR` - Where tools are installed (`.vfx_pipeline/` inside repo)
+- `DEFAULT_PROJECTS_DIR` - Where projects are created (`../vfx_projects/`)
+- `require_conda_env()` - Enforce correct environment at script start
+
+**comfyui_utils.py** provides:
+- `check_comfyui_running()` - Verify ComfyUI server is accessible
+- `queue_workflow()` - Submit workflows to ComfyUI API
+- `wait_for_completion()` - Poll for workflow completion
+- `run_comfyui_workflow()` - High-level wrapper combining the above
+
 ## Architecture
 
 ```
 comfyui_ingest/
 ├── scripts/                  # All executable tools
-│   ├── install_wizard.py    # Installation wizard
+│   ├── install_wizard/      # Installation wizard package
+│   │   ├── __init__.py
+│   │   ├── wizard.py        # Main orchestrator
+│   │   ├── conda.py         # Conda environment management
+│   │   ├── downloader.py    # Model checkpoint downloads
+│   │   ├── validator.py     # Installation validation
+│   │   └── ...              # Other modules
+│   ├── install_wizard.py    # Thin wrapper (calls package)
 │   ├── run_pipeline.py      # Pipeline orchestrator
 │   ├── janitor.py           # Maintenance tool
+│   ├── env_config.py        # Centralized environment config
+│   ├── comfyui_utils.py     # Shared ComfyUI API utilities
 │   └── ...                  # Component scripts
 ├── workflow_templates/       # ComfyUI workflow templates
 │   ├── 01_analysis.json     # Depth analysis
@@ -103,17 +133,20 @@ comfyui_ingest/
 │   ├── config.json          # Generated configuration
 │   └── activate.sh          # Environment activation script
 └── docs/                    # This documentation
+
+../vfx_projects/             # Default projects directory (sibling to repo)
+└── MyShot/                  # Individual project folders
 ```
 
 ## Project Structure
 
-When you process footage, the pipeline creates this structure:
+When you process footage, the pipeline creates this structure in the **sibling `vfx_projects/` directory** (not inside the repository):
 
 ```
-./projects/MyShot/           # Default projects directory
+../vfx_projects/MyShot/      # Default: sibling to comfyui_ingest repo
 ├── source/
-│   └── frames/              # Extracted frames (1001.png, 1002.png, ...)
-├── workflows/               # ComfyUI workflow copies
+│   └── frames/              # Extracted frames (frame_1001.png, frame_1002.png, ...)
+├── workflows/               # ComfyUI workflow copies (with absolute paths)
 ├── depth/                   # Depth maps
 ├── roto/                    # Segmentation masks
 ├── cleanplate/              # Clean plates
@@ -130,6 +163,13 @@ When you process footage, the pipeline creates this structure:
     ├── extrinsics.json      # Camera transforms
     ├── intrinsics.json      # Camera parameters
     └── camera.abc           # Alembic camera export
+```
+
+**Why sibling directory?** Keeps project data separate from the repository code, making updates cleaner and preventing accidental commits of large video files.
+
+Override with `--projects-dir`:
+```bash
+python scripts/run_pipeline.py footage.mp4 --projects-dir /path/to/my/projects
 ```
 
 ## Requirements

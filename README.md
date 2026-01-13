@@ -190,9 +190,9 @@ movie.mp4 → run_pipeline.py → project folder → VFX passes
 - **VideoHelperSuite** - Frame I/O handling
 - **COLMAP** - Structure-from-Motion for accurate camera reconstruction and 3D geometry
 
-**Project structure** (per-shot):
+**Project structure** (per-shot, created in sibling `vfx_projects/` directory):
 ```
-projects/My_Shot_Name/
+../vfx_projects/My_Shot_Name/    # Sibling to repo, not inside it
 ├── source/frames/    # Input frames (frame_1001.png, ...)
 ├── depth/            # Depth maps
 ├── roto/             # Segmentation masks
@@ -210,6 +210,8 @@ projects/My_Shot_Name/
 │   └── dense/        # Dense reconstruction (if --colmap-dense)
 └── workflows/        # Project-specific workflows (with absolute paths)
 ```
+
+Override the default projects location with `--projects-dir`.
 
 ## Current State
 
