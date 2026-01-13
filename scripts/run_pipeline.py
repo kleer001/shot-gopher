@@ -196,8 +196,7 @@ def calculate_depth_batch_size(
                 # Get available (free) GPU memory, not total
                 free_memory, total_memory = torch.cuda.mem_get_info(0)
                 gpu_memory_gb = free_memory / (1024**3)
-                # Reserve 10% buffer for safety
-                gpu_memory_gb *= 0.9
+                # No headroom needed for inference (no gradients stored)
             else:
                 gpu_memory_gb = 8.0  # Conservative default for CPU
         except ImportError:
@@ -239,8 +238,9 @@ def calculate_depth_batch_size(
         max_frames = 16  # Minimum fallback
 
     # Set batch size (round down to nearest multiple of 8 for efficiency)
+    # Max 32 frames due to MultiView node's internal tensor handling limitation
     batch_size = (max_frames // 8) * 8
-    batch_size = max(8, min(batch_size, 64))  # Clamp 8-64 frames
+    batch_size = max(8, min(batch_size, 32))
 
     # Overlap is 25% of batch size (minimum 4 frames)
     overlap = max(4, batch_size // 4)
