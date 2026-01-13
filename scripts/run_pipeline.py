@@ -55,6 +55,24 @@ def run_command(cmd: list[str], description: str, check: bool = True) -> subproc
     return result
 
 
+def get_frame_count(input_path: Path) -> int:
+    """Get total frame count from video using ffprobe."""
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-select_streams", "v:0",
+        "-count_frames",
+        "-show_entries", "stream=nb_read_frames",
+        "-of", "csv=p=0",
+        str(input_path)
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        return int(result.stdout.strip())
+    except (ValueError, AttributeError):
+        # Fallback: try duration-based estimate
+        return 0
+
+
 def extract_frames(
     input_path: Path,
     output_dir: Path,
@@ -69,6 +87,14 @@ def extract_frames(
     output_dir.mkdir(parents=True, exist_ok=True)
     output_pattern = output_dir / "frame_%04d.png"
 
+    # Get total frame count for progress reporting
+    print(f"  → Analyzing video for frame count...")
+    total_frames = get_frame_count(input_path)
+    if total_frames > 0:
+        print(f"    Video contains {total_frames} frames")
+    else:
+        print(f"    Frame count unknown, progress will be estimated")
+
     cmd = ["ffmpeg", "-i", str(input_path)]
 
     if fps:
@@ -77,11 +103,52 @@ def extract_frames(
     cmd.extend([
         "-start_number", str(start_frame),
         "-q:v", "2",  # High quality
+        "-progress", "pipe:1",  # Output progress to stdout in parseable format
+        "-nostats",  # Disable default stderr stats (we use -progress instead)
         str(output_pattern),
         "-y"  # Overwrite
     ])
 
-    run_command(cmd, f"Extracting frames to {output_dir}")
+    print(f"  → Extracting frames to {output_dir}")
+    print(f"    $ {' '.join(cmd)}")
+
+    # Run FFmpeg with progress streaming
+    # Using -progress pipe:1 outputs line-by-line "key=value" format to stdout
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,  # Line buffered
+    )
+
+    # Parse FFmpeg progress output (format: "frame=142\nfps=30.0\n...progress=continue\n")
+    last_reported = 0
+    report_interval = max(1, total_frames // 100) if total_frames > 0 else 10
+
+    for line in process.stdout:
+        line = line.strip()
+        if line.startswith("frame="):
+            try:
+                current_frame = int(line.split("=")[1])
+                # Only report progress periodically to avoid flooding
+                if current_frame - last_reported >= report_interval or current_frame == total_frames:
+                    if total_frames > 0:
+                        print(f"[FFmpeg] Extracting frame {current_frame}/{total_frames}")
+                    else:
+                        print(f"[FFmpeg] Extracting frame {current_frame}")
+                    last_reported = current_frame
+                    sys.stdout.flush()
+            except (ValueError, IndexError):
+                pass
+
+    process.wait()
+
+    if process.returncode != 0:
+        # Read stderr for error message
+        stderr_output = process.stderr.read() if process.stderr else ""
+        print(f"    Error during extraction: {stderr_output}", file=sys.stderr)
+        raise subprocess.CalledProcessError(process.returncode, cmd)
 
     # Count extracted frames
     frames = list(output_dir.glob("frame_*.png"))
@@ -342,55 +409,76 @@ def run_pipeline(
 
     # Stage: Ingest
     if "ingest" in stages:
-        print("\n[Ingest]")
+        print("\n=== Stage: ingest ===")
         if skip_existing and list(source_frames.glob("frame_*.png")):
             print("  → Skipping (frames exist)")
         else:
             frame_count = extract_frames(input_path, source_frames, START_FRAME, fps)
             print(f"  → Extracted {frame_count} frames")
 
+    # Count total frames for progress reporting
+    total_frames = len(list(source_frames.glob("frame_*.png")))
+
     # Stage: Depth
     if "depth" in stages:
-        print("\n[Depth Analysis]")
+        print("\n=== Stage: depth ===")
         workflow_path = project_dir / "workflows" / "01_analysis.json"
+        depth_dir = project_dir / "depth"
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
-        elif skip_existing and list((project_dir / "depth").glob("*.png")):
+        elif skip_existing and list(depth_dir.glob("*.png")):
             print("  → Skipping (depth maps exist)")
         else:
-            if not run_comfyui_workflow(workflow_path, comfyui_url):
+            if not run_comfyui_workflow(
+                workflow_path, comfyui_url,
+                output_dir=depth_dir,
+                total_frames=total_frames,
+                stage_name="depth",
+            ):
                 print("  → Depth stage failed", file=sys.stderr)
                 return False
 
     # Stage: Roto
     if "roto" in stages:
-        print("\n[Segmentation]")
+        print("\n=== Stage: roto ===")
         workflow_path = project_dir / "workflows" / "02_segmentation.json"
+        roto_dir = project_dir / "roto"
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
-        elif skip_existing and list((project_dir / "roto").glob("*.png")):
+        elif skip_existing and list(roto_dir.glob("*.png")):
             print("  → Skipping (masks exist)")
         else:
-            if not run_comfyui_workflow(workflow_path, comfyui_url):
+            if not run_comfyui_workflow(
+                workflow_path, comfyui_url,
+                output_dir=roto_dir,
+                total_frames=total_frames,
+                stage_name="roto",
+            ):
                 print("  → Segmentation stage failed", file=sys.stderr)
                 return False
 
     # Stage: Cleanplate
     if "cleanplate" in stages:
-        print("\n[Clean Plate]")
+        print("\n=== Stage: cleanplate ===")
         workflow_path = project_dir / "workflows" / "03_cleanplate.json"
+        cleanplate_dir = project_dir / "cleanplate"
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
-        elif skip_existing and list((project_dir / "cleanplate").glob("*.png")):
+        elif skip_existing and list(cleanplate_dir.glob("*.png")):
             print("  → Skipping (cleanplates exist)")
         else:
-            if not run_comfyui_workflow(workflow_path, comfyui_url):
+            if not run_comfyui_workflow(
+                workflow_path, comfyui_url,
+                output_dir=cleanplate_dir,
+                total_frames=total_frames,
+                stage_name="cleanplate",
+            ):
                 print("  → Cleanplate stage failed", file=sys.stderr)
                 return False
 
     # Stage: COLMAP reconstruction
     if "colmap" in stages:
-        print("\n[COLMAP Reconstruction]")
+        print("\n=== Stage: colmap ===")
         colmap_sparse = project_dir / "colmap" / "sparse" / "0"
         if skip_existing and colmap_sparse.exists():
             print("  → Skipping (COLMAP sparse model exists)")
@@ -408,7 +496,7 @@ def run_pipeline(
 
     # Stage: Motion capture
     if "mocap" in stages:
-        print("\n[Motion Capture]")
+        print("\n=== Stage: mocap ===")
         mocap_output = project_dir / "mocap" / "econ" / "mesh_sequence"
         camera_dir = project_dir / "camera"
         if not camera_dir.exists() or not (camera_dir / "extrinsics.json").exists():
@@ -426,7 +514,7 @@ def run_pipeline(
 
     # Stage: GS-IR material decomposition
     if "gsir" in stages:
-        print("\n[GS-IR Material Decomposition]")
+        print("\n=== Stage: gsir ===")
         colmap_sparse = project_dir / "colmap" / "sparse" / "0"
         gsir_checkpoint = project_dir / "gsir" / "model" / f"chkpnt{gsir_iterations}.pth"
         if not colmap_sparse.exists():
@@ -445,7 +533,7 @@ def run_pipeline(
 
     # Stage: Camera export
     if "camera" in stages:
-        print("\n[Camera Export]")
+        print("\n=== Stage: camera ===")
         camera_dir = project_dir / "camera"
         if not (camera_dir / "extrinsics.json").exists():
             print("  → Skipping (no camera data - run depth or colmap stage first)")

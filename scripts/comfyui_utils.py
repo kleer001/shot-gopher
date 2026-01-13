@@ -10,6 +10,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
 
 DEFAULT_COMFYUI_URL = "http://127.0.0.1:8188"
@@ -122,19 +123,30 @@ def queue_workflow(workflow_path: Path, comfyui_url: str = DEFAULT_COMFYUI_URL) 
         return result.get("prompt_id", "")
 
 
-def wait_for_completion(prompt_id: str, comfyui_url: str = DEFAULT_COMFYUI_URL, timeout: int = 3600) -> bool:
+def wait_for_completion(
+    prompt_id: str,
+    comfyui_url: str = DEFAULT_COMFYUI_URL,
+    timeout: int = 3600,
+    output_dir: Optional[Path] = None,
+    total_frames: int = 0,
+    stage_name: str = "",
+) -> bool:
     """Wait for a queued workflow to complete.
 
     Args:
         prompt_id: The prompt ID returned from queue_workflow
         comfyui_url: ComfyUI API URL
         timeout: Maximum wait time in seconds
+        output_dir: If provided, monitor this directory for progress (file count)
+        total_frames: Expected total frames for progress calculation
+        stage_name: Stage name for progress output
 
     Returns:
         True if completed successfully, False otherwise
     """
     start_time = time.time()
     check_interval = 2  # seconds
+    last_file_count = 0
 
     while time.time() - start_time < timeout:
         try:
@@ -152,6 +164,23 @@ def wait_for_completion(prompt_id: str, comfyui_url: str = DEFAULT_COMFYUI_URL, 
         except urllib.error.URLError:
             pass
 
+        # File-based progress monitoring
+        if output_dir and output_dir.exists():
+            current_files = len(list(output_dir.glob("*.png")))
+            if current_files != last_file_count:
+                last_file_count = current_files
+                if total_frames > 0:
+                    print(f"[ComfyUI] {stage_name} frame {current_files}/{total_frames}")
+                else:
+                    print(f"[ComfyUI] {stage_name} frame {current_files}")
+                sys.stdout.flush()
+
+        # Also print elapsed time periodically
+        elapsed = int(time.time() - start_time)
+        if elapsed > 0 and elapsed % 30 == 0:
+            print(f"    Elapsed: {elapsed}s")
+            sys.stdout.flush()
+
         time.sleep(check_interval)
 
     print("    Timeout waiting for workflow completion", file=sys.stderr)
@@ -162,7 +191,10 @@ def run_comfyui_workflow(
     workflow_path: Path,
     comfyui_url: str = DEFAULT_COMFYUI_URL,
     wait: bool = True,
-    timeout: int = 3600
+    timeout: int = 3600,
+    output_dir: Optional[Path] = None,
+    total_frames: int = 0,
+    stage_name: str = "",
 ) -> bool:
     """Run a ComfyUI workflow via API.
 
@@ -171,6 +203,9 @@ def run_comfyui_workflow(
         comfyui_url: ComfyUI API URL
         wait: Whether to wait for completion
         timeout: Maximum wait time in seconds
+        output_dir: If provided, monitor this directory for progress (file count)
+        total_frames: Expected total frames for progress calculation
+        stage_name: Stage name for progress output
 
     Returns:
         True if successful
@@ -191,6 +226,11 @@ def run_comfyui_workflow(
 
     if wait:
         print("    Waiting for completion...")
-        return wait_for_completion(prompt_id, comfyui_url, timeout)
+        return wait_for_completion(
+            prompt_id, comfyui_url, timeout,
+            output_dir=output_dir,
+            total_frames=total_frames,
+            stage_name=stage_name,
+        )
 
     return True

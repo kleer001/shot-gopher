@@ -48,6 +48,7 @@ const elements = {
     stageRoto: document.getElementById('stage-roto'),
     skipExisting: document.getElementById('skip-existing'),
     presetButtons: document.querySelectorAll('.btn-preset'),
+    timeEstimate: document.getElementById('time-estimate'),
 
     // Processing
     processingProjectName: document.getElementById('processing-project-name'),
@@ -314,6 +315,9 @@ function handleUploadSuccess(data, filename) {
 
     // Show configure section
     showSection('configure');
+
+    // Update time estimate with video info
+    updateTimeEstimate();
 }
 
 // Configure form
@@ -344,6 +348,65 @@ function handleStageChange(e) {
 
     // Update preset selection
     updatePresetSelection();
+
+    // Update time estimate
+    updateTimeEstimate();
+}
+
+// Time estimates per frame (in seconds) - rough averages
+const stageTimePerFrame = {
+    ingest: 0.05,       // FFmpeg - fast
+    depth: 0.5,         // ComfyUI depth estimation
+    roto: 0.8,          // ComfyUI segmentation
+    cleanplate: 0.6,    // ComfyUI inpainting
+    colmap: 2.0,        // COLMAP reconstruction (per frame average)
+    gsir: 0.1,          // GS-IR training (amortized per frame)
+    mocap: 1.5,         // Motion capture per frame
+    camera: 0.01,       // Camera export - fast
+};
+
+function updateTimeEstimate() {
+    if (!state.videoInfo || !state.videoInfo.frame_count) {
+        if (elements.timeEstimate) {
+            elements.timeEstimate.textContent = 'Unknown';
+        }
+        return;
+    }
+
+    const frameCount = state.videoInfo.frame_count;
+    const selectedStages = Array.from(document.querySelectorAll('input[name="stage"]:checked'))
+        .map(cb => cb.value);
+
+    // Always include ingest
+    let stages = ['ingest', ...selectedStages];
+
+    // Add camera if colmap selected
+    if (selectedStages.includes('colmap') && !stages.includes('camera')) {
+        stages.push('camera');
+    }
+
+    // Calculate total time
+    let totalSeconds = 0;
+    stages.forEach(stage => {
+        totalSeconds += (stageTimePerFrame[stage] || 0) * frameCount;
+    });
+
+    // Format the estimate
+    let estimate;
+    if (totalSeconds < 60) {
+        estimate = `~${Math.round(totalSeconds)} seconds`;
+    } else if (totalSeconds < 3600) {
+        const mins = Math.round(totalSeconds / 60);
+        estimate = `~${mins} minute${mins > 1 ? 's' : ''}`;
+    } else {
+        const hours = Math.floor(totalSeconds / 3600);
+        const mins = Math.round((totalSeconds % 3600) / 60);
+        estimate = `~${hours}h ${mins}m`;
+    }
+
+    if (elements.timeEstimate) {
+        elements.timeEstimate.textContent = estimate;
+    }
 }
 
 function applyPreset(presetName) {
@@ -367,6 +430,9 @@ function applyPreset(presetName) {
 
     // Update roto prompt visibility
     toggleRotoPrompt();
+
+    // Update time estimate
+    updateTimeEstimate();
 }
 
 function updatePresetSelection() {
@@ -528,10 +594,16 @@ function handleProgressUpdate(data) {
     }
 
     // Update progress bar
-    if (data.progress !== undefined) {
+    if (data.progress !== undefined && data.progress > 0) {
+        // Determinate mode - show actual progress
+        elements.processingProgressFill.parentElement.classList.remove('indeterminate');
         const percent = Math.round(data.progress * 100);
         elements.processingProgressFill.style.width = `${percent}%`;
         elements.progressPercent.textContent = `${percent}%`;
+    } else if (data.progress === undefined && data.stage) {
+        // Indeterminate mode - no progress info yet for this stage
+        elements.processingProgressFill.parentElement.classList.add('indeterminate');
+        elements.progressPercent.textContent = 'Processing...';
     }
 
     // Update frame count

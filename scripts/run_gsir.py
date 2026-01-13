@@ -172,22 +172,54 @@ def run_gsir_command(
         elif value is not False and value is not None:
             cmd.extend([f"--{key}" if not key.startswith("-") else key, str(value)])
 
+    import re
     print(f"  → {description}")
     print(f"    $ {' '.join(cmd)}")
 
-    result = subprocess.run(
+    # Stream output to show training progress
+    process = subprocess.Popen(
         cmd,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
-        timeout=timeout,
+        bufsize=1,
         cwd=str(gsir_path)  # Run from GS-IR directory
     )
 
-    if result.returncode != 0:
-        print(f"    Error: {result.stderr[:500]}", file=sys.stderr)
-        raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+    stdout_lines = []
+    # Pattern: iteration progress (various formats)
+    iter_pattern = re.compile(r'[Ii]teration\s*[:\s]*(\d+)\s*[/|of]\s*(\d+)')
+    last_reported = 0
+    report_interval = 500  # Report every 500 iterations
 
-    return result
+    for line in process.stdout:
+        stdout_lines.append(line)
+        line = line.strip()
+
+        # Check for iteration progress
+        match = iter_pattern.search(line)
+        if match:
+            current = int(match.group(1))
+            total = int(match.group(2))
+            if current - last_reported >= report_interval or current == total:
+                print(f"    Iteration {current}/{total}")
+                sys.stdout.flush()
+                last_reported = current
+
+    process.wait()
+
+    stdout = ''.join(stdout_lines)
+    if process.returncode != 0:
+        print(f"    Error: {stdout[:500]}", file=sys.stderr)
+        raise subprocess.CalledProcessError(process.returncode, cmd, stdout, "")
+
+    # Return a result-like object
+    class Result:
+        def __init__(self):
+            self.returncode = process.returncode
+            self.stdout = stdout
+            self.stderr = ""
+    return Result()
 
 
 def run_gsir_training(

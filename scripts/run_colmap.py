@@ -70,7 +70,8 @@ def run_colmap_command(
     command: str,
     args: dict,
     description: str,
-    timeout: int = 3600
+    timeout: int = 3600,
+    stream_output: bool = False,
 ) -> subprocess.CompletedProcess:
     """Run a COLMAP command with the given arguments.
 
@@ -79,10 +80,12 @@ def run_colmap_command(
         args: Dictionary of argument name -> value
         description: Human-readable description for logging
         timeout: Timeout in seconds
+        stream_output: If True, stream stdout/stderr for progress parsing
 
     Returns:
         CompletedProcess result
     """
+    import re
     cmd = ["colmap", command]
     for key, value in args.items():
         if value is True:
@@ -93,18 +96,61 @@ def run_colmap_command(
     print(f"  → {description}")
     print(f"    $ {' '.join(cmd)}")
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout
-    )
+    if stream_output:
+        # Stream output for progress tracking (mapper command)
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
 
-    if result.returncode != 0:
-        print(f"    Error: {result.stderr}", file=sys.stderr)
-        raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+        stdout_lines = []
+        # Pattern: "Registering image #142 (150)"
+        register_pattern = re.compile(r'Registering image #(\d+)\s*\((\d+)\)')
 
-    return result
+        for line in process.stdout:
+            stdout_lines.append(line)
+            line = line.strip()
+
+            # Check for registration progress
+            match = register_pattern.search(line)
+            if match:
+                current = int(match.group(1))
+                total = int(match.group(2))
+                print(f"    Registered {current} / {total} images")
+                sys.stdout.flush()
+
+        process.wait()
+
+        stdout = ''.join(stdout_lines)
+        if process.returncode != 0:
+            print(f"    Error: {stdout}", file=sys.stderr)
+            raise subprocess.CalledProcessError(process.returncode, cmd, stdout, "")
+
+        # Create a CompletedProcess-like result
+        class Result:
+            def __init__(self):
+                self.returncode = process.returncode
+                self.stdout = stdout
+                self.stderr = ""
+        return Result()
+
+    else:
+        # Standard capture mode
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+
+        if result.returncode != 0:
+            print(f"    Error: {result.stderr}", file=sys.stderr)
+            raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+
+        return result
 
 
 def extract_features(
@@ -199,7 +245,7 @@ def run_sparse_reconstruction(
         "Mapper.ba_refine_extra_params": 1,
     }
 
-    run_colmap_command("mapper", args, "Running sparse reconstruction")
+    run_colmap_command("mapper", args, "Running sparse reconstruction", stream_output=True)
 
     # Check if reconstruction produced output
     model_path = output_path / "0"

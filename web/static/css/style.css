@@ -177,6 +177,70 @@ main {
     width: 0%;
 }
 
+/* Indeterminate progress bar (striped animated) */
+.progress-bar.indeterminate .progress-fill {
+    width: 100%;
+    background: linear-gradient(
+        -45deg,
+        var(--accent) 25%,
+        transparent 25%,
+        transparent 50%,
+        var(--accent) 50%,
+        var(--accent) 75%,
+        transparent 75%,
+        transparent
+    );
+    background-size: 20px 20px;
+    animation: progress-stripes 1s linear infinite;
+}
+
+@keyframes progress-stripes {
+    0% {
+        background-position: 0 0;
+    }
+    100% {
+        background-position: 20px 0;
+    }
+}
+
+/* Elapsed time display */
+.elapsed-time {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+
+/* Time estimate box */
+.time-estimate {
+    margin-top: 20px;
+}
+
+.estimate-box {
+    background: var(--bg-tertiary);
+    padding: 12px 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.estimate-label {
+    color: var(--text-secondary);
+}
+
+.estimate-value {
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 1.1rem;
+}
+
+.estimate-note {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 6px;
+    font-style: italic;
+}
+
 /* Recent Projects */
 .recent-projects {
     margin-top: 40px;
