@@ -89,17 +89,22 @@ def start_comfyui(
     """
     global _comfyui_process
 
-    # Check if already running
-    if is_comfyui_running(url):
-        print("ComfyUI already running")
-        return True
-
-    # Find ComfyUI installation
+    # Find ComfyUI installation first (needed for patching)
     comfyui_path = get_comfyui_path()
     if not comfyui_path:
         print(f"ComfyUI not found at {COMFYUI_DIR}", file=sys.stderr)
         print("Run the install wizard to install ComfyUI", file=sys.stderr)
         return False
+
+    # Always try to apply the logger patch (fixes BrokenPipeError)
+    patch_applied = _patch_comfyui_logger(comfyui_path)
+
+    # Check if already running
+    if is_comfyui_running(url):
+        print("ComfyUI already running")
+        if patch_applied:
+            print("  Note: Logger patch applied - restart ComfyUI to take effect")
+        return True
 
     print(f"Starting ComfyUI from {comfyui_path}...")
 
@@ -117,9 +122,6 @@ def start_comfyui(
     # Disable HuggingFace progress bars to prevent BrokenPipeError
     # when tqdm tries to write to stderr during model downloads
     env["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
-
-    # Apply logger patch if needed (fixes BrokenPipeError in ComfyUI logger)
-    _patch_comfyui_logger(comfyui_path)
 
     try:
         # Start ComfyUI as subprocess
