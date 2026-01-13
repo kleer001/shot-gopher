@@ -17,48 +17,85 @@ from comfyui_utils import DEFAULT_COMFYUI_URL, check_comfyui_running
 # ComfyUI installation path
 COMFYUI_DIR = INSTALL_DIR / "ComfyUI"
 
-# Path to our custom node that patches flush errors
-REPO_ROOT = Path(__file__).parent.parent
-PATCH_NODE_SRC = REPO_ROOT / "comfyui_custom_nodes" / "vfx_pipeline_patch"
-
 # Global process handle
 _comfyui_process: Optional[subprocess.Popen] = None
 
+# Depth Anything V3 model configuration
+# HuggingFace repos for each model variant
+DA3_MODEL_REPOS = {
+    "da3_small.safetensors": "depth-anything/DA3-SMALL",
+    "da3_base.safetensors": "depth-anything/DA3-BASE",
+    "da3_large.safetensors": "depth-anything/DA3-LARGE-1.1",
+    "da3_giant.safetensors": "depth-anything/DA3-GIANT-1.1",
+    "da3mono_large.safetensors": "depth-anything/DA3MONO-LARGE",
+    "da3metric_large.safetensors": "depth-anything/DA3METRIC-LARGE",
+    "da3nested_giant_large.safetensors": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+}
 
-def _install_patch_node(comfyui_path: Path) -> bool:
-    """Install our custom node that patches flush errors.
+# Default model used in our workflows
+DEFAULT_DA3_MODEL = "da3metric_large.safetensors"
 
-    Creates a symlink from ComfyUI's custom_nodes to our patch node.
-    This automatically applies the BrokenPipeError fix when ComfyUI starts.
+
+def _predownload_depth_model(comfyui_path: Path, model_name: str = DEFAULT_DA3_MODEL) -> bool:
+    """Pre-download Depth Anything V3 model to avoid HuggingFace download during workflow.
+
+    Downloads the model with progress bars disabled to avoid BrokenPipeError
+    that occurs when tqdm tries to flush stderr during ComfyUI execution.
+
+    Args:
+        comfyui_path: Path to ComfyUI installation
+        model_name: Model filename (e.g., "da3metric_large.safetensors")
+
+    Returns:
+        True if model is available (downloaded or already exists)
     """
-    custom_nodes_dir = comfyui_path / "custom_nodes"
-    patch_link = custom_nodes_dir / "vfx_pipeline_patch"
-
-    # Check if source exists
-    if not PATCH_NODE_SRC.exists():
+    if model_name not in DA3_MODEL_REPOS:
+        print(f"  Unknown model: {model_name}", file=sys.stderr)
         return False
 
-    # Create custom_nodes dir if needed
-    custom_nodes_dir.mkdir(parents=True, exist_ok=True)
+    models_dir = comfyui_path / "models" / "depthanything3"
+    model_path = models_dir / model_name
 
-    # Check if already installed
-    if patch_link.exists():
-        if patch_link.is_symlink() and patch_link.resolve() == PATCH_NODE_SRC.resolve():
-            return True  # Already correctly linked
-        # Remove old link/dir
-        if patch_link.is_symlink():
-            patch_link.unlink()
-        elif patch_link.is_dir():
-            import shutil
-            shutil.rmtree(patch_link)
-
-    # Create symlink
-    try:
-        patch_link.symlink_to(PATCH_NODE_SRC)
-        print("  Installed VFX Pipeline patch node")
+    # Check if already downloaded
+    if model_path.exists():
         return True
-    except OSError as e:
-        print(f"  Warning: Could not install patch node: {e}", file=sys.stderr)
+
+    repo_id = DA3_MODEL_REPOS[model_name]
+    print(f"  Pre-downloading {model_name} from {repo_id}...")
+
+    # Ensure models directory exists
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        # Import here to avoid import errors if huggingface_hub not installed
+        from huggingface_hub import hf_hub_download
+
+        # Disable progress bars via environment (backup)
+        old_env = os.environ.get("HF_HUB_DISABLE_PROGRESS_BARS")
+        os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+
+        try:
+            # Download the model file
+            downloaded_path = hf_hub_download(
+                repo_id=repo_id,
+                filename=model_name,
+                local_dir=str(models_dir),
+                local_dir_use_symlinks=False,
+            )
+            print(f"  Downloaded: {model_name}")
+            return True
+        finally:
+            # Restore environment
+            if old_env is None:
+                os.environ.pop("HF_HUB_DISABLE_PROGRESS_BARS", None)
+            else:
+                os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = old_env
+
+    except ImportError:
+        print("  Warning: huggingface_hub not installed, skipping pre-download", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"  Warning: Could not pre-download model: {e}", file=sys.stderr)
         return False
 
 
@@ -72,93 +109,6 @@ def get_comfyui_path() -> Optional[Path]:
 def is_comfyui_running(url: str = DEFAULT_COMFYUI_URL) -> bool:
     """Check if ComfyUI is already running."""
     return check_comfyui_running(url)
-
-
-def _check_comfyui_needs_patch(comfyui_path: Path) -> tuple[bool, str]:
-    """Check if ComfyUI's logger.py needs the BrokenPipeError patch.
-
-    Returns:
-        (needs_patch, reason) tuple
-    """
-    logger_path = comfyui_path / "app" / "logger.py"
-
-    if not logger_path.exists():
-        return False, "logger.py not found"
-
-    content = logger_path.read_text()
-
-    # Check if already has error handling (patched or fixed upstream)
-    if "except (OSError, ValueError)" in content:
-        return False, "already patched"
-
-    if "except OSError" in content or "except BrokenPipeError" in content:
-        return False, "already fixed upstream"
-
-    # Check for the vulnerable pattern: flush without try/except
-    vulnerable_pattern = "def flush(self):\n        super().flush()"
-    if vulnerable_pattern in content:
-        return True, "vulnerable pattern found"
-
-    # Check alternate indentation
-    vulnerable_pattern_alt = "def flush(self):\n    super().flush()"
-    if vulnerable_pattern_alt in content:
-        return True, "vulnerable pattern found (4-space indent)"
-
-    return False, "flush method not found or different structure"
-
-
-def _patch_comfyui_logger(comfyui_path: Path) -> bool:
-    """Patch ComfyUI's logger.py to handle flush errors gracefully.
-
-    Only patches if the vulnerable code pattern is detected.
-    Does nothing if already patched or fixed upstream.
-
-    This fixes BrokenPipeError that can occur when tqdm/progress bars
-    try to write to stderr and the flush fails.
-
-    See: https://github.com/Comfy-Org/ComfyUI/pull/11629
-
-    Returns:
-        True if patch was applied this run, False otherwise
-    """
-    logger_path = comfyui_path / "app" / "logger.py"
-
-    # Check if patching is needed
-    needs_patch, reason = _check_comfyui_needs_patch(comfyui_path)
-
-    if not needs_patch:
-        # No action needed - either already fixed or not applicable
-        return False
-
-    try:
-        content = logger_path.read_text()
-
-        # Apply patch based on detected pattern
-        patched = False
-        for old_pattern, indent in [
-            ("def flush(self):\n        super().flush()", "        "),
-            ("def flush(self):\n    super().flush()", "    "),
-        ]:
-            if old_pattern in content:
-                new_pattern = f"""def flush(self):
-{indent}try:
-{indent}    super().flush()
-{indent}except (OSError, ValueError):
-{indent}    pass  # Ignore flush errors (BrokenPipe, etc.)"""
-                content = content.replace(old_pattern, new_pattern)
-                patched = True
-                break
-
-        if patched:
-            logger_path.write_text(content)
-            print("  Patched ComfyUI logger.py to handle flush errors")
-            return True
-
-        return False
-
-    except Exception as e:
-        print(f"  Warning: Could not patch ComfyUI logger: {e}", file=sys.stderr)
-        return False
 
 
 def start_comfyui(
@@ -183,8 +133,9 @@ def start_comfyui(
         print("Run the install wizard to install ComfyUI", file=sys.stderr)
         return False
 
-    # Install our patch node (fixes BrokenPipeError via custom node)
-    _install_patch_node(comfyui_path)
+    # Pre-download Depth Anything model to avoid HuggingFace download during workflow
+    # (HuggingFace's tqdm progress bars cause BrokenPipeError in ComfyUI)
+    _predownload_depth_model(comfyui_path)
 
     # Check if already running
     if is_comfyui_running(url):
