@@ -151,19 +151,19 @@
       ],
       "size": [
         380,
-        300
+        400
       ],
       "flags": {},
       "order": 3,
       "mode": 0,
       "inputs": [
         {
-          "name": "images",
+          "name": "image",
           "type": "IMAGE",
           "link": 1
         },
         {
-          "name": "masks",
+          "name": "mask",
           "type": "MASK",
           "link": 3
         }
@@ -175,19 +175,31 @@
           "links": [
             4
           ]
+        },
+        {
+          "name": "FLOW_MASK",
+          "type": "MASK",
+          "links": null
+        },
+        {
+          "name": "MASK_DILATE",
+          "type": "MASK",
+          "links": null
         }
       ],
       "properties": {
         "Node name for S&R": "ProPainterInpaint"
       },
       "widgets_values": [
-        10,
+        640,
+        360,
+        5,
+        8,
         10,
         10,
         80,
-        true,
-        "cuda",
-        1.0
+        20,
+        "enable"
       ],
       "title": "\ud83c\udfa8 ProPainter Inpaint"
     },
