@@ -582,8 +582,18 @@ class InstallationWizard:
         # Download checkpoints for motion capture components
         mocap_components = [cid for cid in to_install if cid in ['wham']]
         if mocap_components:
-            if ask_yes_no("\nDownload checkpoints for motion capture components?", default=True):
-                self.checkpoint_downloader.download_all_checkpoints(mocap_components, self.state_manager)
+            print("\nDownloading checkpoints for motion capture components...")
+            self.checkpoint_downloader.download_all_checkpoints(mocap_components, self.state_manager)
+
+        # Download SMPL-X models if mocap_core was installed and credentials exist
+        if 'mocap_core' in to_install:
+            smpl_login = Path("SMPL.login.dat")
+            if smpl_login.exists():
+                print("\nDownloading SMPL-X body models...")
+                self.checkpoint_downloader.download_all_checkpoints(['smplx'], self.state_manager)
+            else:
+                print("\n⚠ SMPL-X credentials not found - skipping model download")
+                print("  Run wizard again after setting up credentials to download models")
 
         # Final status
         final_status = self.check_all_components()
@@ -594,7 +604,7 @@ class InstallationWizard:
             self.config_generator.generate_all()
 
         # Run validation tests
-        if to_install and ask_yes_no("\nRun installation validation tests?", default=True):
+        if to_install:
             self.validator.validate_and_report()
 
         # Post-installation instructions
@@ -606,13 +616,23 @@ class InstallationWizard:
         """Print post-installation instructions."""
         print_header("Next Steps")
 
-        # SMPL-X models (manual download required - registration needed)
+        # SMPL-X models status
         if status.get('mocap_core', False):
-            print("\n📦 SMPL-X Body Models (Manual Download Required):")
-            print("  1. Register at https://smpl-x.is.tue.mpg.de/")
-            print("  2. Download SMPL-X models")
-            print(f"  3. Place in {INSTALL_DIR}/smplx_models/")
-            print(f"     mkdir -p {INSTALL_DIR}/smplx_models && cp SMPLX_*.pkl {INSTALL_DIR}/smplx_models/")
+            smplx_dir = self.install_dir / "smplx_models"
+            smplx_models = list(smplx_dir.glob("SMPLX_*.pkl")) if smplx_dir.exists() else []
+            if smplx_models:
+                print("\n📦 SMPL-X Body Models:")
+                print(f"  ✓ Found {len(smplx_models)} SMPL-X model(s)")
+            else:
+                print("\n📦 SMPL-X Body Models (Not Found):")
+                if not Path("SMPL.login.dat").exists():
+                    print("  ⚠ Credentials not set up - run wizard to configure")
+                else:
+                    print("  ⚠ Download may have failed - check credentials and re-run wizard")
+                print("  Or download manually:")
+                print("    1. Register at https://smpl-x.is.tue.mpg.de/")
+                print("    2. Download SMPL-X models")
+                print(f"    3. Place in {INSTALL_DIR}/smplx_models/")
 
         # Checkpoints status
         if status.get('wham', False):

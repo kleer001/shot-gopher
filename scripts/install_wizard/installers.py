@@ -248,6 +248,24 @@ class GitRepoInstaller(ComponentInstaller):
                 if not success:
                     print_warning(f"Failed to install {pkg}")
 
+        # Run install.py if exists (for GPU extensions like SAM3)
+        install_py = self.install_dir / "install.py"
+        if install_py.exists():
+            print(f"  Running {self.name} install script...")
+            if self.conda_manager and self.conda_manager.conda_exe:
+                success, output = run_command([
+                    self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                    "python", str(install_py)
+                ], capture=True)
+            else:
+                success, output = run_command(
+                    [sys.executable, str(install_py)], capture=True
+                )
+            if success:
+                print_success(f"{self.name} install script completed")
+            else:
+                print_warning(f"install.py failed for {self.name} (GPU acceleration may be slower)")
+
         self.installed = True
         print_success(f"{self.name} cloned to {self.install_dir}")
         return True

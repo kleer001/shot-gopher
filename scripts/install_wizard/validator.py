@@ -80,11 +80,21 @@ class InstallationValidator:
         Returns:
             (success, message)
         """
+        import shutil
+
+        # First check if colmap binary exists
+        colmap_path = shutil.which("colmap")
+        if not colmap_path:
+            return False, "COLMAP not found in PATH"
+
+        # Try to get version
         success, output = run_command(["colmap", "--version"], check=False, capture=True)
         if success and output:
             version = output.strip().split('\n')[0] if output else "unknown"
             return True, f"COLMAP {version}"
-        return False, "COLMAP not found"
+
+        # Binary exists but version check failed - still report as available
+        return True, f"COLMAP available at {colmap_path}"
 
     def validate_checkpoint_files(self, base_dir: Optional[Path] = None) -> Dict[str, bool]:
         """Check if checkpoint files exist.

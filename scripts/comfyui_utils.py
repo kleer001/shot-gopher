@@ -25,16 +25,42 @@ def check_comfyui_running(url: str = DEFAULT_COMFYUI_URL) -> bool:
         return False
 
 
-def get_node_definitions(comfyui_url: str = DEFAULT_COMFYUI_URL) -> dict:
-    """Get node type definitions from ComfyUI's object_info endpoint."""
-    try:
-        with urllib.request.urlopen(f"{comfyui_url}/object_info", timeout=10) as response:
-            return json.loads(response.read().decode())
-    except Exception:
-        return {}
+def get_node_definitions(comfyui_url: str = DEFAULT_COMFYUI_URL, retries: int = 3) -> dict:
+    """Get node type definitions from ComfyUI's object_info endpoint.
+
+    Args:
+        comfyui_url: ComfyUI API URL
+        retries: Number of retry attempts with exponential backoff
+
+    Returns:
+        Node definitions dict, or empty dict on failure
+    """
+    last_error = None
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(f"{comfyui_url}/object_info", timeout=15) as response:
+                return json.loads(response.read().decode())
+        except urllib.error.HTTPError as e:
+            last_error = f"HTTP {e.code}: {e.reason}"
+            # Server error - might be temporary, retry
+            if e.code >= 500:
+                time.sleep(2 ** attempt)
+                continue
+            return {}
+        except Exception as e:
+            last_error = str(e)
+            time.sleep(2 ** attempt)
+
+    if last_error:
+        print(f"  Warning: Failed to fetch node definitions after {retries} attempts: {last_error}", file=sys.stderr)
+    return {}
 
 
-def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_COMFYUI_URL) -> dict:
+def convert_workflow_to_api_format(
+    workflow: dict,
+    comfyui_url: str = DEFAULT_COMFYUI_URL,
+    require_node_defs: bool = False,
+) -> Optional[dict]:
     """Convert ComfyUI workflow format to API format if needed.
 
     Workflow format (saved from UI): {"nodes": [...], "links": [...]}
@@ -43,9 +69,10 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
     Args:
         workflow: Workflow dict (either format)
         comfyui_url: ComfyUI API URL for fetching node definitions
+        require_node_defs: If True, return None when node definitions unavailable
 
     Returns:
-        Workflow in API format for /prompt endpoint
+        Workflow in API format for /prompt endpoint, or None on failure
     """
     # If already in API format (no "nodes" key), return as-is
     if "nodes" not in workflow:
@@ -62,6 +89,8 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
     if not node_defs:
         print("  Warning: Could not fetch node definitions from ComfyUI", file=sys.stderr)
         print("  Widget values may not be mapped correctly", file=sys.stderr)
+        if require_node_defs:
+            return None
 
     # Build link lookup: link_id -> (source_node_id, source_slot)
     link_lookup = {}
@@ -99,33 +128,50 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
         # Collect widget names in order (required first, then optional)
         # Skip connection-type inputs - they're handled via links
         widget_names = []
-        for name, spec in required_inputs.items():
-            if isinstance(spec, list) and len(spec) > 0:
-                first = spec[0]
-                # If first element is a list, it's a dropdown (widget)
-                # If first element is a string that's ALL_CAPS, it's likely a connection type
-                if isinstance(first, list):
-                    widget_names.append(name)  # Dropdown widget
-                elif isinstance(first, str):
-                    # Connection types are typically ALL_CAPS custom types
-                    # Widget types: INT, FLOAT, STRING, BOOLEAN, or mixed-case
-                    if first in ("INT", "FLOAT", "STRING", "BOOLEAN"):
-                        widget_names.append(name)
-                    elif not first.isupper():
-                        # Mixed case = widget type
-                        widget_names.append(name)
-                    # else: ALL_CAPS = connection type, skip
 
-        for name, spec in optional_inputs.items():
-            if isinstance(spec, list) and len(spec) > 0:
-                first = spec[0]
-                if isinstance(first, list):
-                    widget_names.append(name)
-                elif isinstance(first, str):
-                    if first in ("INT", "FLOAT", "STRING", "BOOLEAN"):
+        # Fallback widget names for common nodes when node_defs unavailable
+        fallback_widgets = {
+            "ImageToMask": ["channel"],
+            "SaveImage": ["filename_prefix"],
+            "PreviewImage": [],
+            "VHS_LoadImagesPath": ["directory", "image_load_cap", "skip_first_images", "select_every_nth", "meta_batch"],
+            "LoadVideoDepthAnythingModel": ["model"],
+            "VideoDepthAnythingProcess": ["input_size", "max_res", "precision"],
+            "VideoDepthAnythingOutput": ["colormap"],
+            "ProPainterInpaint": ["width", "height", "mask_dilates", "flow_mask_dilates", "ref_stride",
+                                  "neighbor_length", "subvideo_length", "raft_iter", "mode"],
+        }
+
+        if not node_def and node_type in fallback_widgets:
+            widget_names = fallback_widgets[node_type]
+        else:
+            for name, spec in required_inputs.items():
+                if isinstance(spec, list) and len(spec) > 0:
+                    first = spec[0]
+                    # If first element is a list, it's a dropdown (widget)
+                    # If first element is a string that's ALL_CAPS, it's likely a connection type
+                    if isinstance(first, list):
+                        widget_names.append(name)  # Dropdown widget
+                    elif isinstance(first, str):
+                        # Connection types are typically ALL_CAPS custom types
+                        # Widget types: INT, FLOAT, STRING, BOOLEAN, or mixed-case
+                        if first in ("INT", "FLOAT", "STRING", "BOOLEAN"):
+                            widget_names.append(name)
+                        elif not first.isupper():
+                            # Mixed case = widget type
+                            widget_names.append(name)
+                        # else: ALL_CAPS = connection type, skip
+
+            for name, spec in optional_inputs.items():
+                if isinstance(spec, list) and len(spec) > 0:
+                    first = spec[0]
+                    if isinstance(first, list):
                         widget_names.append(name)
-                    elif not first.isupper():
-                        widget_names.append(name)
+                    elif isinstance(first, str):
+                        if first in ("INT", "FLOAT", "STRING", "BOOLEAN"):
+                            widget_names.append(name)
+                        elif not first.isupper():
+                            widget_names.append(name)
 
         # Process linked inputs (connections)
         for inp in node_inputs:
@@ -144,11 +190,17 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
             non_connected_widgets = [n for n in widget_names if n not in connected_input_names]
 
             for i, value in enumerate(widget_values):
-                if i < len(non_connected_widgets) and value is not None:
-                    # Skip UI-only state indicators that shouldn't be passed to the API
-                    if isinstance(value, str) and value in ("Disabled", "disabled", "None", "none"):
-                        continue
-                    inputs[non_connected_widgets[i]] = value
+                if i >= len(non_connected_widgets):
+                    break
+
+                # Skip None/null values and UI state indicators like "Disabled"
+                # These consume a widget slot but shouldn't be passed to the API
+                if value is None:
+                    continue
+                if isinstance(value, str) and value in ("Disabled", "disabled", "None", "none"):
+                    continue
+
+                inputs[non_connected_widgets[i]] = value
 
         api_workflow[node_id] = {
             "class_type": node_type,
@@ -176,6 +228,9 @@ def queue_workflow(workflow_path: Path, comfyui_url: str = DEFAULT_COMFYUI_URL) 
 
     # Convert workflow format to API format if needed
     api_workflow = convert_workflow_to_api_format(workflow, comfyui_url)
+    if api_workflow is None:
+        print("    Error: Workflow conversion failed", file=sys.stderr)
+        return ""
 
     # Wrap workflow in prompt format
     prompt_data = {"prompt": api_workflow}
