@@ -440,23 +440,34 @@ def read_colmap_images(images_path: Path) -> dict:
     txt_path = images_path.parent / "images.txt"
     if txt_path.exists():
         with open(txt_path) as f:
-            lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+            all_lines = f.readlines()
 
-        # Images.txt has 2 lines per image
-        for i in range(0, len(lines), 2):
-            parts = lines[i].split()
-            image_id = int(parts[0])
-            qw, qx, qy, qz = [float(p) for p in parts[1:5]]
-            tx, ty, tz = [float(p) for p in parts[5:8]]
-            camera_id = int(parts[8])
-            name = parts[9]
+        # Images.txt has 2 lines per image: metadata + keypoints
+        # Parse only non-comment metadata lines (keypoints line may be empty)
+        for line in all_lines:
+            line = line.strip()
+            # Skip empty lines and comments
+            if not line or line.startswith("#"):
+                continue
+            # Metadata lines have at least 10 parts and end with a filename
+            parts = line.split()
+            if len(parts) >= 10:
+                try:
+                    image_id = int(parts[0])
+                    qw, qx, qy, qz = [float(p) for p in parts[1:5]]
+                    tx, ty, tz = [float(p) for p in parts[5:8]]
+                    camera_id = int(parts[8])
+                    name = parts[9]
 
-            images[name] = {
-                "image_id": image_id,
-                "quat": [qw, qx, qy, qz],
-                "trans": [tx, ty, tz],
-                "camera_id": camera_id,
-            }
+                    images[name] = {
+                        "image_id": image_id,
+                        "quat": [qw, qx, qy, qz],
+                        "trans": [tx, ty, tz],
+                        "camera_id": camera_id,
+                    }
+                except (ValueError, IndexError):
+                    # Not a metadata line (probably keypoints), skip
+                    continue
         return images
 
     # Binary format - convert to text
@@ -473,22 +484,34 @@ def read_colmap_images(images_path: Path) -> dict:
             ], capture_output=True, check=True)
 
             with open(temp_dir / "images.txt") as f:
-                lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+                all_lines = f.readlines()
 
-            for i in range(0, len(lines), 2):
-                parts = lines[i].split()
-                image_id = int(parts[0])
-                qw, qx, qy, qz = [float(p) for p in parts[1:5]]
-                tx, ty, tz = [float(p) for p in parts[5:8]]
-                camera_id = int(parts[8])
-                name = parts[9]
+            # Images.txt has 2 lines per image: metadata + keypoints
+            # Parse only non-comment metadata lines (keypoints line may be empty)
+            for line in all_lines:
+                line = line.strip()
+                # Skip empty lines and comments
+                if not line or line.startswith("#"):
+                    continue
+                # Metadata lines have at least 10 parts and end with a filename
+                parts = line.split()
+                if len(parts) >= 10:
+                    try:
+                        image_id = int(parts[0])
+                        qw, qx, qy, qz = [float(p) for p in parts[1:5]]
+                        tx, ty, tz = [float(p) for p in parts[5:8]]
+                        camera_id = int(parts[8])
+                        name = parts[9]
 
-                images[name] = {
-                    "image_id": image_id,
-                    "quat": [qw, qx, qy, qz],
-                    "trans": [tx, ty, tz],
-                    "camera_id": camera_id,
-                }
+                        images[name] = {
+                            "image_id": image_id,
+                            "quat": [qw, qx, qy, qz],
+                            "trans": [tx, ty, tz],
+                            "camera_id": camera_id,
+                        }
+                    except (ValueError, IndexError):
+                        # Not a metadata line (probably keypoints), skip
+                        continue
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
