@@ -117,20 +117,6 @@ class InstallationWizard:
             ]
         }
 
-        # ECON (code ~0.2GB + dependencies ~1GB + checkpoints ~4GB + SMPL-X models ~0.5GB)
-        self.components['econ'] = {
-            'name': 'ECON',
-            'required': False,
-            'installers': [
-                GitRepoInstaller(
-                    'ECON',
-                    'https://github.com/YuliangXiu/ECON.git',
-                    self.install_dir / "ECON",
-                    size_gb=6.0  # Code + dependencies + checkpoints + models
-                )
-            ]
-        }
-
         # ComfyUI and custom nodes
         comfyui_dir = self.install_dir / "ComfyUI"
         self.components['comfyui'] = {
@@ -430,30 +416,25 @@ class InstallationWizard:
         Sets up:
         - HF_TOKEN.dat for HuggingFace (SAM3, etc.)
         - SMPL.login.dat for SMPL-X body models (motion capture)
-        - ECON.login.dat for ECON checkpoints (clothed human reconstruction)
         """
         print_header("Credentials Setup")
         print("Some components require authentication to download:")
         print("  - SAM3 segmentation model (HuggingFace)")
         print("  - SMPL-X body models (smpl-x.is.tue.mpg.de)")
-        print("  - ECON checkpoints (icon.is.tue.mpg.de) - SEPARATE registration!")
         print("")
 
         # Check existing credentials
         hf_token_file = repo_root / "HF_TOKEN.dat"
         smpl_creds_file = repo_root / "SMPL.login.dat"
-        econ_creds_file = repo_root / "ECON.login.dat"
 
         hf_exists = hf_token_file.exists()
         smpl_exists = smpl_creds_file.exists()
-        econ_exists = econ_creds_file.exists()
 
-        if hf_exists and smpl_exists and econ_exists:
+        if hf_exists and smpl_exists:
             print_success("All credential files already exist")
             if ask_yes_no("Update credentials?", default=False):
                 hf_exists = False
                 smpl_exists = False
-                econ_exists = False
             else:
                 return
 
@@ -523,42 +504,6 @@ class InstallationWizard:
             else:
                 print_info("Skipped - you can add SMPL.login.dat later")
 
-        # ECON credentials setup (separate from SMPL-X)
-        if not econ_exists:
-            print(f"\n{Colors.BOLD}ECON Credentials Setup{Colors.ENDC}")
-            print("Required for: Clothed human reconstruction from video")
-            print("")
-            print("ECON takes video frames and creates a detailed 3D mesh with clothing,")
-            print("using SMPL-X as the underlying body prior.")
-            print("")
-            print(f"{Colors.WARNING}NOTE: This is a SEPARATE registration from SMPL-X!{Colors.ENDC}")
-            print("")
-            print("Registration: https://icon.is.tue.mpg.de/")
-            print("")
-            print("Steps:")
-            print("  1. Register at the website above (separate from SMPL-X)")
-            print("  2. Wait for approval email (usually within 24-48 hours)")
-            print("  3. Enter your credentials below")
-            print("")
-
-            if ask_yes_no("Set up ECON credentials now?", default=True):
-                email = tty_input("Enter your ECON registered email: ").strip()
-                if email and '@' in email:
-                    password = tty_input("Enter your ECON password: ").strip()
-                    if password:
-                        with open(econ_creds_file, 'w') as f:
-                            f.write(email + '\n')
-                            f.write(password + '\n')
-                        # Set restrictive permissions
-                        econ_creds_file.chmod(0o600)
-                        print_success(f"Credentials saved to {econ_creds_file}")
-                    else:
-                        print_info("Skipped - you can add ECON.login.dat later")
-                else:
-                    print_info("Skipped - you can add ECON.login.dat later")
-            else:
-                print_info("Skipped - you can add ECON.login.dat later")
-
         print("")
 
     def interactive_install(self, component: Optional[str] = None, resume: bool = False):
@@ -624,7 +569,7 @@ class InstallationWizard:
                     to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham', 'econ']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham']
                     break
                 elif choice == '4':
                     to_install = []
@@ -668,7 +613,7 @@ class InstallationWizard:
             self.checkpoint_downloader.download_all_checkpoints(['sam3'], self.state_manager)
 
         # Download checkpoints for motion capture components
-        mocap_components = [cid for cid in to_install if cid in ['wham', 'econ']]
+        mocap_components = [cid for cid in to_install if cid in ['wham']]
         if mocap_components:
             if ask_yes_no("\nDownload checkpoints for motion capture components?", default=True):
                 self.checkpoint_downloader.download_all_checkpoints(mocap_components, self.state_manager)
@@ -703,22 +648,13 @@ class InstallationWizard:
             print(f"     mkdir -p {INSTALL_DIR}/smplx_models && cp SMPLX_*.pkl {INSTALL_DIR}/smplx_models/")
 
         # Checkpoints status
-        has_mocap = status.get('wham', False) or status.get('econ', False)
-        if has_mocap:
+        if status.get('wham', False):
             print("\n📦 Motion Capture Checkpoints:")
-            if status.get('wham', False):
-                if self.state_manager.is_checkpoint_downloaded('wham'):
-                    print("  ✓ WHAM checkpoints downloaded")
-                else:
-                    print("  ⚠ WHAM checkpoints not downloaded - run wizard again or visit:")
-                    print("    https://github.com/yohanshin/WHAM")
-
-            if status.get('econ', False):
-                if self.state_manager.is_checkpoint_downloaded('econ'):
-                    print("  ✓ ECON checkpoints downloaded")
-                else:
-                    print("  ⚠ ECON checkpoints not downloaded - run wizard again or visit:")
-                    print("    https://github.com/YuliangXiu/ECON")
+            if self.state_manager.is_checkpoint_downloaded('wham'):
+                print("  ✓ WHAM checkpoints downloaded")
+            else:
+                print("  ⚠ WHAM checkpoints not downloaded - run wizard again or visit:")
+                print("    https://github.com/yohanshin/WHAM")
 
         # ComfyUI
         if status.get('comfyui', False):

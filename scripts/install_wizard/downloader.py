@@ -41,31 +41,6 @@ If automatic download fails, manually download from:
 Or run the fetch_demo_data.sh script from the WHAM repository:
   cd {INSTALL_DIR}/WHAM && bash fetch_demo_data.sh'''
         },
-        'econ': {
-            'name': 'ECON Checkpoints',
-            'requires_auth': True,
-            'auth_type': 'basic',
-            'auth_file': 'ECON.login.dat',
-            'files': [
-                {
-                    'url': 'https://download.is.tue.mpg.de/download.php?domain=icon&sfile=econ_data.zip&resume=1',
-                    'filename': 'econ_data.zip',
-                    'size_mb': 2500,
-                    'sha256': None,
-                    'extract': True
-                }
-            ],
-            'dest_dir_rel': 'ECON/data',
-            'instructions': '''ECON checkpoints require SEPARATE registration from SMPL-X:
-1. Register at https://icon.is.tue.mpg.de/
-2. Wait for approval email (usually within 24 hours)
-3. Create ECON.login.dat in repository root with:
-   Line 1: your email
-   Line 2: your password
-4. Re-run the wizard to download models
-
-Alternatively, run the fetch_data.sh script from the ECON repository.'''
-        },
         'smplx': {
             'name': 'SMPL-X Models',
             'requires_auth': True,
