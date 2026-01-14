@@ -25,16 +25,42 @@ def check_comfyui_running(url: str = DEFAULT_COMFYUI_URL) -> bool:
         return False
 
 
-def get_node_definitions(comfyui_url: str = DEFAULT_COMFYUI_URL) -> dict:
-    """Get node type definitions from ComfyUI's object_info endpoint."""
-    try:
-        with urllib.request.urlopen(f"{comfyui_url}/object_info", timeout=10) as response:
-            return json.loads(response.read().decode())
-    except Exception:
-        return {}
+def get_node_definitions(comfyui_url: str = DEFAULT_COMFYUI_URL, retries: int = 3) -> dict:
+    """Get node type definitions from ComfyUI's object_info endpoint.
+
+    Args:
+        comfyui_url: ComfyUI API URL
+        retries: Number of retry attempts with exponential backoff
+
+    Returns:
+        Node definitions dict, or empty dict on failure
+    """
+    last_error = None
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(f"{comfyui_url}/object_info", timeout=15) as response:
+                return json.loads(response.read().decode())
+        except urllib.error.HTTPError as e:
+            last_error = f"HTTP {e.code}: {e.reason}"
+            # Server error - might be temporary, retry
+            if e.code >= 500:
+                time.sleep(2 ** attempt)
+                continue
+            return {}
+        except Exception as e:
+            last_error = str(e)
+            time.sleep(2 ** attempt)
+
+    if last_error:
+        print(f"  Warning: Failed to fetch node definitions after {retries} attempts: {last_error}", file=sys.stderr)
+    return {}
 
 
-def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_COMFYUI_URL) -> dict:
+def convert_workflow_to_api_format(
+    workflow: dict,
+    comfyui_url: str = DEFAULT_COMFYUI_URL,
+    require_node_defs: bool = True,
+) -> Optional[dict]:
     """Convert ComfyUI workflow format to API format if needed.
 
     Workflow format (saved from UI): {"nodes": [...], "links": [...]}
@@ -43,9 +69,10 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
     Args:
         workflow: Workflow dict (either format)
         comfyui_url: ComfyUI API URL for fetching node definitions
+        require_node_defs: If True, return None when node definitions unavailable
 
     Returns:
-        Workflow in API format for /prompt endpoint
+        Workflow in API format for /prompt endpoint, or None on failure
     """
     # If already in API format (no "nodes" key), return as-is
     if "nodes" not in workflow:
@@ -60,8 +87,17 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
     # Get node definitions from ComfyUI to map widget values
     node_defs = get_node_definitions(comfyui_url)
     if not node_defs:
-        print("  Warning: Could not fetch node definitions from ComfyUI", file=sys.stderr)
-        print("  Widget values may not be mapped correctly", file=sys.stderr)
+        print("  Error: Could not fetch node definitions from ComfyUI", file=sys.stderr)
+        print("  This is required to map widget values to API parameters.", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("  Common causes:", file=sys.stderr)
+        print("    - ComfyUI database is read-only (check file permissions)", file=sys.stderr)
+        print("    - ComfyUI server error (check ComfyUI logs)", file=sys.stderr)
+        print("    - Network connectivity issues", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("  Try: Check ownership of .vfx_pipeline/ComfyUI/*.db files", file=sys.stderr)
+        if require_node_defs:
+            return None
 
     # Build link lookup: link_id -> (source_node_id, source_slot)
     link_lookup = {}
@@ -143,12 +179,21 @@ def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_CO
             # Only map to widgets that don't have connections
             non_connected_widgets = [n for n in widget_names if n not in connected_input_names]
 
-            for i, value in enumerate(widget_values):
-                if i < len(non_connected_widgets) and value is not None:
-                    # Skip UI-only state indicators that shouldn't be passed to the API
-                    if isinstance(value, str) and value in ("Disabled", "disabled", "None", "none"):
-                        continue
-                    inputs[non_connected_widgets[i]] = value
+            # Use separate index for widgets - UI-only values like "Disabled"
+            # don't correspond to API widgets and shouldn't advance the index
+            widget_idx = 0
+            for value in widget_values:
+                if widget_idx >= len(non_connected_widgets):
+                    break
+
+                # Skip UI-only state indicators - they don't consume a widget slot
+                if isinstance(value, str) and value in ("Disabled", "disabled", "None", "none"):
+                    continue
+
+                # None/null values consume a widget slot but don't get assigned
+                if value is not None:
+                    inputs[non_connected_widgets[widget_idx]] = value
+                widget_idx += 1
 
         api_workflow[node_id] = {
             "class_type": node_type,
@@ -176,6 +221,9 @@ def queue_workflow(workflow_path: Path, comfyui_url: str = DEFAULT_COMFYUI_URL) 
 
     # Convert workflow format to API format if needed
     api_workflow = convert_workflow_to_api_format(workflow, comfyui_url)
+    if api_workflow is None:
+        print("    Error: Workflow conversion failed", file=sys.stderr)
+        return ""
 
     # Wrap workflow in prompt format
     prompt_data = {"prompt": api_workflow}
