@@ -349,6 +349,25 @@ def get_image_dimensions(image_path: Path) -> tuple[int, int]:
         return 1920, 1080  # Default fallback
 
 
+def update_segmentation_prompt(workflow_path: Path, prompt: str) -> None:
+    """Update the text prompt in segmentation workflow."""
+    print(f"  → Setting segmentation prompt: {prompt}")
+
+    with open(workflow_path) as f:
+        workflow = json.load(f)
+
+    for node in workflow.get("nodes", []):
+        if node.get("type") == "SAM3VideoSegmentation":
+            widgets = node.get("widgets_values", [])
+            if len(widgets) >= 2:
+                widgets[1] = prompt
+                node["widgets_values"] = widgets
+            break
+
+    with open(workflow_path, 'w') as f:
+        json.dump(workflow, f, indent=2)
+
+
 def update_cleanplate_resolution(workflow_path: Path, source_frames_dir: Path) -> None:
     """Update ProPainterInpaint resolution in cleanplate workflow to match source frames."""
     # Get resolution from first source frame
@@ -452,6 +471,7 @@ def run_pipeline(
     gsir_iterations: int = 35000,
     gsir_path: Optional[str] = None,
     auto_start_comfyui: bool = True,
+    roto_prompt: Optional[str] = None,
 ) -> bool:
     """Run the full VFX pipeline.
 
@@ -571,6 +591,9 @@ def run_pipeline(
         elif skip_existing and list(roto_dir.glob("*.png")):
             print("  → Skipping (masks exist)")
         else:
+            # Update segmentation prompt if specified
+            if roto_prompt:
+                update_segmentation_prompt(workflow_path, roto_prompt)
             if not run_comfyui_workflow(
                 workflow_path, comfyui_url,
                 output_dir=roto_dir,
@@ -776,6 +799,12 @@ def main():
         action="store_true",
         help="Don't auto-start ComfyUI (assume it's already running)"
     )
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default=None,
+        help="Segmentation prompt for roto stage (default: 'person'). Example: 'person, ball, backpack'"
+    )
 
     args = parser.parse_args()
 
@@ -822,6 +851,7 @@ def main():
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
         auto_start_comfyui=not args.no_auto_comfyui,
+        roto_prompt=args.prompt,
     )
 
     sys.exit(0 if success else 1)
