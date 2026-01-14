@@ -15,6 +15,7 @@ Example:
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -445,6 +446,54 @@ def update_segmentation_prompt(workflow_path: Path, prompt: str) -> None:
         json.dump(workflow, f, indent=2)
 
 
+def combine_mask_sequences(source_dirs: list[Path], output_dir: Path) -> int:
+    """Combine multiple mask sequences by OR-ing them together.
+
+    Args:
+        source_dirs: List of directories containing mask sequences
+        output_dir: Output directory for combined masks
+
+    Returns:
+        Number of frames processed
+    """
+    from PIL import Image
+    import numpy as np
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get all frame files from first source
+    if not source_dirs:
+        return 0
+
+    frame_files = sorted(source_dirs[0].glob("*.png"))
+    if not frame_files:
+        return 0
+
+    count = 0
+    for frame_file in frame_files:
+        frame_name = frame_file.name
+
+        # Load and combine masks from all sources
+        combined = None
+        for src_dir in source_dirs:
+            src_file = src_dir / frame_name
+            if src_file.exists():
+                img = Image.open(src_file).convert('L')
+                arr = np.array(img)
+                if combined is None:
+                    combined = arr
+                else:
+                    # OR the masks together
+                    combined = np.maximum(combined, arr)
+
+        if combined is not None:
+            result = Image.fromarray(combined)
+            result.save(output_dir / frame_name)
+            count += 1
+
+    return count
+
+
 def update_cleanplate_resolution(workflow_path: Path, source_frames_dir: Path) -> None:
     """Update ProPainterInpaint resolution in cleanplate workflow to match source frames."""
     # Get resolution from first source frame
@@ -672,17 +721,54 @@ def run_pipeline(
         elif skip_existing and list(roto_dir.glob("*.png")):
             print("  → Skipping (masks exist)")
         else:
-            # Update segmentation prompt if specified
-            if roto_prompt:
-                update_segmentation_prompt(workflow_path, roto_prompt)
-            if not run_comfyui_workflow(
-                workflow_path, comfyui_url,
-                output_dir=roto_dir,
-                total_frames=total_frames,
-                stage_name="roto",
-            ):
-                print("  → Segmentation stage failed", file=sys.stderr)
-                return False
+            # Parse prompts - support comma-separated list for multiple objects
+            prompts = [p.strip() for p in (roto_prompt or "person").split(",")]
+            prompts = [p for p in prompts if p]  # Remove empty
+
+            if len(prompts) == 1:
+                # Single prompt - run directly to roto_dir
+                update_segmentation_prompt(workflow_path, prompts[0])
+                if not run_comfyui_workflow(
+                    workflow_path, comfyui_url,
+                    output_dir=roto_dir,
+                    total_frames=total_frames,
+                    stage_name="roto",
+                ):
+                    print("  → Segmentation stage failed", file=sys.stderr)
+                    return False
+            else:
+                # Multiple prompts - run each separately and combine
+                print(f"  → Segmenting {len(prompts)} targets: {', '.join(prompts)}")
+                temp_dirs = []
+
+                for i, prompt in enumerate(prompts):
+                    temp_dir = project_dir / "roto_temp" / f"mask_{i}_{prompt.replace(' ', '_')}"
+                    temp_dir.mkdir(parents=True, exist_ok=True)
+                    temp_dirs.append(temp_dir)
+
+                    print(f"\n  [{i+1}/{len(prompts)}] Segmenting: {prompt}")
+                    update_segmentation_prompt(workflow_path, prompt)
+                    if not run_comfyui_workflow(
+                        workflow_path, comfyui_url,
+                        output_dir=temp_dir,
+                        total_frames=total_frames,
+                        stage_name=f"roto ({prompt})",
+                    ):
+                        print(f"  → Segmentation failed for '{prompt}'", file=sys.stderr)
+                        # Continue with other prompts
+
+                # Combine all masks
+                print(f"\n  → Combining {len(temp_dirs)} mask sequences...")
+                valid_dirs = [d for d in temp_dirs if list(d.glob("*.png"))]
+                if valid_dirs:
+                    count = combine_mask_sequences(valid_dirs, roto_dir)
+                    print(f"  → Combined {count} frames")
+
+                # Cleanup temp directories
+                temp_parent = project_dir / "roto_temp"
+                if temp_parent.exists():
+                    shutil.rmtree(temp_parent)
+
         # Generate preview movie
         if auto_movie and list(roto_dir.glob("*.png")):
             generate_preview_movie(roto_dir, project_dir / "preview" / "roto.mp4", fps)
