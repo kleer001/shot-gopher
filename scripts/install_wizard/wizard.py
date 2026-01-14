@@ -658,6 +658,10 @@ class InstallationWizard:
             print("\nDownloading Video Depth Anything model (for temporally consistent depth)...")
             self.checkpoint_downloader.download_all_checkpoints(['video_depth_anything'], self.state_manager)
 
+            # Download SAM2 model for segmentation
+            print("\nDownloading SAM2 model (for segmentation/roto workflows)...")
+            self.checkpoint_downloader.download_all_checkpoints(['sam2'], self.state_manager)
+
         # Download checkpoints for motion capture components
         mocap_components = [cid for cid in to_install if cid in ['wham', 'econ']]
         if mocap_components:

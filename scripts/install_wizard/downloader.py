@@ -90,26 +90,20 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
    Line 2: your password
 4. Re-run the wizard to download models'''
         },
-        'sam3': {
-            'name': 'SAM3 Model',
-            'requires_auth': True,
-            'auth_type': 'bearer',
-            'auth_file': 'HF_TOKEN.dat',
+        'sam2': {
+            'name': 'SAM2 Model (Segment Anything 2.1)',
+            'requires_auth': False,  # Public model
+            'use_huggingface': True,
+            'hf_repo_id': 'facebook/sam2.1-hiera-large',
             'files': [
                 {
-                    'url': 'https://huggingface.co/facebook/sam3/resolve/main/model.safetensors',
-                    'filename': 'sam3_model.safetensors',
-                    'size_mb': 2400,
-                    'sha256': None
+                    'filename': 'sam2.1_hiera_large.pt',
+                    'size_mb': 860,
                 }
             ],
-            'dest_dir_rel': 'ComfyUI/models/sam',
-            'instructions': '''SAM3 model requires HuggingFace access:
-1. Visit https://huggingface.co/facebook/sam3
-2. Click "Access repository" and accept the license
-3. Get your HuggingFace token from https://huggingface.co/settings/tokens
-4. Create HF_TOKEN.dat in repository root with your token
-5. Re-run the wizard to download the model'''
+            'dest_dir_rel': 'ComfyUI/models/sam2',
+            'instructions': '''SAM2 model will be downloaded from HuggingFace.
+This is a public model for image/video segmentation.'''
         },
         'video_depth_anything': {
             'name': 'Video Depth Anything Model',
