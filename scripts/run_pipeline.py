@@ -735,6 +735,26 @@ def run_pipeline(
     fps = fps or 24.0
     print(f"Frame rate: {fps} fps")
 
+    # Save project metadata for standalone scripts
+    metadata_path = project_dir / "project.json"
+    project_metadata = {
+        "name": project_name,
+        "fps": fps,
+        "source": str(input_path),
+        "start_frame": 1,
+    }
+    # Load existing and merge (preserve other fields)
+    if metadata_path.exists():
+        try:
+            with open(metadata_path) as f:
+                existing = json.load(f)
+            existing.update(project_metadata)
+            project_metadata = existing
+        except json.JSONDecodeError:
+            pass
+    with open(metadata_path, "w") as f:
+        json.dump(project_metadata, f, indent=2)
+
     # Stage: Setup
     print("\n[Setup]")
     if not setup_project(project_dir, workflows_dir):
@@ -752,6 +772,18 @@ def run_pipeline(
 
     # Count total frames for progress reporting
     total_frames = len(list(source_frames.glob("frame_*.png")))
+
+    # Update metadata with frame count
+    if total_frames > 0:
+        project_metadata["frame_count"] = total_frames
+        # Get resolution from first frame
+        first_frame = sorted(source_frames.glob("frame_*.png"))[0]
+        from PIL import Image
+        with Image.open(first_frame) as img:
+            project_metadata["width"] = img.width
+            project_metadata["height"] = img.height
+        with open(metadata_path, "w") as f:
+            json.dump(project_metadata, f, indent=2)
 
     # Stage: Depth (Video Depth Anything handles long videos natively)
     if "depth" in stages:

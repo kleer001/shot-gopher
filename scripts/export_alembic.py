@@ -36,7 +36,16 @@ except ImportError:
     HAS_ALEMBIC = False
 
 
-def load_camera_data(input_path: Path) -> tuple[list[np.ndarray], dict, str]:
+def load_project_metadata(project_dir: Path) -> dict:
+    """Load project metadata (fps, resolution, etc.) from project.json."""
+    metadata_path = project_dir / "project.json"
+    if metadata_path.exists():
+        with open(metadata_path) as f:
+            return json.load(f)
+    return {}
+
+
+def load_camera_data(input_path: Path) -> tuple[list[np.ndarray], dict, str, Path]:
     """Load camera data from project directory or JSON file.
 
     Args:
@@ -44,12 +53,14 @@ def load_camera_data(input_path: Path) -> tuple[list[np.ndarray], dict, str]:
                    or a direct path to extrinsics.json
 
     Returns:
-        Tuple of (extrinsics matrices, intrinsics dict, source name)
+        Tuple of (extrinsics matrices, intrinsics dict, source name, project_dir)
     """
     if input_path.is_dir():
+        project_dir = input_path
         camera_dir = input_path / "camera"
         if not camera_dir.exists():
             camera_dir = input_path
+            project_dir = input_path.parent
         extrinsics_path = camera_dir / "extrinsics.json"
         intrinsics_path = camera_dir / "intrinsics.json"
         colmap_raw_path = camera_dir / "colmap_raw.json"
@@ -57,6 +68,7 @@ def load_camera_data(input_path: Path) -> tuple[list[np.ndarray], dict, str]:
         extrinsics_path = input_path
         intrinsics_path = input_path.parent / "intrinsics.json"
         colmap_raw_path = input_path.parent / "colmap_raw.json"
+        project_dir = input_path.parent.parent  # camera/ -> project/
 
     if not extrinsics_path.exists():
         raise FileNotFoundError(f"Extrinsics not found: {extrinsics_path}")
@@ -84,7 +96,7 @@ def load_camera_data(input_path: Path) -> tuple[list[np.ndarray], dict, str]:
             matrix = np.array(matrix_data).reshape(4, 4)
             extrinsics.append(matrix)
 
-    return extrinsics, intrinsics, source
+    return extrinsics, intrinsics, source, project_dir
 
 
 def decompose_matrix(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -274,7 +286,7 @@ def main():
         sys.exit(1)
 
     try:
-        extrinsics, intrinsics, source = load_camera_data(args.input)
+        extrinsics, intrinsics, source, project_dir = load_camera_data(args.input)
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -282,6 +294,18 @@ def main():
     if not extrinsics:
         print("Error: No camera data found", file=sys.stderr)
         sys.exit(1)
+
+    # Load project metadata for defaults
+    metadata = load_project_metadata(project_dir)
+
+    # Use metadata values if not overridden by args
+    fps = args.fps
+    start_frame = args.start_frame
+    if fps == 24.0 and "fps" in metadata:  # 24 is the default, check if metadata has actual value
+        fps = metadata["fps"]
+        print(f"Using FPS from project: {fps}")
+    if start_frame == 1 and "start_frame" in metadata:
+        start_frame = metadata["start_frame"]
 
     print(f"Loaded {len(extrinsics)} camera frames from {source}")
 
@@ -298,8 +322,8 @@ def main():
         extrinsics=extrinsics,
         intrinsics=intrinsics,
         output_path=output_path,
-        start_frame=args.start_frame,
-        fps=args.fps,
+        start_frame=start_frame,
+        fps=fps,
         camera_name=args.camera_name,
         sensor_width_mm=args.sensor_width,
     )
