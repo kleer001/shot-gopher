@@ -28,6 +28,7 @@ from comfyui_utils import (
     check_comfyui_running,
     run_comfyui_workflow,
 )
+from comfyui_manager import ensure_comfyui, stop_comfyui
 START_FRAME = 1001
 SUPPORTED_FORMATS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf", ".exr", ".dpx", ".jpg", ".png"}
 
@@ -38,21 +39,81 @@ STAGES = {
     "roto": "Run segmentation (02_segmentation.json)",
     "cleanplate": "Run clean plate generation (03_cleanplate.json)",
     "colmap": "Run COLMAP SfM reconstruction",
-    "mocap": "Run human motion capture (WHAM + ECON)",
+    "mocap": "Run human motion capture (WHAM)",
     "gsir": "Run GS-IR material decomposition",
     "camera": "Export camera to Alembic",
 }
 
+# Correct execution order for stages
+STAGE_ORDER = ["ingest", "depth", "roto", "colmap", "cleanplate", "mocap", "gsir", "camera"]
 
-def run_command(cmd: list[str], description: str, check: bool = True) -> subprocess.CompletedProcess:
-    """Run a shell command with logging."""
+
+def sanitize_stages(stages: list[str]) -> list[str]:
+    """Deduplicate and reorder stages according to pipeline dependencies.
+
+    Args:
+        stages: List of stage names (may have duplicates or wrong order)
+
+    Returns:
+        Deduplicated list in correct execution order
+    """
+    # Deduplicate while preserving which stages were requested
+    requested = set(stages)
+
+    # Return in correct order, only including requested stages
+    return [s for s in STAGE_ORDER if s in requested]
+
+
+def run_command(cmd: list[str], description: str, check: bool = True, stream: bool = True) -> subprocess.CompletedProcess:
+    """Run a shell command with logging and optional streaming output.
+
+    Args:
+        cmd: Command and arguments
+        description: Human-readable description
+        check: Raise exception on non-zero exit
+        stream: If True, stream stdout/stderr in real-time (default: True)
+    """
     print(f"  → {description}")
     print(f"    $ {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if check and result.returncode != 0:
-        print(f"    Error: {result.stderr}", file=sys.stderr)
-        raise subprocess.CalledProcessError(result.returncode, cmd)
-    return result
+    sys.stdout.flush()
+
+    if stream:
+        # Stream output in real-time
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+
+        stdout_lines = []
+        for line in iter(process.stdout.readline, ''):
+            stdout_lines.append(line)
+            # Print output directly (child process handles its own formatting)
+            print(line.rstrip())
+            sys.stdout.flush()
+
+        process.wait()
+
+        stdout = ''.join(stdout_lines)
+        if check and process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, cmd, stdout, "")
+
+        # Return a CompletedProcess-like object
+        class Result:
+            def __init__(self):
+                self.returncode = process.returncode
+                self.stdout = stdout
+                self.stderr = ""
+        return Result()
+    else:
+        # Capture mode for quick commands
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if check and result.returncode != 0:
+            print(f"    Error: {result.stderr}", file=sys.stderr)
+            raise subprocess.CalledProcessError(result.returncode, cmd)
+        return result
 
 
 def get_frame_count(input_path: Path) -> int:
@@ -240,14 +301,12 @@ def run_colmap_reconstruction(
 def run_mocap(
     project_dir: Path,
     skip_texture: bool = False,
-    keyframe_interval: int = 25,
 ) -> bool:
-    """Run human motion capture with WHAM + ECON.
+    """Run human motion capture with WHAM.
 
     Args:
         project_dir: Project directory with frames and camera data
         skip_texture: Skip texture projection (faster)
-        keyframe_interval: ECON keyframe interval
 
     Returns:
         True if mocap succeeded
@@ -261,7 +320,6 @@ def run_mocap(
     cmd = [
         sys.executable, str(script_path),
         str(project_dir),
-        "--keyframe-interval", str(keyframe_interval),
     ]
 
     if skip_texture:
@@ -348,6 +406,7 @@ def run_pipeline(
     colmap_use_masks: bool = True,
     gsir_iterations: int = 35000,
     gsir_path: Optional[str] = None,
+    auto_start_comfyui: bool = True,
 ) -> bool:
     """Run the full VFX pipeline.
 
@@ -365,11 +424,27 @@ def run_pipeline(
         colmap_use_masks: Use segmentation masks for COLMAP (if available)
         gsir_iterations: Total GS-IR training iterations
         gsir_path: Path to GS-IR installation
+        auto_start_comfyui: Auto-start ComfyUI if not running (default: True)
 
     Returns:
         True if all stages successful
     """
     stages = stages or list(STAGES.keys())
+
+    # Check if any stage requires ComfyUI
+    comfyui_stages = {"depth", "roto", "cleanplate"}
+    needs_comfyui = bool(comfyui_stages & set(stages))
+
+    # Auto-start ComfyUI if needed
+    comfyui_was_started = False
+    if needs_comfyui and auto_start_comfyui:
+        if not check_comfyui_running(comfyui_url):
+            print("\n[ComfyUI] Starting ComfyUI automatically...")
+            if not ensure_comfyui(url=comfyui_url):
+                print("Error: Failed to start ComfyUI", file=sys.stderr)
+                print("Install ComfyUI with the install wizard or start it manually", file=sys.stderr)
+                return False
+            comfyui_was_started = True
 
     # Derive project name from input if not specified
     if not project_name:
@@ -420,7 +495,7 @@ def run_pipeline(
     # Count total frames for progress reporting
     total_frames = len(list(source_frames.glob("frame_*.png")))
 
-    # Stage: Depth
+    # Stage: Depth (Video Depth Anything handles long videos natively)
     if "depth" in stages:
         print("\n=== Stage: depth ===")
         workflow_path = project_dir / "workflows" / "01_analysis.json"
@@ -430,6 +505,8 @@ def run_pipeline(
         elif skip_existing and list(depth_dir.glob("*.png")):
             print("  → Skipping (depth maps exist)")
         else:
+            # Video Depth Anything processes long videos with sliding window
+            # (32 frames per segment with temporal consistency)
             if not run_comfyui_workflow(
                 workflow_path, comfyui_url,
                 output_dir=depth_dir,
@@ -498,7 +575,7 @@ def run_pipeline(
     # Stage: Motion capture
     if "mocap" in stages:
         print("\n=== Stage: mocap ===")
-        mocap_output = project_dir / "mocap" / "econ" / "mesh_sequence"
+        mocap_output = project_dir / "mocap" / "wham"
         camera_dir = project_dir / "camera"
         if not camera_dir.exists() or not (camera_dir / "extrinsics.json").exists():
             print("  → Skipping (camera data required - run colmap stage first)")
@@ -508,7 +585,6 @@ def run_pipeline(
             if not run_mocap(
                 project_dir,
                 skip_texture=False,  # Could add as pipeline option
-                keyframe_interval=25,
             ):
                 print("  → Motion capture failed", file=sys.stderr)
                 # Non-fatal - continue to other stages
@@ -548,6 +624,12 @@ def run_pipeline(
     print(f"\n{'='*60}")
     print(f"Pipeline complete: {project_dir}")
     print(f"{'='*60}\n")
+
+    # Stop ComfyUI if we started it
+    if comfyui_was_started:
+        print("[ComfyUI] Stopping ComfyUI...")
+        stop_comfyui()
+
     return True
 
 
@@ -642,6 +724,11 @@ def main():
         default=None,
         help="Path to GS-IR installation (default: auto-detect)"
     )
+    parser.add_argument(
+        "--no-auto-comfyui",
+        action="store_true",
+        help="Don't auto-start ComfyUI (assume it's already running)"
+    )
 
     args = parser.parse_args()
 
@@ -659,14 +746,18 @@ def main():
 
     # Parse stages
     if args.stages.lower() == "all":
-        stages = list(STAGES.keys())
+        stages = STAGE_ORDER.copy()
     else:
         stages = [s.strip() for s in args.stages.split(",")]
         invalid = set(stages) - set(STAGES.keys())
         if invalid:
             print(f"Error: Invalid stages: {invalid}", file=sys.stderr)
-            print(f"Valid stages: {', '.join(STAGES.keys())}")
+            print(f"Valid stages: {', '.join(STAGE_ORDER)}")
             sys.exit(1)
+        # Sanitize: deduplicate and reorder
+        stages = sanitize_stages(stages)
+
+    print(f"Stages to run: {', '.join(stages)}")
 
     # Run pipeline
     success = run_pipeline(
@@ -683,6 +774,7 @@ def main():
         colmap_use_masks=not args.colmap_no_masks,
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
+        auto_start_comfyui=not args.no_auto_comfyui,
     )
 
     sys.exit(0 if success else 1)

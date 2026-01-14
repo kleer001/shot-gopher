@@ -70,17 +70,15 @@ def run_colmap_command(
     command: str,
     args: dict,
     description: str,
-    timeout: int = 3600,
-    stream_output: bool = False,
+    timeout: int = None,  # No timeout by default
 ) -> subprocess.CompletedProcess:
-    """Run a COLMAP command with the given arguments.
+    """Run a COLMAP command with streaming output.
 
     Args:
         command: COLMAP subcommand (e.g., 'feature_extractor')
         args: Dictionary of argument name -> value
         description: Human-readable description for logging
-        timeout: Timeout in seconds
-        stream_output: If True, stream stdout/stderr for progress parsing
+        timeout: Timeout in seconds (None = no timeout)
 
     Returns:
         CompletedProcess result
@@ -95,63 +93,94 @@ def run_colmap_command(
 
     print(f"  → {description}")
     print(f"    $ {' '.join(cmd)}")
+    sys.stdout.flush()
 
-    if stream_output:
-        # Stream output for progress tracking (mapper command)
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        )
+    # Always stream output for visibility
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
 
-        stdout_lines = []
-        # Pattern: "Registering image #142 (150)"
-        register_pattern = re.compile(r'Registering image #(\d+)\s*\((\d+)\)')
+    stdout_lines = []
+    last_progress = ""
+    is_tty = sys.stdout.isatty()
 
-        # Use iter(readline, '') to avoid Python's internal buffering
-        for line in iter(process.stdout.readline, ''):
-            stdout_lines.append(line)
-            line = line.strip()
+    # Progress patterns for different COLMAP stages
+    # Feature extraction: "Processed file [1/521]"
+    extract_pattern = re.compile(r'Processed file \[(\d+)/(\d+)\]')
+    # Matching: "Matching block [1/52, 1/52]" or image pairs
+    match_pattern = re.compile(r'Matching block \[(\d+)/(\d+)')
+    # Mapper: "Registering image #142 (150)"
+    register_pattern = re.compile(r'Registering image #(\d+)\s*\((\d+)\)')
 
-            # Check for registration progress
-            match = register_pattern.search(line)
-            if match:
-                current = int(match.group(1))
-                total = int(match.group(2))
-                print(f"    Registered {current} / {total} images")
+    for line in iter(process.stdout.readline, ''):
+        stdout_lines.append(line)
+        line_stripped = line.strip()
+
+        # Check for feature extraction progress
+        match = extract_pattern.search(line_stripped)
+        if match:
+            current, total = match.group(1), match.group(2)
+            progress = f"Extracting features: {current}/{total}"
+            if progress != last_progress:
+                if is_tty:
+                    print(f"\r    {progress}    ", end="")
+                else:
+                    print(f"    {progress}")
                 sys.stdout.flush()
+                last_progress = progress
+            continue
 
-        process.wait()
+        # Check for matching progress
+        match = match_pattern.search(line_stripped)
+        if match:
+            current, total = match.group(1), match.group(2)
+            progress = f"Matching: block {current}/{total}"
+            if progress != last_progress:
+                if is_tty:
+                    print(f"\r    {progress}    ", end="")
+                else:
+                    print(f"    {progress}")
+                sys.stdout.flush()
+                last_progress = progress
+            continue
 
-        stdout = ''.join(stdout_lines)
-        if process.returncode != 0:
-            print(f"    Error: {stdout}", file=sys.stderr)
-            raise subprocess.CalledProcessError(process.returncode, cmd, stdout, "")
+        # Check for registration progress (mapper)
+        match = register_pattern.search(line_stripped)
+        if match:
+            current = int(match.group(1))
+            total = int(match.group(2))
+            progress = f"Registered {current}/{total} images"
+            if progress != last_progress:
+                if is_tty:
+                    print(f"\r    {progress}    ", end="")
+                else:
+                    print(f"    {progress}")
+                sys.stdout.flush()
+                last_progress = progress
+            continue
 
-        # Create a CompletedProcess-like result
-        class Result:
-            def __init__(self):
-                self.returncode = process.returncode
-                self.stdout = stdout
-                self.stderr = ""
-        return Result()
+    # Clear the progress line and print newline (only needed for TTY mode)
+    if last_progress and is_tty:
+        print()  # newline after progress
 
-    else:
-        # Standard capture mode
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
+    process.wait()
 
-        if result.returncode != 0:
-            print(f"    Error: {result.stderr}", file=sys.stderr)
-            raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+    stdout = ''.join(stdout_lines)
+    if process.returncode != 0:
+        print(f"    Error output:\n{stdout[-2000:]}", file=sys.stderr)  # Last 2000 chars
+        raise subprocess.CalledProcessError(process.returncode, cmd, stdout, "")
 
-        return result
+    # Create a CompletedProcess-like result
+    class Result:
+        def __init__(self):
+            self.returncode = process.returncode
+            self.stdout = stdout
+            self.stderr = ""
+    return Result()
 
 
 def extract_features(
@@ -246,7 +275,7 @@ def run_sparse_reconstruction(
         "Mapper.ba_refine_extra_params": 1,
     }
 
-    run_colmap_command("mapper", args, "Running sparse reconstruction", stream_output=True)
+    run_colmap_command("mapper", args, "Running sparse reconstruction")
 
     # Check if reconstruction produced output
     model_path = output_path / "0"

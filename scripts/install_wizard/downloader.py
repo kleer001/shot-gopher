@@ -41,31 +41,6 @@ If automatic download fails, manually download from:
 Or run the fetch_demo_data.sh script from the WHAM repository:
   cd {INSTALL_DIR}/WHAM && bash fetch_demo_data.sh'''
         },
-        'econ': {
-            'name': 'ECON Checkpoints',
-            'requires_auth': True,
-            'auth_type': 'basic',
-            'auth_file': 'ECON.login.dat',
-            'files': [
-                {
-                    'url': 'https://download.is.tue.mpg.de/download.php?domain=icon&sfile=econ_data.zip&resume=1',
-                    'filename': 'econ_data.zip',
-                    'size_mb': 2500,
-                    'sha256': None,
-                    'extract': True
-                }
-            ],
-            'dest_dir_rel': 'ECON/data',
-            'instructions': '''ECON checkpoints require SEPARATE registration from SMPL-X:
-1. Register at https://icon.is.tue.mpg.de/
-2. Wait for approval email (usually within 24 hours)
-3. Create ECON.login.dat in repository root with:
-   Line 1: your email
-   Line 2: your password
-4. Re-run the wizard to download models
-
-Alternatively, run the fetch_data.sh script from the ECON repository.'''
-        },
         'smplx': {
             'name': 'SMPL-X Models',
             'requires_auth': True,
@@ -92,29 +67,111 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
         },
         'sam3': {
             'name': 'SAM3 Model',
-            'requires_auth': True,
-            'auth_type': 'bearer',
-            'auth_file': 'HF_TOKEN.dat',
+            'requires_auth': False,  # Public repo at 1038lab/sam3
+            'use_huggingface': True,
+            'hf_repo_id': '1038lab/sam3',
             'files': [
                 {
-                    'url': 'https://huggingface.co/facebook/sam3/resolve/main/model.safetensors',
-                    'filename': 'sam3_model.safetensors',
-                    'size_mb': 2400,
-                    'sha256': None
+                    'filename': 'sam3.pt',
+                    'size_mb': 3200,  # ~3.2GB model
                 }
             ],
-            'dest_dir_rel': 'ComfyUI/models/sam',
-            'instructions': '''SAM3 model requires HuggingFace access:
-1. Visit https://huggingface.co/facebook/sam3
-2. Click "Access repository" and accept the license
-3. Get your HuggingFace token from https://huggingface.co/settings/tokens
-4. Create HF_TOKEN.dat in repository root with your token
-5. Re-run the wizard to download the model'''
+            'dest_dir_rel': 'ComfyUI/models/sam3',
+            'instructions': '''SAM3 model will be downloaded from HuggingFace (1038lab/sam3).
+The model is publicly accessible and will be placed in ComfyUI/models/sam3/.
+If automatic download fails, manually download from:
+  https://huggingface.co/1038lab/sam3/blob/main/sam3.pt'''
+        },
+        'video_depth_anything': {
+            'name': 'Video Depth Anything Model',
+            'requires_auth': False,  # Public model
+            'use_huggingface': True,  # Use huggingface_hub snapshot_download
+            'hf_repo_id': 'depth-anything/Video-Depth-Anything-Small',
+            'files': [
+                {
+                    'filename': 'video_depth_anything_vits.pth',
+                    'size_mb': 120,  # Small model is ~116MB
+                }
+            ],
+            'dest_dir_rel': 'ComfyUI/models/videodepthanything',
+            'instructions': '''Video Depth Anything Small model will be downloaded from HuggingFace.
+This model uses ~6.8GB VRAM (vs 23.6GB for Large), suitable for most GPUs.'''
         }
     }
 
     def __init__(self, base_dir: Optional[Path] = None):
         self.base_dir = base_dir or INSTALL_DIR
+
+    def download_from_huggingface(
+        self,
+        repo_id: str,
+        dest_dir: Path,
+        target_filename: str,
+        token: Optional[str] = None,
+    ) -> bool:
+        """Download model from HuggingFace using snapshot_download.
+
+        Downloads to HuggingFace cache, then copies the model file
+        to the destination directory with the specified filename.
+
+        Args:
+            repo_id: HuggingFace repository ID (e.g., 'depth-anything/Metric-Video-Depth-Anything-Large')
+            dest_dir: Destination directory for the model file
+            target_filename: Filename to save as (e.g., 'metric_video_depth_anything_vitl.pth')
+            token: Optional HuggingFace token for gated models
+
+        Returns:
+            True if successful
+        """
+        import shutil
+
+        dest_path = dest_dir / target_filename
+
+        # Check if already exists
+        if dest_path.exists():
+            print_success(f"{target_filename} already exists")
+            return True
+
+        print(f"  Downloading {repo_id} from HuggingFace...")
+
+        # Determine file pattern based on target extension
+        ext = Path(target_filename).suffix  # .pth, .safetensors, etc.
+        pattern = f"*{ext}" if ext else "*.pth"
+
+        try:
+            from huggingface_hub import snapshot_download
+
+            # Download to HuggingFace cache (shows progress bar)
+            cache_dir = snapshot_download(
+                repo_id=repo_id,
+                allow_patterns=[pattern],
+                token=token,  # Pass token for gated models
+            )
+
+            # Find the downloaded model file
+            cache_path = Path(cache_dir)
+            model_files = list(cache_path.glob(pattern))
+
+            if model_files:
+                # Ensure destination directory exists
+                dest_dir.mkdir(parents=True, exist_ok=True)
+
+                # Copy the file (repos typically have one model file)
+                src_file = model_files[0]
+                shutil.copy2(src_file, dest_path)
+                print_success(f"Downloaded: {target_filename}")
+                return True
+            else:
+                print_error(f"No {ext} file found in {repo_id}")
+                return False
+
+        except ImportError:
+            print_error("huggingface_hub not installed")
+            print_info("Install with: pip install huggingface_hub")
+            return False
+        except Exception as e:
+            print_error(f"Download failed: {e}")
+            return False
 
     def download_file(self, url: str, dest: Path, expected_size_mb: Optional[int] = None) -> bool:
         """Download file with progress tracking.
@@ -921,6 +978,23 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
             dest_dir = self.base_dir / checkpoint_info['dest_dir_rel']
 
         dest_dir.mkdir(parents=True, exist_ok=True)
+
+        # Handle HuggingFace downloads (uses snapshot_download)
+        use_huggingface = checkpoint_info.get('use_huggingface', False)
+        if use_huggingface:
+            hf_repo_id = checkpoint_info.get('hf_repo_id')
+            if hf_repo_id:
+                if not self.download_from_huggingface(
+                    hf_repo_id,
+                    dest_dir,
+                    checkpoint_info['files'][0]['filename'],
+                    token=token,  # Pass token for gated models like SAM3
+                ):
+                    print_info(checkpoint_info['instructions'])
+                    return False
+                if state_manager:
+                    state_manager.mark_checkpoint_downloaded(comp_id, dest_dir)
+                return True
 
         success = True
         for file_info in checkpoint_info['files']:

@@ -91,16 +91,45 @@ def ask_yes_no(question: str, default: bool = True) -> bool:
         print("Please answer yes or no.")
 
 
-def run_command(cmd: List[str], check: bool = True, capture: bool = False) -> Tuple[bool, str]:
-    """Run shell command and return success status and output."""
+def run_command(cmd: List[str], check: bool = True, capture: bool = False, timeout: int = 600, stream: bool = False) -> Tuple[bool, str]:
+    """Run shell command and return success status and output.
+
+    Args:
+        cmd: Command and arguments
+        check: Raise on non-zero exit (only if not capturing)
+        capture: Capture output instead of showing it
+        timeout: Timeout in seconds (default 600 = 10 minutes for conda installs)
+        stream: Stream output line by line (for long-running commands)
+    """
     try:
         if capture:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
             return result.returncode == 0, result.stdout + result.stderr
+        elif stream:
+            # Stream output line by line for visibility during long operations
+            import sys
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            output_lines = []
+            for line in iter(process.stdout.readline, ''):
+                print(f"    {line.rstrip()}")
+                sys.stdout.flush()
+                output_lines.append(line)
+            process.wait()
+            return process.returncode == 0, ''.join(output_lines)
         else:
-            result = subprocess.run(cmd, check=check, timeout=30)
+            # Show output in real-time for long-running commands
+            result = subprocess.run(cmd, check=check, timeout=timeout)
             return result.returncode == 0, ""
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+    except subprocess.TimeoutExpired:
+        print_warning(f"Command timed out after {timeout}s")
+        return False, ""
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return False, ""
 
 

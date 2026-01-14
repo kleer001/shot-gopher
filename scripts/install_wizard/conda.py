@@ -137,8 +137,8 @@ class CondaEnvironmentManager:
         if channel:
             cmd.extend(["-c", channel])
 
-        print(f"  Installing {package} via conda...")
-        success, _ = run_command(cmd)
+        print(f"  Installing {package} via conda (this may take a few minutes)...")
+        success, _ = run_command(cmd, timeout=600)
         return success
 
     def install_package_pip(self, package: str) -> bool:

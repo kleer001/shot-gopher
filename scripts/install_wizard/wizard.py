@@ -13,7 +13,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import GitRepoInstaller, PythonPackageInstaller
+from .installers import CondaPackageInstaller, GitRepoInstaller, PythonPackageInstaller, SystemPackageInstaller
 from .state import InstallationStateManager
 from .utils import (
     Colors,
@@ -83,12 +83,14 @@ class InstallationWizard:
             ]
         }
 
-        # COLMAP
+        # COLMAP (installed via apt on Linux)
         self.components['colmap'] = {
             'name': 'COLMAP',
             'required': False,
-            'installers': [],  # System install, check only
-            'size_gb': 0.5,  # If installed via conda
+            'installers': [
+                SystemPackageInstaller('COLMAP', 'colmap', size_gb=0.5),
+            ],
+            'size_gb': 0.5,
         }
 
         # Motion capture dependencies
@@ -115,25 +117,12 @@ class InstallationWizard:
             ]
         }
 
-        # ECON (code ~0.2GB + dependencies ~1GB + checkpoints ~4GB + SMPL-X models ~0.5GB)
-        self.components['econ'] = {
-            'name': 'ECON',
-            'required': False,
-            'installers': [
-                GitRepoInstaller(
-                    'ECON',
-                    'https://github.com/YuliangXiu/ECON.git',
-                    self.install_dir / "ECON",
-                    size_gb=6.0  # Code + dependencies + checkpoints + models
-                )
-            ]
-        }
-
         # ComfyUI and custom nodes
         comfyui_dir = self.install_dir / "ComfyUI"
         self.components['comfyui'] = {
             'name': 'ComfyUI',
             'required': False,
+            'size_gb': 1.0,  # Video Depth Anything model (downloaded automatically)
             'installers': [
                 GitRepoInstaller(
                     'ComfyUI',
@@ -148,16 +137,22 @@ class InstallationWizard:
                     size_gb=0.1
                 ),
                 GitRepoInstaller(
-                    'ComfyUI-DepthAnythingV3',
-                    'https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3.git',
-                    comfyui_dir / "custom_nodes" / "ComfyUI-DepthAnythingV3",
-                    size_gb=0.5
+                    'ComfyUI-Video-Depth-Anything',
+                    'https://github.com/yuvraj108c/ComfyUI-Video-Depth-Anything.git',
+                    comfyui_dir / "custom_nodes" / "ComfyUI-Video-Depth-Anything",
+                    size_gb=0.1
                 ),
                 GitRepoInstaller(
-                    'ComfyUI-SAM2',
-                    'https://github.com/neverbiasu/ComfyUI-SAM2.git',
-                    comfyui_dir / "custom_nodes" / "ComfyUI-SAM2",
-                    size_gb=1.0
+                    'ComfyUI-SAM3',
+                    'https://github.com/PozzettiAndrea/ComfyUI-SAM3.git',
+                    comfyui_dir / "custom_nodes" / "ComfyUI-SAM3",
+                    size_gb=3.5,  # ~3.2GB model + code
+                ),
+                GitRepoInstaller(
+                    'ComfyUI-ProPainter-Nodes',
+                    'https://github.com/daniabib/ComfyUI_ProPainter_Nodes.git',
+                    comfyui_dir / "custom_nodes" / "ComfyUI_ProPainter_Nodes",
+                    size_gb=1.5,  # Models auto-downloaded
                 )
             ]
         }
@@ -369,11 +364,22 @@ class InstallationWizard:
 
         print(f"\n{Colors.BOLD}Installing {comp_info['name']}...{Colors.ENDC}")
 
-        # Check if already completed
+        # Check if already completed AND actually present on disk
         status = self.state_manager.get_component_status(comp_id)
         if status == "completed":
-            print_success(f"{comp_info['name']} already installed (from previous run)")
-            return True
+            # Verify files actually exist before trusting state
+            all_present = True
+            for installer in comp_info['installers']:
+                if hasattr(installer, 'set_conda_manager'):
+                    installer.set_conda_manager(self.conda_manager)
+                if not installer.check():
+                    all_present = False
+                    break
+            if all_present:
+                print_success(f"{comp_info['name']} already installed (from previous run)")
+                return True
+            else:
+                print_warning(f"{comp_info['name']} marked complete but files missing, reinstalling...")
 
         # Mark as started
         self.state_manager.mark_component_started(comp_id)
@@ -408,66 +414,28 @@ class InstallationWizard:
         """Prompt user to set up credentials for authenticated downloads.
 
         Sets up:
-        - HF_TOKEN.dat for HuggingFace (SAM3, etc.)
         - SMPL.login.dat for SMPL-X body models (motion capture)
-        - ECON.login.dat for ECON checkpoints (clothed human reconstruction)
+
+        Note: SAM3 model is now public at 1038lab/sam3 and doesn't require auth.
         """
         print_header("Credentials Setup")
         print("Some components require authentication to download:")
-        print("  - SAM3 segmentation model (HuggingFace)")
         print("  - SMPL-X body models (smpl-x.is.tue.mpg.de)")
-        print("  - ECON checkpoints (icon.is.tue.mpg.de) - SEPARATE registration!")
+        print("")
+        print_info("Note: SAM3 model is now publicly available (no auth required)")
         print("")
 
         # Check existing credentials
-        hf_token_file = repo_root / "HF_TOKEN.dat"
         smpl_creds_file = repo_root / "SMPL.login.dat"
-        econ_creds_file = repo_root / "ECON.login.dat"
 
-        hf_exists = hf_token_file.exists()
         smpl_exists = smpl_creds_file.exists()
-        econ_exists = econ_creds_file.exists()
 
-        if hf_exists and smpl_exists and econ_exists:
-            print_success("All credential files already exist")
+        if smpl_exists:
+            print_success("SMPL-X credentials file already exists")
             if ask_yes_no("Update credentials?", default=False):
-                hf_exists = False
                 smpl_exists = False
-                econ_exists = False
             else:
                 return
-
-        # HuggingFace token setup
-        if not hf_exists:
-            print(f"\n{Colors.BOLD}HuggingFace Token Setup{Colors.ENDC}")
-            print("Required for: SAM3 segmentation model")
-            print("")
-            print("Steps:")
-            print("  1. Go to https://huggingface.co/facebook/sam2.1-hiera-large")
-            print("  2. Click 'Agree and access repository' to accept the license")
-            print("  3. Go to https://huggingface.co/settings/tokens")
-            print("  4. Create a new token with 'Read' access")
-            print("")
-
-            if ask_yes_no("Set up HuggingFace token now?", default=True):
-                token = tty_input("Enter your HuggingFace token (hf_...): ").strip()
-                if token:
-                    if token.startswith("hf_") or len(token) > 20:
-                        with open(hf_token_file, 'w') as f:
-                            f.write(token + '\n')
-                        hf_token_file.chmod(0o600)
-                        print_success(f"Token saved to {hf_token_file}")
-                    else:
-                        print_warning("Token looks invalid (should start with 'hf_')")
-                        if ask_yes_no("Save anyway?", default=False):
-                            with open(hf_token_file, 'w') as f:
-                                f.write(token + '\n')
-                            hf_token_file.chmod(0o600)
-                            print_success(f"Token saved to {hf_token_file}")
-                else:
-                    print_info("Skipped - you can add HF_TOKEN.dat later")
-            else:
-                print_info("Skipped - you can add HF_TOKEN.dat later")
 
         # SMPL-X credentials setup
         if not smpl_exists:
@@ -502,42 +470,6 @@ class InstallationWizard:
                     print_info("Skipped - you can add SMPL.login.dat later")
             else:
                 print_info("Skipped - you can add SMPL.login.dat later")
-
-        # ECON credentials setup (separate from SMPL-X)
-        if not econ_exists:
-            print(f"\n{Colors.BOLD}ECON Credentials Setup{Colors.ENDC}")
-            print("Required for: Clothed human reconstruction from video")
-            print("")
-            print("ECON takes video frames and creates a detailed 3D mesh with clothing,")
-            print("using SMPL-X as the underlying body prior.")
-            print("")
-            print(f"{Colors.WARNING}NOTE: This is a SEPARATE registration from SMPL-X!{Colors.ENDC}")
-            print("")
-            print("Registration: https://icon.is.tue.mpg.de/")
-            print("")
-            print("Steps:")
-            print("  1. Register at the website above (separate from SMPL-X)")
-            print("  2. Wait for approval email (usually within 24-48 hours)")
-            print("  3. Enter your credentials below")
-            print("")
-
-            if ask_yes_no("Set up ECON credentials now?", default=True):
-                email = tty_input("Enter your ECON registered email: ").strip()
-                if email and '@' in email:
-                    password = tty_input("Enter your ECON password: ").strip()
-                    if password:
-                        with open(econ_creds_file, 'w') as f:
-                            f.write(email + '\n')
-                            f.write(password + '\n')
-                        # Set restrictive permissions
-                        econ_creds_file.chmod(0o600)
-                        print_success(f"Credentials saved to {econ_creds_file}")
-                    else:
-                        print_info("Skipped - you can add ECON.login.dat later")
-                else:
-                    print_info("Skipped - you can add ECON.login.dat later")
-            else:
-                print_info("Skipped - you can add ECON.login.dat later")
 
         print("")
 
@@ -598,13 +530,13 @@ class InstallationWizard:
             while True:
                 choice = tty_input("\nChoice [1-5]: ").strip()
                 if choice == '1':
-                    to_install = ['core', 'web_gui', 'pytorch']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap']
                     break
                 elif choice == '2':
-                    to_install = ['core', 'web_gui', 'pytorch', 'comfyui']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'comfyui', 'mocap_core', 'wham', 'econ']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham']
                     break
                 elif choice == '4':
                     to_install = []
@@ -638,8 +570,17 @@ class InstallationWizard:
                     if self.components[comp_id]['required']:
                         return False
 
+        # Download Video Depth Anything model (required for ComfyUI depth workflows)
+        if 'comfyui' in to_install:
+            print("\nDownloading Video Depth Anything model (for temporally consistent depth)...")
+            self.checkpoint_downloader.download_all_checkpoints(['video_depth_anything'], self.state_manager)
+
+            # Download SAM3 model for segmentation
+            print("\nDownloading SAM3 model (for segmentation/roto workflows)...")
+            self.checkpoint_downloader.download_all_checkpoints(['sam3'], self.state_manager)
+
         # Download checkpoints for motion capture components
-        mocap_components = [cid for cid in to_install if cid in ['wham', 'econ']]
+        mocap_components = [cid for cid in to_install if cid in ['wham']]
         if mocap_components:
             if ask_yes_no("\nDownload checkpoints for motion capture components?", default=True):
                 self.checkpoint_downloader.download_all_checkpoints(mocap_components, self.state_manager)
@@ -674,22 +615,13 @@ class InstallationWizard:
             print(f"     mkdir -p {INSTALL_DIR}/smplx_models && cp SMPLX_*.pkl {INSTALL_DIR}/smplx_models/")
 
         # Checkpoints status
-        has_mocap = status.get('wham', False) or status.get('econ', False)
-        if has_mocap:
+        if status.get('wham', False):
             print("\n📦 Motion Capture Checkpoints:")
-            if status.get('wham', False):
-                if self.state_manager.is_checkpoint_downloaded('wham'):
-                    print("  ✓ WHAM checkpoints downloaded")
-                else:
-                    print("  ⚠ WHAM checkpoints not downloaded - run wizard again or visit:")
-                    print("    https://github.com/yohanshin/WHAM")
-
-            if status.get('econ', False):
-                if self.state_manager.is_checkpoint_downloaded('econ'):
-                    print("  ✓ ECON checkpoints downloaded")
-                else:
-                    print("  ⚠ ECON checkpoints not downloaded - run wizard again or visit:")
-                    print("    https://github.com/YuliangXiu/ECON")
+            if self.state_manager.is_checkpoint_downloaded('wham'):
+                print("  ✓ WHAM checkpoints downloaded")
+            else:
+                print("  ⚠ WHAM checkpoints not downloaded - run wizard again or visit:")
+                print("    https://github.com/yohanshin/WHAM")
 
         # ComfyUI
         if status.get('comfyui', False):

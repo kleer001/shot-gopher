@@ -183,6 +183,7 @@ def run_pipeline_thread(
         "--name", Path(project_dir).name,
         "--projects-dir", str(Path(project_dir).parent),
         "--stages", ",".join(stages),
+        "--no-auto-comfyui",  # Web server already manages ComfyUI
     ]
 
     if roto_prompt and "roto" in stages:

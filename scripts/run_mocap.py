@@ -1,29 +1,18 @@
 #!/usr/bin/env python3
-"""Human motion capture with SMPL-X topology and UV mapping.
+"""Human motion capture with SMPL-X topology.
 
 Reconstructs people from monocular video with:
 - SMPL-X body model (standard topology + UVs)
-- World-space motion tracking
-- Clothed body geometry
-- Textured output ready for VFX
+- World-space motion tracking via WHAM
 
 Pipeline:
 1. Motion tracking (WHAM) → skeleton animation in world space
-2. Geometry reconstruction (ECON) → clothed body with SMPL-X compatibility
-3. Texture projection → UV texture from camera views
 
 Usage:
     python run_mocap.py <project_dir> [options]
 
 Example:
-    # Full pipeline with texture
-    python run_mocap.py /path/to/projects/My_Shot --texture
-
-    # Motion only (fast)
-    python run_mocap.py /path/to/projects/My_Shot --skip-texture
-
-    # Test individual stages
-    python run_mocap.py /path/to/projects/My_Shot --test-stage motion
+    python run_mocap.py /path/to/projects/My_Shot
 """
 
 import argparse
@@ -96,7 +85,6 @@ def check_all_dependencies() -> Dict[str, bool]:
 
     # Optional dependencies (for specific methods)
     deps["wham"] = check_dependency("wham", command=["python", "-c", "import wham"])
-    deps["econ"] = check_dependency("econ", command=["python", "-c", "import econ"])
 
     return deps
 
@@ -116,7 +104,7 @@ def print_dependency_status():
 
     # Optional dependencies
     print("\nOptional (for specific methods):")
-    for name in ["wham", "econ"]:
+    for name in ["wham"]:
         status = "✓" if deps[name] else "✗"
         print(f"  {status} {name}")
 
@@ -136,11 +124,6 @@ def install_instructions():
     print("  git clone https://github.com/yohanshin/WHAM.git")
     print("  cd WHAM && pip install -e .")
     print("  # Download checkpoints from project page")
-
-    print("\nECON (clothed reconstruction):")
-    print("  git clone https://github.com/YuliangXiu/ECON.git")
-    print("  cd ECON && pip install -r requirements.txt")
-    print("  # Download SMPL models + checkpoints")
 
     print("\nSMPL-X body model:")
     print("  1. Register at https://smpl-x.is.tue.mpg.de/")
@@ -225,140 +208,15 @@ def run_wham_motion_tracking(
         return False
 
 
-def run_econ_reconstruction(
-    project_dir: Path,
-    keyframe_interval: int = 25,
-    output_dir: Optional[Path] = None
-) -> bool:
-    """Run ECON clothed body reconstruction on keyframes.
-
-    Args:
-        project_dir: Project directory containing source/frames/
-        keyframe_interval: Extract geometry every N frames
-        output_dir: Output directory for meshes
-
-    Returns:
-        True if successful
-    """
-    if not check_dependency("econ"):
-        print("Error: ECON not available", file=sys.stderr)
-        return False
-
-    output_dir = output_dir or project_dir / "mocap" / "econ"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    frames_dir = project_dir / "source" / "frames"
-    frame_files = sorted(frames_dir.glob("frame_*.png"))
-
-    if not frame_files:
-        print(f"Error: No frames found in {frames_dir}", file=sys.stderr)
-        return False
-
-    # Select keyframes
-    keyframes = frame_files[::keyframe_interval]
-
-    print(f"\n{'=' * 60}")
-    print("ECON Geometry Reconstruction")
-    print("=" * 60)
-    print(f"Total frames: {len(frame_files)}")
-    print(f"Keyframes: {len(keyframes)} (every {keyframe_interval} frames)")
-    print(f"Output: {output_dir}")
-    print()
-
-    try:
-        for i, keyframe_path in enumerate(keyframes, 1):
-            frame_num = keyframe_path.stem.split("_")[-1]
-            output_mesh = output_dir / f"mesh_{frame_num}.obj"
-
-            if output_mesh.exists():
-                print(f"  [{i}/{len(keyframes)}] Skipping {keyframe_path.name} (exists)")
-                continue
-
-            print(f"  [{i}/{len(keyframes)}] Processing {keyframe_path.name}...")
-
-            # ECON command - adjust based on actual ECON CLI
-            cmd = [
-                "python", "-m", "econ.run",
-                "--input", str(keyframe_path),
-                "--output", str(output_mesh),
-            ]
-
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-
-            if result.returncode != 0:
-                print(f"    Warning: ECON failed for {keyframe_path.name}")
-                continue
-
-            print(f"    ✓ Saved: {output_mesh.name}")
-
-        # Check we got at least one mesh
-        mesh_files = list(output_dir.glob("mesh_*.obj"))
-        if not mesh_files:
-            print("Error: No meshes generated", file=sys.stderr)
-            return False
-
-        print(f"\n  ✓ Reconstruction complete: {len(mesh_files)} meshes")
-        return True
-
-    except Exception as e:
-        print(f"Error running ECON: {e}", file=sys.stderr)
-        return False
-
-
-def export_econ_meshes_to_sequence(
-    econ_dir: Path,
-    output_dir: Path
-) -> bool:
-    """Export ECON meshes as an OBJ sequence.
-
-    Args:
-        econ_dir: Directory with ECON keyframe meshes
-        output_dir: Output directory for mesh sequence
-
-    Returns:
-        True if successful
-    """
-    print(f"\n{'=' * 60}")
-    print("Mesh Sequence Export")
-    print("=" * 60)
-    print(f"Input: {econ_dir}")
-    print(f"Output: {output_dir}")
-    print()
-
-    try:
-        mesh_files = sorted(econ_dir.glob("mesh_*.obj"))
-        if not mesh_files:
-            print("Error: No ECON meshes found", file=sys.stderr)
-            return False
-
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Copy meshes to output sequence directory
-        for mesh_file in mesh_files:
-            dest = output_dir / mesh_file.name
-            shutil.copy2(mesh_file, dest)
-
-        print(f"  ✓ Exported {len(mesh_files)} meshes to {output_dir}")
-        return True
-
-    except Exception as e:
-        print(f"Error exporting meshes: {e}", file=sys.stderr)
-        return False
-
-
 def run_mocap_pipeline(
     project_dir: Path,
     skip_texture: bool = False,
-    keyframe_interval: int = 25,
-    test_stage: Optional[str] = None
 ) -> bool:
-    """Run full motion capture pipeline.
+    """Run motion capture pipeline (WHAM).
 
     Args:
         project_dir: Project directory
-        skip_texture: Skip texture projection (faster)
-        keyframe_interval: ECON keyframe interval
-        test_stage: Test only specific stage (motion, econ, texture)
+        skip_texture: Skip texture projection (unused, kept for API compatibility)
 
     Returns:
         True if successful
@@ -375,13 +233,9 @@ def run_mocap_pipeline(
         return False
 
     print(f"\n{'=' * 60}")
-    print("Motion Capture Pipeline")
+    print("Motion Capture Pipeline (WHAM)")
     print("=" * 60)
     print(f"Project: {project_dir}")
-    print(f"Keyframe interval: {keyframe_interval}")
-    print(f"Texture: {'Disabled' if skip_texture else 'Enabled'}")
-    if test_stage:
-        print(f"Test stage: {test_stage}")
     print()
 
     # Setup paths
@@ -392,84 +246,22 @@ def run_mocap_pipeline(
     if not person_mask_dir.exists():
         person_mask_dir = None
 
-    # Stage 1: Motion tracking (WHAM)
-    if not test_stage or test_stage == "motion":
-        if not run_wham_motion_tracking(
-            project_dir,
-            person_mask_dir=person_mask_dir,
-            output_dir=mocap_dir / "wham"
-        ):
-            print("Motion tracking failed", file=sys.stderr)
-            return False
-
-        if test_stage == "motion":
-            print("\n✓ Motion stage test complete")
-            return True
-
-    motion_file = mocap_dir / "wham" / "motion.pkl"
-    if not motion_file.exists():
-        print(f"Error: Motion file not found: {motion_file}", file=sys.stderr)
-        print("Run motion stage first: --test-stage motion", file=sys.stderr)
+    # Run WHAM motion tracking
+    if not run_wham_motion_tracking(
+        project_dir,
+        person_mask_dir=person_mask_dir,
+        output_dir=mocap_dir / "wham"
+    ):
+        print("Motion tracking failed", file=sys.stderr)
         return False
-
-    # Stage 2: Geometry reconstruction (ECON)
-    if not test_stage or test_stage == "econ":
-        if not run_econ_reconstruction(
-            project_dir,
-            keyframe_interval=keyframe_interval,
-            output_dir=mocap_dir / "econ"
-        ):
-            print("Geometry reconstruction failed", file=sys.stderr)
-            return False
-
-        if test_stage == "econ":
-            print("\n✓ ECON stage test complete")
-            return True
-
-    econ_dir = mocap_dir / "econ"
-    if not econ_dir.exists() or not list(econ_dir.glob("mesh_*.obj")):
-        print(f"Error: ECON meshes not found in {econ_dir}", file=sys.stderr)
-        print("Run ECON stage first: --test-stage econ", file=sys.stderr)
-        return False
-
-    # Stage 3: Export mesh sequence
-    mesh_output_dir = mocap_dir / "mesh_sequence"
-    if not export_econ_meshes_to_sequence(econ_dir, mesh_output_dir):
-        print("Mesh export failed", file=sys.stderr)
-        return False
-
-    # Stage 4: Texture projection (optional)
-    if not skip_texture and (not test_stage or test_stage == "texture"):
-        texture_script = Path(__file__).parent / "texture_projection.py"
-        if texture_script.exists():
-            print(f"\n{'=' * 60}")
-            print("Texture Projection")
-            print("=" * 60)
-
-            cmd = [
-                sys.executable, str(texture_script),
-                str(project_dir),
-                "--mesh-dir", str(mesh_output_dir),
-                "--output", str(mocap_dir / "texture.png")
-            ]
-
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                print("Warning: Texture projection failed", file=sys.stderr)
-            else:
-                print(f"  ✓ Texture saved: {mocap_dir / 'texture.png'}")
-        else:
-            print(f"\nNote: Texture projection script not found: {texture_script}")
 
     # Final output summary
+    motion_file = mocap_dir / "wham" / "motion.pkl"
     print(f"\n{'=' * 60}")
     print("Motion Capture Complete")
     print("=" * 60)
     print(f"Output directory: {mocap_dir}")
     print(f"Motion data: {motion_file}")
-    print(f"Mesh sequence: {mesh_output_dir}")
-    if not skip_texture and (mocap_dir / "texture.png").exists():
-        print(f"Texture: {mocap_dir / 'texture.png'}")
     print()
 
     return True
@@ -495,18 +287,7 @@ def main():
     parser.add_argument(
         "--skip-texture",
         action="store_true",
-        help="Skip texture projection (faster)"
-    )
-    parser.add_argument(
-        "--keyframe-interval",
-        type=int,
-        default=25,
-        help="ECON keyframe interval in frames (default: 25)"
-    )
-    parser.add_argument(
-        "--test-stage",
-        choices=["motion", "econ", "texture"],
-        help="Test only specific stage (for debugging)"
+        help="Skip texture projection (unused, kept for compatibility)"
     )
 
     args = parser.parse_args()
@@ -532,8 +313,6 @@ def main():
     success = run_mocap_pipeline(
         project_dir=project_dir,
         skip_texture=args.skip_texture,
-        keyframe_interval=args.keyframe_interval,
-        test_stage=args.test_stage
     )
 
     sys.exit(0 if success else 1)

@@ -25,17 +25,24 @@ def check_comfyui_running(url: str = DEFAULT_COMFYUI_URL) -> bool:
         return False
 
 
-def convert_workflow_to_api_format(workflow: dict) -> dict:
+def get_node_definitions(comfyui_url: str = DEFAULT_COMFYUI_URL) -> dict:
+    """Get node type definitions from ComfyUI's object_info endpoint."""
+    try:
+        with urllib.request.urlopen(f"{comfyui_url}/object_info", timeout=10) as response:
+            return json.loads(response.read().decode())
+    except Exception:
+        return {}
+
+
+def convert_workflow_to_api_format(workflow: dict, comfyui_url: str = DEFAULT_COMFYUI_URL) -> dict:
     """Convert ComfyUI workflow format to API format if needed.
 
     Workflow format (saved from UI): {"nodes": [...], "links": [...]}
     API format (for /prompt): {"1": {"class_type": "...", "inputs": {...}}, ...}
 
-    Note: Full conversion from workflow format requires node type definitions.
-    Workflow templates should be saved in API format directly.
-
     Args:
         workflow: Workflow dict (either format)
+        comfyui_url: ComfyUI API URL for fetching node definitions
 
     Returns:
         Workflow in API format for /prompt endpoint
@@ -44,12 +51,17 @@ def convert_workflow_to_api_format(workflow: dict) -> dict:
     if "nodes" not in workflow:
         return workflow
 
-    # Workflow format detected - attempt basic conversion
-    print("  Warning: Workflow in UI format, attempting conversion...", file=sys.stderr)
-    print("  For reliable execution, save workflows in API format", file=sys.stderr)
+    # Workflow format detected - convert it
+    print("  Converting workflow from UI format to API format...")
 
     nodes = workflow.get("nodes", [])
     links = workflow.get("links", [])
+
+    # Get node definitions from ComfyUI to map widget values
+    node_defs = get_node_definitions(comfyui_url)
+    if not node_defs:
+        print("  Warning: Could not fetch node definitions from ComfyUI", file=sys.stderr)
+        print("  Widget values may not be mapped correctly", file=sys.stderr)
 
     # Build link lookup: link_id -> (source_node_id, source_slot)
     link_lookup = {}
@@ -66,13 +78,56 @@ def convert_workflow_to_api_format(workflow: dict) -> dict:
         node_type = node.get("type")
 
         # Skip special nodes that don't execute
-        if node_type in ("Note", "Reroute"):
+        if node_type in ("Note", "Reroute", "PrimitiveNode"):
             continue
 
         inputs = {}
 
-        # Process linked inputs only
+        # Get node definition for widget names
+        node_def = node_defs.get(node_type, {})
+        input_def = node_def.get("input", {})
+        required_inputs = input_def.get("required", {})
+        optional_inputs = input_def.get("optional", {})
+
+        # First, identify which inputs have connections (from the node's inputs array)
+        connected_input_names = set()
         node_inputs = node.get("inputs", [])
+        for inp in node_inputs:
+            if inp.get("link") is not None:
+                connected_input_names.add(inp.get("name"))
+
+        # Collect widget names in order (required first, then optional)
+        # Skip connection-type inputs - they're handled via links
+        widget_names = []
+        for name, spec in required_inputs.items():
+            if isinstance(spec, list) and len(spec) > 0:
+                first = spec[0]
+                # If first element is a list, it's a dropdown (widget)
+                # If first element is a string that's ALL_CAPS, it's likely a connection type
+                if isinstance(first, list):
+                    widget_names.append(name)  # Dropdown widget
+                elif isinstance(first, str):
+                    # Connection types are typically ALL_CAPS custom types
+                    # Widget types: INT, FLOAT, STRING, BOOLEAN, or mixed-case
+                    if first in ("INT", "FLOAT", "STRING", "BOOLEAN"):
+                        widget_names.append(name)
+                    elif not first.isupper():
+                        # Mixed case = widget type
+                        widget_names.append(name)
+                    # else: ALL_CAPS = connection type, skip
+
+        for name, spec in optional_inputs.items():
+            if isinstance(spec, list) and len(spec) > 0:
+                first = spec[0]
+                if isinstance(first, list):
+                    widget_names.append(name)
+                elif isinstance(first, str):
+                    if first in ("INT", "FLOAT", "STRING", "BOOLEAN"):
+                        widget_names.append(name)
+                    elif not first.isupper():
+                        widget_names.append(name)
+
+        # Process linked inputs (connections)
         for inp in node_inputs:
             inp_name = inp.get("name")
             link_id = inp.get("link")
@@ -80,6 +135,20 @@ def convert_workflow_to_api_format(workflow: dict) -> dict:
             if link_id is not None and link_id in link_lookup:
                 src_node, src_slot = link_lookup[link_id]
                 inputs[inp_name] = [str(src_node), src_slot]
+
+        # Process widget values
+        # Filter out widgets that have connections (they're not in widgets_values)
+        widget_values = node.get("widgets_values", [])
+        if widget_values:
+            # Only map to widgets that don't have connections
+            non_connected_widgets = [n for n in widget_names if n not in connected_input_names]
+
+            for i, value in enumerate(widget_values):
+                if i < len(non_connected_widgets) and value is not None:
+                    # Skip UI-only state indicators that shouldn't be passed to the API
+                    if isinstance(value, str) and value in ("Disabled", "disabled", "None", "none"):
+                        continue
+                    inputs[non_connected_widgets[i]] = value
 
         api_workflow[node_id] = {
             "class_type": node_type,
@@ -100,13 +169,13 @@ def queue_workflow(workflow_path: Path, comfyui_url: str = DEFAULT_COMFYUI_URL) 
         comfyui_url: ComfyUI API URL
 
     Returns:
-        Prompt ID for tracking
+        Prompt ID for tracking, or empty string on failure
     """
     with open(workflow_path) as f:
         workflow = json.load(f)
 
     # Convert workflow format to API format if needed
-    api_workflow = convert_workflow_to_api_format(workflow)
+    api_workflow = convert_workflow_to_api_format(workflow, comfyui_url)
 
     # Wrap workflow in prompt format
     prompt_data = {"prompt": api_workflow}
@@ -118,9 +187,27 @@ def queue_workflow(workflow_path: Path, comfyui_url: str = DEFAULT_COMFYUI_URL) 
         headers={"Content-Type": "application/json"}
     )
 
-    with urllib.request.urlopen(req) as response:
-        result = json.loads(response.read().decode())
-        return result.get("prompt_id", "")
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode())
+            return result.get("prompt_id", "")
+    except urllib.error.HTTPError as e:
+        # Read error response body for details
+        error_body = ""
+        try:
+            error_body = e.read().decode()
+            error_json = json.loads(error_body)
+            if "error" in error_json:
+                error_msg = error_json["error"].get("message", str(error_json["error"]))
+                print(f"    ComfyUI error: {error_msg}", file=sys.stderr)
+                if "node_errors" in error_json:
+                    for node_id, node_err in error_json["node_errors"].items():
+                        print(f"      Node {node_id}: {node_err}", file=sys.stderr)
+        except Exception:
+            if error_body:
+                print(f"    ComfyUI response: {error_body[:500]}", file=sys.stderr)
+        print(f"    HTTP {e.code}: {e.reason}", file=sys.stderr)
+        return ""
 
 
 def wait_for_completion(
@@ -148,7 +235,13 @@ def wait_for_completion(
     check_interval = 2  # seconds
     last_file_count = 0
 
+    # Braille spinner characters for visual feedback
+    spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    spin_idx = 0
+
     while time.time() - start_time < timeout:
+        elapsed = int(time.time() - start_time)
+
         try:
             with urllib.request.urlopen(f"{comfyui_url}/history/{prompt_id}") as response:
                 history = json.loads(response.read().decode())
@@ -156,34 +249,36 @@ def wait_for_completion(
                 if prompt_id in history:
                     status = history[prompt_id].get("status", {})
                     if status.get("completed", False):
+                        print("\r    Done!                              ")
                         return True
                     if status.get("status_str") == "error":
-                        print(f"    Workflow error: {status}", file=sys.stderr)
+                        print(f"\r    Workflow error: {status}", file=sys.stderr)
                         return False
 
         except urllib.error.URLError:
             pass
 
         # File-based progress monitoring
+        file_info = ""
         if output_dir and output_dir.exists():
             current_files = len(list(output_dir.glob("*.png")))
             if current_files != last_file_count:
                 last_file_count = current_files
+            if current_files > 0:
                 if total_frames > 0:
-                    print(f"[ComfyUI] {stage_name} frame {current_files}/{total_frames}")
+                    file_info = f" | {current_files}/{total_frames} frames"
                 else:
-                    print(f"[ComfyUI] {stage_name} frame {current_files}")
-                sys.stdout.flush()
+                    file_info = f" | {current_files} frames"
 
-        # Also print elapsed time periodically
-        elapsed = int(time.time() - start_time)
-        if elapsed > 0 and elapsed % 30 == 0:
-            print(f"    Elapsed: {elapsed}s")
-            sys.stdout.flush()
+        # Show spinner with elapsed time
+        spin_char = spinner[spin_idx % len(spinner)]
+        spin_idx += 1
+        status_line = f"\r    {spin_char} Processing{file_info} [{elapsed}s]"
+        print(status_line, end="", flush=True)
 
         time.sleep(check_interval)
 
-    print("    Timeout waiting for workflow completion", file=sys.stderr)
+    print(f"\r    Timeout waiting for workflow completion ({timeout}s)", file=sys.stderr)
     return False
 
 
