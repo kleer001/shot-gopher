@@ -264,7 +264,7 @@ class Janitor:
         if self.conda_manager.detect_conda():
             print_success(f"Conda detected: {self.conda_manager.conda_exe}")
 
-            if self.conda_manager.environment_exists():
+            if self.conda_manager.environment_exists(self.conda_manager.env_name):
                 print_success(f"Environment '{self.conda_manager.env_name}' exists")
             else:
                 print_warning(f"Environment '{self.conda_manager.env_name}' not found")
@@ -519,7 +519,7 @@ class Janitor:
 
         # Check conda environment
         if self.conda_manager.detect_conda():
-            if not self.conda_manager.environment_exists():
+            if not self.conda_manager.environment_exists(self.conda_manager.env_name):
                 issues.append(("conda_env", "Conda environment missing"))
 
         # Check checkpoints
@@ -621,7 +621,7 @@ class Janitor:
         print("\n[Conda Environment]")
         if self.conda_manager.detect_conda():
             print(f"  Conda: {self.conda_manager.conda_exe}")
-            if self.conda_manager.environment_exists():
+            if self.conda_manager.environment_exists(self.conda_manager.env_name):
                 print(f"  Environment: {self.conda_manager.env_name} (exists)")
             else:
                 print(f"  Environment: {self.conda_manager.env_name} (missing)")
