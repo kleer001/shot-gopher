@@ -44,6 +44,25 @@ STAGES = {
     "camera": "Export camera to Alembic",
 }
 
+# Correct execution order for stages
+STAGE_ORDER = ["ingest", "depth", "roto", "colmap", "cleanplate", "mocap", "gsir", "camera"]
+
+
+def sanitize_stages(stages: list[str]) -> list[str]:
+    """Deduplicate and reorder stages according to pipeline dependencies.
+
+    Args:
+        stages: List of stage names (may have duplicates or wrong order)
+
+    Returns:
+        Deduplicated list in correct execution order
+    """
+    # Deduplicate while preserving which stages were requested
+    requested = set(stages)
+
+    # Return in correct order, only including requested stages
+    return [s for s in STAGE_ORDER if s in requested]
+
 
 def run_command(cmd: list[str], description: str, check: bool = True, stream: bool = True) -> subprocess.CompletedProcess:
     """Run a shell command with logging and optional streaming output.
@@ -731,14 +750,18 @@ def main():
 
     # Parse stages
     if args.stages.lower() == "all":
-        stages = list(STAGES.keys())
+        stages = STAGE_ORDER.copy()
     else:
         stages = [s.strip() for s in args.stages.split(",")]
         invalid = set(stages) - set(STAGES.keys())
         if invalid:
             print(f"Error: Invalid stages: {invalid}", file=sys.stderr)
-            print(f"Valid stages: {', '.join(STAGES.keys())}")
+            print(f"Valid stages: {', '.join(STAGE_ORDER)}")
             sys.exit(1)
+        # Sanitize: deduplicate and reorder
+        stages = sanitize_stages(stages)
+
+    print(f"Stages to run: {', '.join(stages)}")
 
     # Run pipeline
     success = run_pipeline(
