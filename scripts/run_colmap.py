@@ -34,20 +34,36 @@ QUALITY_PRESETS = {
     "low": {
         "sift_max_features": 4096,
         "matcher": "sequential",
+        "sequential_overlap": 10,
         "ba_refine_focal": True,
         "dense_max_size": 1000,
+        "min_tri_angle": 1.5,  # Default
     },
     "medium": {
         "sift_max_features": 8192,
         "matcher": "sequential",
+        "sequential_overlap": 10,
         "ba_refine_focal": True,
         "dense_max_size": 2000,
+        "min_tri_angle": 1.5,
     },
     "high": {
         "sift_max_features": 16384,
         "matcher": "exhaustive",
+        "sequential_overlap": 10,
         "ba_refine_focal": True,
         "dense_max_size": -1,  # No limit
+        "min_tri_angle": 1.5,
+    },
+    # For slow/minimal camera motion - more aggressive matching
+    "slow": {
+        "sift_max_features": 16384,
+        "matcher": "exhaustive",  # Check all frame pairs
+        "sequential_overlap": 50,  # Higher overlap for sequential fallback
+        "ba_refine_focal": True,
+        "dense_max_size": 2000,
+        "min_tri_angle": 0.5,  # Accept smaller triangulation angles
+        "min_num_inliers": 10,  # Lower threshold (default 15)
     },
 }
 
@@ -251,7 +267,9 @@ def run_sparse_reconstruction(
     database_path: Path,
     image_path: Path,
     output_path: Path,
-    refine_focal: bool = True
+    refine_focal: bool = True,
+    min_tri_angle: float = 1.5,
+    min_num_inliers: int = 15,
 ) -> bool:
     """Run incremental Structure-from-Motion reconstruction.
 
@@ -260,6 +278,8 @@ def run_sparse_reconstruction(
         image_path: Path to image directory
         output_path: Path to sparse reconstruction output
         refine_focal: Whether to refine focal length during BA
+        min_tri_angle: Minimum triangulation angle in degrees (lower = accept smaller motion)
+        min_num_inliers: Minimum inliers for valid match (lower = accept weaker matches)
 
     Returns:
         True if reconstruction succeeded
@@ -273,6 +293,8 @@ def run_sparse_reconstruction(
         "Mapper.ba_refine_focal_length": 1 if refine_focal else 0,
         "Mapper.ba_refine_principal_point": 0,
         "Mapper.ba_refine_extra_params": 1,
+        "Mapper.init_min_tri_angle": min_tri_angle,
+        "Mapper.min_num_matches": min_num_inliers,
     }
 
     run_colmap_command("mapper", args, "Running sparse reconstruction")
@@ -770,6 +792,9 @@ def run_colmap_pipeline(
     print(f"Project: {project_dir}")
     print(f"Frames: {frame_count}")
     print(f"Quality: {quality}")
+    if quality == "slow":
+        print(f"  ⚠️  Slow-camera mode: Using aggressive settings for minimal motion")
+        print(f"      Note: Results may be jittery due to low parallax")
 
     # Check for segmentation masks
     mask_dir = project_dir / "roto"
@@ -819,6 +844,7 @@ def run_colmap_pipeline(
         match_features(
             database_path=database_path,
             matcher_type=preset["matcher"],
+            sequential_overlap=preset.get("sequential_overlap", 10),
         )
 
         # Sparse reconstruction
@@ -828,6 +854,8 @@ def run_colmap_pipeline(
             image_path=frames_dir,
             output_path=sparse_path,
             refine_focal=preset["ba_refine_focal"],
+            min_tri_angle=preset.get("min_tri_angle", 1.5),
+            min_num_inliers=preset.get("min_num_inliers", 15),
         ):
             print("Sparse reconstruction failed", file=sys.stderr)
             return False
@@ -903,9 +931,9 @@ def main():
     )
     parser.add_argument(
         "--quality", "-q",
-        choices=["low", "medium", "high"],
+        choices=["low", "medium", "high", "slow"],
         default="medium",
-        help="Quality preset (default: medium)"
+        help="Quality preset: low, medium, high, or 'slow' for minimal camera motion (default: medium)"
     )
     parser.add_argument(
         "--dense", "-d",

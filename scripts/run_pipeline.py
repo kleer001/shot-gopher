@@ -967,9 +967,9 @@ def main():
     # COLMAP options
     parser.add_argument(
         "--colmap-quality", "-q",
-        choices=["low", "medium", "high"],
+        choices=["low", "medium", "high", "slow"],
         default="medium",
-        help="COLMAP quality preset (default: medium)"
+        help="COLMAP quality preset: low, medium, high, or 'slow' for minimal camera motion (default: medium)"
     )
     parser.add_argument(
         "--colmap-dense", "-d",
