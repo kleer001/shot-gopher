@@ -429,7 +429,7 @@ def read_colmap_cameras(cameras_path: Path) -> dict:
     return cameras
 
 
-def read_colmap_images(images_path: Path) -> dict:
+def read_colmap_images(images_path: Path, debug: bool = False) -> dict:
     """Read COLMAP images.bin or images.txt file.
 
     Returns:
@@ -437,13 +437,23 @@ def read_colmap_images(images_path: Path) -> dict:
     """
     images = {}
 
+    if debug:
+        print(f"    DEBUG: Reading images from {images_path}")
+
     txt_path = images_path.parent / "images.txt"
     if txt_path.exists():
+        if debug:
+            print(f"    DEBUG: Found text file: {txt_path}")
         with open(txt_path) as f:
             all_lines = f.readlines()
 
+        if debug:
+            print(f"    DEBUG: Total lines in file: {len(all_lines)}")
+
         # Images.txt has 2 lines per image: metadata + keypoints
         # Parse only non-comment metadata lines (keypoints line may be empty)
+        parsed_count = 0
+        skipped_count = 0
         for line in all_lines:
             line = line.strip()
             # Skip empty lines and comments
@@ -465,29 +475,67 @@ def read_colmap_images(images_path: Path) -> dict:
                         "trans": [tx, ty, tz],
                         "camera_id": camera_id,
                     }
-                except (ValueError, IndexError):
+                    parsed_count += 1
+                except (ValueError, IndexError) as e:
                     # Not a metadata line (probably keypoints), skip
+                    skipped_count += 1
+                    if debug:
+                        print(f"    DEBUG: Skipped line (parse error): {line[:80]}...")
                     continue
+            else:
+                skipped_count += 1
+
+        if debug:
+            print(f"    DEBUG: Parsed {parsed_count} images, skipped {skipped_count} lines")
         return images
 
     # Binary format - convert to text
     bin_path = images_path
     if bin_path.exists():
+        if debug:
+            print(f"    DEBUG: Converting binary file: {bin_path}")
+            print(f"    DEBUG: Binary file size: {bin_path.stat().st_size} bytes")
         temp_dir = images_path.parent / "_temp_txt"
         temp_dir.mkdir(exist_ok=True)
         try:
-            subprocess.run([
+            result = subprocess.run([
                 "colmap", "model_converter",
                 "--input_path", str(images_path.parent),
                 "--output_path", str(temp_dir),
                 "--output_type", "TXT"
-            ], capture_output=True, check=True)
+            ], capture_output=True, text=True)
 
-            with open(temp_dir / "images.txt") as f:
+            if debug:
+                print(f"    DEBUG: model_converter return code: {result.returncode}")
+                if result.stderr:
+                    print(f"    DEBUG: model_converter stderr: {result.stderr[:500]}")
+
+            if result.returncode != 0:
+                print(f"    Warning: model_converter failed: {result.stderr}", file=sys.stderr)
+                return images
+
+            txt_file = temp_dir / "images.txt"
+            if debug:
+                if txt_file.exists():
+                    print(f"    DEBUG: Converted file size: {txt_file.stat().st_size} bytes")
+                else:
+                    print(f"    DEBUG: Converted file not found!")
+
+            with open(txt_file) as f:
                 all_lines = f.readlines()
+
+            if debug:
+                print(f"    DEBUG: Total lines in converted file: {len(all_lines)}")
+                # Print first few non-comment lines
+                data_lines = [l for l in all_lines if l.strip() and not l.strip().startswith("#")]
+                print(f"    DEBUG: Non-comment lines: {len(data_lines)}")
+                if data_lines:
+                    print(f"    DEBUG: First data line: {data_lines[0][:100]}...")
 
             # Images.txt has 2 lines per image: metadata + keypoints
             # Parse only non-comment metadata lines (keypoints line may be empty)
+            parsed_count = 0
+            skipped_count = 0
             for line in all_lines:
                 line = line.strip()
                 # Skip empty lines and comments
@@ -509,9 +557,18 @@ def read_colmap_images(images_path: Path) -> dict:
                             "trans": [tx, ty, tz],
                             "camera_id": camera_id,
                         }
-                    except (ValueError, IndexError):
+                        parsed_count += 1
+                    except (ValueError, IndexError) as e:
                         # Not a metadata line (probably keypoints), skip
+                        skipped_count += 1
+                        if debug:
+                            print(f"    DEBUG: Skipped line (parse error): {line[:80]}...")
                         continue
+                else:
+                    skipped_count += 1
+
+            if debug:
+                print(f"    DEBUG: Parsed {parsed_count} images, skipped {skipped_count} lines")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -613,7 +670,8 @@ def colmap_to_camera_matrices(images: dict, cameras: dict) -> tuple[list, dict]:
 
 def export_colmap_to_pipeline_format(
     sparse_path: Path,
-    output_dir: Path
+    output_dir: Path,
+    debug: bool = False
 ) -> bool:
     """Export COLMAP reconstruction to pipeline camera format.
 
@@ -622,6 +680,7 @@ def export_colmap_to_pipeline_format(
     Args:
         sparse_path: Path to COLMAP sparse model (e.g., sparse/0/)
         output_dir: Output directory (typically project/camera/)
+        debug: Print debug output
 
     Returns:
         True if export succeeded
@@ -630,7 +689,7 @@ def export_colmap_to_pipeline_format(
 
     # Read COLMAP output
     cameras = read_colmap_cameras(sparse_path / "cameras.bin")
-    images = read_colmap_images(sparse_path / "images.bin")
+    images = read_colmap_images(sparse_path / "images.bin", debug=debug)
 
     if not images:
         print("    Error: No images in reconstruction", file=sys.stderr)
