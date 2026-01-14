@@ -172,21 +172,18 @@ def convert_workflow_to_api_format(
             # Only map to widgets that don't have connections
             non_connected_widgets = [n for n in widget_names if n not in connected_input_names]
 
-            # Use separate index for widgets - UI-only values like "Disabled"
-            # don't correspond to API widgets and shouldn't advance the index
-            widget_idx = 0
-            for value in widget_values:
-                if widget_idx >= len(non_connected_widgets):
+            for i, value in enumerate(widget_values):
+                if i >= len(non_connected_widgets):
                     break
 
-                # Skip UI-only state indicators - they don't consume a widget slot
+                # Skip None/null values and UI state indicators like "Disabled"
+                # These consume a widget slot but shouldn't be passed to the API
+                if value is None:
+                    continue
                 if isinstance(value, str) and value in ("Disabled", "disabled", "None", "none"):
                     continue
 
-                # None/null values consume a widget slot but don't get assigned
-                if value is not None:
-                    inputs[non_connected_widgets[widget_idx]] = value
-                widget_idx += 1
+                inputs[non_connected_widgets[i]] = value
 
         api_workflow[node_id] = {
             "class_type": node_type,
