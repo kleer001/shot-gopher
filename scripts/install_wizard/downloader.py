@@ -90,20 +90,26 @@ Alternatively, run the fetch_data.sh script from the ECON repository.'''
    Line 2: your password
 4. Re-run the wizard to download models'''
         },
-        'sam2': {
-            'name': 'SAM2 Model (Segment Anything 2.1)',
-            'requires_auth': False,  # Public model
-            'use_huggingface': True,
-            'hf_repo_id': 'facebook/sam2.1-hiera-large',
+        'sam3': {
+            'name': 'SAM3 Model',
+            'requires_auth': True,
+            'auth_type': 'bearer',
+            'auth_file': 'HF_TOKEN.dat',
             'files': [
                 {
-                    'filename': 'sam2.1_hiera_large.pt',
-                    'size_mb': 860,
+                    'url': 'https://huggingface.co/facebook/sam3/resolve/main/model.safetensors',
+                    'filename': 'sam3_model.safetensors',
+                    'size_mb': 2400,
+                    'sha256': None
                 }
             ],
-            'dest_dir_rel': 'ComfyUI/models/sam2',
-            'instructions': '''SAM2 model will be downloaded from HuggingFace.
-This is a public model for image/video segmentation.'''
+            'dest_dir_rel': 'ComfyUI/models/sam',
+            'instructions': '''SAM3 model requires HuggingFace access:
+1. Visit https://huggingface.co/facebook/sam3
+2. Click "Access repository" and accept the license
+3. Get your HuggingFace token from https://huggingface.co/settings/tokens
+4. Create HF_TOKEN.dat in repository root with your token
+5. Re-run the wizard to download the model'''
         },
         'video_depth_anything': {
             'name': 'Video Depth Anything Model',
@@ -130,6 +136,7 @@ This model uses ~6.8GB VRAM (vs 23.6GB for Large), suitable for most GPUs.'''
         repo_id: str,
         dest_dir: Path,
         target_filename: str,
+        token: Optional[str] = None,
     ) -> bool:
         """Download model from HuggingFace using snapshot_download.
 
@@ -140,6 +147,7 @@ This model uses ~6.8GB VRAM (vs 23.6GB for Large), suitable for most GPUs.'''
             repo_id: HuggingFace repository ID (e.g., 'depth-anything/Metric-Video-Depth-Anything-Large')
             dest_dir: Destination directory for the model file
             target_filename: Filename to save as (e.g., 'metric_video_depth_anything_vitl.pth')
+            token: Optional HuggingFace token for gated models
 
         Returns:
             True if successful
@@ -166,6 +174,7 @@ This model uses ~6.8GB VRAM (vs 23.6GB for Large), suitable for most GPUs.'''
             cache_dir = snapshot_download(
                 repo_id=repo_id,
                 allow_patterns=[pattern],
+                token=token,  # Pass token for gated models
             )
 
             # Find the downloaded model file
@@ -1008,6 +1017,7 @@ This model uses ~6.8GB VRAM (vs 23.6GB for Large), suitable for most GPUs.'''
                     hf_repo_id,
                     dest_dir,
                     checkpoint_info['files'][0]['filename'],
+                    token=token,  # Pass token for gated models like SAM3
                 ):
                     print_info(checkpoint_info['instructions'])
                     return False

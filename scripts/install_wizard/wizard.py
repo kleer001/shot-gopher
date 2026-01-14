@@ -157,11 +157,10 @@ class InstallationWizard:
                     size_gb=0.1
                 ),
                 GitRepoInstaller(
-                    'ComfyUI-SAM2',
-                    'https://github.com/neverbiasu/ComfyUI-SAM2.git',
-                    comfyui_dir / "custom_nodes" / "ComfyUI-SAM2",
-                    size_gb=1.0,
-                    extra_packages=['yapf']  # Missing from SAM2's requirements.txt
+                    'ComfyUI-SAM3',
+                    'https://github.com/PozzettiAndrea/ComfyUI-SAM3.git',
+                    comfyui_dir / "custom_nodes" / "ComfyUI-SAM3",
+                    size_gb=3.5,  # ~3.2GB model + code
                 )
             ]
         }
@@ -658,9 +657,9 @@ class InstallationWizard:
             print("\nDownloading Video Depth Anything model (for temporally consistent depth)...")
             self.checkpoint_downloader.download_all_checkpoints(['video_depth_anything'], self.state_manager)
 
-            # Download SAM2 model for segmentation
-            print("\nDownloading SAM2 model (for segmentation/roto workflows)...")
-            self.checkpoint_downloader.download_all_checkpoints(['sam2'], self.state_manager)
+            # Download SAM3 model for segmentation
+            print("\nDownloading SAM3 model (for segmentation/roto workflows)...")
+            self.checkpoint_downloader.download_all_checkpoints(['sam3'], self.state_manager)
 
         # Download checkpoints for motion capture components
         mocap_components = [cid for cid in to_install if cid in ['wham', 'econ']]
