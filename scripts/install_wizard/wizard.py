@@ -161,6 +161,12 @@ class InstallationWizard:
                     'https://github.com/PozzettiAndrea/ComfyUI-SAM3.git',
                     comfyui_dir / "custom_nodes" / "ComfyUI-SAM3",
                     size_gb=3.5,  # ~3.2GB model + code
+                ),
+                GitRepoInstaller(
+                    'ComfyUI-ProPainter-Nodes',
+                    'https://github.com/daniabib/ComfyUI_ProPainter_Nodes.git',
+                    comfyui_dir / "custom_nodes" / "ComfyUI_ProPainter_Nodes",
+                    size_gb=1.5,  # Models auto-downloaded
                 )
             ]
         }
