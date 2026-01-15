@@ -24,7 +24,7 @@ class CondaEnvironmentManager:
 
     def detect_conda(self) -> bool:
         """Check if conda is installed and available."""
-        # Try conda command
+        # Try conda command directly (works if in PATH)
         success, output = run_command(["conda", "--version"], check=False, capture=True)
         if success:
             self.conda_exe = "conda"
@@ -34,6 +34,43 @@ class CondaEnvironmentManager:
         success, output = run_command(["mamba", "--version"], check=False, capture=True)
         if success:
             self.conda_exe = "mamba"
+            return True
+
+        # Check CONDA_EXE environment variable (set by conda init)
+        conda_exe_env = os.environ.get('CONDA_EXE')
+        if conda_exe_env and Path(conda_exe_env).exists():
+            success, output = run_command([conda_exe_env, "--version"], check=False, capture=True)
+            if success:
+                self.conda_exe = conda_exe_env
+                return True
+
+        # Search common conda installation paths
+        home = Path.home()
+        common_paths = [
+            home / "miniconda3" / "bin" / "conda",
+            home / "miniconda" / "bin" / "conda",
+            home / "anaconda3" / "bin" / "conda",
+            home / "anaconda" / "bin" / "conda",
+            home / "mambaforge" / "bin" / "conda",
+            home / ".conda" / "bin" / "conda",
+            Path("/opt/conda/bin/conda"),
+            Path("/opt/miniconda3/bin/conda"),
+            Path("/opt/anaconda3/bin/conda"),
+        ]
+
+        for conda_path in common_paths:
+            if conda_path.exists():
+                success, output = run_command([str(conda_path), "--version"], check=False, capture=True)
+                if success:
+                    self.conda_exe = str(conda_path)
+                    return True
+
+        # Check if we're in an active conda environment (CONDA_PREFIX is set)
+        # In this case, we can use pip directly even if conda binary isn't found
+        conda_prefix = os.environ.get('CONDA_PREFIX')
+        if conda_prefix and Path(conda_prefix).exists():
+            # We're in an active conda env, mark as detected but note pip-only mode
+            self.conda_exe = "pip-only"
             return True
 
         return False
@@ -133,6 +170,11 @@ class CondaEnvironmentManager:
         if not self.conda_exe:
             return False
 
+        # Can't use conda install in pip-only mode
+        if self.conda_exe == "pip-only":
+            print_warning(f"  Conda binary not available, cannot install {package} via conda")
+            return False
+
         cmd = [self.conda_exe, "install", "-n", self.env_name, package, "-y"]
         if channel:
             cmd.extend(["-c", channel])
@@ -154,10 +196,16 @@ class CondaEnvironmentManager:
             return False
 
         print(f"  Installing {package} via pip...")
-        success, _ = run_command([
-            self.conda_exe, "run", "-n", self.env_name,
-            "pip", "install", package
-        ])
+
+        # If we're in pip-only mode (active conda env but no conda binary),
+        # run pip directly
+        if self.conda_exe == "pip-only":
+            success, _ = run_command(["pip", "install", package])
+        else:
+            success, _ = run_command([
+                self.conda_exe, "run", "-n", self.env_name,
+                "pip", "install", package
+            ])
         return success
 
     def check_setup(self) -> Tuple[bool, str]:
@@ -168,6 +216,11 @@ class CondaEnvironmentManager:
         """
         if not self.detect_conda():
             return False, "Conda not installed. Please install Miniconda or Anaconda first."
+
+        # If in pip-only mode (active conda env but no conda binary)
+        if self.conda_exe == "pip-only":
+            conda_prefix = os.environ.get('CONDA_PREFIX', '')
+            return True, f"Using active conda environment (pip-only mode): {conda_prefix}"
 
         current_env = self.get_current_env()
 

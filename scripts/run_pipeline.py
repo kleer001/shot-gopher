@@ -14,6 +14,8 @@ Example:
 
 import argparse
 import json
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -29,7 +31,7 @@ from comfyui_utils import (
     run_comfyui_workflow,
 )
 from comfyui_manager import ensure_comfyui, stop_comfyui
-START_FRAME = 1001
+START_FRAME = 1  # ComfyUI SaveImage outputs start at 1, so we match that
 SUPPORTED_FORMATS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf", ".exr", ".dpx", ".jpg", ".png"}
 
 # Stage definitions
@@ -298,6 +300,54 @@ def run_colmap_reconstruction(
         return False
 
 
+def export_camera_to_vfx_formats(
+    project_dir: Path,
+    start_frame: int = 1,
+    fps: float = 24.0,
+) -> bool:
+    """Export camera data to VFX-friendly formats.
+
+    Exports to .chan (Nuke), .csv, .clip (Houdini), .camera.json.
+    Also exports .abc if PyAlembic is available.
+
+    Args:
+        project_dir: Project directory with camera/ subfolder
+        start_frame: Starting frame number
+        fps: Frames per second
+
+    Returns:
+        True if export succeeded
+    """
+    script_path = Path(__file__).parent / "export_camera.py"
+
+    if not script_path.exists():
+        print("    Error: export_camera.py not found", file=sys.stderr)
+        return False
+
+    cmd = [
+        sys.executable, str(script_path),
+        str(project_dir),
+        "--format", "all",
+        "--start-frame", str(start_frame),
+        "--fps", str(fps),
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            # Print export summary (filter to relevant lines)
+            for line in result.stdout.strip().split('\n'):
+                if 'Exported' in line or 'formats:' in line or '.chan' in line or '.clip' in line:
+                    print(f"    {line}")
+            return True
+        else:
+            print(f"    Camera export failed: {result.stderr}", file=sys.stderr)
+            return False
+    except Exception as e:
+        print(f"    Camera export failed: {e}", file=sys.stderr)
+        return False
+
+
 def run_mocap(
     project_dir: Path,
     skip_texture: bool = False,
@@ -330,6 +380,212 @@ def run_mocap(
         return True
     except subprocess.CalledProcessError:
         return False
+
+
+def generate_preview_movie(
+    image_dir: Path,
+    output_path: Path,
+    fps: float = 24.0,
+    pattern: str = "*.png",
+    crf: int = 23,
+) -> bool:
+    """Generate a preview MP4 from an image sequence.
+
+    Args:
+        image_dir: Directory containing images
+        output_path: Output MP4 path
+        fps: Frame rate
+        pattern: Glob pattern for images
+        crf: Quality (lower = better, 18-28 typical)
+
+    Returns:
+        True if successful
+    """
+    images = sorted(image_dir.glob(pattern))
+    if not images:
+        return False
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Use ffmpeg with image sequence input
+    # -pattern_type glob for flexible matching
+    cmd = [
+        "ffmpeg", "-y",
+        "-framerate", str(fps),
+        "-pattern_type", "glob",
+        "-i", str(image_dir / pattern),
+        "-c:v", "libx264",
+        "-crf", str(crf),
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        str(output_path)
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            print(f"    → Created: {output_path.name}")
+            return True
+        else:
+            # Try alternative approach with numbered frames
+            first_image = images[0]
+            # Detect numbering pattern from filename
+            match = re.search(r'(\d+)', first_image.stem)
+            if match:
+                num_digits = len(match.group(1))
+                prefix = first_image.stem[:match.start()]
+                suffix = first_image.suffix
+                input_pattern = str(image_dir / f"{prefix}%0{num_digits}d{suffix}")
+                start_num = int(match.group(1))
+
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-framerate", str(fps),
+                    "-start_number", str(start_num),
+                    "-i", input_pattern,
+                    "-c:v", "libx264",
+                    "-crf", str(crf),
+                    "-pix_fmt", "yuv420p",
+                    "-movflags", "+faststart",
+                    str(output_path)
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode == 0:
+                    print(f"    → Created: {output_path.name}")
+                    return True
+            return False
+    except Exception:
+        return False
+
+
+def get_image_dimensions(image_path: Path) -> tuple[int, int]:
+    """Get width and height from an image file using ffprobe."""
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height",
+        "-of", "csv=p=0:s=x",
+        str(image_path)
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        width, height = result.stdout.strip().split("x")
+        return int(width), int(height)
+    except (ValueError, AttributeError):
+        return 1920, 1080  # Default fallback
+
+
+def update_segmentation_prompt(workflow_path: Path, prompt: str, output_subdir: Path = None) -> None:
+    """Update the text prompt and output path in segmentation workflow.
+
+    Args:
+        workflow_path: Path to workflow JSON
+        prompt: Segmentation target text
+        output_subdir: If provided, update SaveImage to write here with prompt-based prefix
+    """
+    print(f"  → Setting segmentation prompt: {prompt}")
+
+    with open(workflow_path) as f:
+        workflow = json.load(f)
+
+    prompt_name = prompt.replace(" ", "_")
+
+    for node in workflow.get("nodes", []):
+        # Update the segmentation prompt
+        if node.get("type") == "SAM3VideoSegmentation":
+            widgets = node.get("widgets_values", [])
+            if len(widgets) >= 2:
+                widgets[1] = prompt
+                node["widgets_values"] = widgets
+
+        # Update SaveImage output path if specified
+        if output_subdir and node.get("type") == "SaveImage":
+            widgets = node.get("widgets_values", [])
+            if widgets:
+                # Set output to subdir with prompt-named prefix
+                widgets[0] = str(output_subdir / prompt_name)
+                node["widgets_values"] = widgets
+
+    with open(workflow_path, 'w') as f:
+        json.dump(workflow, f, indent=2)
+
+
+def combine_mask_sequences(source_dirs: list[Path], output_dir: Path, prefix: str = "combined") -> int:
+    """Combine multiple mask sequences by OR-ing them together.
+
+    Args:
+        source_dirs: List of directories containing mask sequences
+        output_dir: Output directory for combined masks
+        prefix: Filename prefix for combined masks
+
+    Returns:
+        Number of frames processed
+    """
+    from PIL import Image
+    import numpy as np
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get all frame files from first source
+    if not source_dirs:
+        return 0
+
+    frame_files = sorted(source_dirs[0].glob("*.png"))
+    if not frame_files:
+        return 0
+
+    count = 0
+    for i, frame_file in enumerate(frame_files):
+        # Load and combine masks from all sources
+        combined = None
+        for src_dir in source_dirs:
+            # Find matching frame in this source (by index, not name)
+            src_files = sorted(src_dir.glob("*.png"))
+            if i < len(src_files):
+                img = Image.open(src_files[i]).convert('L')
+                arr = np.array(img)
+                if combined is None:
+                    combined = arr
+                else:
+                    # OR the masks together
+                    combined = np.maximum(combined, arr)
+
+        if combined is not None:
+            # Use consistent naming: prefix_00001.png
+            out_name = f"{prefix}_{i+1:05d}.png"
+            result = Image.fromarray(combined)
+            result.save(output_dir / out_name)
+            count += 1
+
+    return count
+
+
+def update_cleanplate_resolution(workflow_path: Path, source_frames_dir: Path) -> None:
+    """Update ProPainterInpaint resolution in cleanplate workflow to match source frames."""
+    # Get resolution from first source frame
+    frames = sorted(source_frames_dir.glob("frame_*.png"))
+    if not frames:
+        print("  → Warning: No source frames found, using default resolution")
+        return
+
+    width, height = get_image_dimensions(frames[0])
+    print(f"  → Setting cleanplate resolution to {width}x{height}")
+
+    # Load workflow and update ProPainterInpaint node
+    with open(workflow_path) as f:
+        workflow = json.load(f)
+
+    for node in workflow.get("nodes", []):
+        if node.get("type") == "ProPainterInpaint":
+            widgets = node.get("widgets_values", [])
+            if len(widgets) >= 2:
+                widgets[0] = width
+                widgets[1] = height
+                node["widgets_values"] = widgets
+            break
+
+    with open(workflow_path, 'w') as f:
+        json.dump(workflow, f, indent=2)
 
 
 def run_gsir_materials(
@@ -407,6 +663,8 @@ def run_pipeline(
     gsir_iterations: int = 35000,
     gsir_path: Optional[str] = None,
     auto_start_comfyui: bool = True,
+    roto_prompt: Optional[str] = None,
+    auto_movie: bool = False,
 ) -> bool:
     """Run the full VFX pipeline.
 
@@ -477,6 +735,26 @@ def run_pipeline(
     fps = fps or 24.0
     print(f"Frame rate: {fps} fps")
 
+    # Save project metadata for standalone scripts
+    metadata_path = project_dir / "project.json"
+    project_metadata = {
+        "name": project_name,
+        "fps": fps,
+        "source": str(input_path),
+        "start_frame": 1,
+    }
+    # Load existing and merge (preserve other fields)
+    if metadata_path.exists():
+        try:
+            with open(metadata_path) as f:
+                existing = json.load(f)
+            existing.update(project_metadata)
+            project_metadata = existing
+        except json.JSONDecodeError:
+            pass
+    with open(metadata_path, "w") as f:
+        json.dump(project_metadata, f, indent=2)
+
     # Stage: Setup
     print("\n[Setup]")
     if not setup_project(project_dir, workflows_dir):
@@ -492,8 +770,29 @@ def run_pipeline(
             frame_count = extract_frames(input_path, source_frames, START_FRAME, fps)
             print(f"  → Extracted {frame_count} frames")
 
+        # Copy source video to preview folder for reference
+        preview_dir = project_dir / "preview"
+        preview_dir.mkdir(exist_ok=True)
+        source_preview = preview_dir / f"source{input_path.suffix}"
+        if not source_preview.exists():
+            import shutil
+            shutil.copy2(input_path, source_preview)
+            print(f"  → Copied source to {source_preview.name}")
+
     # Count total frames for progress reporting
     total_frames = len(list(source_frames.glob("frame_*.png")))
+
+    # Update metadata with frame count
+    if total_frames > 0:
+        project_metadata["frame_count"] = total_frames
+        # Get resolution from first frame
+        first_frame = sorted(source_frames.glob("frame_*.png"))[0]
+        from PIL import Image
+        with Image.open(first_frame) as img:
+            project_metadata["width"] = img.width
+            project_metadata["height"] = img.height
+        with open(metadata_path, "w") as f:
+            json.dump(project_metadata, f, indent=2)
 
     # Stage: Depth (Video Depth Anything handles long videos natively)
     if "depth" in stages:
@@ -515,6 +814,9 @@ def run_pipeline(
             ):
                 print("  → Depth stage failed", file=sys.stderr)
                 return False
+        # Generate preview movie
+        if auto_movie and list(depth_dir.glob("*.png")):
+            generate_preview_movie(depth_dir, project_dir / "preview" / "depth.mp4", fps)
 
     # Stage: Roto
     if "roto" in stages:
@@ -523,17 +825,75 @@ def run_pipeline(
         roto_dir = project_dir / "roto"
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
-        elif skip_existing and list(roto_dir.glob("*.png")):
+        elif skip_existing and (list(roto_dir.glob("*.png")) or list(roto_dir.glob("*/*.png"))):
             print("  → Skipping (masks exist)")
         else:
-            if not run_comfyui_workflow(
-                workflow_path, comfyui_url,
-                output_dir=roto_dir,
-                total_frames=total_frames,
-                stage_name="roto",
-            ):
-                print("  → Segmentation stage failed", file=sys.stderr)
-                return False
+            # Clean up any existing .png files in roto/ base directory
+            for old_file in roto_dir.glob("*.png"):
+                old_file.unlink()
+
+            # Parse prompts - support comma-separated list for multiple objects
+            prompts = [p.strip() for p in (roto_prompt or "person").split(",")]
+            prompts = [p for p in prompts if p]  # Remove empty
+
+            if len(prompts) == 1:
+                # Single prompt - save to named subdirectory
+                prompt_name = prompts[0].replace(" ", "_")
+                output_subdir = roto_dir / prompt_name
+                output_subdir.mkdir(parents=True, exist_ok=True)
+                update_segmentation_prompt(workflow_path, prompts[0], output_subdir)
+                if not run_comfyui_workflow(
+                    workflow_path, comfyui_url,
+                    output_dir=output_subdir,
+                    total_frames=total_frames,
+                    stage_name="roto",
+                ):
+                    print("  → Segmentation stage failed", file=sys.stderr)
+                    return False
+                # Copy masks to roto/ with consistent naming for cleanplate
+                print(f"  → Copying masks to roto/ for cleanplate...")
+                for i, mask_file in enumerate(sorted(output_subdir.glob("*.png"))):
+                    out_name = f"{prompt_name}_{i+1:05d}.png"
+                    shutil.copy2(mask_file, roto_dir / out_name)
+            else:
+                # Multiple prompts - run each to its own subdirectory
+                print(f"  → Segmenting {len(prompts)} targets: {', '.join(prompts)}")
+                mask_dirs = []
+
+                for i, prompt in enumerate(prompts):
+                    prompt_name = prompt.replace(" ", "_")
+                    output_subdir = roto_dir / prompt_name
+                    output_subdir.mkdir(parents=True, exist_ok=True)
+                    mask_dirs.append(output_subdir)
+
+                    print(f"\n  [{i+1}/{len(prompts)}] Segmenting: {prompt}")
+                    update_segmentation_prompt(workflow_path, prompt, output_subdir)
+                    if not run_comfyui_workflow(
+                        workflow_path, comfyui_url,
+                        output_dir=output_subdir,
+                        total_frames=total_frames,
+                        stage_name=f"roto ({prompt})",
+                    ):
+                        print(f"  → Segmentation failed for '{prompt}'", file=sys.stderr)
+                        # Continue with other prompts
+
+                # Combine all masks directly into roto/ for cleanplate to use
+                print(f"\n  → Combining {len(mask_dirs)} mask sequences...")
+                valid_dirs = [d for d in mask_dirs if list(d.glob("*.png"))]
+                if valid_dirs:
+                    count = combine_mask_sequences(valid_dirs, roto_dir, prefix="combined")
+                    print(f"  → Combined {count} frames → roto/combined_*.png")
+
+        # Generate preview movie from roto/ (combined masks) or first subdirectory
+        if auto_movie:
+            if list(roto_dir.glob("*.png")):
+                generate_preview_movie(roto_dir, project_dir / "preview" / "roto.mp4", fps)
+            else:
+                # Find first subdirectory with masks
+                for subdir in sorted(roto_dir.iterdir()):
+                    if subdir.is_dir() and list(subdir.glob("*.png")):
+                        generate_preview_movie(subdir, project_dir / "preview" / "roto.mp4", fps)
+                        break
 
     # Stage: Cleanplate
     if "cleanplate" in stages:
@@ -545,6 +905,8 @@ def run_pipeline(
         elif skip_existing and list(cleanplate_dir.glob("*.png")):
             print("  → Skipping (cleanplates exist)")
         else:
+            # Update ProPainterInpaint resolution to match source frames
+            update_cleanplate_resolution(workflow_path, source_frames)
             if not run_comfyui_workflow(
                 workflow_path, comfyui_url,
                 output_dir=cleanplate_dir,
@@ -553,6 +915,9 @@ def run_pipeline(
             ):
                 print("  → Cleanplate stage failed", file=sys.stderr)
                 return False
+        # Generate preview movie
+        if auto_movie and list(cleanplate_dir.glob("*.png")):
+            generate_preview_movie(cleanplate_dir, project_dir / "preview" / "cleanplate.mp4", fps)
 
     # Stage: COLMAP reconstruction
     if "colmap" in stages:
@@ -571,6 +936,16 @@ def run_pipeline(
                 print("  → COLMAP reconstruction failed", file=sys.stderr)
                 # Non-fatal for pipeline - continue to camera export
                 # (may use DA3 camera data as fallback)
+
+        # Export camera to VFX formats after COLMAP completes
+        camera_dir = project_dir / "camera"
+        if (camera_dir / "extrinsics.json").exists():
+            print("\n  → Exporting camera to VFX formats...")
+            export_camera_to_vfx_formats(
+                project_dir,
+                start_frame=1,
+                fps=fps,
+            )
 
     # Stage: Motion capture
     if "mocap" in stages:
@@ -691,9 +1066,9 @@ def main():
     # COLMAP options
     parser.add_argument(
         "--colmap-quality", "-q",
-        choices=["low", "medium", "high"],
+        choices=["low", "medium", "high", "slow"],
         default="medium",
-        help="COLMAP quality preset (default: medium)"
+        help="COLMAP quality preset: low, medium, high, or 'slow' for minimal camera motion (default: medium)"
     )
     parser.add_argument(
         "--colmap-dense", "-d",
@@ -728,6 +1103,17 @@ def main():
         "--no-auto-comfyui",
         action="store_true",
         help="Don't auto-start ComfyUI (assume it's already running)"
+    )
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default=None,
+        help="Segmentation prompt for roto stage (default: 'person'). Example: 'person, ball, backpack'"
+    )
+    parser.add_argument(
+        "--auto-movie",
+        action="store_true",
+        help="Generate preview MP4s from completed image sequences (depth, roto, cleanplate)"
     )
 
     args = parser.parse_args()
@@ -775,6 +1161,8 @@ def main():
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
         auto_start_comfyui=not args.no_auto_comfyui,
+        roto_prompt=args.prompt,
+        auto_movie=args.auto_movie,
     )
 
     sys.exit(0 if success else 1)

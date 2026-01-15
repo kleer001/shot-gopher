@@ -34,20 +34,36 @@ QUALITY_PRESETS = {
     "low": {
         "sift_max_features": 4096,
         "matcher": "sequential",
+        "sequential_overlap": 10,
         "ba_refine_focal": True,
         "dense_max_size": 1000,
+        "min_tri_angle": 1.5,  # Default
     },
     "medium": {
         "sift_max_features": 8192,
         "matcher": "sequential",
+        "sequential_overlap": 10,
         "ba_refine_focal": True,
         "dense_max_size": 2000,
+        "min_tri_angle": 1.5,
     },
     "high": {
         "sift_max_features": 16384,
         "matcher": "exhaustive",
+        "sequential_overlap": 10,
         "ba_refine_focal": True,
         "dense_max_size": -1,  # No limit
+        "min_tri_angle": 1.5,
+    },
+    # For slow/minimal camera motion - more aggressive matching
+    "slow": {
+        "sift_max_features": 16384,
+        "matcher": "exhaustive",  # Check all frame pairs
+        "sequential_overlap": 50,  # Higher overlap for sequential fallback
+        "ba_refine_focal": True,
+        "dense_max_size": 2000,
+        "min_tri_angle": 0.5,  # Accept smaller triangulation angles
+        "min_num_inliers": 10,  # Lower threshold (default 15)
     },
 }
 
@@ -251,7 +267,9 @@ def run_sparse_reconstruction(
     database_path: Path,
     image_path: Path,
     output_path: Path,
-    refine_focal: bool = True
+    refine_focal: bool = True,
+    min_tri_angle: float = 1.5,
+    min_num_inliers: int = 15,
 ) -> bool:
     """Run incremental Structure-from-Motion reconstruction.
 
@@ -260,6 +278,8 @@ def run_sparse_reconstruction(
         image_path: Path to image directory
         output_path: Path to sparse reconstruction output
         refine_focal: Whether to refine focal length during BA
+        min_tri_angle: Minimum triangulation angle in degrees (lower = accept smaller motion)
+        min_num_inliers: Minimum inliers for valid match (lower = accept weaker matches)
 
     Returns:
         True if reconstruction succeeded
@@ -273,6 +293,8 @@ def run_sparse_reconstruction(
         "Mapper.ba_refine_focal_length": 1 if refine_focal else 0,
         "Mapper.ba_refine_principal_point": 0,
         "Mapper.ba_refine_extra_params": 1,
+        "Mapper.init_min_tri_angle": min_tri_angle,
+        "Mapper.min_num_matches": min_num_inliers,
     }
 
     run_colmap_command("mapper", args, "Running sparse reconstruction")
@@ -429,7 +451,7 @@ def read_colmap_cameras(cameras_path: Path) -> dict:
     return cameras
 
 
-def read_colmap_images(images_path: Path) -> dict:
+def read_colmap_images(images_path: Path, debug: bool = False) -> dict:
     """Read COLMAP images.bin or images.txt file.
 
     Returns:
@@ -437,58 +459,138 @@ def read_colmap_images(images_path: Path) -> dict:
     """
     images = {}
 
+    if debug:
+        print(f"    DEBUG: Reading images from {images_path}")
+
     txt_path = images_path.parent / "images.txt"
     if txt_path.exists():
+        if debug:
+            print(f"    DEBUG: Found text file: {txt_path}")
         with open(txt_path) as f:
-            lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+            all_lines = f.readlines()
 
-        # Images.txt has 2 lines per image
-        for i in range(0, len(lines), 2):
-            parts = lines[i].split()
-            image_id = int(parts[0])
-            qw, qx, qy, qz = [float(p) for p in parts[1:5]]
-            tx, ty, tz = [float(p) for p in parts[5:8]]
-            camera_id = int(parts[8])
-            name = parts[9]
+        if debug:
+            print(f"    DEBUG: Total lines in file: {len(all_lines)}")
 
-            images[name] = {
-                "image_id": image_id,
-                "quat": [qw, qx, qy, qz],
-                "trans": [tx, ty, tz],
-                "camera_id": camera_id,
-            }
+        # Images.txt has 2 lines per image: metadata + keypoints
+        # Parse only non-comment metadata lines (keypoints line may be empty)
+        parsed_count = 0
+        skipped_count = 0
+        for line in all_lines:
+            line = line.strip()
+            # Skip empty lines and comments
+            if not line or line.startswith("#"):
+                continue
+            # Metadata lines have at least 10 parts and end with a filename
+            parts = line.split()
+            if len(parts) >= 10:
+                try:
+                    image_id = int(parts[0])
+                    qw, qx, qy, qz = [float(p) for p in parts[1:5]]
+                    tx, ty, tz = [float(p) for p in parts[5:8]]
+                    camera_id = int(parts[8])
+                    name = parts[9]
+
+                    images[name] = {
+                        "image_id": image_id,
+                        "quat": [qw, qx, qy, qz],
+                        "trans": [tx, ty, tz],
+                        "camera_id": camera_id,
+                    }
+                    parsed_count += 1
+                except (ValueError, IndexError) as e:
+                    # Not a metadata line (probably keypoints), skip
+                    skipped_count += 1
+                    if debug:
+                        print(f"    DEBUG: Skipped line (parse error): {line[:80]}...")
+                    continue
+            else:
+                skipped_count += 1
+
+        if debug:
+            print(f"    DEBUG: Parsed {parsed_count} images, skipped {skipped_count} lines")
         return images
 
     # Binary format - convert to text
     bin_path = images_path
     if bin_path.exists():
+        if debug:
+            print(f"    DEBUG: Converting binary file: {bin_path}")
+            print(f"    DEBUG: Binary file size: {bin_path.stat().st_size} bytes")
         temp_dir = images_path.parent / "_temp_txt"
         temp_dir.mkdir(exist_ok=True)
         try:
-            subprocess.run([
+            result = subprocess.run([
                 "colmap", "model_converter",
                 "--input_path", str(images_path.parent),
                 "--output_path", str(temp_dir),
                 "--output_type", "TXT"
-            ], capture_output=True, check=True)
+            ], capture_output=True, text=True)
 
-            with open(temp_dir / "images.txt") as f:
-                lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+            if debug:
+                print(f"    DEBUG: model_converter return code: {result.returncode}")
+                if result.stderr:
+                    print(f"    DEBUG: model_converter stderr: {result.stderr[:500]}")
 
-            for i in range(0, len(lines), 2):
-                parts = lines[i].split()
-                image_id = int(parts[0])
-                qw, qx, qy, qz = [float(p) for p in parts[1:5]]
-                tx, ty, tz = [float(p) for p in parts[5:8]]
-                camera_id = int(parts[8])
-                name = parts[9]
+            if result.returncode != 0:
+                print(f"    Warning: model_converter failed: {result.stderr}", file=sys.stderr)
+                return images
 
-                images[name] = {
-                    "image_id": image_id,
-                    "quat": [qw, qx, qy, qz],
-                    "trans": [tx, ty, tz],
-                    "camera_id": camera_id,
-                }
+            txt_file = temp_dir / "images.txt"
+            if debug:
+                if txt_file.exists():
+                    print(f"    DEBUG: Converted file size: {txt_file.stat().st_size} bytes")
+                else:
+                    print(f"    DEBUG: Converted file not found!")
+
+            with open(txt_file) as f:
+                all_lines = f.readlines()
+
+            if debug:
+                print(f"    DEBUG: Total lines in converted file: {len(all_lines)}")
+                # Print first few non-comment lines
+                data_lines = [l for l in all_lines if l.strip() and not l.strip().startswith("#")]
+                print(f"    DEBUG: Non-comment lines: {len(data_lines)}")
+                if data_lines:
+                    print(f"    DEBUG: First data line: {data_lines[0][:100]}...")
+
+            # Images.txt has 2 lines per image: metadata + keypoints
+            # Parse only non-comment metadata lines (keypoints line may be empty)
+            parsed_count = 0
+            skipped_count = 0
+            for line in all_lines:
+                line = line.strip()
+                # Skip empty lines and comments
+                if not line or line.startswith("#"):
+                    continue
+                # Metadata lines have at least 10 parts and end with a filename
+                parts = line.split()
+                if len(parts) >= 10:
+                    try:
+                        image_id = int(parts[0])
+                        qw, qx, qy, qz = [float(p) for p in parts[1:5]]
+                        tx, ty, tz = [float(p) for p in parts[5:8]]
+                        camera_id = int(parts[8])
+                        name = parts[9]
+
+                        images[name] = {
+                            "image_id": image_id,
+                            "quat": [qw, qx, qy, qz],
+                            "trans": [tx, ty, tz],
+                            "camera_id": camera_id,
+                        }
+                        parsed_count += 1
+                    except (ValueError, IndexError) as e:
+                        # Not a metadata line (probably keypoints), skip
+                        skipped_count += 1
+                        if debug:
+                            print(f"    DEBUG: Skipped line (parse error): {line[:80]}...")
+                        continue
+                else:
+                    skipped_count += 1
+
+            if debug:
+                print(f"    DEBUG: Parsed {parsed_count} images, skipped {skipped_count} lines")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -508,6 +610,232 @@ def quaternion_to_rotation_matrix(quat: list) -> np.ndarray:
         [2*x*y + 2*z*w, 1 - 2*x*x - 2*z*z, 2*y*z - 2*x*w],
         [2*x*z - 2*y*w, 2*y*z + 2*x*w, 1 - 2*x*x - 2*y*y]
     ])
+
+
+def rotation_matrix_to_quaternion(R: np.ndarray) -> np.ndarray:
+    """Convert 3x3 rotation matrix to quaternion [w, x, y, z]."""
+    trace = np.trace(R)
+    if trace > 0:
+        s = 0.5 / np.sqrt(trace + 1.0)
+        w = 0.25 / s
+        x = (R[2, 1] - R[1, 2]) * s
+        y = (R[0, 2] - R[2, 0]) * s
+        z = (R[1, 0] - R[0, 1]) * s
+    elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+        s = 2.0 * np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2])
+        w = (R[2, 1] - R[1, 2]) / s
+        x = 0.25 * s
+        y = (R[0, 1] + R[1, 0]) / s
+        z = (R[0, 2] + R[2, 0]) / s
+    elif R[1, 1] > R[2, 2]:
+        s = 2.0 * np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2])
+        w = (R[0, 2] - R[2, 0]) / s
+        x = (R[0, 1] + R[1, 0]) / s
+        y = 0.25 * s
+        z = (R[1, 2] + R[2, 1]) / s
+    else:
+        s = 2.0 * np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1])
+        w = (R[1, 0] - R[0, 1]) / s
+        x = (R[0, 2] + R[2, 0]) / s
+        y = (R[1, 2] + R[2, 1]) / s
+        z = 0.25 * s
+    q = np.array([w, x, y, z])
+    return q / np.linalg.norm(q)
+
+
+def slerp(q1: np.ndarray, q2: np.ndarray, t: float) -> np.ndarray:
+    """Spherical linear interpolation between quaternions.
+
+    Args:
+        q1: Start quaternion [w, x, y, z]
+        q2: End quaternion [w, x, y, z]
+        t: Interpolation factor (0 = q1, 1 = q2)
+
+    Returns:
+        Interpolated quaternion
+    """
+    # Normalize
+    q1 = q1 / np.linalg.norm(q1)
+    q2 = q2 / np.linalg.norm(q2)
+
+    # Compute dot product
+    dot = np.dot(q1, q2)
+
+    # If negative dot, negate one quaternion (shortest path)
+    if dot < 0:
+        q2 = -q2
+        dot = -dot
+
+    # If very close, use linear interpolation
+    if dot > 0.9995:
+        result = q1 + t * (q2 - q1)
+        return result / np.linalg.norm(result)
+
+    # Compute SLERP
+    theta_0 = np.arccos(dot)
+    theta = theta_0 * t
+    sin_theta = np.sin(theta)
+    sin_theta_0 = np.sin(theta_0)
+
+    s1 = np.cos(theta) - dot * sin_theta / sin_theta_0
+    s2 = sin_theta / sin_theta_0
+
+    return s1 * q1 + s2 * q2
+
+
+def cubic_bezier(p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray, t: float) -> np.ndarray:
+    """Cubic Bezier interpolation.
+
+    Args:
+        p0, p1, p2, p3: Control points
+        t: Parameter (0 to 1)
+
+    Returns:
+        Interpolated point
+    """
+    t2 = t * t
+    t3 = t2 * t
+    mt = 1 - t
+    mt2 = mt * mt
+    mt3 = mt2 * mt
+    return mt3 * p0 + 3 * mt2 * t * p1 + 3 * mt * t2 * p2 + t3 * p3
+
+
+def extract_frame_number(filename: str) -> int:
+    """Extract frame number from filename like 'frame_0001.png' or 'depth_00001.png'."""
+    import re
+    match = re.search(r'(\d+)', filename)
+    if match:
+        return int(match.group(1))
+    return -1
+
+
+def interpolate_camera_poses(
+    registered_images: dict,
+    total_frames: int,
+    max_gap: int = 12,
+) -> tuple[list[np.ndarray], list[int]]:
+    """Interpolate camera poses for missing frames using Bezier curves.
+
+    Args:
+        registered_images: Dict of {filename: {quat, trans, ...}} from COLMAP
+        total_frames: Total number of frames expected
+        max_gap: Maximum gap size to interpolate (larger gaps get static camera)
+
+    Returns:
+        Tuple of (list of 4x4 matrices for all frames, list of frame indices that were interpolated)
+    """
+    if not registered_images:
+        return [], []
+
+    # Parse frame numbers and build sparse pose dict
+    frame_poses = {}  # frame_idx -> (translation, quaternion)
+    for name, data in registered_images.items():
+        frame_idx = extract_frame_number(name)
+        if frame_idx >= 0:
+            # Convert COLMAP to camera-to-world
+            quat = np.array(data["quat"])
+            trans = np.array(data["trans"])
+
+            R_wc = quaternion_to_rotation_matrix(quat)
+            t_wc = trans
+
+            # Camera-to-world
+            R_cw = R_wc.T
+            t_cw = -R_wc.T @ t_wc
+            q_cw = rotation_matrix_to_quaternion(R_cw)
+
+            frame_poses[frame_idx] = (t_cw, q_cw)
+
+    if not frame_poses:
+        return [], []
+
+    # Get sorted list of registered frames
+    registered_frames = sorted(frame_poses.keys())
+    min_frame = min(registered_frames)
+    max_frame = max(registered_frames)
+
+    # Determine actual frame range (1-indexed or 0-indexed)
+    start_frame = 1 if min_frame >= 1 else 0
+    end_frame = start_frame + total_frames - 1
+
+    # Build complete pose list
+    all_poses = []
+    interpolated_indices = []
+
+    for frame_idx in range(start_frame, end_frame + 1):
+        if frame_idx in frame_poses:
+            # Use registered pose
+            t, q = frame_poses[frame_idx]
+            matrix = np.eye(4)
+            matrix[:3, :3] = quaternion_to_rotation_matrix(q)
+            matrix[:3, 3] = t
+            all_poses.append(matrix)
+        else:
+            # Need to interpolate
+            # Find surrounding registered frames
+            prev_frame = None
+            next_frame = None
+            for rf in registered_frames:
+                if rf < frame_idx:
+                    prev_frame = rf
+                elif rf > frame_idx and next_frame is None:
+                    next_frame = rf
+                    break
+
+            # Check if we can interpolate
+            if prev_frame is not None and next_frame is not None:
+                gap = next_frame - prev_frame
+                if gap <= max_gap:
+                    # Interpolate
+                    t_factor = (frame_idx - prev_frame) / gap
+                    t0, q0 = frame_poses[prev_frame]
+                    t1, q1 = frame_poses[next_frame]
+
+                    # Linear position interpolation (could use Bezier with tangents)
+                    t_interp = t0 + t_factor * (t1 - t0)
+
+                    # SLERP for rotation
+                    q_interp = slerp(q0, q1, t_factor)
+
+                    matrix = np.eye(4)
+                    matrix[:3, :3] = quaternion_to_rotation_matrix(q_interp)
+                    matrix[:3, 3] = t_interp
+                    all_poses.append(matrix)
+                    interpolated_indices.append(frame_idx)
+                else:
+                    # Gap too large - use nearest pose
+                    if frame_idx - prev_frame <= next_frame - frame_idx:
+                        t, q = frame_poses[prev_frame]
+                    else:
+                        t, q = frame_poses[next_frame]
+                    matrix = np.eye(4)
+                    matrix[:3, :3] = quaternion_to_rotation_matrix(q)
+                    matrix[:3, 3] = t
+                    all_poses.append(matrix)
+                    interpolated_indices.append(frame_idx)
+            elif prev_frame is not None:
+                # Extrapolate from previous
+                t, q = frame_poses[prev_frame]
+                matrix = np.eye(4)
+                matrix[:3, :3] = quaternion_to_rotation_matrix(q)
+                matrix[:3, 3] = t
+                all_poses.append(matrix)
+                interpolated_indices.append(frame_idx)
+            elif next_frame is not None:
+                # Extrapolate from next
+                t, q = frame_poses[next_frame]
+                matrix = np.eye(4)
+                matrix[:3, :3] = quaternion_to_rotation_matrix(q)
+                matrix[:3, 3] = t
+                all_poses.append(matrix)
+                interpolated_indices.append(frame_idx)
+            else:
+                # No registered frames - identity
+                all_poses.append(np.eye(4))
+                interpolated_indices.append(frame_idx)
+
+    return all_poses, interpolated_indices
 
 
 def colmap_to_camera_matrices(images: dict, cameras: dict) -> tuple[list, dict]:
@@ -590,15 +918,23 @@ def colmap_to_camera_matrices(images: dict, cameras: dict) -> tuple[list, dict]:
 
 def export_colmap_to_pipeline_format(
     sparse_path: Path,
-    output_dir: Path
+    output_dir: Path,
+    debug: bool = False,
+    total_frames: int = 0,
+    max_gap: int = 12,
 ) -> bool:
     """Export COLMAP reconstruction to pipeline camera format.
 
-    Creates extrinsics.json and intrinsics.json compatible with export_camera.py
+    Creates extrinsics.json and intrinsics.json compatible with export_camera.py.
+    If total_frames is specified and COLMAP didn't register all frames,
+    interpolates missing frames using SLERP for rotation and linear for translation.
 
     Args:
         sparse_path: Path to COLMAP sparse model (e.g., sparse/0/)
         output_dir: Output directory (typically project/camera/)
+        debug: Print debug output
+        total_frames: Expected total frames (0 = use only registered frames)
+        max_gap: Maximum gap to interpolate (larger gaps use nearest pose)
 
     Returns:
         True if export succeeded
@@ -607,17 +943,35 @@ def export_colmap_to_pipeline_format(
 
     # Read COLMAP output
     cameras = read_colmap_cameras(sparse_path / "cameras.bin")
-    images = read_colmap_images(sparse_path / "images.bin")
+    images = read_colmap_images(sparse_path / "images.bin", debug=debug)
 
     if not images:
         print("    Error: No images in reconstruction", file=sys.stderr)
         return False
 
-    # Convert to our format
-    extrinsics, intrinsics = colmap_to_camera_matrices(images, cameras)
+    registered_count = len(images)
+
+    # Check if we need to interpolate
+    if total_frames > 0 and registered_count < total_frames:
+        print(f"    COLMAP registered {registered_count}/{total_frames} frames")
+        print(f"    Interpolating missing frames (max_gap={max_gap})...")
+
+        # Use interpolation to fill gaps
+        extrinsics, interpolated = interpolate_camera_poses(
+            images, total_frames, max_gap=max_gap
+        )
+
+        if interpolated:
+            print(f"    Interpolated {len(interpolated)} frames")
+
+        # Get intrinsics from COLMAP
+        _, intrinsics = colmap_to_camera_matrices(images, cameras)
+    else:
+        # Use only registered frames
+        extrinsics, intrinsics = colmap_to_camera_matrices(images, cameras)
 
     # Save extrinsics (list of 4x4 matrices)
-    extrinsics_data = [m.tolist() for m in extrinsics]
+    extrinsics_data = [m.tolist() if isinstance(m, np.ndarray) else m for m in extrinsics]
     with open(output_dir / "extrinsics.json", "w") as f:
         json.dump(extrinsics_data, f, indent=2)
 
@@ -634,6 +988,9 @@ def export_colmap_to_pipeline_format(
             "camera_id": data["camera_id"],
         } for name, data in images.items()},
         "source": "colmap",
+        "registered_frames": registered_count,
+        "total_frames": total_frames if total_frames > 0 else registered_count,
+        "interpolated": total_frames > 0 and registered_count < total_frames,
     }
     with open(output_dir / "colmap_raw.json", "w") as f:
         json.dump(colmap_data, f, indent=2)
@@ -649,16 +1006,18 @@ def run_colmap_pipeline(
     run_mesh: bool = False,
     camera_model: str = "OPENCV",
     use_masks: bool = True,
+    max_gap: int = 12,
 ) -> bool:
     """Run the complete COLMAP reconstruction pipeline.
 
     Args:
         project_dir: Project directory containing source/frames/
-        quality: Quality preset ('low', 'medium', 'high')
+        quality: Quality preset ('low', 'medium', 'high', 'slow')
         run_dense: Whether to run dense reconstruction
         run_mesh: Whether to generate mesh (requires dense)
         camera_model: COLMAP camera model to use
         use_masks: If True, automatically use segmentation masks from roto/ (if available)
+        max_gap: Maximum frame gap to interpolate if COLMAP misses frames (default: 12)
 
     Returns:
         True if reconstruction succeeded
@@ -688,6 +1047,9 @@ def run_colmap_pipeline(
     print(f"Project: {project_dir}")
     print(f"Frames: {frame_count}")
     print(f"Quality: {quality}")
+    if quality == "slow":
+        print(f"  ⚠️  Slow-camera mode: Using aggressive settings for minimal motion")
+        print(f"      Note: Results may be jittery due to low parallax")
 
     # Check for segmentation masks
     mask_dir = project_dir / "roto"
@@ -737,6 +1099,7 @@ def run_colmap_pipeline(
         match_features(
             database_path=database_path,
             matcher_type=preset["matcher"],
+            sequential_overlap=preset.get("sequential_overlap", 10),
         )
 
         # Sparse reconstruction
@@ -746,6 +1109,8 @@ def run_colmap_pipeline(
             image_path=frames_dir,
             output_path=sparse_path,
             refine_focal=preset["ba_refine_focal"],
+            min_tri_angle=preset.get("min_tri_angle", 1.5),
+            min_num_inliers=preset.get("min_num_inliers", 15),
         ):
             print("Sparse reconstruction failed", file=sys.stderr)
             return False
@@ -754,7 +1119,12 @@ def run_colmap_pipeline(
         print("\n[4/4] Exporting Camera Data")
         camera_dir = project_dir / "camera"
         sparse_model = sparse_path / "0"
-        if not export_colmap_to_pipeline_format(sparse_model, camera_dir):
+        if not export_colmap_to_pipeline_format(
+            sparse_model,
+            camera_dir,
+            total_frames=frame_count,
+            max_gap=max_gap,
+        ):
             print("Camera export failed", file=sys.stderr)
             return False
 
@@ -821,9 +1191,9 @@ def main():
     )
     parser.add_argument(
         "--quality", "-q",
-        choices=["low", "medium", "high"],
+        choices=["low", "medium", "high", "slow"],
         default="medium",
-        help="Quality preset (default: medium)"
+        help="Quality preset: low, medium, high, or 'slow' for minimal camera motion (default: medium)"
     )
     parser.add_argument(
         "--dense", "-d",
@@ -845,6 +1215,12 @@ def main():
         "--no-masks",
         action="store_true",
         help="Disable automatic use of segmentation masks from roto/ directory"
+    )
+    parser.add_argument(
+        "--max-gap",
+        type=int,
+        default=12,
+        help="Maximum frame gap to interpolate if COLMAP misses frames (default: 12)"
     )
     parser.add_argument(
         "--check",
@@ -874,6 +1250,7 @@ def main():
         run_mesh=args.mesh,
         camera_model=args.camera_model,
         use_masks=not args.no_masks,
+        max_gap=args.max_gap,
     )
 
     sys.exit(0 if success else 1)

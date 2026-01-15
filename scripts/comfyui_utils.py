@@ -154,8 +154,9 @@ def convert_workflow_to_api_format(
                         widget_names.append(name)  # Dropdown widget
                     elif isinstance(first, str):
                         # Connection types are typically ALL_CAPS custom types
-                        # Widget types: INT, FLOAT, STRING, BOOLEAN, or mixed-case
-                        if first in ("INT", "FLOAT", "STRING", "BOOLEAN"):
+                        # Widget types: INT, FLOAT, STRING, BOOLEAN, COMBO, or mixed-case
+                        # COMBO is used for dropdown/combo box widgets
+                        if first in ("INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"):
                             widget_names.append(name)
                         elif not first.isupper():
                             # Mixed case = widget type
@@ -168,7 +169,7 @@ def convert_workflow_to_api_format(
                     if isinstance(first, list):
                         widget_names.append(name)
                     elif isinstance(first, str):
-                        if first in ("INT", "FLOAT", "STRING", "BOOLEAN"):
+                        if first in ("INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"):
                             widget_names.append(name)
                         elif not first.isupper():
                             widget_names.append(name)

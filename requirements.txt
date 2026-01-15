@@ -11,6 +11,11 @@ Pillow>=8.0.0
 # Install PyTorch: https://pytorch.org/get-started/locally/
 # Install smplx: pip install smplx
 
+# Camera Alembic export (export_alembic.py)
+# The Alembic Python bindings must be installed via conda:
+#   conda install -c conda-forge alembic
+# Note: The "alembic" package on pip is NOT the same (that's a database tool)
+
 # Web GUI (start_web.py)
 fastapi>=0.100.0
 uvicorn>=0.23.0
