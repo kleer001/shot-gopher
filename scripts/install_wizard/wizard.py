@@ -416,17 +416,13 @@ class InstallationWizard:
 
         return success
 
-    def setup_credentials(self, repo_root: Path, yolo: bool = False) -> None:
+    def setup_credentials(self, repo_root: Path) -> None:
         """Prompt user to set up credentials for authenticated downloads.
 
         Sets up:
         - SMPL.login.dat for SMPL-X body models (motion capture)
 
         Note: SAM3 model is now public at 1038lab/sam3 and doesn't require auth.
-
-        Args:
-            repo_root: Path to repository root
-            yolo: If True, skip interactive prompts
         """
         # Check existing credentials
         smpl_creds_file = repo_root / "SMPL.login.dat"
@@ -439,11 +435,6 @@ class InstallationWizard:
         smplx_dir = INSTALL_DIR / "smplx_models" / "models" / "smplx"
         if (smplx_dir / "SMPLX_NEUTRAL.npz").exists():
             return  # Already have models, no need for credentials
-
-        # In yolo mode, skip credential prompts
-        if yolo:
-            print_info("SMPL-X credentials not configured - you can set them up later")
-            return
 
         print_header("Credentials Setup")
         print("SMPL-X body models require registration for download.")
@@ -489,11 +480,9 @@ class InstallationWizard:
 
         if yolo:
             print_info("YOLO mode: Full stack install with auto-yes")
-            # Clear any previous state for a clean install
-            self.state_manager.clear_state()
 
         # Check for resumable installation
-        if not yolo and not resume and self.state_manager.can_resume():
+        if not resume and self.state_manager.can_resume():
             incomplete = self.state_manager.get_incomplete_components()
             print_warning("Found incomplete installation from previous run:")
             for comp_id in incomplete:
@@ -519,8 +508,8 @@ class InstallationWizard:
         status = self.check_all_components()
         self.print_status(status)
 
-        # Set up credentials for authenticated downloads (skip prompts in yolo mode)
-        self.setup_credentials(self.repo_root, yolo=yolo)
+        # Set up credentials for authenticated downloads
+        self.setup_credentials(self.repo_root)
 
         # Determine what to install
         if component:
