@@ -970,6 +970,9 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
         2. Access download page to establish session
         3. Download from download.is.tue.mpg.de (may need token from download page)
 
+        This method first tries Playwright (headless browser) for reliable
+        cross-domain authentication, then falls back to requests-based approach.
+
         Args:
             login_url: URL of the login form
             download_page: URL of the download page (to get session/tokens)
@@ -981,10 +984,261 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
         Returns:
             True if successful
         """
+        # Try Playwright first (more reliable for cross-domain auth)
+        print_info("Attempting download with headless browser (Playwright)...")
+        if self._download_smplx_with_playwright(
+            login_url, download_page, download_url, dest, username, password
+        ):
+            return True
+
+        # Fall back to requests-based approach
+        print_warning("Playwright method failed, trying requests-based approach...")
+        return self._download_smplx_with_requests(
+            login_url, download_page, download_url, dest, username, password
+        )
+
+    def _download_smplx_with_playwright(
+        self,
+        login_url: str,
+        download_page: str,
+        download_url: str,
+        dest: Path,
+        username: str,
+        password: str,
+    ) -> bool:
+        """Download SMPL-X model using Playwright headless browser.
+
+        Playwright handles cross-domain cookies automatically and works
+        even if the site uses JavaScript for authentication.
+        """
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            print_warning("Playwright not installed. Installing...")
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--user", "playwright"],
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--break-system-packages", "playwright"],
+                    capture_output=True, text=True
+                )
+            # Install browser binaries
+            print_info("Installing Playwright browser (this may take a minute)...")
+            browser_result = subprocess.run(
+                [sys.executable, "-m", "playwright", "install", "chromium"],
+                capture_output=True, text=True
+            )
+            if browser_result.returncode != 0:
+                print_warning(f"Could not install Playwright browser: {browser_result.stderr}")
+                return False
+            try:
+                from playwright.sync_api import sync_playwright
+            except ImportError:
+                print_warning("Playwright installation failed")
+                return False
+
+        try:
+            with sync_playwright() as p:
+                # Launch headless browser
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                )
+                page = context.new_page()
+
+                # Step 1: Go to login page
+                print(f"  Navigating to login page...")
+                page.goto(login_url, wait_until='networkidle')
+
+                # Step 2: Fill in login form and submit
+                print(f"  Logging in to SMPL-X website...")
+
+                # Wait for form fields to be visible
+                page.wait_for_selector('input[name="username"], input[type="email"], input[name="email"]', timeout=10000)
+
+                # Try different form field names
+                username_selectors = ['input[name="username"]', 'input[type="email"]', 'input[name="email"]']
+                password_selectors = ['input[name="password"]', 'input[type="password"]']
+
+                for selector in username_selectors:
+                    try:
+                        page.fill(selector, username)
+                        break
+                    except Exception:
+                        continue
+
+                for selector in password_selectors:
+                    try:
+                        page.fill(selector, password)
+                        break
+                    except Exception:
+                        continue
+
+                # Submit the form
+                submit_selectors = ['button[type="submit"]', 'input[type="submit"]', 'button:has-text("Login")', 'button:has-text("Sign in")']
+                for selector in submit_selectors:
+                    try:
+                        page.click(selector)
+                        break
+                    except Exception:
+                        continue
+
+                # Wait for navigation after login
+                page.wait_for_load_state('networkidle')
+
+                # Check if login was successful (should not be on login page anymore)
+                if 'login' in page.url.lower() and 'invalid' in page.content().lower():
+                    print_error("Login failed - invalid credentials")
+                    browser.close()
+                    return False
+
+                print_success("Login successful")
+
+                # Step 3: Navigate to download page
+                print(f"  Accessing download page...")
+                page.goto(download_page, wait_until='networkidle')
+
+                # Step 4: Find the download link
+                page_content = page.content()
+
+                import re
+                import html as html_module
+                from urllib.parse import urljoin
+
+                download_link = None
+                patterns = [
+                    r'href=["\']([^"\']*models_smplx_v1_1\.zip[^"\']*)["\']',
+                    r'href=["\']([^"\']*download\.php\?[^"\']*smplx[^"\']*v1_1[^"\']*)["\']',
+                    r'href=["\']([^"\']*download[^"\']*smplx[^"\']*)["\']',
+                ]
+
+                for pattern in patterns:
+                    match = re.search(pattern, page_content, re.IGNORECASE)
+                    if match:
+                        link = html_module.unescape(match.group(1))
+                        if not link.startswith('http'):
+                            link = urljoin(download_page, link)
+                        download_link = link
+                        break
+
+                if download_link:
+                    print(f"  Found download link: {download_link}")
+                    final_url = download_link
+                else:
+                    print(f"  Using configured download URL: {download_url}")
+                    final_url = download_url
+
+                # Step 5: Get cookies from browser and download with requests
+                # This ensures we have all cookies including httpOnly ones
+                cookies = context.cookies()
+                print(f"  Got {len(cookies)} cookies from browser session")
+
+                # Debug: show cookies
+                for c in cookies:
+                    print(f"    Cookie: {c['name']} (domain: {c.get('domain', 'N/A')})")
+
+                browser.close()
+
+                # Use requests with the browser cookies for the actual download
+                import requests
+                session = requests.Session()
+                session.headers.update({
+                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': download_page,
+                })
+
+                # Add all cookies to session
+                for cookie in cookies:
+                    session.cookies.set(
+                        cookie['name'],
+                        cookie['value'],
+                        domain=cookie.get('domain', ''),
+                        path=cookie.get('path', '/'),
+                    )
+
+                # Also set cookies specifically for download domain
+                download_domain = 'download.is.tue.mpg.de'
+                for cookie in cookies:
+                    session.cookies.set(
+                        cookie['name'],
+                        cookie['value'],
+                        domain=download_domain,
+                        path=cookie.get('path', '/'),
+                    )
+
+                # Download the file
+                print(f"  Downloading SMPL-X models...")
+                print(f"  URL: {final_url}")
+                print(f"  -> {dest}")
+
+                dest.parent.mkdir(parents=True, exist_ok=True)
+
+                response = session.get(final_url, stream=True, timeout=60)
+
+                # Check content-type
+                content_type = response.headers.get('content-type', '').lower()
+                if 'text/html' in content_type:
+                    if len(response.content) < 10000:
+                        print_error("Server returned HTML instead of the file")
+                        print_info("Response content:")
+                        print("-" * 60)
+                        try:
+                            html_content = response.content.decode('utf-8', errors='ignore')
+                            print(html_content[:2000])
+                            if len(html_content) > 2000:
+                                print(f"... (truncated, total {len(html_content)} chars)")
+                        except Exception as e:
+                            print(f"Could not decode response: {e}")
+                        print("-" * 60)
+                        return False
+
+                response.raise_for_status()
+
+                total_size = int(response.headers.get('content-length', 0))
+                downloaded = 0
+
+                with open(dest, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+
+                            if total_size > 0:
+                                pct = (downloaded / total_size) * 100
+                                mb_downloaded = downloaded / (1024 * 1024)
+                                mb_total = total_size / (1024 * 1024)
+                                print(f"\r  Progress: {pct:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end='', flush=True)
+
+                print()
+                print_success(f"Downloaded {dest.name}")
+                return True
+
+        except Exception as e:
+            print_warning(f"Playwright download failed: {e}")
+            if dest.exists():
+                dest.unlink()
+            return False
+
+    def _download_smplx_with_requests(
+        self,
+        login_url: str,
+        download_page: str,
+        download_url: str,
+        dest: Path,
+        username: str,
+        password: str,
+    ) -> bool:
+        """Download SMPL-X model with requests-based cross-domain authentication.
+
+        This is the fallback method if Playwright is not available.
+        """
         try:
             import requests
             from urllib.parse import urljoin
             import re
+            import html
         except ImportError:
             print_warning("requests library not found, installing...")
             result = subprocess.run(
@@ -999,6 +1253,7 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
             import requests
             from urllib.parse import urljoin
             import re
+            import html
 
         try:
             print(f"  Logging in to SMPL-X website...")
@@ -1006,14 +1261,44 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
             # Create session to maintain cookies
             session = requests.Session()
             session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
             })
+
+            # First, get the login page to extract any CSRF token
+            print(f"  Fetching login page for CSRF token...")
+            login_page_response = session.get(login_url, timeout=30)
+
+            # Extract CSRF token if present
+            csrf_token = None
+            csrf_patterns = [
+                r'name=["\']csrf_token["\'][^>]*value=["\']([^"\']+)["\']',
+                r'name=["\']_token["\'][^>]*value=["\']([^"\']+)["\']',
+                r'name=["\']token["\'][^>]*value=["\']([^"\']+)["\']',
+                r'value=["\']([^"\']+)["\'][^>]*name=["\']csrf_token["\']',
+                r'value=["\']([^"\']+)["\'][^>]*name=["\']_token["\']',
+            ]
+            for pattern in csrf_patterns:
+                match = re.search(pattern, login_page_response.text, re.IGNORECASE)
+                if match:
+                    csrf_token = match.group(1)
+                    print(f"  Found CSRF token")
+                    break
 
             # POST login form
             login_data = {
                 'username': username,
                 'password': password
             }
+            if csrf_token:
+                login_data['csrf_token'] = csrf_token
+                login_data['_token'] = csrf_token
+                login_data['token'] = csrf_token
+
+            # Set referer for login
+            session.headers['Referer'] = login_url
+
             login_response = session.post(login_url, data=login_data, timeout=30, allow_redirects=True)
 
             # Check for login errors in response
@@ -1028,8 +1313,14 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
 
             print_success("Login successful")
 
+            # Debug: Show cookies after login
+            print(f"  Cookies after login:")
+            for cookie in session.cookies:
+                print(f"    {cookie.name}: domain={cookie.domain}, path={cookie.path}")
+
             # Visit download page to establish session and find download link
             print(f"  Accessing download page...")
+            session.headers['Referer'] = login_response.url
             dl_page_response = session.get(download_page, timeout=30)
 
             if dl_page_response.status_code != 200:
@@ -1037,21 +1328,17 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
                 return False
 
             # Look for the actual download link in the page
-            # SMPL-X download links often have format: download.php?domain=smplx&sfile=...
-            # or they might include a session token
             page_content = dl_page_response.text
 
             # Try to find a direct link to the model file
             download_link = None
 
-            # Pattern 1: Look for link containing the filename
             patterns = [
                 r'href=["\']([^"\']*models_smplx_v1_1\.zip[^"\']*)["\']',
                 r'href=["\']([^"\']*download\.php\?[^"\']*smplx[^"\']*v1_1[^"\']*)["\']',
                 r'href=["\']([^"\']*download[^"\']*smplx[^"\']*)["\']',
             ]
 
-            import html
             for pattern in patterns:
                 match = re.search(pattern, page_content, re.IGNORECASE)
                 if match:
@@ -1073,12 +1360,21 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
             print(f"  URL: {final_url}")
             print(f"  -> {dest}")
 
-            # Copy cookies from smpl-x domain to download domain
+            # Copy ALL cookie attributes to download domain
             # Both are subdomains of is.tue.mpg.de but cookies don't auto-transfer
             download_domain = 'download.is.tue.mpg.de'
             for cookie in list(session.cookies):
                 if 'smpl-x.is.tue.mpg.de' in cookie.domain or 'is.tue.mpg.de' in cookie.domain:
-                    session.cookies.set(cookie.name, cookie.value, domain=download_domain)
+                    # Create a proper cookie with all attributes
+                    session.cookies.set(
+                        cookie.name,
+                        cookie.value,
+                        domain=download_domain,
+                        path=cookie.path if cookie.path else '/',
+                    )
+
+            # Set referer for download request
+            session.headers['Referer'] = download_page
 
             # Ensure directory exists
             dest.parent.mkdir(parents=True, exist_ok=True)
