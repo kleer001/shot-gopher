@@ -44,6 +44,11 @@ Examples:
         action="store_true",
         help="Resume previous interrupted installation"
     )
+    parser.add_argument(
+        "--yolo", "-y",
+        action="store_true",
+        help="Non-interactive full stack install (option 3 + auto-yes)"
+    )
 
     args = parser.parse_args()
 
@@ -59,7 +64,7 @@ Examples:
         wizard.validator.validate_and_report()
         sys.exit(0)
 
-    success = wizard.interactive_install(component=args.component, resume=args.resume)
+    success = wizard.interactive_install(component=args.component, resume=args.resume, yolo=args.yolo)
     sys.exit(0 if success else 1)
 
 

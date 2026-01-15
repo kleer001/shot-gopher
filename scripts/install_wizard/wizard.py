@@ -68,7 +68,7 @@ class InstallationWizard:
             'installers': [
                 PythonPackageInstaller('FastAPI', 'fastapi', size_gb=0.02),
                 PythonPackageInstaller('Uvicorn', 'uvicorn', size_gb=0.01),
-                PythonPackageInstaller('Python-Multipart', 'python-multipart', size_gb=0.01),
+                PythonPackageInstaller('Python-Multipart', 'python-multipart', 'python_multipart', size_gb=0.01),
                 PythonPackageInstaller('WebSockets', 'websockets', size_gb=0.01),
                 PythonPackageInstaller('Jinja2', 'jinja2', size_gb=0.01),
             ]
@@ -153,6 +153,12 @@ class InstallationWizard:
                     'https://github.com/daniabib/ComfyUI_ProPainter_Nodes.git',
                     comfyui_dir / "custom_nodes" / "ComfyUI_ProPainter_Nodes",
                     size_gb=1.5,  # Models auto-downloaded
+                ),
+                GitRepoInstaller(
+                    'ComfyUI-MatAnyone',
+                    'https://github.com/FuouM/ComfyUI-MatAnyone.git',
+                    comfyui_dir / "custom_nodes" / "ComfyUI-MatAnyone",
+                    size_gb=0.1,  # Code only, model downloaded separately
                 )
             ]
         }
@@ -418,64 +424,62 @@ class InstallationWizard:
 
         Note: SAM3 model is now public at 1038lab/sam3 and doesn't require auth.
         """
-        print_header("Credentials Setup")
-        print("Some components require authentication to download:")
-        print("  - SMPL-X body models (smpl-x.is.tue.mpg.de)")
-        print("")
-        print_info("Note: SAM3 model is now publicly available (no auth required)")
-        print("")
-
         # Check existing credentials
         smpl_creds_file = repo_root / "SMPL.login.dat"
 
-        smpl_exists = smpl_creds_file.exists()
-
-        if smpl_exists:
+        if smpl_creds_file.exists():
             print_success("SMPL-X credentials file already exists")
-            if ask_yes_no("Update credentials?", default=False):
-                smpl_exists = False
-            else:
-                return
+            return
 
-        # SMPL-X credentials setup
-        if not smpl_exists:
-            print(f"\n{Colors.BOLD}SMPL-X Credentials Setup{Colors.ENDC}")
-            print("Required for: Body model (skeleton, mesh topology, UV layout)")
-            print("")
-            print("SMPL-X provides the parametric body model - the 'rigged character'")
-            print("that can be posed and animated with consistent vertex ordering.")
-            print("")
-            print("Registration: https://smpl-x.is.tue.mpg.de/")
-            print("")
-            print("Steps:")
-            print("  1. Register at the website above")
-            print("  2. Wait for approval email (usually within 24-48 hours)")
-            print("  3. Enter your credentials below")
-            print("")
+        # Check if SMPL-X models already downloaded
+        smplx_dir = INSTALL_DIR / "smplx_models" / "models" / "smplx"
+        if (smplx_dir / "SMPLX_NEUTRAL.npz").exists():
+            return  # Already have models, no need for credentials
 
-            if ask_yes_no("Set up SMPL-X credentials now?", default=True):
-                email = tty_input("Enter your SMPL-X registered email: ").strip()
-                if email and '@' in email:
-                    password = tty_input("Enter your SMPL-X password: ").strip()
-                    if password:
-                        with open(smpl_creds_file, 'w') as f:
-                            f.write(email + '\n')
-                            f.write(password + '\n')
-                        # Set restrictive permissions
-                        smpl_creds_file.chmod(0o600)
-                        print_success(f"Credentials saved to {smpl_creds_file}")
-                    else:
-                        print_info("Skipped - you can add SMPL.login.dat later")
+        print_header("Credentials Setup")
+        print("SMPL-X body models require registration for download.")
+        print("")
+
+        print(f"{Colors.BOLD}SMPL-X Credentials Setup{Colors.ENDC}")
+        print("Required for: Body model (skeleton, mesh topology, UV layout)")
+        print("")
+        print("Registration: https://smpl-x.is.tue.mpg.de/register.php")
+        print("")
+        print("Steps:")
+        print("  1. Register at the website above")
+        print("  2. Wait for approval email (usually within 24-48 hours)")
+        print("  3. Enter your credentials below")
+        print("")
+
+        if ask_yes_no("Set up SMPL-X credentials now?", default=True):
+            email = tty_input("Enter your SMPL-X registered email: ").strip()
+            if email and '@' in email:
+                password = tty_input("Enter your SMPL-X password: ").strip()
+                if password:
+                    with open(smpl_creds_file, 'w') as f:
+                        f.write(email + '\n')
+                        f.write(password + '\n')
+                    smpl_creds_file.chmod(0o600)
+                    print_success(f"Credentials saved to {smpl_creds_file}")
                 else:
                     print_info("Skipped - you can add SMPL.login.dat later")
             else:
                 print_info("Skipped - you can add SMPL.login.dat later")
+        else:
+            print_info("Skipped - you can add SMPL.login.dat later")
 
-        print("")
+    def interactive_install(self, component: Optional[str] = None, resume: bool = False, yolo: bool = False):
+        """Interactive installation flow.
 
-    def interactive_install(self, component: Optional[str] = None, resume: bool = False):
-        """Interactive installation flow."""
+        Args:
+            component: Specific component to install, or None for menu
+            resume: Resume previous interrupted installation
+            yolo: Non-interactive mode - full stack install with auto-yes
+        """
         print_header("VFX Pipeline Installation Wizard")
+
+        if yolo:
+            print_info("YOLO mode: Full stack install with auto-yes")
 
         # Check for resumable installation
         if not resume and self.state_manager.can_resume():
@@ -516,6 +520,10 @@ class InstallationWizard:
                 return False
 
             to_install = [component]
+        elif yolo:
+            # YOLO mode: auto-select full stack (option 3)
+            print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture)")
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -555,10 +563,11 @@ class InstallationWizard:
                 print_error("\nInsufficient disk space for installation")
                 return False
 
-            # Confirm installation
-            if not ask_yes_no("\nProceed with installation?", default=True):
-                print_info("Installation cancelled")
-                return True
+            # Confirm installation (skip in yolo mode)
+            if not yolo:
+                if not ask_yes_no("\nProceed with installation?", default=True):
+                    print_info("Installation cancelled")
+                    return True
 
         # Install components
         print_header("Installing Components")
@@ -579,6 +588,10 @@ class InstallationWizard:
             print("\nDownloading SAM3 model (for segmentation/roto workflows)...")
             self.checkpoint_downloader.download_all_checkpoints(['sam3'], self.state_manager)
 
+            # Download MatAnyone model for video matting
+            print("\nDownloading MatAnyone model (for person matte refinement)...")
+            self.checkpoint_downloader.download_all_checkpoints(['matanyone'], self.state_manager)
+
         # Download checkpoints for motion capture components
         mocap_components = [cid for cid in to_install if cid in ['wham']]
         if mocap_components:
@@ -587,7 +600,7 @@ class InstallationWizard:
 
         # Download SMPL-X models if mocap_core was installed and credentials exist
         if 'mocap_core' in to_install:
-            smpl_login = Path("SMPL.login.dat")
+            smpl_login = self.repo_root / "SMPL.login.dat"
             if smpl_login.exists():
                 print("\nDownloading SMPL-X body models...")
                 self.checkpoint_downloader.download_all_checkpoints(['smplx'], self.state_manager)

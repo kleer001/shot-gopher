@@ -8,12 +8,13 @@ Automated end-to-end VFX processing pipeline.
 
 1. **Ingest** - Extract frames from video
 2. **Depth** - Depth map generation (ComfyUI + Depth-Anything-V3)
-3. **Roto** - Segmentation masks (ComfyUI + SAM2)
-4. **Cleanplate** - Clean plate generation (ComfyUI)
-5. **COLMAP** - Camera tracking and 3D reconstruction
-6. **Mocap** - Human motion capture (WHAM + ECON)
-7. **GS-IR** - Material decomposition (Gaussian splatting)
-8. **Camera** - Export camera to Alembic format
+3. **Roto** - Segmentation masks (ComfyUI + SAM3)
+4. **MatAnyone** - Video matting for person mask refinement
+5. **Cleanplate** - Clean plate generation (ComfyUI + ProPainter)
+6. **COLMAP** - Camera tracking and 3D reconstruction
+7. **Mocap** - Human motion capture (WHAM + ECON)
+8. **GS-IR** - Material decomposition (Gaussian splatting)
+9. **Camera** - Export camera to Alembic format
 
 ## Quick Start
 
@@ -212,34 +213,87 @@ python scripts/run_pipeline.py footage.mp4 -s depth
 
 ### roto - Segmentation
 
-Creates segmentation masks using SAM2.
+Creates segmentation masks using SAM3.
 
 **Input**: `source/frames/*.png`
-**Output**: `roto/*.png` (binary masks)
+**Output**: `roto/<prompt>/*.png` (binary masks in per-prompt subdirectories)
 
 **Requirements**:
 - ComfyUI server running
-- SAM2 custom node installed
+- SAM3 custom node installed
 
 **Workflow**: `02_segmentation.json`
+
+**Multi-prompt support**:
+```bash
+# Segment multiple objects
+python scripts/run_pipeline.py footage.mp4 -s roto --roto-prompt "person,bag,backpack"
+```
+
+Each prompt creates its own subdirectory under `roto/`:
+```
+roto/
+├── person/     # Person masks
+├── bag/        # Bag masks
+└── backpack/   # Backpack masks
+```
 
 **Use Cases**:
 - Object removal (clean plates)
 - Selective color grading
 - COLMAP masking (improves camera tracking)
 
+### matanyone - Video Matting
+
+Refines person segmentation masks into clean alpha mattes using MatAnyone.
+
+**Input**: `roto/person/*.png` (or any subdirectory containing "person" in its name)
+**Output**: `matte/*.png` (refined alpha mattes)
+
+**Requirements**:
+- ComfyUI server running
+- ComfyUI-MatAnyone custom node installed
+- MatAnyone model checkpoint (~450MB)
+- **9GB+ VRAM** (NVIDIA GPU required)
+
+**Workflow**: `04_matanyone.json`
+
+**What it does**:
+- Takes rough SAM3 person masks as input
+- Produces clean alpha mattes with proper edge detail (hair, clothing edges)
+- Uses temporal consistency for stable results across frames
+
+**Limitations**:
+- **Human-focused only**: MatAnyone is trained specifically on people. Non-human objects (cars, bags, etc.) will not benefit from this refinement.
+- Automatically skipped if no person-related masks are found in `roto/`
+- Automatically skipped if workflow file is not present
+
+**Example**:
+```bash
+# Full pipeline with MatAnyone refinement
+python scripts/run_pipeline.py footage.mp4 -s ingest,roto,matanyone,cleanplate
+```
+
 ### cleanplate - Clean Plate Generation
 
 Generates clean plates by removing objects from segmented areas.
 
-**Input**: `source/frames/*.png`, `roto/*.png`
-**Output**: `cleanplate/*.png`
+**Input**: `source/frames/*.png`, `roto/*/*.png` (mask subdirectories), optionally `matte/*.png`
+**Output**: `cleanplate/*.png`, `roto/combined_*.png` (consolidated masks)
 
 **Requirements**:
 - ComfyUI server running
 - Segmentation masks from `roto` stage
 
 **Workflow**: `03_cleanplate.json`
+
+**Preprocessing - Mask Consolidation**:
+Before running inpainting, cleanplate consolidates all masks:
+1. Collects masks from all `roto/` subdirectories
+2. If MatAnyone refined mattes exist in `matte/`, substitutes them for person masks
+3. OR-combines all mask sources into `roto/combined_*.png`
+
+This ensures the inpainting receives a single unified mask covering all dynamic regions.
 
 ### colmap - Camera Tracking
 
@@ -356,14 +410,21 @@ Pipeline creates this directory structure in a **sibling folder** to the repo (k
 ├── workflows/                   # ComfyUI workflow copies
 │   ├── 01_analysis.json
 │   ├── 02_segmentation.json
-│   └── 03_cleanplate.json
+│   ├── 03_cleanplate.json
+│   └── 04_matanyone.json
 ├── depth/                       # Depth maps
 │   ├── depth_1001.png
 │   ├── depth_1002.png
 │   └── ...
-├── roto/                        # Segmentation masks
-│   ├── mask_1001.png
-│   ├── mask_1002.png
+├── roto/                        # Segmentation masks (per-prompt subdirs)
+│   ├── person/                  # SAM3 person masks
+│   │   ├── mask_00001.png
+│   │   └── ...
+│   ├── bag/                     # SAM3 bag masks (if multi-prompt)
+│   │   └── ...
+│   └── combined_*.png           # Consolidated masks (created by cleanplate)
+├── matte/                       # MatAnyone refined person mattes
+│   ├── matte_00001.png
 │   └── ...
 ├── cleanplate/                  # Clean plates
 │   ├── clean_1001.png
