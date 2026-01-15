@@ -31,6 +31,10 @@ from comfyui_utils import (
     run_comfyui_workflow,
 )
 from comfyui_manager import ensure_comfyui, stop_comfyui
+
+# Workflow templates directory
+WORKFLOW_TEMPLATES_DIR = Path(__file__).parent.parent / "workflow_templates"
+
 START_FRAME = 1  # ComfyUI SaveImage outputs start at 1, so we match that
 SUPPORTED_FORMATS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf", ".exr", ".dpx", ".jpg", ".png"}
 
@@ -476,25 +480,137 @@ def get_image_dimensions(image_path: Path) -> tuple[int, int]:
         return 1920, 1080  # Default fallback
 
 
-def update_segmentation_prompt(workflow_path: Path, prompt: str, output_subdir: Path = None) -> None:
+def get_comfyui_output_dir() -> Path:
+    """Get the output directory that ComfyUI uses for SaveImage nodes.
+
+    This must match the --output-directory argument passed to ComfyUI in comfyui_manager.py.
+    """
+    from env_config import INSTALL_DIR
+    # ComfyUI is started with: --output-directory <INSTALL_DIR.parent.parent>
+    # See comfyui_manager.py start_comfyui()
+    return INSTALL_DIR.parent.parent
+
+
+def combine_mattes(
+    input_dirs: list,
+    output_dir: Path,
+    output_prefix: str = "combined"
+) -> bool:
+    """Combine multiple matte directories into a single combined output.
+
+    Takes the maximum (union) of all mattes at each frame.
+
+    Args:
+        input_dirs: List of directories containing matte images
+        output_dir: Directory to write combined mattes
+        output_prefix: Prefix for output filenames
+
+    Returns:
+        True if successful, False otherwise
+    """
+    import cv2
+    import numpy as np
+
+    if not input_dirs:
+        print("  → No input directories to combine")
+        return False
+
+    # Get list of frame files from first directory
+    first_dir = input_dirs[0]
+    frame_files = sorted(first_dir.glob("*.png"))
+    if not frame_files:
+        print(f"  → No PNG files found in {first_dir}")
+        return False
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    num_frames = len(frame_files)
+    print(f"  → Combining {len(input_dirs)} matte directories ({num_frames} frames)")
+
+    for frame_idx in range(num_frames):
+        combined = None
+
+        for input_dir in input_dirs:
+            # Find corresponding frame file in this directory
+            dir_files = sorted(input_dir.glob("*.png"))
+            if frame_idx >= len(dir_files):
+                continue
+
+            frame_file = dir_files[frame_idx]
+            matte = cv2.imread(str(frame_file), cv2.IMREAD_GRAYSCALE)
+            if matte is None:
+                continue
+
+            if combined is None:
+                combined = matte.astype(np.float32)
+            else:
+                # Take maximum (union) of mattes
+                combined = np.maximum(combined, matte.astype(np.float32))
+
+        if combined is not None:
+            out_file = output_dir / f"{output_prefix}_{frame_idx:05d}_.png"
+            cv2.imwrite(str(out_file), combined.astype(np.uint8))
+
+        if (frame_idx + 1) % 50 == 0:
+            print(f"    Combined {frame_idx + 1}/{num_frames} frames...")
+
+    print(f"  → Combined mattes written to: {output_dir}")
+    return True
+
+
+def refresh_workflow_from_template(workflow_path: Path, template_name: str) -> bool:
+    """Refresh a project's workflow from the template if template is newer.
+
+    Args:
+        workflow_path: Path to project's workflow file
+        template_name: Name of template file (e.g., "02_segmentation.json")
+
+    Returns:
+        True if refreshed, False if no refresh needed
+    """
+    template_path = WORKFLOW_TEMPLATES_DIR / template_name
+    if not template_path.exists():
+        return False
+
+    # Always refresh if project workflow doesn't exist
+    if not workflow_path.exists():
+        shutil.copy2(template_path, workflow_path)
+        print(f"  → Copied workflow from template: {template_name}")
+        return True
+
+    # Refresh if template is newer
+    if template_path.stat().st_mtime > workflow_path.stat().st_mtime:
+        shutil.copy2(template_path, workflow_path)
+        print(f"  → Refreshed workflow from template: {template_name}")
+        return True
+
+    return False
+
+
+def update_segmentation_prompt(workflow_path: Path, prompt: str, output_subdir: Path = None, project_dir: Path = None) -> None:
     """Update the text prompt and output path in segmentation workflow.
 
     Args:
         workflow_path: Path to workflow JSON
         prompt: Segmentation target text
-        output_subdir: If provided, update SaveImage to write here with prompt-based prefix
+        output_subdir: If provided, update SaveImage to write here
+        project_dir: Project root for computing relative paths
     """
     print(f"  → Setting segmentation prompt: {prompt}")
 
     with open(workflow_path) as f:
         workflow = json.load(f)
 
-    prompt_name = prompt.replace(" ", "_")
-
     for node in workflow.get("nodes", []):
-        # Update the segmentation prompt
-        if node.get("type") == "SAM3VideoSegmentation":
+        # Update the segmentation prompt (supports both node types)
+        if node.get("type") == "SAM3Grounding":
             widgets = node.get("widgets_values", [])
+            # SAM3Grounding: [threshold, text_prompt, max_detections, bool]
+            if len(widgets) >= 2:
+                widgets[1] = prompt
+                node["widgets_values"] = widgets
+        elif node.get("type") == "SAM3VideoSegmentation":
+            widgets = node.get("widgets_values", [])
+            # SAM3VideoSegmentation: ["text", text_prompt, frame_idx, threshold]
             if len(widgets) >= 2:
                 widgets[1] = prompt
                 node["widgets_values"] = widgets
@@ -503,32 +619,55 @@ def update_segmentation_prompt(workflow_path: Path, prompt: str, output_subdir: 
         if output_subdir and node.get("type") == "SaveImage":
             widgets = node.get("widgets_values", [])
             if widgets:
-                # Set output to subdir with prompt-named prefix
-                widgets[0] = str(output_subdir / prompt_name)
+                # ComfyUI SaveImage expects path relative to its output directory
+                # (set via --output-directory when starting ComfyUI)
+                comfyui_output = get_comfyui_output_dir()
+                try:
+                    relative_path = output_subdir.relative_to(comfyui_output)
+                except ValueError:
+                    # output_subdir is not under comfyui_output, use absolute path
+                    relative_path = output_subdir
+                # Add "mask" as the filename prefix
+                widgets[0] = str(relative_path / "mask")
                 node["widgets_values"] = widgets
 
     with open(workflow_path, 'w') as f:
         json.dump(workflow, f, indent=2)
 
 
-def update_matanyone_input(workflow_path: Path, mask_dir: Path, project_dir: Path) -> None:
-    """Update the MatAnyone workflow to read masks from a specific directory.
+def update_matanyone_input(workflow_path: Path, mask_dir: Path, output_dir: Path, project_dir: Path) -> None:
+    """Update the MatAnyone workflow to read masks from a specific directory and write to output.
 
     Args:
         workflow_path: Path to workflow JSON
         mask_dir: Directory containing person masks to refine
+        output_dir: Directory to write refined mattes
         project_dir: Project root directory for computing relative paths
     """
     with open(workflow_path) as f:
         workflow = json.load(f)
+
+    comfyui_output = get_comfyui_output_dir()
 
     for node in workflow.get("nodes", []):
         # Update the mask input path (second VHS_LoadImagesPath node)
         if node.get("type") == "VHS_LoadImagesPath" and "Person" in node.get("title", ""):
             widgets = node.get("widgets_values", [])
             if widgets:
-                # Use relative path from project dir
-                widgets[0] = str(mask_dir.relative_to(project_dir))
+                # Use absolute path (consistent with setup_project.py)
+                widgets[0] = str(mask_dir)
+                node["widgets_values"] = widgets
+
+        # Update SaveImage output path
+        if node.get("type") == "SaveImage":
+            widgets = node.get("widgets_values", [])
+            if widgets:
+                # ComfyUI SaveImage expects path relative to its output directory
+                try:
+                    relative_path = output_dir.relative_to(comfyui_output)
+                except ValueError:
+                    relative_path = output_dir
+                widgets[0] = str(relative_path / "matte")
                 node["widgets_values"] = widgets
 
     with open(workflow_path, 'w') as f:
@@ -689,6 +828,7 @@ def run_pipeline(
     gsir_path: Optional[str] = None,
     auto_start_comfyui: bool = True,
     roto_prompt: Optional[str] = None,
+    separate_instances: bool = False,
     auto_movie: bool = False,
 ) -> bool:
     """Run the full VFX pipeline.
@@ -759,6 +899,9 @@ def run_pipeline(
                 break
     fps = fps or 24.0
     print(f"Frame rate: {fps} fps")
+
+    # Ensure project directory exists before writing metadata
+    project_dir.mkdir(parents=True, exist_ok=True)
 
     # Save project metadata for standalone scripts
     metadata_path = project_dir / "project.json"
@@ -848,6 +991,10 @@ def run_pipeline(
         print("\n=== Stage: roto ===")
         workflow_path = project_dir / "workflows" / "02_segmentation.json"
         roto_dir = project_dir / "roto"
+
+        # Refresh workflow from template if template is newer
+        refresh_workflow_from_template(workflow_path, "02_segmentation.json")
+
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
         elif skip_existing and (list(roto_dir.glob("*.png")) or list(roto_dir.glob("*/*.png"))):
@@ -872,7 +1019,7 @@ def run_pipeline(
 
                 if len(prompts) > 1:
                     print(f"\n  [{i+1}/{len(prompts)}] Segmenting: {prompt}")
-                update_segmentation_prompt(workflow_path, prompt, output_subdir)
+                update_segmentation_prompt(workflow_path, prompt, output_subdir, project_dir)
                 if not run_comfyui_workflow(
                     workflow_path, comfyui_url,
                     output_dir=output_subdir,
@@ -891,43 +1038,111 @@ def run_pipeline(
                     generate_preview_movie(subdir, project_dir / "preview" / "roto.mp4", fps)
                     break
 
+        # Separate instances if requested (multi-person detection)
+        if separate_instances:
+            from separate_instances import separate_instances as do_separate
+
+            # Find person-related directories to separate
+            person_dirs = []
+            for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
+                if subdir.is_dir() and "person" in subdir.name.lower():
+                    if list(subdir.glob("*.png")):
+                        person_dirs.append(subdir)
+
+            if person_dirs:
+                print("\n  --- Separating instances ---")
+                for person_dir in person_dirs:
+                    print(f"  → Processing: {person_dir.name}")
+                    result = do_separate(
+                        input_dir=person_dir,
+                        output_dir=roto_dir,
+                        min_area=500,
+                        prefix=person_dir.name,
+                    )
+
+                    if result and len(result) > 1:
+                        # Found multiple instances, remove original combined directory
+                        print(f"    Found {len(result)} instances, removing combined directory")
+                        import shutil
+                        shutil.rmtree(person_dir)
+                    elif result and len(result) == 1:
+                        # Only one instance found, keep as-is but rename for consistency
+                        print(f"    Only 1 instance found, keeping original")
+                        # Remove the person_0 directory since it's redundant
+                        for idx, out_dir in result.items():
+                            if out_dir.exists() and out_dir != person_dir:
+                                shutil.rmtree(out_dir)
+            else:
+                print("  → No person directories to separate")
+
     # Stage: MatAnyone (refine person mattes)
     if "matanyone" in stages:
         print("\n=== Stage: matanyone ===")
         workflow_path = project_dir / "workflows" / "04_matanyone.json"
-        matte_dir = project_dir / "matte"
         roto_dir = project_dir / "roto"
+        combined_dir = roto_dir / "combined"
+        matte_dir = project_dir / "matte"  # Temp storage for individual refined mattes
 
-        # Find person-related mask directory
-        person_dir = None
+        # Refresh workflow from template if template is newer
+        refresh_workflow_from_template(workflow_path, "04_matanyone.json")
+
+        # Find ALL person-related mask directories (supports multi-instance)
+        person_dirs = []
         for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
             if subdir.is_dir() and "person" in subdir.name.lower():
                 if list(subdir.glob("*.png")):
-                    person_dir = subdir
-                    break
+                    person_dirs.append(subdir)
 
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
-        elif person_dir is None:
+        elif not person_dirs:
             print("  → Skipping (no person masks found in roto/)")
+        else:
+            # Track output directories for combining
+            output_dirs = []
 
-        if person_dir and skip_existing and list(matte_dir.glob("*.png")):
-            print("  → Skipping (mattes exist)")
-        elif person_dir:
-            print(f"  → Refining person masks from: {person_dir.name}")
-            # Update workflow to read from the person mask directory
-            update_matanyone_input(workflow_path, person_dir, project_dir)
-            if not run_comfyui_workflow(
-                workflow_path, comfyui_url,
-                output_dir=matte_dir,
-                total_frames=total_frames,
-                stage_name="matanyone",
-            ):
-                print("  → MatAnyone stage failed", file=sys.stderr)
-                return False
-            # Generate preview movie
-            if auto_movie and list(matte_dir.glob("*.png")):
-                generate_preview_movie(matte_dir, project_dir / "preview" / "matte.mp4", fps)
+            # Process each person directory
+            for i, person_dir in enumerate(person_dirs):
+                # Output individual refined mattes to matte/person_XX/
+                out_dir = matte_dir / person_dir.name
+                output_dirs.append(out_dir)
+
+                if skip_existing and list(out_dir.glob("*.png")):
+                    print(f"  → Skipping {person_dir.name} (mattes exist)")
+                    continue
+
+                if len(person_dirs) > 1:
+                    print(f"\n  [{i+1}/{len(person_dirs)}] Refining: {person_dir.name}")
+                else:
+                    print(f"  → Refining person masks from: {person_dir.name}")
+
+                out_dir.mkdir(parents=True, exist_ok=True)
+
+                # Update workflow to read from this person mask directory and write to out_dir
+                update_matanyone_input(workflow_path, person_dir, out_dir, project_dir)
+                if not run_comfyui_workflow(
+                    workflow_path, comfyui_url,
+                    output_dir=out_dir,
+                    total_frames=total_frames,
+                    stage_name=f"matanyone ({person_dir.name})" if len(person_dirs) > 1 else "matanyone",
+                ):
+                    print(f"  → MatAnyone stage failed for {person_dir.name}", file=sys.stderr)
+                    # Continue with other instances instead of failing completely
+                    if len(person_dirs) == 1:
+                        return False
+
+            # Combine all refined mattes into roto/combined/
+            valid_output_dirs = [d for d in output_dirs if d.exists() and list(d.glob("*.png"))]
+            if valid_output_dirs:
+                if skip_existing and list(combined_dir.glob("*.png")):
+                    print(f"  → Skipping combine (roto/combined/ exists)")
+                else:
+                    print("\n  --- Combining mattes ---")
+                    combine_mattes(valid_output_dirs, combined_dir, "combined")
+
+            # Generate preview movie from combined directory
+            if auto_movie and list(combined_dir.glob("*.png")):
+                generate_preview_movie(combined_dir, project_dir / "preview" / "matte.mp4", fps)
 
     # Stage: Cleanplate
     if "cleanplate" in stages:
@@ -935,48 +1150,45 @@ def run_pipeline(
         workflow_path = project_dir / "workflows" / "03_cleanplate.json"
         cleanplate_dir = project_dir / "cleanplate"
         roto_dir = project_dir / "roto"
-        matte_dir = project_dir / "matte"
+        combined_dir = roto_dir / "combined"
 
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
         elif skip_existing and list(cleanplate_dir.glob("*.png")):
             print("  → Skipping (cleanplates exist)")
         else:
-            # Preprocessing: consolidate masks from roto/ subdirs into roto/
-            # If MatAnyone refined mattes exist, use them instead of person masks
-            has_refined_mattes = list(matte_dir.glob("*.png"))
+            # Check for combined MatAnyone mattes first (preferred)
+            has_combined_mattes = combined_dir.exists() and list(combined_dir.glob("*.png"))
 
-            # Collect all mask directories
+            # Collect all mask directories (excluding 'combined' which we handle separately)
             mask_dirs = []
             for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
-                if subdir.is_dir() and list(subdir.glob("*.png")):
-                    if has_refined_mattes and "person" in subdir.name.lower():
-                        # Use refined mattes instead of raw person masks
-                        mask_dirs.append(matte_dir)
-                    else:
-                        mask_dirs.append(subdir)
+                if subdir.is_dir() and subdir.name != "combined" and list(subdir.glob("*.png")):
+                    mask_dirs.append(subdir)
 
-            # Clear any existing combined masks
+            # Clear any existing combined masks in roto/ base
             for old_file in roto_dir.glob("*.png"):
                 old_file.unlink()
 
-            # Consolidate masks
-            if len(mask_dirs) > 1:
+            # Determine mask source for cleanplate
+            if has_combined_mattes:
+                # Use roto/combined/ directly (MatAnyone refined + combined)
+                print(f"  → Using combined MatAnyone mattes from roto/combined/")
+                # Copy combined mattes to roto/ for cleanplate workflow
+                for i, mask_file in enumerate(sorted(combined_dir.glob("*.png"))):
+                    out_name = f"mask_{i+1:05d}.png"
+                    shutil.copy2(mask_file, roto_dir / out_name)
+            elif len(mask_dirs) > 1:
+                # Multiple sources without combined - consolidate them
                 count = combine_mask_sequences(mask_dirs, roto_dir, prefix="combined")
-                if has_refined_mattes:
-                    print(f"  → Consolidated {count} frames (with MatAnyone refined mattes)")
-                else:
-                    print(f"  → Consolidated {count} frames from {len(mask_dirs)} mask sources")
+                print(f"  → Consolidated {count} frames from {len(mask_dirs)} mask sources")
             elif len(mask_dirs) == 1:
                 # Single source - copy to roto/ with consistent naming
                 source_dir = mask_dirs[0]
                 for i, mask_file in enumerate(sorted(source_dir.glob("*.png"))):
                     out_name = f"mask_{i+1:05d}.png"
                     shutil.copy2(mask_file, roto_dir / out_name)
-                if has_refined_mattes and source_dir == matte_dir:
-                    print(f"  → Using MatAnyone refined mattes")
-                else:
-                    print(f"  → Using masks from {source_dir.name}/")
+                print(f"  → Using masks from {source_dir.name}/")
             else:
                 print("  → Warning: No masks found in roto/ subdirectories")
 
@@ -1186,6 +1398,11 @@ def main():
         help="Segmentation prompt for roto stage (default: 'person'). Example: 'person, ball, backpack'"
     )
     parser.add_argument(
+        "--separate-instances",
+        action="store_true",
+        help="Separate multi-person masks into individual instances (person_0/, person_1/, etc.)"
+    )
+    parser.add_argument(
         "--auto-movie",
         action="store_true",
         help="Generate preview MP4s from completed image sequences (depth, roto, cleanplate)"
@@ -1237,6 +1454,7 @@ def main():
         gsir_path=args.gsir_path,
         auto_start_comfyui=not args.no_auto_comfyui,
         roto_prompt=args.prompt,
+        separate_instances=args.separate_instances,
         auto_movie=args.auto_movie,
     )
 

@@ -37,8 +37,8 @@
         {"name": "frame_count", "type": "INT", "links": null, "slot_index": 2}
       ],
       "properties": {"Node name for S&R": "VHS_LoadImagesPath"},
-      "widgets_values": ["roto", 0, 0, 1, "Disabled", 1920, 1080, null, null],
-      "title": "Load Person Masks"
+      "widgets_values": ["roto", 1, 0, 1, "Disabled", 1920, 1080, null, null],
+      "title": "Load Person Mask (First Frame)"
     },
     {
       "id": 3,
@@ -104,7 +104,7 @@
       "inputs": [],
       "outputs": [],
       "properties": {"text": ""},
-      "widgets_values": ["MATANYONE VIDEO MATTING\n\nInput: source/frames + person roto masks\nOutput: matte/ (refined alpha)\n\nRefines SAM3 person masks for clean edges."],
+      "widgets_values": ["MATANYONE VIDEO MATTING\n\nInput: source/frames + FIRST FRAME of person mask\nOutput: matte/ (refined alpha)\n\nMatAnyone only needs the first frame mask - it propagates throughout the video automatically."],
       "title": "Instructions",
       "color": "#233",
       "bgcolor": "#355"
