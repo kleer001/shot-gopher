@@ -476,6 +476,17 @@ def get_image_dimensions(image_path: Path) -> tuple[int, int]:
         return 1920, 1080  # Default fallback
 
 
+def get_comfyui_output_dir() -> Path:
+    """Get the output directory that ComfyUI uses for SaveImage nodes.
+
+    This must match the --output-directory argument passed to ComfyUI in comfyui_manager.py.
+    """
+    from env_config import INSTALL_DIR
+    # ComfyUI is started with: --output-directory <INSTALL_DIR.parent.parent>
+    # See comfyui_manager.py start_comfyui()
+    return INSTALL_DIR.parent.parent
+
+
 def update_segmentation_prompt(workflow_path: Path, prompt: str, output_subdir: Path = None, project_dir: Path = None) -> None:
     """Update the text prompt and output path in segmentation workflow.
 
@@ -502,11 +513,13 @@ def update_segmentation_prompt(workflow_path: Path, prompt: str, output_subdir: 
         if output_subdir and node.get("type") == "SaveImage":
             widgets = node.get("widgets_values", [])
             if widgets:
-                # ComfyUI SaveImage expects relative path from output directory
-                # Convert absolute path to relative path from project_dir
-                if project_dir:
-                    relative_path = output_subdir.relative_to(project_dir)
-                else:
+                # ComfyUI SaveImage expects path relative to its output directory
+                # (set via --output-directory when starting ComfyUI)
+                comfyui_output = get_comfyui_output_dir()
+                try:
+                    relative_path = output_subdir.relative_to(comfyui_output)
+                except ValueError:
+                    # output_subdir is not under comfyui_output, use absolute path
                     relative_path = output_subdir
                 # Add "mask" as the filename prefix
                 widgets[0] = str(relative_path / "mask")
@@ -516,24 +529,39 @@ def update_segmentation_prompt(workflow_path: Path, prompt: str, output_subdir: 
         json.dump(workflow, f, indent=2)
 
 
-def update_matanyone_input(workflow_path: Path, mask_dir: Path, project_dir: Path) -> None:
-    """Update the MatAnyone workflow to read masks from a specific directory.
+def update_matanyone_input(workflow_path: Path, mask_dir: Path, output_dir: Path, project_dir: Path) -> None:
+    """Update the MatAnyone workflow to read masks from a specific directory and write to output.
 
     Args:
         workflow_path: Path to workflow JSON
         mask_dir: Directory containing person masks to refine
+        output_dir: Directory to write refined mattes
         project_dir: Project root directory for computing relative paths
     """
     with open(workflow_path) as f:
         workflow = json.load(f)
+
+    comfyui_output = get_comfyui_output_dir()
 
     for node in workflow.get("nodes", []):
         # Update the mask input path (second VHS_LoadImagesPath node)
         if node.get("type") == "VHS_LoadImagesPath" and "Person" in node.get("title", ""):
             widgets = node.get("widgets_values", [])
             if widgets:
-                # Use relative path from project dir
-                widgets[0] = str(mask_dir.relative_to(project_dir))
+                # Use absolute path (consistent with setup_project.py)
+                widgets[0] = str(mask_dir)
+                node["widgets_values"] = widgets
+
+        # Update SaveImage output path
+        if node.get("type") == "SaveImage":
+            widgets = node.get("widgets_values", [])
+            if widgets:
+                # ComfyUI SaveImage expects path relative to its output directory
+                try:
+                    relative_path = output_dir.relative_to(comfyui_output)
+                except ValueError:
+                    relative_path = output_dir
+                widgets[0] = str(relative_path / "matte")
                 node["widgets_values"] = widgets
 
     with open(workflow_path, 'w') as f:
@@ -977,8 +1005,8 @@ def run_pipeline(
 
                 out_dir.mkdir(parents=True, exist_ok=True)
 
-                # Update workflow to read from this person mask directory
-                update_matanyone_input(workflow_path, person_dir, project_dir)
+                # Update workflow to read from this person mask directory and write to out_dir
+                update_matanyone_input(workflow_path, person_dir, out_dir, project_dir)
                 if not run_comfyui_workflow(
                     workflow_path, comfyui_url,
                     output_dir=out_dir,
