@@ -131,6 +131,8 @@ class InstallationValidator:
     def validate_smplx_models(self) -> Tuple[bool, str]:
         """Check if SMPL-X models are installed.
 
+        The SMPL-X v1.1 zip extracts to: models/smplx/SMPLX_*.npz
+
         Returns:
             (success, message)
         """
@@ -138,8 +140,23 @@ class InstallationValidator:
         if not smplx_dir.exists():
             return False, f"SMPL-X directory not found ({INSTALL_DIR}/smplx_models/)"
 
-        # Look for model files
-        model_files = list(smplx_dir.glob("SMPLX_*.pkl"))
+        # Look for model files - check multiple possible locations and extensions
+        # The SMPL-X v1.1 zip extracts to: models/smplx/SMPLX_*.npz
+        search_patterns = [
+            "models/smplx/SMPLX_*.npz",  # Standard v1.1 zip structure
+            "smplx/SMPLX_*.npz",          # Alternative structure
+            "SMPLX_*.npz",                # Flat structure
+            "models/smplx/SMPLX_*.pkl",   # Legacy .pkl format
+            "smplx/SMPLX_*.pkl",
+            "SMPLX_*.pkl",
+        ]
+
+        model_files = []
+        for pattern in search_patterns:
+            model_files.extend(smplx_dir.glob(pattern))
+            if model_files:
+                break
+
         if model_files:
             return True, f"Found {len(model_files)} SMPL-X model file(s)"
         return False, "No SMPL-X model files found"

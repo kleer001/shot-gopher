@@ -632,7 +632,14 @@ class InstallationWizard:
         # SMPL-X models status
         if status.get('mocap_core', False):
             smplx_dir = self.install_dir / "smplx_models"
-            smplx_models = list(smplx_dir.glob("SMPLX_*.pkl")) if smplx_dir.exists() else []
+            # Check multiple possible locations (v1.1 zip extracts to models/smplx/)
+            smplx_models = []
+            if smplx_dir.exists():
+                for pattern in ["models/smplx/SMPLX_*.npz", "smplx/SMPLX_*.npz", "SMPLX_*.npz",
+                                "models/smplx/SMPLX_*.pkl", "smplx/SMPLX_*.pkl", "SMPLX_*.pkl"]:
+                    smplx_models = list(smplx_dir.glob(pattern))
+                    if smplx_models:
+                        break
             if smplx_models:
                 print("\n📦 SMPL-X Body Models:")
                 print(f"  ✓ Found {len(smplx_models)} SMPL-X model(s)")
