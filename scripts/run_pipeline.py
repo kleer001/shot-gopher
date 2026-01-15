@@ -502,9 +502,16 @@ def update_segmentation_prompt(workflow_path: Path, prompt: str, output_subdir: 
         workflow = json.load(f)
 
     for node in workflow.get("nodes", []):
-        # Update the segmentation prompt
-        if node.get("type") == "SAM3VideoSegmentation":
+        # Update the segmentation prompt (supports both node types)
+        if node.get("type") == "SAM3Grounding":
             widgets = node.get("widgets_values", [])
+            # SAM3Grounding: [threshold, text_prompt, max_detections, bool]
+            if len(widgets) >= 2:
+                widgets[1] = prompt
+                node["widgets_values"] = widgets
+        elif node.get("type") == "SAM3VideoSegmentation":
+            widgets = node.get("widgets_values", [])
+            # SAM3VideoSegmentation: ["text", text_prompt, frame_idx, threshold]
             if len(widgets) >= 2:
                 widgets[1] = prompt
                 node["widgets_values"] = widgets
