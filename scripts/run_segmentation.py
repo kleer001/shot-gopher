@@ -224,6 +224,17 @@ def main():
         default=3600,
         help="Timeout in seconds per workflow (default: 3600)"
     )
+    parser.add_argument(
+        "--separate-instances",
+        action="store_true",
+        help="Separate combined masks into individual instances (e.g., person_0/, person_1/)"
+    )
+    parser.add_argument(
+        "--min-area",
+        type=int,
+        default=500,
+        help="Minimum component area for instance separation (default: 500)"
+    )
 
     args = parser.parse_args()
 
@@ -245,7 +256,46 @@ def main():
         timeout=args.timeout
     )
 
-    sys.exit(0 if success else 1)
+    if not success:
+        sys.exit(1)
+
+    # Separate instances if requested
+    if args.separate_instances:
+        from separate_instances import separate_instances as do_separate
+
+        roto_dir = project_dir / "roto"
+
+        # Find person-related directories to separate
+        person_dirs = []
+        if roto_dir.exists():
+            for subdir in sorted(roto_dir.iterdir()):
+                if subdir.is_dir() and "person" in subdir.name.lower():
+                    if list(subdir.glob("*.png")):
+                        person_dirs.append(subdir)
+
+        if person_dirs:
+            print(f"\n{'='*60}")
+            print(f"Separating Instances")
+            print(f"{'='*60}")
+
+            for person_dir in person_dirs:
+                print(f"\nProcessing: {person_dir.name}")
+                result = do_separate(
+                    input_dir=person_dir,
+                    output_dir=roto_dir,
+                    min_area=args.min_area,
+                    prefix=person_dir.name,  # e.g., "person" -> "person_0", "person_1"
+                )
+
+                if result:
+                    # Remove the original combined directory after successful separation
+                    print(f"  Removing original combined directory: {person_dir.name}")
+                    import shutil
+                    shutil.rmtree(person_dir)
+        else:
+            print("No person directories found to separate")
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":

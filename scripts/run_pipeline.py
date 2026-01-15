@@ -689,6 +689,7 @@ def run_pipeline(
     gsir_path: Optional[str] = None,
     auto_start_comfyui: bool = True,
     roto_prompt: Optional[str] = None,
+    separate_instances: bool = False,
     auto_movie: bool = False,
 ) -> bool:
     """Run the full VFX pipeline.
@@ -894,6 +895,43 @@ def run_pipeline(
                     generate_preview_movie(subdir, project_dir / "preview" / "roto.mp4", fps)
                     break
 
+        # Separate instances if requested (multi-person detection)
+        if separate_instances:
+            from separate_instances import separate_instances as do_separate
+
+            # Find person-related directories to separate
+            person_dirs = []
+            for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
+                if subdir.is_dir() and "person" in subdir.name.lower():
+                    if list(subdir.glob("*.png")):
+                        person_dirs.append(subdir)
+
+            if person_dirs:
+                print("\n  --- Separating instances ---")
+                for person_dir in person_dirs:
+                    print(f"  → Processing: {person_dir.name}")
+                    result = do_separate(
+                        input_dir=person_dir,
+                        output_dir=roto_dir,
+                        min_area=500,
+                        prefix=person_dir.name,
+                    )
+
+                    if result and len(result) > 1:
+                        # Found multiple instances, remove original combined directory
+                        print(f"    Found {len(result)} instances, removing combined directory")
+                        import shutil
+                        shutil.rmtree(person_dir)
+                    elif result and len(result) == 1:
+                        # Only one instance found, keep as-is but rename for consistency
+                        print(f"    Only 1 instance found, keeping original")
+                        # Remove the person_0 directory since it's redundant
+                        for idx, out_dir in result.items():
+                            if out_dir.exists() and out_dir != person_dir:
+                                shutil.rmtree(out_dir)
+            else:
+                print("  → No person directories to separate")
+
     # Stage: MatAnyone (refine person mattes)
     if "matanyone" in stages:
         print("\n=== Stage: matanyone ===")
@@ -901,35 +939,59 @@ def run_pipeline(
         matte_dir = project_dir / "matte"
         roto_dir = project_dir / "roto"
 
-        # Find person-related mask directory
-        person_dir = None
+        # Find ALL person-related mask directories (supports multi-instance)
+        person_dirs = []
         for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
             if subdir.is_dir() and "person" in subdir.name.lower():
                 if list(subdir.glob("*.png")):
-                    person_dir = subdir
-                    break
+                    person_dirs.append(subdir)
 
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
-        elif person_dir is None:
+        elif not person_dirs:
             print("  → Skipping (no person masks found in roto/)")
-        elif skip_existing and list(matte_dir.glob("*.png")):
-            print("  → Skipping (mattes exist)")
         else:
-            print(f"  → Refining person masks from: {person_dir.name}")
-            # Update workflow to read from the person mask directory
-            update_matanyone_input(workflow_path, person_dir, project_dir)
-            if not run_comfyui_workflow(
-                workflow_path, comfyui_url,
-                output_dir=matte_dir,
-                total_frames=total_frames,
-                stage_name="matanyone",
-            ):
-                print("  → MatAnyone stage failed", file=sys.stderr)
-                return False
-            # Generate preview movie
-            if auto_movie and list(matte_dir.glob("*.png")):
-                generate_preview_movie(matte_dir, project_dir / "preview" / "matte.mp4", fps)
+            # Process each person directory
+            for i, person_dir in enumerate(person_dirs):
+                # Determine output directory
+                if len(person_dirs) == 1:
+                    # Single person - output to matte/
+                    out_dir = matte_dir
+                else:
+                    # Multiple instances - output to matte/person_0/, matte/person_1/, etc.
+                    out_dir = matte_dir / person_dir.name
+
+                if skip_existing and list(out_dir.glob("*.png")):
+                    print(f"  → Skipping {person_dir.name} (mattes exist)")
+                    continue
+
+                if len(person_dirs) > 1:
+                    print(f"\n  [{i+1}/{len(person_dirs)}] Refining: {person_dir.name}")
+                else:
+                    print(f"  → Refining person masks from: {person_dir.name}")
+
+                out_dir.mkdir(parents=True, exist_ok=True)
+
+                # Update workflow to read from this person mask directory
+                update_matanyone_input(workflow_path, person_dir, project_dir)
+                if not run_comfyui_workflow(
+                    workflow_path, comfyui_url,
+                    output_dir=out_dir,
+                    total_frames=total_frames,
+                    stage_name=f"matanyone ({person_dir.name})" if len(person_dirs) > 1 else "matanyone",
+                ):
+                    print(f"  → MatAnyone stage failed for {person_dir.name}", file=sys.stderr)
+                    # Continue with other instances instead of failing completely
+                    if len(person_dirs) == 1:
+                        return False
+
+            # Generate preview movie from first matte directory
+            if auto_movie:
+                preview_dir = matte_dir
+                if len(person_dirs) > 1 and (matte_dir / person_dirs[0].name).exists():
+                    preview_dir = matte_dir / person_dirs[0].name
+                if list(preview_dir.glob("*.png")):
+                    generate_preview_movie(preview_dir, project_dir / "preview" / "matte.mp4", fps)
 
     # Stage: Cleanplate
     if "cleanplate" in stages:
@@ -1188,6 +1250,11 @@ def main():
         help="Segmentation prompt for roto stage (default: 'person'). Example: 'person, ball, backpack'"
     )
     parser.add_argument(
+        "--separate-instances",
+        action="store_true",
+        help="Separate multi-person masks into individual instances (person_0/, person_1/, etc.)"
+    )
+    parser.add_argument(
         "--auto-movie",
         action="store_true",
         help="Generate preview MP4s from completed image sequences (depth, roto, cleanplate)"
@@ -1239,6 +1306,7 @@ def main():
         gsir_path=args.gsir_path,
         auto_start_comfyui=not args.no_auto_comfyui,
         roto_prompt=args.prompt,
+        separate_instances=args.separate_instances,
         auto_movie=args.auto_movie,
     )
 
