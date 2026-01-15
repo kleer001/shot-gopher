@@ -1073,6 +1073,13 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
             print(f"  URL: {final_url}")
             print(f"  -> {dest}")
 
+            # Copy cookies from smpl-x domain to download domain
+            # Both are subdomains of is.tue.mpg.de but cookies don't auto-transfer
+            download_domain = 'download.is.tue.mpg.de'
+            for cookie in list(session.cookies):
+                if 'smpl-x.is.tue.mpg.de' in cookie.domain or 'is.tue.mpg.de' in cookie.domain:
+                    session.cookies.set(cookie.name, cookie.value, domain=download_domain)
+
             # Ensure directory exists
             dest.parent.mkdir(parents=True, exist_ok=True)
 
