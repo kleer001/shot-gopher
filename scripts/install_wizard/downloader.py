@@ -1560,10 +1560,17 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/matanyone.pth'''
         # Verify actual file exists before trusting state (handles filename changes)
         files_exist = True
         for file_info in checkpoint_info['files']:
-            dest_path = dest_dir / file_info['filename']
-            if not dest_path.exists():
-                files_exist = False
-                break
+            if file_info.get('extract'):
+                # For extracted archives, check if dest_dir has content
+                # (the zip is deleted after extraction)
+                if not dest_dir.exists() or not any(dest_dir.iterdir()):
+                    files_exist = False
+                    break
+            else:
+                dest_path = dest_dir / file_info['filename']
+                if not dest_path.exists():
+                    files_exist = False
+                    break
 
         # Check if already downloaded AND files exist
         if state_manager and state_manager.is_checkpoint_downloaded(comp_id) and files_exist:
