@@ -31,6 +31,10 @@ from comfyui_utils import (
     run_comfyui_workflow,
 )
 from comfyui_manager import ensure_comfyui, stop_comfyui
+
+# Workflow templates directory
+WORKFLOW_TEMPLATES_DIR = Path(__file__).parent.parent / "workflow_templates"
+
 START_FRAME = 1  # ComfyUI SaveImage outputs start at 1, so we match that
 SUPPORTED_FORMATS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf", ".exr", ".dpx", ".jpg", ".png"}
 
@@ -553,6 +557,35 @@ def combine_mattes(
     return True
 
 
+def refresh_workflow_from_template(workflow_path: Path, template_name: str) -> bool:
+    """Refresh a project's workflow from the template if template is newer.
+
+    Args:
+        workflow_path: Path to project's workflow file
+        template_name: Name of template file (e.g., "02_segmentation.json")
+
+    Returns:
+        True if refreshed, False if no refresh needed
+    """
+    template_path = WORKFLOW_TEMPLATES_DIR / template_name
+    if not template_path.exists():
+        return False
+
+    # Always refresh if project workflow doesn't exist
+    if not workflow_path.exists():
+        shutil.copy2(template_path, workflow_path)
+        print(f"  → Copied workflow from template: {template_name}")
+        return True
+
+    # Refresh if template is newer
+    if template_path.stat().st_mtime > workflow_path.stat().st_mtime:
+        shutil.copy2(template_path, workflow_path)
+        print(f"  → Refreshed workflow from template: {template_name}")
+        return True
+
+    return False
+
+
 def update_segmentation_prompt(workflow_path: Path, prompt: str, output_subdir: Path = None, project_dir: Path = None) -> None:
     """Update the text prompt and output path in segmentation workflow.
 
@@ -958,6 +991,10 @@ def run_pipeline(
         print("\n=== Stage: roto ===")
         workflow_path = project_dir / "workflows" / "02_segmentation.json"
         roto_dir = project_dir / "roto"
+
+        # Refresh workflow from template if template is newer
+        refresh_workflow_from_template(workflow_path, "02_segmentation.json")
+
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
         elif skip_existing and (list(roto_dir.glob("*.png")) or list(roto_dir.glob("*/*.png"))):
@@ -1045,6 +1082,9 @@ def run_pipeline(
         roto_dir = project_dir / "roto"
         combined_dir = roto_dir / "combined"
         matte_dir = project_dir / "matte"  # Temp storage for individual refined mattes
+
+        # Refresh workflow from template if template is newer
+        refresh_workflow_from_template(workflow_path, "04_matanyone.json")
 
         # Find ALL person-related mask directories (supports multi-instance)
         person_dirs = []
