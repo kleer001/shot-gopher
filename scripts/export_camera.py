@@ -541,18 +541,15 @@ print("=" * 60)
         f.write(py_content)
 
     # Write the .cmd file that runs the .py file
-    # Use execfile-style for better compatibility
+    # In hscript, python command takes code directly, not a file path
+    # Use exec(open().read()) pattern to execute the .py file
+    py_path_escaped = str(py_script_path).replace('\\', '/')
     cmd_content = f'''# Houdini camera import
 # File -> Run Script -> select this file
 #
 # Alternative: Windows -> Python Source Editor -> Open camera.py -> Run
 
-echo "========================================"
-echo "Pipeline Camera Import"
-echo "========================================"
-echo "Running: {py_script_path}"
-
-python "{py_script_path}"
+python -c "exec(open(r'{py_path_escaped}').read())"
 '''
 
     with open(output_path, 'w') as f:
