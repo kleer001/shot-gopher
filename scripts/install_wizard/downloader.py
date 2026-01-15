@@ -1020,10 +1020,15 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
                 capture_output=True, text=True
             )
             if result.returncode != 0:
-                subprocess.run(
+                print_info(f"pip --user failed, trying --break-system-packages...")
+                result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", "--break-system-packages", "playwright"],
                     capture_output=True, text=True
                 )
+            if result.returncode != 0:
+                print_warning(f"Could not install playwright package: {result.stderr[:200] if result.stderr else 'unknown error'}")
+                return False
+
             # Install browser binaries
             print_info("Installing Playwright browser (this may take a minute)...")
             browser_result = subprocess.run(
@@ -1031,12 +1036,12 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
                 capture_output=True, text=True
             )
             if browser_result.returncode != 0:
-                print_warning(f"Could not install Playwright browser: {browser_result.stderr}")
+                print_warning(f"Could not install Playwright browser: {browser_result.stderr[:300] if browser_result.stderr else 'unknown error'}")
                 return False
             try:
                 from playwright.sync_api import sync_playwright
-            except ImportError:
-                print_warning("Playwright installation failed")
+            except ImportError as e:
+                print_warning(f"Playwright installation failed: {e}")
                 return False
 
         try:
