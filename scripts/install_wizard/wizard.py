@@ -416,13 +416,17 @@ class InstallationWizard:
 
         return success
 
-    def setup_credentials(self, repo_root: Path) -> None:
+    def setup_credentials(self, repo_root: Path, yolo: bool = False) -> None:
         """Prompt user to set up credentials for authenticated downloads.
 
         Sets up:
         - SMPL.login.dat for SMPL-X body models (motion capture)
 
         Note: SAM3 model is now public at 1038lab/sam3 and doesn't require auth.
+
+        Args:
+            repo_root: Path to repository root
+            yolo: If True, skip interactive prompts
         """
         # Check existing credentials
         smpl_creds_file = repo_root / "SMPL.login.dat"
@@ -435,6 +439,11 @@ class InstallationWizard:
         smplx_dir = INSTALL_DIR / "smplx_models" / "models" / "smplx"
         if (smplx_dir / "SMPLX_NEUTRAL.npz").exists():
             return  # Already have models, no need for credentials
+
+        # In yolo mode, skip credential prompts
+        if yolo:
+            print_info("SMPL-X credentials not configured - you can set them up later")
+            return
 
         print_header("Credentials Setup")
         print("SMPL-X body models require registration for download.")
@@ -468,12 +477,23 @@ class InstallationWizard:
         else:
             print_info("Skipped - you can add SMPL.login.dat later")
 
-    def interactive_install(self, component: Optional[str] = None, resume: bool = False):
-        """Interactive installation flow."""
+    def interactive_install(self, component: Optional[str] = None, resume: bool = False, yolo: bool = False):
+        """Interactive installation flow.
+
+        Args:
+            component: Specific component to install, or None for menu
+            resume: Resume previous interrupted installation
+            yolo: Non-interactive mode - full stack install with auto-yes
+        """
         print_header("VFX Pipeline Installation Wizard")
 
+        if yolo:
+            print_info("YOLO mode: Full stack install with auto-yes")
+            # Clear any previous state for a clean install
+            self.state_manager.clear_state()
+
         # Check for resumable installation
-        if not resume and self.state_manager.can_resume():
+        if not yolo and not resume and self.state_manager.can_resume():
             incomplete = self.state_manager.get_incomplete_components()
             print_warning("Found incomplete installation from previous run:")
             for comp_id in incomplete:
@@ -499,8 +519,8 @@ class InstallationWizard:
         status = self.check_all_components()
         self.print_status(status)
 
-        # Set up credentials for authenticated downloads
-        self.setup_credentials(self.repo_root)
+        # Set up credentials for authenticated downloads (skip prompts in yolo mode)
+        self.setup_credentials(self.repo_root, yolo=yolo)
 
         # Determine what to install
         if component:
@@ -511,6 +531,10 @@ class InstallationWizard:
                 return False
 
             to_install = [component]
+        elif yolo:
+            # YOLO mode: auto-select full stack (option 3)
+            print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture)")
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -550,10 +574,11 @@ class InstallationWizard:
                 print_error("\nInsufficient disk space for installation")
                 return False
 
-            # Confirm installation
-            if not ask_yes_no("\nProceed with installation?", default=True):
-                print_info("Installation cancelled")
-                return True
+            # Confirm installation (skip in yolo mode)
+            if not yolo:
+                if not ask_yes_no("\nProceed with installation?", default=True):
+                    print_info("Installation cancelled")
+                    return True
 
         # Install components
         print_header("Installing Components")
