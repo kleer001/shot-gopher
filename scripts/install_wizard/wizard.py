@@ -424,30 +424,26 @@ class InstallationWizard:
 
         Note: SAM3 model is now public at 1038lab/sam3 and doesn't require auth.
         """
-        print_header("Credentials Setup")
-        print("Some components require authentication to download:")
-        print("  - SMPL-X body models (smpl-x.is.tue.mpg.de)")
-        print("")
-        print_info("Note: SAM3 model is now publicly available (no auth required)")
-        print("")
-
         # Check existing credentials
         smpl_creds_file = repo_root / "SMPL.login.dat"
 
-        smpl_exists = smpl_creds_file.exists()
-
-        if smpl_exists:
+        if smpl_creds_file.exists():
             print_success("SMPL-X credentials file already exists")
             return
 
-        # SMPL-X credentials setup
-        print(f"\n{Colors.BOLD}SMPL-X Credentials Setup{Colors.ENDC}")
+        # Check if SMPL-X models already downloaded
+        smplx_dir = INSTALL_DIR / "smplx_models" / "models" / "smplx"
+        if (smplx_dir / "SMPLX_NEUTRAL.npz").exists():
+            return  # Already have models, no need for credentials
+
+        print_header("Credentials Setup")
+        print("SMPL-X body models require registration for download.")
+        print("")
+
+        print(f"{Colors.BOLD}SMPL-X Credentials Setup{Colors.ENDC}")
         print("Required for: Body model (skeleton, mesh topology, UV layout)")
         print("")
-        print("SMPL-X provides the parametric body model - the 'rigged character'")
-        print("that can be posed and animated with consistent vertex ordering.")
-        print("")
-        print("Registration: https://smpl-x.is.tue.mpg.de/")
+        print("Registration: https://smpl-x.is.tue.mpg.de/register.php")
         print("")
         print("Steps:")
         print("  1. Register at the website above")
@@ -463,7 +459,6 @@ class InstallationWizard:
                     with open(smpl_creds_file, 'w') as f:
                         f.write(email + '\n')
                         f.write(password + '\n')
-                    # Set restrictive permissions
                     smpl_creds_file.chmod(0o600)
                     print_success(f"Credentials saved to {smpl_creds_file}")
                 else:
@@ -472,8 +467,6 @@ class InstallationWizard:
                 print_info("Skipped - you can add SMPL.login.dat later")
         else:
             print_info("Skipped - you can add SMPL.login.dat later")
-
-        print("")
 
     def interactive_install(self, component: Optional[str] = None, resume: bool = False):
         """Interactive installation flow."""

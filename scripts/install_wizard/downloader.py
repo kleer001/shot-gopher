@@ -44,9 +44,10 @@ Or run the fetch_demo_data.sh script from the WHAM repository:
         'smplx': {
             'name': 'SMPL-X Models',
             'requires_auth': True,
-            'auth_type': 'form',  # Form-based login with session cookies
+            'auth_type': 'smplx',  # Special handling for SMPL-X cross-domain auth
             'auth_file': 'SMPL.login.dat',
             'login_url': 'https://smpl-x.is.tue.mpg.de/login.php',
+            'download_page': 'https://smpl-x.is.tue.mpg.de/download.php',
             'files': [
                 {
                     'url': 'https://download.is.tue.mpg.de/download.php?domain=smplx&sfile=models_smplx_v1_1.zip',
@@ -56,11 +57,11 @@ Or run the fetch_demo_data.sh script from the WHAM repository:
                     'extract': True
                 }
             ],
-            'dest_dir_rel': 'smplx_models',  # Relative to install_dir
+            'dest_dir_rel': 'smplx_models',
             'use_home_dir': False,
             'instructions': '''SMPL-X models require registration:
-1. Register at https://smpl-x.is.tue.mpg.de/
-2. Wait for approval email (usually within 24 hours)
+1. Register at https://smpl-x.is.tue.mpg.de/register.php
+2. Wait for approval email (usually within 24-48 hours)
 3. Create SMPL.login.dat in repository root with:
    Line 1: your email
    Line 2: your password
@@ -953,6 +954,169 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
                 dest.unlink()
             return False
 
+    def download_smplx_model(
+        self,
+        login_url: str,
+        download_page: str,
+        download_url: str,
+        dest: Path,
+        username: str,
+        password: str,
+    ) -> bool:
+        """Download SMPL-X model with special cross-domain authentication.
+
+        The SMPL-X site requires:
+        1. Login at smpl-x.is.tue.mpg.de
+        2. Access download page to establish session
+        3. Download from download.is.tue.mpg.de (may need token from download page)
+
+        Args:
+            login_url: URL of the login form
+            download_page: URL of the download page (to get session/tokens)
+            download_url: Final download URL
+            dest: Destination file path
+            username: Login email
+            password: Login password
+
+        Returns:
+            True if successful
+        """
+        try:
+            import requests
+            from urllib.parse import urljoin
+            import re
+        except ImportError:
+            print_warning("requests library not found, installing...")
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--user", "requests"],
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--break-system-packages", "requests"],
+                    capture_output=True, text=True
+                )
+            import requests
+            from urllib.parse import urljoin
+            import re
+
+        try:
+            print(f"  Logging in to SMPL-X website...")
+
+            # Create session to maintain cookies
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
+            })
+
+            # POST login form
+            login_data = {
+                'username': username,
+                'password': password
+            }
+            login_response = session.post(login_url, data=login_data, timeout=30, allow_redirects=True)
+
+            # Check for login errors in response
+            if 'invalid' in login_response.text.lower() and 'password' in login_response.text.lower():
+                print_error("Login failed - invalid credentials")
+                return False
+
+            # Check if we got redirected to login page (login failed)
+            if 'login.php' in login_response.url and login_response.url != login_url:
+                print_error("Login failed - redirected back to login page")
+                return False
+
+            print_success("Login successful")
+
+            # Visit download page to establish session and find download link
+            print(f"  Accessing download page...")
+            dl_page_response = session.get(download_page, timeout=30)
+
+            if dl_page_response.status_code != 200:
+                print_error(f"Could not access download page (status {dl_page_response.status_code})")
+                return False
+
+            # Look for the actual download link in the page
+            # SMPL-X download links often have format: download.php?domain=smplx&sfile=...
+            # or they might include a session token
+            page_content = dl_page_response.text
+
+            # Try to find a direct link to the model file
+            download_link = None
+
+            # Pattern 1: Look for link containing the filename
+            patterns = [
+                r'href=["\']([^"\']*models_smplx_v1_1\.zip[^"\']*)["\']',
+                r'href=["\']([^"\']*download\.php\?[^"\']*smplx[^"\']*v1_1[^"\']*)["\']',
+                r'href=["\']([^"\']*download[^"\']*smplx[^"\']*)["\']',
+            ]
+
+            for pattern in patterns:
+                match = re.search(pattern, page_content, re.IGNORECASE)
+                if match:
+                    link = match.group(1)
+                    if not link.startswith('http'):
+                        link = urljoin(download_page, link)
+                    download_link = link
+                    break
+
+            if download_link:
+                print(f"  Found download link on page")
+                final_url = download_link
+            else:
+                # Use the configured URL but try with the session
+                print(f"  Using configured download URL")
+                final_url = download_url
+
+            print(f"  Downloading SMPL-X models...")
+            print(f"  -> {dest}")
+
+            # Ensure directory exists
+            dest.parent.mkdir(parents=True, exist_ok=True)
+
+            # Try downloading with the session (cookies will be sent)
+            response = session.get(final_url, stream=True, timeout=60)
+
+            # Check content-type
+            content_type = response.headers.get('content-type', '').lower()
+            if 'text/html' in content_type:
+                # Check if it's a redirect page or error
+                if len(response.content) < 10000:
+                    # Small HTML response - likely an error page
+                    print_error("Server returned HTML instead of the file")
+                    print_info("This usually means:")
+                    print("  - Your account may not have download access yet")
+                    print("  - You may need to accept the license agreement on the website first")
+                    print("  - Try logging in at https://smpl-x.is.tue.mpg.de/ and downloading manually")
+                    return False
+
+            response.raise_for_status()
+
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+
+            with open(dest, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+
+                        if total_size > 0:
+                            pct = (downloaded / total_size) * 100
+                            mb_downloaded = downloaded / (1024 * 1024)
+                            mb_total = total_size / (1024 * 1024)
+                            print(f"\r  Progress: {pct:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end='', flush=True)
+
+            print()
+            print_success(f"Downloaded {dest.name}")
+            return True
+
+        except requests.exceptions.RequestException as e:
+            print_error(f"Download failed: {e}")
+            if dest.exists():
+                dest.unlink()
+            return False
+
     def _validate_zip_file(self, file_path: Path) -> Tuple[bool, str]:
         """Validate that a file is actually a zip archive.
 
@@ -1103,7 +1267,7 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
                     return False
                 print_success(f"Loaded credentials from {auth_file}")
             elif auth_type == 'form':
-                # Form-based login (e.g., SMPL-X website)
+                # Form-based login
                 creds = self.read_credentials(repo_root, auth_file)
                 if not creds:
                     print_error(f"{checkpoint_info['name']} requires authentication")
@@ -1114,6 +1278,14 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
                     print_error(f"No login_url configured for {checkpoint_info['name']}")
                     return False
                 form_auth = (creds[0], creds[1], login_url)
+                print_success(f"Loaded credentials from {auth_file}")
+            elif auth_type == 'smplx':
+                # Special SMPL-X cross-domain auth
+                creds = self.read_credentials(repo_root, auth_file)
+                if not creds:
+                    print_error(f"{checkpoint_info['name']} requires authentication")
+                    print_info(checkpoint_info['instructions'])
+                    return False
                 print_success(f"Loaded credentials from {auth_file}")
             elif auth_type == 'bearer':
                 token = self.read_hf_token(repo_root)
@@ -1168,8 +1340,21 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/model.safetensors'''
                     success = False
                     print_info(checkpoint_info['instructions'])
                     break
+            elif checkpoint_info.get('auth_type') == 'smplx':
+                # Special SMPL-X cross-domain authentication
+                if not self.download_smplx_model(
+                    checkpoint_info['login_url'],
+                    checkpoint_info['download_page'],
+                    file_info['url'],
+                    dest_path,
+                    creds[0],
+                    creds[1],
+                ):
+                    success = False
+                    print_info(checkpoint_info['instructions'])
+                    break
             elif form_auth:
-                # Use form-based login (e.g., SMPL-X)
+                # Use form-based login
                 username, password, login_url = form_auth
                 if not self.download_file_with_form_auth(
                     login_url,
