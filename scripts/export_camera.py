@@ -512,12 +512,13 @@ print("Setting keyframes...")
 for i, m in enumerate(extrinsics):
     frame = start_frame + i
     t, r = decompose(m)
-    cam.parm('tx').setKeyframe(hou.Keyframe(t[0], frame))
-    cam.parm('ty').setKeyframe(hou.Keyframe(t[1], frame))
-    cam.parm('tz').setKeyframe(hou.Keyframe(t[2], frame))
-    cam.parm('rx').setKeyframe(hou.Keyframe(r[0], frame))
-    cam.parm('ry').setKeyframe(hou.Keyframe(r[1], frame))
-    cam.parm('rz').setKeyframe(hou.Keyframe(r[2], frame))
+    # Create keyframes properly - setFrame() sets the frame number
+    for parm_name, value in [('tx', t[0]), ('ty', t[1]), ('tz', t[2]),
+                              ('rx', r[0]), ('ry', r[1]), ('rz', r[2])]:
+        k = hou.Keyframe()
+        k.setFrame(frame)
+        k.setValue(value)
+        cam.parm(parm_name).setKeyframe(k)
     if (i + 1) % 50 == 0 or i == len(extrinsics) - 1:
         print(f"  Processed frame {{frame}} ({{i + 1}}/{{len(extrinsics)}})")
 
