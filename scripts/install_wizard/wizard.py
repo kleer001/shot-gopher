@@ -438,44 +438,40 @@ class InstallationWizard:
 
         if smpl_exists:
             print_success("SMPL-X credentials file already exists")
-            if ask_yes_no("Update credentials?", default=False):
-                smpl_exists = False
-            else:
-                return
+            return
 
         # SMPL-X credentials setup
-        if not smpl_exists:
-            print(f"\n{Colors.BOLD}SMPL-X Credentials Setup{Colors.ENDC}")
-            print("Required for: Body model (skeleton, mesh topology, UV layout)")
-            print("")
-            print("SMPL-X provides the parametric body model - the 'rigged character'")
-            print("that can be posed and animated with consistent vertex ordering.")
-            print("")
-            print("Registration: https://smpl-x.is.tue.mpg.de/")
-            print("")
-            print("Steps:")
-            print("  1. Register at the website above")
-            print("  2. Wait for approval email (usually within 24-48 hours)")
-            print("  3. Enter your credentials below")
-            print("")
+        print(f"\n{Colors.BOLD}SMPL-X Credentials Setup{Colors.ENDC}")
+        print("Required for: Body model (skeleton, mesh topology, UV layout)")
+        print("")
+        print("SMPL-X provides the parametric body model - the 'rigged character'")
+        print("that can be posed and animated with consistent vertex ordering.")
+        print("")
+        print("Registration: https://smpl-x.is.tue.mpg.de/")
+        print("")
+        print("Steps:")
+        print("  1. Register at the website above")
+        print("  2. Wait for approval email (usually within 24-48 hours)")
+        print("  3. Enter your credentials below")
+        print("")
 
-            if ask_yes_no("Set up SMPL-X credentials now?", default=True):
-                email = tty_input("Enter your SMPL-X registered email: ").strip()
-                if email and '@' in email:
-                    password = tty_input("Enter your SMPL-X password: ").strip()
-                    if password:
-                        with open(smpl_creds_file, 'w') as f:
-                            f.write(email + '\n')
-                            f.write(password + '\n')
-                        # Set restrictive permissions
-                        smpl_creds_file.chmod(0o600)
-                        print_success(f"Credentials saved to {smpl_creds_file}")
-                    else:
-                        print_info("Skipped - you can add SMPL.login.dat later")
+        if ask_yes_no("Set up SMPL-X credentials now?", default=True):
+            email = tty_input("Enter your SMPL-X registered email: ").strip()
+            if email and '@' in email:
+                password = tty_input("Enter your SMPL-X password: ").strip()
+                if password:
+                    with open(smpl_creds_file, 'w') as f:
+                        f.write(email + '\n')
+                        f.write(password + '\n')
+                    # Set restrictive permissions
+                    smpl_creds_file.chmod(0o600)
+                    print_success(f"Credentials saved to {smpl_creds_file}")
                 else:
                     print_info("Skipped - you can add SMPL.login.dat later")
             else:
                 print_info("Skipped - you can add SMPL.login.dat later")
+        else:
+            print_info("Skipped - you can add SMPL.login.dat later")
 
         print("")
 
