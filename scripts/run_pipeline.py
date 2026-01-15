@@ -39,6 +39,7 @@ STAGES = {
     "ingest": "Extract frames from movie",
     "depth": "Run depth analysis (01_analysis.json)",
     "roto": "Run segmentation (02_segmentation.json)",
+    "matanyone": "Refine person mattes (04_matanyone.json)",
     "cleanplate": "Run clean plate generation (03_cleanplate.json)",
     "colmap": "Run COLMAP SfM reconstruction",
     "mocap": "Run human motion capture (WHAM)",
@@ -47,7 +48,7 @@ STAGES = {
 }
 
 # Correct execution order for stages
-STAGE_ORDER = ["ingest", "depth", "roto", "colmap", "cleanplate", "mocap", "gsir", "camera"]
+STAGE_ORDER = ["ingest", "depth", "roto", "matanyone", "cleanplate", "colmap", "mocap", "gsir", "camera"]
 
 
 def sanitize_stages(stages: list[str]) -> list[str]:
@@ -510,6 +511,29 @@ def update_segmentation_prompt(workflow_path: Path, prompt: str, output_subdir: 
         json.dump(workflow, f, indent=2)
 
 
+def update_matanyone_input(workflow_path: Path, mask_dir: Path) -> None:
+    """Update the MatAnyone workflow to read masks from a specific directory.
+
+    Args:
+        workflow_path: Path to workflow JSON
+        mask_dir: Directory containing person masks to refine
+    """
+    with open(workflow_path) as f:
+        workflow = json.load(f)
+
+    for node in workflow.get("nodes", []):
+        # Update the mask input path (second VHS_LoadImagesPath node)
+        if node.get("type") == "VHS_LoadImagesPath" and "Person" in node.get("title", ""):
+            widgets = node.get("widgets_values", [])
+            if widgets:
+                # Use relative path from project dir
+                widgets[0] = str(mask_dir.relative_to(mask_dir.parent.parent))
+                node["widgets_values"] = widgets
+
+    with open(workflow_path, 'w') as f:
+        json.dump(workflow, f, indent=2)
+
+
 def combine_mask_sequences(source_dirs: list[Path], output_dir: Path, prefix: str = "combined") -> int:
     """Combine multiple mask sequences by OR-ing them together.
 
@@ -690,7 +714,7 @@ def run_pipeline(
     stages = stages or list(STAGES.keys())
 
     # Check if any stage requires ComfyUI
-    comfyui_stages = {"depth", "roto", "cleanplate"}
+    comfyui_stages = {"depth", "roto", "matanyone", "cleanplate"}
     needs_comfyui = bool(comfyui_stages & set(stages))
 
     # Auto-start ComfyUI if needed
@@ -895,16 +919,93 @@ def run_pipeline(
                         generate_preview_movie(subdir, project_dir / "preview" / "roto.mp4", fps)
                         break
 
+    # Stage: MatAnyone (refine person mattes)
+    if "matanyone" in stages:
+        print("\n=== Stage: matanyone ===")
+        workflow_path = project_dir / "workflows" / "04_matanyone.json"
+        matte_dir = project_dir / "matte"
+        roto_dir = project_dir / "roto"
+
+        # Find person-related mask directory
+        person_dir = None
+        for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
+            if subdir.is_dir() and "person" in subdir.name.lower():
+                if list(subdir.glob("*.png")):
+                    person_dir = subdir
+                    break
+
+        if not workflow_path.exists():
+            print("  → Skipping (workflow not found)")
+        elif person_dir is None:
+            # Check if there are masks directly in roto/ (single prompt case)
+            if list(roto_dir.glob("*.png")):
+                person_dir = roto_dir
+            else:
+                print("  → Skipping (no person masks found in roto/)")
+
+        if person_dir and skip_existing and list(matte_dir.glob("*.png")):
+            print("  → Skipping (mattes exist)")
+        elif person_dir:
+            print(f"  → Refining person masks from: {person_dir.name}")
+            # Update workflow to read from the person mask directory
+            update_matanyone_input(workflow_path, person_dir)
+            if not run_comfyui_workflow(
+                workflow_path, comfyui_url,
+                output_dir=matte_dir,
+                total_frames=total_frames,
+                stage_name="matanyone",
+            ):
+                print("  → MatAnyone stage failed", file=sys.stderr)
+                return False
+            # Generate preview movie
+            if auto_movie and list(matte_dir.glob("*.png")):
+                generate_preview_movie(matte_dir, project_dir / "preview" / "matte.mp4", fps)
+
     # Stage: Cleanplate
     if "cleanplate" in stages:
         print("\n=== Stage: cleanplate ===")
         workflow_path = project_dir / "workflows" / "03_cleanplate.json"
         cleanplate_dir = project_dir / "cleanplate"
+        roto_dir = project_dir / "roto"
+        matte_dir = project_dir / "matte"
+
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
         elif skip_existing and list(cleanplate_dir.glob("*.png")):
             print("  → Skipping (cleanplates exist)")
         else:
+            # If MatAnyone refined mattes exist, re-consolidate using them
+            # instead of raw SAM3 person masks
+            if list(matte_dir.glob("*.png")):
+                print("  → Using MatAnyone refined mattes for consolidation")
+
+                # Collect all mask directories, substituting matte/ for person dirs
+                mask_dirs = []
+                for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
+                    if subdir.is_dir() and list(subdir.glob("*.png")):
+                        if "person" in subdir.name.lower():
+                            # Use refined mattes instead of raw person masks
+                            mask_dirs.append(matte_dir)
+                        else:
+                            mask_dirs.append(subdir)
+
+                # If we have multiple mask sources, re-consolidate
+                if len(mask_dirs) > 1:
+                    # Clear old combined masks
+                    for old_file in roto_dir.glob("combined_*.png"):
+                        old_file.unlink()
+                    count = combine_mask_sequences(mask_dirs, roto_dir, prefix="combined")
+                    print(f"  → Re-consolidated {count} frames with refined mattes")
+                elif len(mask_dirs) == 1 and mask_dirs[0] == matte_dir:
+                    # Single source (just person), copy mattes to roto/
+                    for old_file in roto_dir.glob("*.png"):
+                        if not old_file.parent.is_dir():
+                            old_file.unlink()
+                    for i, matte_file in enumerate(sorted(matte_dir.glob("*.png"))):
+                        out_name = f"matte_{i+1:05d}.png"
+                        shutil.copy2(matte_file, roto_dir / out_name)
+                    print(f"  → Copied refined mattes to roto/")
+
             # Update ProPainterInpaint resolution to match source frames
             update_cleanplate_resolution(workflow_path, source_frames)
             if not run_comfyui_workflow(

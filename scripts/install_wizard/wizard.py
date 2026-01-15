@@ -153,6 +153,12 @@ class InstallationWizard:
                     'https://github.com/daniabib/ComfyUI_ProPainter_Nodes.git',
                     comfyui_dir / "custom_nodes" / "ComfyUI_ProPainter_Nodes",
                     size_gb=1.5,  # Models auto-downloaded
+                ),
+                GitRepoInstaller(
+                    'ComfyUI-MatAnyone',
+                    'https://github.com/FuouM/ComfyUI-MatAnyone.git',
+                    comfyui_dir / "custom_nodes" / "ComfyUI-MatAnyone",
+                    size_gb=0.1,  # Code only, model downloaded separately
                 )
             ]
         }
@@ -578,6 +584,10 @@ class InstallationWizard:
             # Download SAM3 model for segmentation
             print("\nDownloading SAM3 model (for segmentation/roto workflows)...")
             self.checkpoint_downloader.download_all_checkpoints(['sam3'], self.state_manager)
+
+            # Download MatAnyone model for video matting
+            print("\nDownloading MatAnyone model (for person matte refinement)...")
+            self.checkpoint_downloader.download_all_checkpoints(['matanyone'], self.state_manager)
 
         # Download checkpoints for motion capture components
         mocap_components = [cid for cid in to_install if cid in ['wham']]
