@@ -1549,12 +1549,27 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/matanyone.pth'''
             print_warning(f"No checkpoints defined for {comp_id}")
             return True  # Not an error, just skip
 
-        # Check if already downloaded
-        if state_manager and state_manager.is_checkpoint_downloaded(comp_id):
-            print_success(f"{self.CHECKPOINTS[comp_id]['name']} already downloaded")
+        checkpoint_info = self.CHECKPOINTS[comp_id]
+
+        # Determine destination directory
+        if checkpoint_info.get('use_home_dir'):
+            dest_dir = Path.cwd() / checkpoint_info['dest_dir_rel']
+        else:
+            dest_dir = self.base_dir / checkpoint_info['dest_dir_rel']
+
+        # Verify actual file exists before trusting state (handles filename changes)
+        files_exist = True
+        for file_info in checkpoint_info['files']:
+            dest_path = dest_dir / file_info['filename']
+            if not dest_path.exists():
+                files_exist = False
+                break
+
+        # Check if already downloaded AND files exist
+        if state_manager and state_manager.is_checkpoint_downloaded(comp_id) and files_exist:
+            print_success(f"{checkpoint_info['name']} already downloaded")
             return True
 
-        checkpoint_info = self.CHECKPOINTS[comp_id]
         print(f"\n{Colors.BOLD}Downloading {checkpoint_info['name']}...{Colors.ENDC}")
 
         # Handle skip_download flag (for components without available checkpoints)
@@ -1611,12 +1626,7 @@ Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/matanyone.pth'''
                     return False
                 print_success(f"Loaded token from {auth_file}")
 
-        # Determine destination directory
-        if checkpoint_info.get('use_home_dir'):
-            dest_dir = Path.cwd() / checkpoint_info['dest_dir_rel']
-        else:
-            dest_dir = self.base_dir / checkpoint_info['dest_dir_rel']
-
+        # Ensure destination directory exists
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         # Handle HuggingFace downloads (uses snapshot_download)
