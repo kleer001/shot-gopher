@@ -19,7 +19,7 @@
         {"name": "frame_count", "type": "INT", "links": null, "slot_index": 2}
       ],
       "properties": {"Node name for S&R": "VHS_LoadImagesPath"},
-      "widgets_values": ["source/frames", 0, 0, 1, "Disabled", 1920, 1080, null, null],
+      "widgets_values": ["source/frames", 0, 0, 0, "Disabled", 1920, 1080, null, null],
       "title": "Load Source Frames"
     },
     {
