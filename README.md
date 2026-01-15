@@ -201,6 +201,7 @@ movie.mp4 → run_pipeline.py → project folder → VFX passes
 **Core components:**
 - **ComfyUI** - Node-based workflow engine (not for image generation here—just ML inference)
 - **SAM3** - Segment Anything Model 3 for text-prompted rotoscoping
+- **MatAnyone** - Video matting for refining person segmentation masks into clean alpha mattes
 - **Depth Anything V3** - Monocular depth estimation with temporal consistency
 - **ProPainter** - Video inpainting for clean plate generation
 - **VideoHelperSuite** - Frame I/O handling
@@ -211,7 +212,10 @@ movie.mp4 → run_pipeline.py → project folder → VFX passes
 ../vfx_projects/My_Shot_Name/    # Sibling to repo, not inside it
 ├── source/frames/    # Input frames (frame_1001.png, ...)
 ├── depth/            # Depth maps
-├── roto/             # Segmentation masks
+├── roto/             # Segmentation masks (per-prompt subdirs)
+│   ├── person/       # SAM3 person masks
+│   └── bag/          # SAM3 bag masks (if multi-prompt)
+├── matte/            # MatAnyone refined person mattes
 ├── cleanplate/       # Inpainted plates
 ├── camera/           # Camera/geometry data
 │   ├── extrinsics.json    # Per-frame camera matrices
@@ -241,14 +245,15 @@ Override the default projects location with `--projects-dir`.
 - `workflow_templates/01_analysis.json` - Depth Anything V3 + camera estimation
 - `workflow_templates/02_segmentation.json` - SAM3 video segmentation (text prompt → masks)
 - `workflow_templates/03_cleanplate.json` - ProPainter inpainting
+- `workflow_templates/04_matanyone.json` - MatAnyone video matting (person mask refinement)
 
 ### Known Issues
 - SAM3 text prompts like "person" don't capture carried items (bags, purses) - use `run_segmentation.py --prompts` for multi-prompt
 - Frame numbering in ComfyUI SaveImage doesn't support custom start numbers (1001+) - outputs need post-rename or custom node
 - Large frame counts (150+) can stall SAM3 propagation - need batching strategy
+- MatAnyone is trained specifically for humans - non-human objects will have degraded matte quality
 
 ### Not Yet Implemented
-- Automated mask combination (when using multi-prompt segmentation)
 - Depth-to-normals conversion for relighting
 - Batch processing wrapper (multiple shots in parallel)
 
@@ -379,12 +384,14 @@ For footage with moving subjects (people, vehicles, etc.), the pipeline supports
 ### How It Works
 
 ```
-Frames → SAM3 Segmentation → Masks → COLMAP (masked) → Static reconstruction
-                  ↓
-              Clean plates (ProPainter inpainting)
+Frames → SAM3 Segmentation → Masks → MatAnyone (person only) → Refined Mattes
+                                              ↓
+                                    Consolidate all masks
+                                              ↓
+              Clean plates (ProPainter inpainting) ← COLMAP (masked) → Static reconstruction
 ```
 
-The segmentation masks tell COLMAP to ignore features in dynamic regions during camera solving, producing accurate camera tracks even with moving subjects in frame.
+The pipeline automatically refines person masks using MatAnyone for cleaner alpha edges. During cleanplate generation, masks are consolidated (OR-combined) with MatAnyone mattes replacing raw SAM3 person masks. The consolidated masks tell COLMAP to ignore features in dynamic regions during camera solving, producing accurate camera tracks even with moving subjects in frame.
 
 ### Basic Usage
 
@@ -421,14 +428,21 @@ python scripts/run_segmentation.py /path/to/projects/My_Shot --prompt "car"
 1. **Segmentation (roto)**: SAM3 video segmentation
    - Text-prompted object detection
    - Temporal propagation across frames
-   - Output: Binary masks in `roto/`
+   - Output: Binary masks in `roto/<prompt>/` subdirectories
 
-2. **Clean Plate (cleanplate)**: ProPainter inpainting
-   - Uses masks from roto stage
+2. **MatAnyone (matanyone)**: Video matting refinement
+   - Refines person masks into clean alpha mattes
+   - Requires 9GB+ VRAM
+   - Human-focused (trained on people, not general objects)
+   - Output: Refined mattes in `matte/`
+
+3. **Clean Plate (cleanplate)**: ProPainter inpainting
+   - Consolidates masks from all `roto/` subdirs
+   - Substitutes MatAnyone mattes for person masks if available
    - Fills dynamic regions with static background
    - Output: Clean plates in `cleanplate/`
 
-3. **COLMAP (with masks)**: Camera solving
+4. **COLMAP (with masks)**: Camera solving
    - Automatically detects masks in `roto/`
    - Excludes masked regions from feature extraction
    - Produces accurate static-scene reconstruction
@@ -465,13 +479,18 @@ python scripts/run_pipeline.py footage.mp4 --stages cleanplate,colmap,camera
 
 ```
 projects/My_Shot/
-├── roto/                    # Segmentation masks (dynamic regions)
-│   ├── mask_00001.png
-│   ├── mask_00002.png
+├── roto/                    # Segmentation masks (per-prompt subdirs)
+│   ├── person/              # SAM3 person masks
+│   │   ├── mask_00001.png
+│   │   └── ...
+│   ├── bag/                 # SAM3 bag masks (if multi-prompt)
+│   │   └── ...
+│   └── combined_*.png       # Consolidated masks (created by cleanplate)
+├── matte/                   # MatAnyone refined person mattes
+│   ├── matte_00001.png
 │   └── ...
 ├── cleanplate/              # Inpainted backgrounds (static only)
 │   ├── clean_00001.png
-│   ├── clean_00002.png
 │   └── ...
 ├── colmap/
 │   └── sparse/0/            # Static-only reconstruction
@@ -484,7 +503,8 @@ projects/My_Shot/
 
 - **Text prompt specificity**: SAM3's "person" prompt doesn't capture carried items (bags, purses). Use multi-prompt for complete coverage.
 - **Large frame counts**: 150+ frames can stall SAM3 propagation. Batch processing or frame range support planned.
-- **Mask combination**: Multiple prompt runs currently write to same output directory. Manual mask merging may be needed for complex scenes.
+- **MatAnyone is human-only**: Trained specifically on people - object mattes (cars, bags, etc.) won't benefit from MatAnyone refinement and use raw SAM3 masks.
+- **MatAnyone VRAM**: Requires 9GB+ GPU memory. Will skip automatically if workflow not found.
 
 ## Human Motion Capture (Experimental)
 
