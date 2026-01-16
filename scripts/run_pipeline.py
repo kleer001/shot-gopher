@@ -1166,6 +1166,9 @@ def run_pipeline(
         roto_dir = project_dir / "roto"
         combined_dir = roto_dir / "combined"
 
+        # Refresh workflow from template if template is newer
+        refresh_workflow_from_template(workflow_path, "03_cleanplate.json")
+
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
         elif skip_existing and list(cleanplate_dir.glob("*.png")):
