@@ -99,6 +99,8 @@ Output follows VFX production conventions:
 └── colmap/             # COLMAP reconstruction data
 ```
 
+**Note on frame numbering:** Frame sequences start at 0001 rather than the VFX industry standard of 1001. Unfortunately, ComfyUI's SaveImage node and WHAM's output constraints make custom start frame numbering infeasible. We apologize for this deviation from convention.
+
 ## System Requirements
 
 **Platform:** Linux (tested on Ubuntu 20.04+)
