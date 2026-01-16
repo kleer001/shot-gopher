@@ -269,6 +269,131 @@ C:\Windows\System32\nvidia-smi.exe
 
 **Note:** The CUDA Toolkit is effectively a dependency for Windows users who want GPU acceleration. The install wizard should check for it and provide guidance if missing.
 
+### 3.3 Automatic Tool Installation (Windows)
+
+When a required tool is not found, the install wizard will offer to install it automatically (with user confirmation). This keeps the installation experience smooth while respecting user control.
+
+#### Package Manager Strategy
+
+The wizard will detect available package managers in this priority order:
+
+1. **winget** (Windows Package Manager) - Built into Windows 10/11, preferred
+2. **Chocolatey** - Popular third-party manager, widely used
+3. **Scoop** - User-level installs, no admin required
+4. **Manual download** - Fallback with guided instructions
+
+#### Installation Flow
+
+```
+Checking for FFmpeg... NOT FOUND
+
+FFmpeg is required for video processing.
+Would you like to install it automatically? [y/n]: y
+
+Detected package manager: winget
+Installing FFmpeg via winget...
+> winget install ffmpeg
+✓ FFmpeg installed successfully
+
+Verifying installation...
+✓ ffmpeg found at C:\Users\Artist\AppData\Local\Microsoft\WinGet\Packages\...
+```
+
+#### Tool Installation Commands
+
+| Tool | winget | Chocolatey | Scoop |
+|------|--------|------------|-------|
+| **FFmpeg** | `winget install ffmpeg` | `choco install ffmpeg` | `scoop install ffmpeg` |
+| **7-Zip** | `winget install 7zip.7zip` | `choco install 7zip` | `scoop install 7zip` |
+| **Git** | `winget install Git.Git` | `choco install git` | `scoop install git` |
+| **COLMAP** | N/A (manual) | `choco install colmap` | N/A (manual) |
+| **aria2** | `winget install aria2.aria2` | `choco install aria2` | `scoop install aria2` |
+| **Miniconda** | `winget install Anaconda.Miniconda3` | `choco install miniconda3` | `scoop install miniconda3` |
+
+#### Tools Requiring Manual Installation
+
+Some tools cannot be reliably auto-installed:
+
+| Tool | Reason | Wizard Behavior |
+|------|--------|-----------------|
+| **CUDA Toolkit** | Large download, requires specific version matching GPU | Provide download link, verify after user installs |
+| **NVIDIA Drivers** | Hardware-specific, best from NVIDIA directly | Detect GPU, provide direct download link |
+| **Visual Studio Build Tools** | Large, complex installer with options | Provide download link and required components list |
+| **COLMAP** (via winget) | Not available in winget | Offer Chocolatey or provide manual download link |
+
+#### Implementation Details
+
+```python
+class WindowsToolInstaller:
+    """Handles automatic tool installation on Windows."""
+
+    def __init__(self):
+        self.package_manager = self._detect_package_manager()
+
+    def _detect_package_manager(self) -> str:
+        """Detect available package manager in priority order."""
+        if shutil.which('winget'):
+            return 'winget'
+        elif shutil.which('choco'):
+            return 'chocolatey'
+        elif shutil.which('scoop'):
+            return 'scoop'
+        return 'manual'
+
+    def install_tool(self, tool_name: str) -> bool:
+        """
+        Prompt user and install tool if confirmed.
+        Returns True if tool is available after attempt.
+        """
+        if not self._prompt_user(tool_name):
+            return False
+
+        commands = INSTALL_COMMANDS[self.package_manager].get(tool_name)
+        if not commands:
+            self._show_manual_instructions(tool_name)
+            return self._wait_for_manual_install(tool_name)
+
+        return self._run_install(commands)
+```
+
+#### User Prompts
+
+The wizard will use clear, consistent prompts:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Missing Dependency: FFmpeg                                 │
+├─────────────────────────────────────────────────────────────┤
+│  FFmpeg is required for video frame extraction.             │
+│                                                             │
+│  Install automatically using winget?                        │
+│                                                             │
+│  [Y] Yes, install now                                       │
+│  [N] No, I'll install it manually                           │
+│  [S] Skip (some features won't work)                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Error Handling
+
+If automatic installation fails:
+
+1. Show the error message from the package manager
+2. Offer to retry with a different package manager (if available)
+3. Provide manual installation instructions as fallback
+4. Allow user to skip (with warning about reduced functionality)
+
+#### Linux Comparison
+
+On Linux, the wizard already handles package installation via apt/yum/dnf. The Windows implementation follows the same pattern:
+
+| Aspect | Linux | Windows |
+|--------|-------|---------|
+| Package manager detection | apt, yum, dnf, pacman | winget, choco, scoop |
+| User confirmation | Required | Required |
+| Fallback | Manual instructions | Manual instructions |
+| Admin requirements | sudo for system packages | Varies by manager |
+
 ---
 
 ## Phase 4: Prerequisites for Windows Users
@@ -397,9 +522,10 @@ Even with Windows support, some limitations may remain:
 | 4 | Create `activate.bat` and `activate.ps1` | Medium | High |
 | 5 | Update script generator for multi-platform | Medium | High |
 | 6 | Exhaustive tool path detection | Medium | Medium |
-| 7 | Update documentation | Low | Medium |
-| 8 | Standardize pathlib usage | Low | Low |
-| 9 | CI testing on Windows | Medium | Medium |
+| 7 | Automatic tool installation (winget/choco/scoop) | Medium | High |
+| 8 | Update documentation | Low | Medium |
+| 9 | Standardize pathlib usage | Low | Low |
+| 10 | CI testing on Windows | Medium | Medium |
 
 ---
 
