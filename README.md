@@ -127,6 +127,23 @@ Output follows VFX production conventions:
 - Approval typically within 24-48 hours
 - Provides parametric body models for human reconstruction
 
+### GPU Memory (VRAM) Requirements
+
+**Per-Component VRAM Usage:**
+- Depth Anything V3: ~7 GB (Small model)
+- SAM3 (segmentation): ~4 GB
+- ProPainter (clean plates): ~6 GB
+- MatAnyone (matte refinement): 9+ GB
+- COLMAP: CPU-based (minimal GPU usage)
+- GS-IR (material decomposition): 12+ GB
+- WHAM/ECON (motion capture): 12+ GB
+
+**Minimum Recommendation: 9 GB VRAM** (covers core pipeline including MatAnyone)
+**Comfortable Recommendation: 12 GB VRAM** (supports all features including motion capture and material decomposition)
+**Optimal: 24 GB VRAM** (allows higher batch sizes and parallel processing)
+
+Note: NVIDIA GPU with CUDA support required for all ML models.
+
 ## License
 
 See individual component licenses. This pipeline integrates multiple open-source projects with varying licenses.
