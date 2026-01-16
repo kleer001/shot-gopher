@@ -557,29 +557,45 @@ def combine_mattes(
     return True
 
 
-def refresh_workflow_from_template(workflow_path: Path, template_name: str) -> bool:
+def refresh_workflow_from_template(workflow_path: Path, template_name: str, project_dir: Path = None) -> bool:
     """Refresh a project's workflow from the template if template is newer.
 
     Args:
         workflow_path: Path to project's workflow file
         template_name: Name of template file (e.g., "02_segmentation.json")
+        project_dir: Project directory for path population (inferred from workflow_path if not provided)
 
     Returns:
         True if refreshed, False if no refresh needed
     """
+    from setup_project import populate_workflow
+
     template_path = WORKFLOW_TEMPLATES_DIR / template_name
     if not template_path.exists():
         return False
 
+    # Infer project_dir from workflow_path if not provided
+    # workflow_path is typically: project_dir/workflows/02_segmentation.json
+    if project_dir is None:
+        project_dir = workflow_path.parent.parent
+
+    def copy_and_populate():
+        """Copy template and populate with project paths."""
+        with open(template_path) as f:
+            workflow_data = json.load(f)
+        populated = populate_workflow(workflow_data, project_dir)
+        with open(workflow_path, 'w') as f:
+            json.dump(populated, f, indent=2)
+
     # Always refresh if project workflow doesn't exist
     if not workflow_path.exists():
-        shutil.copy2(template_path, workflow_path)
+        copy_and_populate()
         print(f"  → Copied workflow from template: {template_name}")
         return True
 
     # Refresh if template is newer
     if template_path.stat().st_mtime > workflow_path.stat().st_mtime:
-        shutil.copy2(template_path, workflow_path)
+        copy_and_populate()
         print(f"  → Refreshed workflow from template: {template_name}")
         return True
 
@@ -1063,7 +1079,6 @@ def run_pipeline(
                     if result and len(result) > 1:
                         # Found multiple instances, remove original combined directory
                         print(f"    Found {len(result)} instances, removing combined directory")
-                        import shutil
                         shutil.rmtree(person_dir)
                     elif result and len(result) == 1:
                         # Only one instance found, keep as-is but rename for consistency
