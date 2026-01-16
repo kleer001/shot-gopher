@@ -959,7 +959,6 @@ def run_pipeline(
         preview_dir.mkdir(exist_ok=True)
         source_preview = preview_dir / f"source{input_path.suffix}"
         if not source_preview.exists():
-            import shutil
             shutil.copy2(input_path, source_preview)
             print(f"  → Copied source to {source_preview.name}")
 
