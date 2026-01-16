@@ -17,7 +17,12 @@ This pipeline automates first-pass VFX prep work that traditionally requires man
 - **Clean plate generation** - Automated inpainting to remove objects from footage (ProPainter)
 - **Camera tracking** - Structure-from-Motion camera solves with bundle adjustment (COLMAP)
 - **3D reconstruction** - Dense point clouds and mesh generation from multi-view footage
-- **Material decomposition** - PBR material extraction (albedo, roughness, metallic, normals, environment lighting) via GS-IR
+- **Material decomposition** - PBR material extraction via GS-IR
+  - Albedo maps (diffuse color)
+  - Roughness maps (surface specularity)
+  - Metallic maps (metallic vs dielectric)
+  - Normal maps (surface orientation)
+  - Environment lighting (HDR environment map)
 - **Camera export** - Export to Alembic/JSON for Nuke, Maya, Houdini, Blender
 - **Human motion capture** - World-grounded skeleton tracking and clothed mesh reconstruction (WHAM + ECON, experimental)
 - **Batch processing** - Automated multi-stage pipeline orchestration
