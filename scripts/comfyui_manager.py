@@ -238,3 +238,78 @@ def ensure_comfyui(url: str = DEFAULT_COMFYUI_URL, timeout: int = 60) -> bool:
     Returns True if ComfyUI is available, False otherwise.
     """
     return start_comfyui(url=url, timeout=timeout)
+
+
+def kill_all_comfyui_processes() -> int:
+    """Kill ALL ComfyUI processes system-wide to free GPU memory.
+
+    This is useful before starting a fresh pipeline run to ensure
+    no stale ComfyUI processes are hogging VRAM.
+
+    Returns:
+        Number of processes killed
+    """
+    global _comfyui_process
+
+    killed = 0
+
+    # First, stop our managed process if any
+    if _comfyui_process is not None:
+        stop_comfyui()
+        killed += 1
+
+    # Find and kill any other ComfyUI processes
+    # Look for Python processes running ComfyUI's main.py
+    try:
+        # Use pgrep to find ComfyUI processes
+        result = subprocess.run(
+            ["pgrep", "-f", "ComfyUI.*main.py"],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            pids = result.stdout.strip().split('\n')
+            for pid in pids:
+                pid = pid.strip()
+                if pid:
+                    try:
+                        # Try graceful termination first
+                        subprocess.run(["kill", pid], capture_output=True)
+                        killed += 1
+                        print(f"  → Killed ComfyUI process (PID: {pid})")
+                    except Exception:
+                        pass
+
+            # Give processes time to die gracefully
+            if killed > 0:
+                time.sleep(2)
+
+                # Force kill any survivors
+                result = subprocess.run(
+                    ["pgrep", "-f", "ComfyUI.*main.py"],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    for pid in result.stdout.strip().split('\n'):
+                        pid = pid.strip()
+                        if pid:
+                            try:
+                                subprocess.run(["kill", "-9", pid], capture_output=True)
+                                print(f"  → Force killed ComfyUI process (PID: {pid})")
+                            except Exception:
+                                pass
+
+    except FileNotFoundError:
+        # pgrep not available (non-Linux system)
+        pass
+    except Exception as e:
+        print(f"  → Warning: Could not search for ComfyUI processes: {e}")
+
+    if killed == 0:
+        print("  → No ComfyUI processes found")
+    else:
+        print(f"  → Killed {killed} ComfyUI process(es)")
+
+    return killed

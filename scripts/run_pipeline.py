@@ -30,7 +30,7 @@ from comfyui_utils import (
     check_comfyui_running,
     run_comfyui_workflow,
 )
-from comfyui_manager import ensure_comfyui, stop_comfyui
+from comfyui_manager import ensure_comfyui, stop_comfyui, kill_all_comfyui_processes
 
 # Workflow templates directory
 WORKFLOW_TEMPLATES_DIR = Path(__file__).parent.parent / "workflow_templates"
@@ -964,8 +964,9 @@ def run_pipeline(
         print("Failed to set up project", file=sys.stderr)
         return False
 
-    # Clear GPU memory before starting pipeline stages
-    print("\n[GPU Memory]")
+    # Kill stale ComfyUI processes and clear GPU memory before starting
+    print("\n[GPU Cleanup]")
+    kill_all_comfyui_processes()
     clear_gpu_memory()
 
     # Stage: Ingest
