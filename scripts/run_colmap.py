@@ -237,7 +237,8 @@ def extract_features(
 def match_features(
     database_path: Path,
     matcher_type: str = "sequential",
-    sequential_overlap: int = 10
+    sequential_overlap: int = 10,
+    use_gpu: bool = True
 ) -> None:
     """Match features between images.
 
@@ -245,24 +246,42 @@ def match_features(
         database_path: Path to COLMAP database
         matcher_type: 'sequential', 'exhaustive', or 'vocab_tree'
         sequential_overlap: Number of overlapping frames for sequential matcher
+        use_gpu: Whether to use GPU for SIFT matching (falls back to CPU on failure)
     """
-    if matcher_type == "sequential":
-        args = {
-            "database_path": str(database_path),
-            "SequentialMatching.overlap": sequential_overlap,
-            "SiftMatching.use_gpu": 1,
-            "SiftMatching.max_num_matches": 32768,  # Explicit default to avoid GPU init bug
-        }
-        run_colmap_command("sequential_matcher", args, "Matching features (sequential)")
-    elif matcher_type == "exhaustive":
-        args = {
-            "database_path": str(database_path),
-            "SiftMatching.use_gpu": 1,
-            "SiftMatching.max_num_matches": 32768,  # Explicit default to avoid GPU init bug
-        }
-        run_colmap_command("exhaustive_matcher", args, "Matching features (exhaustive)")
+    def _run_matcher(gpu: bool):
+        """Run the matcher with specified GPU setting."""
+        if matcher_type == "sequential":
+            args = {
+                "database_path": str(database_path),
+                "SequentialMatching.overlap": sequential_overlap,
+                "SiftMatching.use_gpu": 1 if gpu else 0,
+                "SiftMatching.max_num_matches": 32768,
+            }
+            mode = "GPU" if gpu else "CPU"
+            run_colmap_command("sequential_matcher", args, f"Matching features (sequential, {mode})")
+        elif matcher_type == "exhaustive":
+            args = {
+                "database_path": str(database_path),
+                "SiftMatching.use_gpu": 1 if gpu else 0,
+                "SiftMatching.max_num_matches": 32768,
+            }
+            mode = "GPU" if gpu else "CPU"
+            run_colmap_command("exhaustive_matcher", args, f"Matching features (exhaustive, {mode})")
+        else:
+            raise ValueError(f"Unknown matcher type: {matcher_type}")
+
+    if use_gpu:
+        try:
+            _run_matcher(gpu=True)
+        except subprocess.CalledProcessError as e:
+            # Check for GPU SIFT initialization failure
+            if "max_num_matches" in str(e.stdout) or "sift.cc" in str(e.stdout):
+                print("    GPU SIFT matching failed, falling back to CPU...")
+                _run_matcher(gpu=False)
+            else:
+                raise
     else:
-        raise ValueError(f"Unknown matcher type: {matcher_type}")
+        _run_matcher(gpu=False)
 
 
 def run_sparse_reconstruction(
