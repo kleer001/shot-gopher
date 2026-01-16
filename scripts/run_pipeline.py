@@ -983,7 +983,6 @@ def run_pipeline(
         preview_dir.mkdir(exist_ok=True)
         source_preview = preview_dir / f"source{input_path.suffix}"
         if not source_preview.exists():
-            import shutil
             shutil.copy2(input_path, source_preview)
             print(f"  → Copied source to {source_preview.name}")
 
@@ -1199,6 +1198,9 @@ def run_pipeline(
         cleanplate_dir = project_dir / "cleanplate"
         roto_dir = project_dir / "roto"
         combined_dir = roto_dir / "combined"
+
+        # Refresh workflow from template if template is newer
+        refresh_workflow_from_template(workflow_path, "03_cleanplate.json")
 
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")

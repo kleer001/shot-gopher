@@ -10,6 +10,16 @@ GVHMR (Gravity-View Human Motion Recovery) is a SIGGRAPH Asia 2024 paper that pr
 - **Camera Motion Support**: Works with both static and moving cameras
 - **Focal Length Input**: Can leverage COLMAP intrinsics for better accuracy
 - **Active Development**: Recent updates (March 2025) include SimpleVO and `f_mm` parameter
+- **Multi-Person Support**: Handles multiple people in scene (outputs per-person results)
+
+### Accuracy Improvements vs WHAM
+
+According to the [SIGGRAPH Asia 2024 paper](https://arxiv.org/abs/2409.06662):
+
+- **7-10mm lower error** on standard benchmarks (PA-MPJPE, MPJPE, PVE)
+- **Better handling of camera rotation errors** - GVHMR is more robust to visual odometry drift
+- **Lower accumulated drift on long sequences** - WHAM's autoregressive RNN accumulates errors over time, while GVHMR's gravity-view coordinates maintain consistency
+- **Up to 6mm improvement** in PA-MPJPE for camera-space metrics
 
 ## Current Pipeline State
 
@@ -40,6 +50,7 @@ GVHMR (Gravity-View Human Motion Recovery) is a SIGGRAPH Asia 2024 paper that pr
 | Static camera | N/A | `--static_cam` flag |
 | Output format | `poses`, `trans`, `betas` | `smpl_params_global`, `smpl_params_incam` |
 | Visual odometry | Built-in SLAM | SimpleVO (default) or DPVO |
+| Multi-person | Single person | Multiple people (outputs to `person_X/` subdirs) |
 
 ---
 
@@ -95,7 +106,15 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-**Decision needed**: Maintain separate `gvhmr` conda env or integrate into `comfyui_ingest` env?
+**Recommendation**: Integrate into `vfx-pipeline` conda env rather than maintaining a separate environment.
+
+Rationale:
+- Python 3.10 is compatible with our other dependencies (PyTorch, ComfyUI, etc.)
+- Simpler user experience - one environment to activate
+- Easier CI/testing - single environment to manage
+- Avoids environment switching complexity in `run_pipeline.py`
+
+If dependency conflicts arise, fall back to separate `gvhmr` env with subprocess activation.
 
 ---
 
@@ -151,12 +170,17 @@ def run_gvhmr_motion_tracking(
 ### 2.2 Convert COLMAP Intrinsics to Focal Length (mm)
 
 ```python
-def colmap_intrinsics_to_focal_mm(intrinsics_path: Path, sensor_width_mm: float = 36.0) -> float:
+def colmap_intrinsics_to_focal_mm(
+    intrinsics_path: Path,
+    sensor_width_mm: Optional[float] = None,
+    metadata_path: Optional[Path] = None
+) -> float:
     """Convert COLMAP intrinsics to focal length in mm.
 
     Args:
         intrinsics_path: Path to camera/intrinsics.json
-        sensor_width_mm: Assumed sensor width (default: 36mm full-frame)
+        sensor_width_mm: Sensor width in mm (None = auto-detect or assume 36mm)
+        metadata_path: Path to source video/image for EXIF extraction
 
     Returns:
         Focal length in millimeters
@@ -169,17 +193,47 @@ def colmap_intrinsics_to_focal_mm(intrinsics_path: Path, sensor_width_mm: float 
     fx = intrinsics["fx"]  # Focal length in pixels
     width = intrinsics["width"]  # Image width in pixels
 
+    # Try to get sensor width from metadata if not provided
+    if sensor_width_mm is None:
+        sensor_width_mm = extract_sensor_width_from_exif(metadata_path)
+        if sensor_width_mm is None:
+            # Default to 36mm (full-frame equivalent)
+            # Common assumptions: 36mm (full-frame), 23.5mm (APS-C), 13.2mm (1-inch)
+            sensor_width_mm = 36.0
+            print(f"    Warning: Assuming {sensor_width_mm}mm sensor width (full-frame)")
+
     # focal_mm = fx * sensor_width_mm / image_width
     focal_mm = fx * sensor_width_mm / width
 
     return focal_mm
+
+
+def extract_sensor_width_from_exif(metadata_path: Optional[Path]) -> Optional[float]:
+    """Try to extract sensor width from EXIF data.
+
+    Returns:
+        Sensor width in mm, or None if not available
+    """
+    if metadata_path is None or not metadata_path.exists():
+        return None
+
+    try:
+        # Could use exifread, PIL, or ffprobe for video
+        # Implementation depends on input format
+        pass
+    except Exception:
+        return None
+
+    return None
 ```
+
+**Note**: Sensor width significantly affects focal length calculation. Consider adding a `--sensor-width` CLI option for users who know their camera specs.
 
 ### 2.3 Video Handling
 
 GVHMR requires video input. Options:
 
-**Option A**: Use original source video
+**Option A**: Use original source video (preferred)
 ```python
 source_video = project_dir / "source" / "input.mp4"
 if source_video.exists():
@@ -187,17 +241,32 @@ if source_video.exists():
 ```
 
 **Option B**: Re-encode frames to video (fallback)
+
+Use high-quality encoding to minimize quality loss:
+
 ```python
 frames_dir = project_dir / "source" / "frames"
 video_path = project_dir / "source" / "_gvhmr_input.mp4"
+
+# Get fps from project metadata
+fps = get_project_fps(project_dir) or 24
+
 subprocess.run([
     "ffmpeg", "-y",
-    "-framerate", "30",
+    "-framerate", str(fps),
     "-i", str(frames_dir / "frame_%04d.png"),
-    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    "-c:v", "libx264",
+    "-crf", "18",           # High quality (18-23 is visually lossless range)
+    "-preset", "slow",      # Better compression at cost of encode time
+    "-pix_fmt", "yuv420p",  # Compatibility
     str(video_path)
 ])
 ```
+
+**Quality considerations**:
+- CRF 18 provides near-lossless quality (CRF 0 = lossless, 23 = default, 51 = worst)
+- For truly lossless, use `-c:v ffv1` but file size will be much larger
+- Original source video is always preferred to avoid any generation loss
 
 ---
 
@@ -318,15 +387,23 @@ def run_mocap(project_dir: Path, use_colmap_intrinsics: bool = True) -> bool:
 ### 4.2 Detect Static Camera
 
 ```python
-def detect_static_camera(extrinsics_path: Path, threshold: float = 0.01) -> bool:
+def detect_static_camera(
+    extrinsics_path: Path,
+    threshold_meters: float = 0.01
+) -> bool:
     """Detect if camera is static from COLMAP extrinsics.
+
+    Analyzes camera translation variance across all frames. A "static" camera
+    is one where the total movement is below the threshold (e.g., tripod shot
+    with minor vibration).
 
     Args:
         extrinsics_path: Path to extrinsics.json
-        threshold: Maximum translation variance for static camera
+        threshold_meters: Max camera movement variance to consider "static"
+                          Default 0.01 = ~1cm movement tolerance
 
     Returns:
-        True if camera appears static
+        True if camera appears static (enables --static_cam in GVHMR)
     """
     import json
     import numpy as np
@@ -335,12 +412,26 @@ def detect_static_camera(extrinsics_path: Path, threshold: float = 0.01) -> bool
         extrinsics = json.load(f)
 
     # Extract translations from 4x4 matrices
-    translations = np.array([m[0:3][3] for m in extrinsics])
+    # Each matrix is a list of 4 rows, translation is column 3 (index 3) of rows 0-2
+    translations = np.array([np.array(m)[:3, 3] for m in extrinsics])
 
-    # Check variance
+    # Check variance across all axes
     variance = np.var(translations, axis=0).sum()
-    return variance < threshold
+
+    is_static = variance < threshold_meters
+    if is_static:
+        max_movement = np.max(np.abs(translations - translations.mean(axis=0)))
+        print(f"    Camera variance: {variance:.6f} (max movement: {max_movement:.4f}m)")
+
+    return is_static
 ```
+
+**Threshold tuning**:
+- `0.01` (default): Strict - only truly locked-off shots
+- `0.05`: Moderate - allows minor handheld wobble
+- `0.1`: Loose - accepts slow dolly/pan movements
+
+When in doubt, don't use `--static_cam` - GVHMR's SimpleVO handles moving cameras well.
 
 ---
 
@@ -353,6 +444,8 @@ def detect_static_camera(extrinsics_path: Path, threshold: float = 0.01) -> bool
 | Static camera, known focal | COLMAP solve | GVHMR with `--f_mm`, `--static_cam` |
 | Moving camera, known focal | COLMAP solve | GVHMR with `--f_mm` |
 | Unknown camera | Raw video | GVHMR auto-estimates |
+| Multi-person scene | Video with 2+ people | Separate `person_0/`, `person_1/` outputs |
+| GVHMR failure | Corrupted/edge case | Fallback to WHAM |
 
 ### 5.2 Validation Checklist
 
@@ -363,6 +456,8 @@ def detect_static_camera(extrinsics_path: Path, threshold: float = 0.01) -> bool
 - [ ] Output converts to WHAM format
 - [ ] `smplx_from_motion.py` generates meshes from converted output
 - [ ] Mesh deformation pipeline still works
+- [ ] Multi-person scenes produce separate outputs per person
+- [ ] WHAM fallback triggers correctly on GVHMR failure
 
 ---
 
@@ -394,14 +489,55 @@ def detect_static_camera(extrinsics_path: Path, threshold: float = 0.01) -> bool
 
 ### Backward Compatibility
 
-Keep WHAM as fallback option:
+Keep WHAM as fallback option with automatic failover:
 
 ```python
-def run_mocap(project_dir: Path, method: str = "gvhmr") -> bool:
-    if method == "gvhmr":
-        return run_gvhmr_motion_tracking(project_dir)
+def run_mocap(
+    project_dir: Path,
+    method: str = "auto",
+    use_colmap_intrinsics: bool = True
+) -> bool:
+    """Run motion capture with automatic fallback.
+
+    Args:
+        project_dir: Project directory
+        method: "gvhmr", "wham", or "auto" (try GVHMR first, fallback to WHAM)
+        use_colmap_intrinsics: Whether to use COLMAP focal length for GVHMR
+
+    Returns:
+        True if successful
+    """
+    if method == "auto":
+        # Try GVHMR first
+        print("  → Attempting GVHMR motion capture...")
+        try:
+            if run_gvhmr_motion_tracking(project_dir, use_colmap_intrinsics):
+                return True
+        except Exception as e:
+            print(f"    GVHMR failed: {e}")
+
+        # Fallback to WHAM
+        print("  → Falling back to WHAM...")
+        return run_wham_motion_tracking(project_dir)
+
+    elif method == "gvhmr":
+        return run_gvhmr_motion_tracking(project_dir, use_colmap_intrinsics)
+
     elif method == "wham":
         return run_wham_motion_tracking(project_dir)
+
+    else:
+        raise ValueError(f"Unknown mocap method: {method}")
+```
+
+**CLI option**: Add `--mocap-method` argument to `run_pipeline.py`:
+```python
+parser.add_argument(
+    "--mocap-method",
+    choices=["auto", "gvhmr", "wham"],
+    default="auto",
+    help="Motion capture method (default: auto = GVHMR with WHAM fallback)"
+)
 ```
 
 ### Deprecation Path

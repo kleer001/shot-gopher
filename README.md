@@ -84,6 +84,7 @@ Complete documentation available in [docs/](docs/):
 - [Pipeline Reference](docs/run_pipeline.md) - Command-line usage and options
 - [Component Scripts](docs/component_scripts.md) - Individual tool documentation
 - [Maintenance](docs/janitor.md) - System health and updates
+- [Windows Compatibility](docs/windows-compatibility.md) - Roadmap for Windows support
 
 ## Project Structure
 
@@ -111,7 +112,7 @@ Output follows VFX production conventions:
 - NVIDIA GPU with CUDA support
 - Conda or Miniconda (recommended for environment management)
 
-**Note:** macOS and Windows compatibility untested. Linux strongly recommended.
+**Note:** macOS and Windows compatibility untested. Linux strongly recommended. See [Windows Compatibility](docs/windows-compatibility.md) for the Windows support roadmap.
 
 ## Installation Requirements
 
