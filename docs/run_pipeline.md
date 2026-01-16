@@ -174,7 +174,7 @@ Higher iterations (`-i`) produce better quality but take longer.
 Extracts frames from video file using ffmpeg.
 
 **Input**: Movie file (mp4, mov, avi, mkv, webm, mxf)
-**Output**: `source/frames/frame_1001.png, frame_1002.png, ...`
+**Output**: `source/frames/frame_0001.png, frame_0002.png, ...`
 
 **Options**:
 - `--fps` - Override frame rate (default: auto-detect from video metadata)
@@ -185,8 +185,8 @@ python scripts/run_pipeline.py footage.mp4 -s ingest -f 24
 ```
 
 **Frame Numbering**:
-- Starts at 1001 (standard VFX convention)
-- Zero-padded 4 digits (1001, 1002, ..., 9999)
+- Starts at 0001 (due to ComfyUI and WHAM constraints)
+- Zero-padded 4 digits (0001, 0002, ..., 9999)
 
 ### depth - Depth Analysis
 
@@ -404,8 +404,8 @@ Pipeline creates this directory structure in a **sibling folder** to the repo (k
 ../vfx_projects/MyShot/          # Default location (sibling to repo)
 ├── source/
 │   └── frames/                  # Extracted frames
-│       ├── frame_1001.png
-│       ├── frame_1002.png
+│       ├── frame_0001.png
+│       ├── frame_0002.png
 │       └── ...
 ├── workflows/                   # ComfyUI workflow copies
 │   ├── 01_analysis.json
@@ -413,8 +413,8 @@ Pipeline creates this directory structure in a **sibling folder** to the repo (k
 │   ├── 03_cleanplate.json
 │   └── 04_matanyone.json
 ├── depth/                       # Depth maps
-│   ├── depth_1001.png
-│   ├── depth_1002.png
+│   ├── depth_0001.png
+│   ├── depth_0002.png
 │   └── ...
 ├── roto/                        # Segmentation masks (per-prompt subdirs)
 │   ├── person/                  # SAM3 person masks
@@ -427,8 +427,8 @@ Pipeline creates this directory structure in a **sibling folder** to the repo (k
 │   ├── matte_00001.png
 │   └── ...
 ├── cleanplate/                  # Clean plates
-│   ├── clean_1001.png
-│   ├── clean_1002.png
+│   ├── clean_0001.png
+│   ├── clean_0002.png
 │   └── ...
 ├── colmap/                      # COLMAP reconstruction
 │   ├── sparse/

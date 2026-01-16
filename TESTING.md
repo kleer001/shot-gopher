@@ -38,7 +38,7 @@ python scripts/run_mocap.py --check
 For testing, you need a project with:
 ```
 projects/Test_Shot/
-├── source/frames/          # PNG sequence (frame_1001.png, frame_1002.png, ...)
+├── source/frames/          # PNG sequence (frame_0001.png, frame_0002.png, ...)
 ├── roto/                   # Optional: person segmentation masks
 └── camera/                 # Required for mocap
     ├── extrinsics.json     # Camera matrices [N, 4, 4]
@@ -144,9 +144,9 @@ python scripts/run_mocap.py projects/Test_Shot \
 ls projects/Test_Shot/mocap/econ/
 
 # Expected:
-# mesh_1001.obj
-# mesh_1026.obj
-# mesh_1051.obj
+# mesh_0001.obj
+# mesh_0026.obj
+# mesh_0051.obj
 # ... (every 25 frames)
 
 # Validate mesh quality

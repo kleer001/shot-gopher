@@ -145,7 +145,7 @@ When you process footage, the pipeline creates this structure in the **sibling `
 ```
 ../vfx_projects/MyShot/      # Default: sibling to comfyui_ingest repo
 ├── source/
-│   └── frames/              # Extracted frames (frame_1001.png, frame_1002.png, ...)
+│   └── frames/              # Extracted frames (frame_0001.png, frame_0002.png, ...)
 ├── workflows/               # ComfyUI workflow copies (with absolute paths)
 ├── depth/                   # Depth maps
 ├── roto/                    # Segmentation masks
