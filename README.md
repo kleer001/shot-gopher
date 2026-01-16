@@ -1,4 +1,4 @@
-# VFX Pipeline
+# VFX Pipeline v0.01
 
 An automated VFX pipeline built on ComfyUI for production-ready outputs from raw footage. Combines modern ML models with traditional computer vision to generate depth maps, segmentation masks, clean plates, camera solves, and 3D reconstructions with minimal manual intervention.
 
@@ -99,6 +99,18 @@ Output follows VFX production conventions:
 └── colmap/             # COLMAP reconstruction data
 ```
 
+## System Requirements
+
+**Platform:** Linux (tested on Ubuntu 20.04+)
+**Python:** 3.10 or newer
+**Prerequisites:**
+- Git
+- FFmpeg
+- NVIDIA GPU with CUDA support
+- Conda or Miniconda (recommended for environment management)
+
+**Note:** macOS and Windows compatibility untested. Linux strongly recommended.
+
 ## Installation Requirements
 
 ### Download Sizes (Approximate)
@@ -143,6 +155,31 @@ Output follows VFX production conventions:
 **Optimal: 24 GB VRAM** (allows higher batch sizes and parallel processing)
 
 Note: NVIDIA GPU with CUDA support required for all ML models.
+
+## Tool Limitations by Shot Type
+
+Different components perform best under specific conditions:
+
+| Shot Type | Depth (DA3) | Roto (SAM3) | Clean Plate | Camera (COLMAP) | Material (GS-IR) | MoCap (WHAM/ECON) |
+|-----------|-------------|-------------|-------------|-----------------|------------------|-------------------|
+| **Static camera** | ✓ Excellent | ✓ Excellent | ✓ Excellent | ✗ Poor (needs parallax) | ✗ Fails (needs multi-view) | ⚠ Limited (no camera motion) |
+| **Moving camera** | ✓ Good | ✓ Good | ⚠ Moderate | ✓ Excellent | ✓ Excellent | ✓ Good |
+| **Handheld/shaky** | ✓ Good | ⚠ Moderate | ⚠ Poor | ⚠ Moderate | ⚠ Challenging | ⚠ Drift possible |
+| **Fast motion** | ⚠ Temporal artifacts | ⚠ Tracking loss | ⚠ Poor | ⚠ Feature matching issues | ⚠ Motion blur issues | ⚠ Tracking loss |
+| **Low texture** | ✓ Good | ✓ Good | ✓ Good | ✗ Poor (few features) | ⚠ Ambiguous materials | ✓ Good |
+| **Full body person** | ✓ Good | ✓ Excellent | ✓ Good | ✓ Good | N/A | ✓ Excellent |
+| **Partial body/occluded** | ✓ Good | ⚠ Incomplete masks | ⚠ Poor | ✓ Good | N/A | ⚠ Tracking drift |
+| **Multiple people** | ✓ Good | ⚠ Combined masks | ⚠ Challenging | ✓ Good | N/A | ✗ Single person only |
+| **In-focus background** | ✓ Excellent | ✓ Good | ✓ Excellent | ✓ Excellent | ✓ Excellent | N/A |
+| **Shallow DOF/bokeh** | ⚠ Depth ambiguous | ✓ Good | ⚠ Moderate | ⚠ Few features | ⚠ Texture loss | ✓ Good |
+| **High contrast lighting** | ✓ Good | ✓ Good | ✓ Good | ✓ Good | ⚠ Lighting/material separation hard | ✓ Good |
+| **150+ frames** | ✓ Good | ⚠ May stall | ✓ Good | ✓ Good | ⚠ Long training time | ⚠ Memory intensive |
+
+**Legend:**
+- ✓ Works well
+- ⚠ Limited/challenging
+- ✗ Not suitable/fails
+- N/A Not applicable
 
 ## License
 
