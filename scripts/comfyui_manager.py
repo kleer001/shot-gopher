@@ -251,65 +251,80 @@ def kill_all_comfyui_processes() -> int:
     """
     global _comfyui_process
 
+    # ANSI escape codes for bold red text
+    BOLD_RED = "\033[1;91m"
+    RESET = "\033[0m"
+
     killed = 0
+    pids_to_kill = []
 
-    # First, stop our managed process if any
+    # Check for managed process
     if _comfyui_process is not None:
-        stop_comfyui()
-        killed += 1
+        pids_to_kill.append(str(_comfyui_process.pid))
 
-    # Find and kill any other ComfyUI processes
-    # Look for Python processes running ComfyUI's main.py
+    # Find any other ComfyUI processes
     try:
-        # Use pgrep to find ComfyUI processes
         result = subprocess.run(
             ["pgrep", "-f", "ComfyUI.*main.py"],
             capture_output=True,
             text=True
         )
-
         if result.returncode == 0 and result.stdout.strip():
-            pids = result.stdout.strip().split('\n')
-            for pid in pids:
+            for pid in result.stdout.strip().split('\n'):
                 pid = pid.strip()
-                if pid:
-                    try:
-                        # Try graceful termination first
-                        subprocess.run(["kill", pid], capture_output=True)
-                        killed += 1
-                        print(f"  → Killed ComfyUI process (PID: {pid})")
-                    except Exception:
-                        pass
-
-            # Give processes time to die gracefully
-            if killed > 0:
-                time.sleep(2)
-
-                # Force kill any survivors
-                result = subprocess.run(
-                    ["pgrep", "-f", "ComfyUI.*main.py"],
-                    capture_output=True,
-                    text=True
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    for pid in result.stdout.strip().split('\n'):
-                        pid = pid.strip()
-                        if pid:
-                            try:
-                                subprocess.run(["kill", "-9", pid], capture_output=True)
-                                print(f"  → Force killed ComfyUI process (PID: {pid})")
-                            except Exception:
-                                pass
-
+                if pid and pid not in pids_to_kill:
+                    pids_to_kill.append(pid)
     except FileNotFoundError:
-        # pgrep not available (non-Linux system)
+        pass  # pgrep not available
+    except Exception:
         pass
-    except Exception as e:
-        print(f"  → Warning: Could not search for ComfyUI processes: {e}")
 
-    if killed == 0:
-        print("  → No ComfyUI processes found")
-    else:
-        print(f"  → Killed {killed} ComfyUI process(es)")
+    # If nothing to kill, we're good
+    if not pids_to_kill:
+        print("  → No stale ComfyUI processes found")
+        return 0
 
+    # Found stale processes - print warning and kill them
+    print(f"{BOLD_RED}  ⚠ FOUND STALE COMFYUI PROCESS(ES). KILLING THEM. SORRY!{RESET}")
+
+    # Stop managed process first
+    if _comfyui_process is not None:
+        stop_comfyui()
+        killed += 1
+
+    # Kill the rest
+    for pid in pids_to_kill:
+        if _comfyui_process and pid == str(_comfyui_process.pid):
+            continue  # Already handled above
+        try:
+            subprocess.run(["kill", pid], capture_output=True)
+            killed += 1
+            print(f"  → Killed ComfyUI process (PID: {pid})")
+        except Exception:
+            pass
+
+    # Give processes time to die gracefully
+    if killed > 0:
+        time.sleep(2)
+
+        # Force kill any survivors
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", "ComfyUI.*main.py"],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                for pid in result.stdout.strip().split('\n'):
+                    pid = pid.strip()
+                    if pid:
+                        try:
+                            subprocess.run(["kill", "-9", pid], capture_output=True)
+                            print(f"  → Force killed ComfyUI process (PID: {pid})")
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    print(f"  → Killed {killed} ComfyUI process(es)")
     return killed
