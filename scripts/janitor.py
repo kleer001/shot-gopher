@@ -238,6 +238,75 @@ class Janitor:
             'ComfyUI': GitRepoChecker(self.install_dir / "ComfyUI", "ComfyUI"),
         }
 
+        # SAM3 custom node path
+        self.sam3_dir = self.install_dir / "ComfyUI" / "custom_nodes" / "ComfyUI-SAM3"
+
+    def check_sam3_gpu_acceleration(self) -> Tuple[bool, str]:
+        """Check if SAM3 GPU-accelerated NMS is installed.
+
+        Returns:
+            Tuple of (is_installed, status_message)
+        """
+        if not self.sam3_dir.exists():
+            return False, "SAM3 not installed"
+
+        # Check if the compiled extension exists
+        # The install.py creates a .so file for GPU-accelerated NMS
+        nms_files = list(self.sam3_dir.glob("**/*nms*.so")) + list(self.sam3_dir.glob("**/*nms*.pyd"))
+
+        if nms_files:
+            return True, f"GPU NMS installed ({nms_files[0].name})"
+        else:
+            return False, "GPU NMS not compiled (video tracking will be 5-10x slower)"
+
+    def repair_sam3_gpu_acceleration(self) -> bool:
+        """Run SAM3 install.py to compile GPU-accelerated NMS.
+
+        Returns:
+            True if repair succeeded
+        """
+        if not self.sam3_dir.exists():
+            print_error("SAM3 not installed")
+            return False
+
+        install_py = self.sam3_dir / "install.py"
+        if not install_py.exists():
+            print_error(f"SAM3 install.py not found at {install_py}")
+            return False
+
+        print(f"Running SAM3 GPU acceleration installer...")
+        print(f"  cd {self.sam3_dir}")
+        print(f"  python install.py")
+
+        if self.conda_manager.conda_exe:
+            success, output = run_command([
+                self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                "python", str(install_py)
+            ], capture=True, cwd=str(self.sam3_dir))
+        else:
+            import sys
+            success, output = run_command(
+                [sys.executable, str(install_py)],
+                capture=True,
+                cwd=str(self.sam3_dir)
+            )
+
+        if success:
+            # Verify installation
+            is_installed, _ = self.check_sam3_gpu_acceleration()
+            if is_installed:
+                print_success("SAM3 GPU acceleration installed successfully")
+                return True
+            else:
+                print_warning("install.py ran but GPU NMS still not detected")
+                print("  You may need to install CUDA development tools")
+                return False
+        else:
+            print_error("SAM3 install.py failed")
+            if output:
+                print(f"  Output: {output[:500]}")
+            return False
+
     def health_check(self) -> bool:
         """Run comprehensive health check.
 
@@ -298,6 +367,19 @@ class Janitor:
                     print_warning(f"{component}: Missing")
         else:
             print_warning("No checkpoints validated")
+
+        # Check SAM3 GPU acceleration
+        print("\n[SAM3 GPU Acceleration]")
+        sam3_ok, sam3_status = self.check_sam3_gpu_acceleration()
+        if sam3_ok:
+            print_success(sam3_status)
+        else:
+            if "not installed" in sam3_status.lower():
+                print_warning(sam3_status)
+            else:
+                print_warning(sam3_status)
+                print("  Run: python janitor.py --repair")
+                all_passed = False
 
         # Check installation state
         print("\n[Installation State]")
@@ -528,6 +610,11 @@ class Janitor:
             if not exists:
                 issues.append(("checkpoint", f"{component} checkpoint missing"))
 
+        # Check SAM3 GPU acceleration
+        sam3_ok, sam3_status = self.check_sam3_gpu_acceleration()
+        if not sam3_ok and "not installed" not in sam3_status.lower():
+            issues.append(("sam3_gpu", sam3_status))
+
         if not issues:
             print_success("No issues detected!")
             return True
@@ -566,6 +653,14 @@ class Janitor:
                     print_success("  → Checkpoint downloaded")
                 else:
                     print_error("  → Failed to download checkpoint")
+                    all_success = False
+
+            elif issue_type == "sam3_gpu":
+                print(f"\nRepairing: {description}")
+                if self.repair_sam3_gpu_acceleration():
+                    print_success("  → SAM3 GPU acceleration installed")
+                else:
+                    print_error("  → Failed to install SAM3 GPU acceleration")
                     all_success = False
 
         return all_success
@@ -627,6 +722,11 @@ class Janitor:
                 print(f"  Environment: {self.conda_manager.env_name} (missing)")
         else:
             print("  Conda: Not detected")
+
+        # SAM3 GPU acceleration
+        print("\n[SAM3 GPU Acceleration]")
+        sam3_ok, sam3_status = self.check_sam3_gpu_acceleration()
+        print(f"  Status: {sam3_status}")
 
         print("\n" + "=" * 60 + "\n")
 
