@@ -4,13 +4,13 @@ An automated VFX pipeline built on ComfyUI for production-ready outputs from raw
 
 ## Overview
 
-This pipeline automates first-pass VFX prep work that traditionally requires manual labor. Ingest a movie file, get production-ready outputs following industry conventions (1001 frame numbering, PNG sequences, etc.). Manual refinement happens downstream in Nuke/Fusion/Houdini—not here.
+This pipeline automates first-pass VFX prep work that traditionally requires manual labor. Ingest a movie file, get production-ready outputs following industry conventions (PNG sequences, etc.). Manual refinement happens downstream in Nuke/Fusion/Houdini—not here.
 
 **Target workflow:** Run the pipeline overnight, come back to usable first-pass outputs ready for VFX compositing and matchmove.
 
 ## Capabilities
 
-- **Frame extraction** - Convert video files to industry-standard PNG sequences (1001+ numbering)
+- **Frame extraction** - Convert video files to PNG frame sequences
 - **Depth estimation** - Monocular depth maps with temporal consistency (Depth Anything V3)
 - **Segmentation/Rotoscoping** - Text-prompted video segmentation for dynamic object masking (SAM3)
 - **Matte refinement** - Alpha matte generation for human subjects (MatAnyone)
@@ -90,7 +90,7 @@ Complete documentation available in [docs/](docs/):
 Output follows VFX production conventions:
 ```
 ../vfx_projects/Shot_Name/
-├── source/frames/      # Input frames (frame_1001.png, ...)
+├── source/frames/      # Input frames (frame_0001.png, ...)
 ├── depth/              # Depth maps
 ├── roto/               # Segmentation masks
 ├── matte/              # Refined alpha mattes
