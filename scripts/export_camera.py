@@ -9,6 +9,7 @@ Supported output formats:
   - CSV (spreadsheet-compatible camera data)
   - JSON (detailed per-frame transforms)
   - Alembic .abc (requires: conda install -c conda-forge alembic)
+  - After Effects .jsx (JavaScript script for camera import)
 
 Supports camera data from:
   - Depth Anything V3 (monocular depth estimation with camera)
@@ -617,6 +618,189 @@ def export_houdini_clip(
     print(f"  Import in Houdini: File CHOP → select .clip file")
 
 
+def export_after_effects_jsx(
+    extrinsics: list[np.ndarray],
+    intrinsics: dict,
+    output_path: Path,
+    start_frame: int = 1,
+    fps: float = 24.0,
+    camera_name: str = "pipeline_camera"
+) -> None:
+    """Export camera to After Effects JSX script.
+
+    Generates a JSX script that creates an animated camera in After Effects
+    with position and rotation keyframes. The script can be run via:
+    File → Scripts → Run Script File
+
+    Args:
+        extrinsics: List of 4x4 camera-to-world matrices per frame
+        intrinsics: Camera intrinsics dict (fx, fy, cx, cy, width, height)
+        output_path: Output .jsx file path
+        start_frame: Starting frame number
+        fps: Frames per second
+        camera_name: Name for the camera layer
+    """
+    num_frames = len(extrinsics)
+
+    # Extract intrinsics
+    fx = intrinsics.get("fx", intrinsics.get("focal_x", 1000))
+    fy = intrinsics.get("fy", intrinsics.get("focal_y", 1000))
+    width = intrinsics.get("width", 1920)
+    height = intrinsics.get("height", 1080)
+
+    # Compute focal length in mm (assuming 36mm sensor width)
+    sensor_width_mm = 36.0
+    h_fov, v_fov = compute_fov_from_intrinsics(intrinsics, width, height)
+    focal_length_mm = (sensor_width_mm / 2) / np.tan(np.radians(h_fov / 2))
+
+    # Generate JSX script content
+    jsx_content = f'''// After Effects Camera Import Script
+// Auto-generated camera animation
+//
+// Usage:
+//   1. File → Scripts → Run Script File → select this .jsx file
+//   2. Or copy/paste into Adobe ExtendScript Toolkit
+//
+// Note: Enable "Allow Scripts to Write Files and Access Network"
+//       in Edit → Preferences → Scripting & Expressions
+
+(function() {{
+    app.beginUndoGroup("Import Pipeline Camera");
+
+    try {{
+        // Configuration
+        var cameraName = "{camera_name}";
+        var fps = {fps};
+        var startFrame = {start_frame};
+        var numFrames = {num_frames};
+        var width = {width};
+        var height = {height};
+        var focalLengthMm = {focal_length_mm:.4f};
+
+        // Get active composition or create new one
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {{
+            comp = app.project.items.addComp(
+                "Pipeline_Comp",
+                width,
+                height,
+                1.0,  // pixel aspect ratio
+                (numFrames / fps),  // duration in seconds
+                fps
+            );
+            alert("Created new composition: " + comp.name);
+        }}
+
+        // Set composition frame rate and duration
+        comp.frameRate = fps;
+        comp.workAreaStart = 0;
+        comp.workAreaDuration = numFrames / fps;
+        comp.duration = numFrames / fps;
+
+        // Create camera layer
+        var camera = comp.layers.addCamera(cameraName, [width/2, height/2]);
+
+        // Set camera properties
+        // After Effects focal length is in pixels by default, but we can set zoom
+        // Zoom relates to focal length via: zoom = (comp.width * focalLength) / (2 * sensorWidth)
+        // For 36mm sensor: zoom = (width * focalLength_px) / width = focalLength_px
+        // Convert from mm to pixels: focal_px = focal_mm * width / sensor_mm
+        var focalLengthPx = focalLengthMm * width / 36.0;
+        camera.property("ADBE Camera Options Group").property("ADBE Camera Zoom").setValue(focalLengthPx);
+
+        // Camera transform data (position and rotation)
+        var cameraData = [
+'''
+
+    # Add camera transform data for each frame
+    for frame_idx, matrix in enumerate(extrinsics):
+        translation, rotation, _ = decompose_matrix(matrix)
+        euler = rotation_matrix_to_euler(rotation)
+
+        # After Effects coordinate system conversion:
+        # OpenGL/COLMAP: +Y up, +Z towards camera (RH)
+        # After Effects: +Y down, +Z away from camera (RH)
+        # Conversion: flip Y and Z
+        ae_x = translation[0]
+        ae_y = -translation[1]  # Flip Y
+        ae_z = -translation[2]  # Flip Z
+
+        # Rotation conversion - also need to flip rotations around Y and Z axes
+        ae_rx = -euler[0]  # Flip X rotation
+        ae_ry = euler[1]
+        ae_rz = -euler[2]  # Flip Z rotation
+
+        jsx_content += f'            {{ pos: [{ae_x:.6f}, {ae_y:.6f}, {ae_z:.6f}], '
+        jsx_content += f'rot: [{ae_rx:.6f}, {ae_ry:.6f}, {ae_rz:.6f}] }}'
+
+        if frame_idx < num_frames - 1:
+            jsx_content += ',\n'
+        else:
+            jsx_content += '\n'
+
+    # Complete the JSX script
+    jsx_content += f'''        ];
+
+        // Apply keyframes
+        var position = camera.property("ADBE Transform Group").property("ADBE Position");
+        var xRotation = camera.property("ADBE Transform Group").property("ADBE Rotate X");
+        var yRotation = camera.property("ADBE Transform Group").property("ADBE Rotate Y");
+        var zRotation = camera.property("ADBE Transform Group").property("ADBE Rotate Z");
+
+        // Enable keyframing
+        position.setValuesAtTimes([], []);
+        xRotation.setValuesAtTimes([], []);
+        yRotation.setValuesAtTimes([], []);
+        zRotation.setValuesAtTimes([], []);
+
+        // Add keyframes for each frame
+        for (var i = 0; i < cameraData.length; i++) {{
+            var frameNum = startFrame + i;
+            var timeInSeconds = frameNum / fps;
+
+            var data = cameraData[i];
+
+            // Set position keyframe
+            position.setValueAtTime(timeInSeconds, data.pos);
+
+            // Set rotation keyframes
+            xRotation.setValueAtTime(timeInSeconds, data.rot[0]);
+            yRotation.setValueAtTime(timeInSeconds, data.rot[1]);
+            zRotation.setValueAtTime(timeInSeconds, data.rot[2]);
+        }}
+
+        // Select the camera
+        camera.selected = true;
+
+        // Summary
+        var endFrame = startFrame + numFrames - 1;
+        alert(
+            "Camera Import Complete!\\n\\n" +
+            "Camera: " + cameraName + "\\n" +
+            "Frames: " + startFrame + "-" + endFrame + " (" + numFrames + " total)\\n" +
+            "FPS: " + fps + "\\n" +
+            "Focal Length: " + focalLengthMm.toFixed(2) + "mm\\n" +
+            "Resolution: " + width + "x" + height
+        );
+
+    }} catch (e) {{
+        alert("Error importing camera:\\n" + e.toString());
+    }} finally {{
+        app.endUndoGroup();
+    }}
+}})();
+'''
+
+    # Write the JSX file
+    with open(output_path, 'w') as f:
+        f.write(jsx_content)
+
+    print(f"Exported {num_frames} frames to {output_path}")
+    print(f"  Frame range: {start_frame}-{start_frame + num_frames - 1}")
+    print(f"  Focal length: {focal_length_mm:.2f}mm")
+    print(f"  Import in After Effects: File → Scripts → Run Script File")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Export camera data to various VFX formats (supports DA3 and COLMAP)",
@@ -660,9 +844,9 @@ def main():
     )
     parser.add_argument(
         "--format",
-        choices=["chan", "csv", "clip", "cmd", "json", "abc", "all"],
+        choices=["chan", "csv", "clip", "cmd", "json", "abc", "jsx", "all"],
         default="all",
-        help="Output format: chan (Nuke), csv, clip (Houdini), json, abc (Alembic), all (default: all)"
+        help="Output format: chan (Nuke), csv, clip (Houdini), json, abc (Alembic), jsx (After Effects), all (default: all)"
     )
 
     args = parser.parse_args()
@@ -787,6 +971,19 @@ def main():
             else:
                 print("Note: Alembic not available, skipping .abc")
                 print("  Install with: conda install -c conda-forge alembic")
+
+    # After Effects JSX format (always available)
+    if fmt in ("jsx", "all"):
+        jsx_path = output_base.with_suffix(".jsx")
+        export_after_effects_jsx(
+            extrinsics=extrinsics,
+            intrinsics=intrinsics,
+            output_path=jsx_path,
+            start_frame=args.start_frame,
+            fps=args.fps,
+            camera_name=camera_name
+        )
+        exported.append(f".jsx (After Effects)")
 
     # Summary
     if exported:

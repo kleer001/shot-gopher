@@ -23,7 +23,7 @@ This pipeline automates first-pass VFX prep work that traditionally requires man
   - Metallic maps (metallic vs dielectric)
   - Normal maps (surface orientation)
   - Environment lighting (HDR environment map)
-- **Camera export** - Export to Alembic/JSON for Nuke, Maya, Houdini, Blender
+- **Camera export** - Export to Alembic/JSON for Nuke, Maya, Houdini, Blender, After Effects
 - **Human motion capture** - World-grounded skeleton tracking and clothed mesh reconstruction (WHAM + ECON, experimental)
 - **Batch processing** - Automated multi-stage pipeline orchestration
 - **Web interface** - Browser-based GUI for drag-and-drop operation

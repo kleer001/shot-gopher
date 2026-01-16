@@ -369,7 +369,7 @@ python scripts/run_gsir.py ./projects/Shot01 --resume
 
 ## export_camera.py
 
-Export camera data to industry-standard formats (Alembic, FBX).
+Export camera data to industry-standard VFX formats.
 
 ### Usage
 
@@ -383,34 +383,37 @@ python scripts/export_camera.py <project_dir> [options]
 - `project_dir` - Project directory with camera data
 
 **Export Options**:
-- `--format` - Export format: `abc`, `fbx`, `both` (default: `both`)
+- `--format` - Export format: `chan`, `csv`, `clip`, `cmd`, `json`, `abc`, `jsx`, `all` (default: `all`)
 - `--fps` - Frame rate (default: 24.0)
-- `--scale` - Scene scale factor (default: 1.0)
-
-**Camera Parameters**:
-- `--focal-length` - Override focal length (mm)
-- `--sensor-width` - Override sensor width (mm)
+- `--start-frame` - Starting frame number (default: 1)
+- `--width` - Image width in pixels (default: 1920)
+- `--height` - Image height in pixels (default: 1080)
 
 ### Examples
 
-**Export to Alembic and FBX**:
+**Export all formats** (default):
 ```bash
 python scripts/export_camera.py ./projects/Shot01
 ```
 
-**Alembic only** (most compatible):
+**Export specific format**:
 ```bash
+# Nuke .chan format
+python scripts/export_camera.py ./projects/Shot01 --format chan
+
+# After Effects JSX script
+python scripts/export_camera.py ./projects/Shot01 --format jsx
+
+# Alembic (most compatible)
 python scripts/export_camera.py ./projects/Shot01 --format abc
+
+# Houdini .cmd script
+python scripts/export_camera.py ./projects/Shot01 --format cmd
 ```
 
 **Custom frame rate**:
 ```bash
 python scripts/export_camera.py ./projects/Shot01 --fps 30
-```
-
-**Scale adjustment** (for different scene units):
-```bash
-python scripts/export_camera.py ./projects/Shot01 --scale 0.01
 ```
 
 ### Input
@@ -420,23 +423,41 @@ python scripts/export_camera.py ./projects/Shot01 --scale 0.01
 
 ### Output
 
-- `camera/camera.abc` - Alembic camera export
-- `camera/camera.fbx` - FBX camera export (if FBX SDK available)
+When using `--format all` (default), exports to all available formats:
+- `camera/camera.chan` - Nuke .chan format
+- `camera/camera.csv` - CSV spreadsheet format
+- `camera/camera.clip` - Houdini CHOP clip format
+- `camera/camera.cmd` + `camera/camera.py` - Houdini Python scripts
+- `camera/camera.camera.json` - JSON format with detailed transforms
+- `camera/camera.abc` - Alembic format (requires conda install)
+- `camera/camera.jsx` - After Effects JavaScript script
 
 ### Format Compatibility
 
-| Format | Maya | Houdini | Blender | Unreal | Unity |
-|--------|------|---------|---------|--------|-------|
-| Alembic (.abc) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| FBX (.fbx) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Format | Nuke | After Effects | Maya | Houdini | Blender | Unreal | Unity |
+|--------|------|---------------|------|---------|---------|--------|-------|
+| .chan | ✓ | - | - | - | - | - | - |
+| .jsx | - | ✓ | - | - | - | - | - |
+| .abc | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ |
+| .clip | - | - | - | ✓ | - | - | - |
+| .cmd/.py | - | - | - | ✓ | - | - | - |
+| .csv | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| .json | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-Both formats are widely supported. Alembic is generally more reliable.
+Notes:
+- Alembic (.abc) is the most widely supported format for 3D DCCs
+- Nuke .chan is the simplest format for Nuke imports
+- After Effects .jsx provides native scripted import
+- CSV and JSON are universal and can be imported via custom scripts
 
 ### Tips
 
-- Alembic is the safer choice (more compatible)
-- FBX requires FBX SDK (may not be available)
-- Scale factor depends on your DCC's scene units
+- Use `--format all` to export all formats at once (default behavior)
+- Alembic (.abc) requires: `conda install -c conda-forge alembic`
+- For Nuke, use .chan for simplest import
+- For After Effects, run the .jsx script via File → Scripts → Run Script File
+- For Houdini, use .cmd via File → Run Script, or .clip via File CHOP
+- CSV and JSON formats work universally with custom import scripts
 - Frame rate should match your edit timeline
 
 ---

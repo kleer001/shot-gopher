@@ -16,6 +16,7 @@ from export_camera import (
     rotation_matrix_to_euler,
     compute_fov_from_intrinsics,
     export_json_camera,
+    export_after_effects_jsx,
     load_camera_data,
 )
 
@@ -155,3 +156,35 @@ class TestExportJsonCamera:
             assert data["end_frame"] == 1002
             assert data["fps"] == 24.0
             assert len(data["frames"]) == 2
+
+
+class TestExportAfterEffectsJsx:
+    def test_export_creates_jsx_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "camera.jsx"
+
+            extrinsics = [np.eye(4), np.eye(4)]
+            intrinsics = {"fx": 1000, "fy": 1000, "width": 1920, "height": 1080}
+
+            export_after_effects_jsx(
+                extrinsics=extrinsics,
+                intrinsics=intrinsics,
+                output_path=output_path,
+                start_frame=1,
+                fps=24.0,
+                camera_name="test_camera"
+            )
+
+            assert output_path.exists()
+
+            # Verify file content
+            with open(output_path) as f:
+                content = f.read()
+
+            # Check for key JSX elements
+            assert "// After Effects Camera Import Script" in content
+            assert "var cameraName = \"test_camera\"" in content
+            assert "var fps = 24" in content
+            assert "var numFrames = 2" in content
+            assert "addCamera" in content
+            assert "setValueAtTime" in content
