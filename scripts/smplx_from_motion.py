@@ -268,6 +268,13 @@ def generate_smplx_meshes(
     print(f"    {n_frames} OBJ files")
     print(f"    Vertices per mesh: {len(vertices)}")
 
+    # Clear GPU memory after model inference
+    del model
+    if device == "cuda":
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+        print("  → Cleared GPU memory")
+
     return True
 
 

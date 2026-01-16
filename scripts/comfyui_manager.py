@@ -238,3 +238,102 @@ def ensure_comfyui(url: str = DEFAULT_COMFYUI_URL, timeout: int = 60) -> bool:
     Returns True if ComfyUI is available, False otherwise.
     """
     return start_comfyui(url=url, timeout=timeout)
+
+
+def kill_all_comfyui_processes() -> int:
+    """Kill ALL ComfyUI processes system-wide to free GPU memory.
+
+    This is useful before starting a fresh pipeline run to ensure
+    no stale ComfyUI processes are hogging VRAM.
+
+    Returns:
+        Number of processes killed
+    """
+    global _comfyui_process
+
+    # ANSI escape codes for bold red text
+    BOLD_RED = "\033[1;91m"
+    RESET = "\033[0m"
+
+    killed = 0
+    pids_to_kill = []
+
+    # Check for managed process
+    if _comfyui_process is not None:
+        pids_to_kill.append(str(_comfyui_process.pid))
+
+    # Find any other ComfyUI processes
+    # Try multiple patterns since ComfyUI can be started different ways
+    patterns = [
+        "ComfyUI.*main.py",           # If ComfyUI is in the path
+        "main.py.*--port.*8188",      # ComfyUI's default port
+        "python.*main.py.*--listen",  # ComfyUI uses --listen flag
+    ]
+
+    for pattern in patterns:
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", pattern],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                for pid in result.stdout.strip().split('\n'):
+                    pid = pid.strip()
+                    if pid and pid not in pids_to_kill:
+                        pids_to_kill.append(pid)
+        except FileNotFoundError:
+            break  # pgrep not available, no point trying other patterns
+        except Exception:
+            pass
+
+    # If nothing to kill, we're good
+    if not pids_to_kill:
+        print("  → No stale ComfyUI processes found")
+        return 0
+
+    # Found stale processes - print warning and kill them
+    print(f"{BOLD_RED}  ⚠ FOUND STALE COMFYUI PROCESS(ES). KILLING THEM. SORRY!{RESET}")
+
+    # Stop managed process first
+    if _comfyui_process is not None:
+        stop_comfyui()
+        killed += 1
+
+    # Kill the rest
+    for pid in pids_to_kill:
+        if _comfyui_process and pid == str(_comfyui_process.pid):
+            continue  # Already handled above
+        try:
+            subprocess.run(["kill", pid], capture_output=True)
+            killed += 1
+            print(f"  → Killed ComfyUI process (PID: {pid})")
+        except Exception:
+            pass
+
+    # Give processes time to die gracefully
+    if killed > 0:
+        time.sleep(2)
+
+        # Force kill any survivors
+        for pattern in patterns:
+            try:
+                result = subprocess.run(
+                    ["pgrep", "-f", pattern],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    for pid in result.stdout.strip().split('\n'):
+                        pid = pid.strip()
+                        if pid:
+                            try:
+                                subprocess.run(["kill", "-9", pid], capture_output=True)
+                                print(f"  → Force killed ComfyUI process (PID: {pid})")
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+    print(f"  → Killed {killed} ComfyUI process(es)")
+    return killed
