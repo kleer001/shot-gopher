@@ -1079,7 +1079,6 @@ def run_pipeline(
                     if result and len(result) > 1:
                         # Found multiple instances, remove original combined directory
                         print(f"    Found {len(result)} instances, removing combined directory")
-                        import shutil
                         shutil.rmtree(person_dir)
                     elif result and len(result) == 1:
                         # Only one instance found, keep as-is but rename for consistency
