@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from env_config import DEFAULT_PROJECTS_DIR, INSTALL_DIR
+from services.config_service import get_config_service
 
 router = APIRouter()
 
@@ -296,8 +297,9 @@ async def get_outputs(project_id: str):
 
     outputs = {}
 
-    # Check each output directory
-    output_dirs = ["depth", "roto", "matanyone", "cleanplate", "camera", "colmap", "gsir", "mocap"]
+    # Check each output directory (from configuration)
+    config_service = get_config_service()
+    output_dirs = config_service.get_output_directories()
 
     for dir_name in output_dirs:
         dir_path = project_dir / dir_name
@@ -370,6 +372,30 @@ async def system_status():
         pass
 
     return status
+
+
+@router.get("/config")
+async def get_config():
+    """Get pipeline configuration (stages, presets, settings).
+
+    Returns the complete pipeline configuration including:
+    - Stage definitions with metadata
+    - Preset configurations
+    - Supported video formats
+    - WebSocket settings
+    - UI configuration
+
+    This provides a single source of truth for configuration,
+    following the DRY principle.
+    """
+    config_service = get_config_service()
+    return {
+        "stages": config_service.get_stages(),
+        "presets": config_service.get_presets(),
+        "supportedVideoFormats": config_service.get_supported_video_formats(),
+        "websocket": config_service.get_websocket_config(),
+        "ui": config_service.get_ui_config(),
+    }
 
 
 @router.post("/projects/{project_id}/open-folder")

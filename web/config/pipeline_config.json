@@ -1,0 +1,124 @@
+{
+  "stages": {
+    "ingest": {
+      "name": "Ingest",
+      "displayName": "Ingest Video Frames",
+      "description": "Extract frames from video",
+      "outputDir": "source/frames",
+      "estimatedTimePerFrame": 0.05,
+      "required": false,
+      "dependencies": [],
+      "defaultEnabled": false
+    },
+    "depth": {
+      "name": "Depth Maps",
+      "displayName": "Generate Depth Maps",
+      "description": "Create depth information for each frame",
+      "outputDir": "depth",
+      "estimatedTimePerFrame": 0.5,
+      "required": false,
+      "dependencies": [],
+      "defaultEnabled": true
+    },
+    "roto": {
+      "name": "Segmentation",
+      "displayName": "Segment Objects (Roto)",
+      "description": "Detect and mask objects/people",
+      "outputDir": "roto",
+      "estimatedTimePerFrame": 0.8,
+      "required": false,
+      "dependencies": [],
+      "defaultEnabled": true,
+      "hasPrompt": true,
+      "promptLabel": "Segmentation Prompt",
+      "promptPlaceholder": "person, car, building..."
+    },
+    "matanyone": {
+      "name": "Refine Mattes",
+      "displayName": "Refine Person Mattes (MatAnyone)",
+      "description": "Improve quality of person masks",
+      "outputDir": "matanyone",
+      "estimatedTimePerFrame": 1.0,
+      "required": false,
+      "dependencies": ["roto"],
+      "defaultEnabled": false,
+      "note": "Requires Roto with person masks"
+    },
+    "cleanplate": {
+      "name": "Clean Plate",
+      "displayName": "Generate Clean Plates",
+      "description": "Create background without objects",
+      "outputDir": "cleanplate",
+      "estimatedTimePerFrame": 0.3,
+      "required": false,
+      "dependencies": [],
+      "defaultEnabled": false
+    },
+    "colmap": {
+      "name": "Camera Tracking",
+      "displayName": "Track Camera (COLMAP)",
+      "description": "Calculate camera movement",
+      "outputDir": "colmap",
+      "estimatedTimePerFrame": 2.0,
+      "required": false,
+      "dependencies": [],
+      "defaultEnabled": false,
+      "enables": ["gsir", "mocap"]
+    },
+    "gsir": {
+      "name": "Materials",
+      "displayName": "Reconstruct 3D Scene (GSIR)",
+      "description": "Generate 3D gaussian splats",
+      "outputDir": "gsir",
+      "estimatedTimePerFrame": 1.5,
+      "required": false,
+      "dependencies": ["colmap"],
+      "defaultEnabled": false
+    },
+    "mocap": {
+      "name": "Motion Capture",
+      "displayName": "Extract Motion (MoCap)",
+      "description": "Capture character movement",
+      "outputDir": "mocap",
+      "estimatedTimePerFrame": 1.2,
+      "required": false,
+      "dependencies": ["colmap"],
+      "defaultEnabled": false
+    }
+  },
+  "presets": {
+    "quick": {
+      "name": "Quick Preview",
+      "description": "Fast preview with depth and segmentation",
+      "stages": ["depth", "roto"]
+    },
+    "full": {
+      "name": "Full VFX",
+      "description": "Complete VFX pipeline without 3D",
+      "stages": ["depth", "roto", "cleanplate"]
+    },
+    "all": {
+      "name": "Everything",
+      "description": "All available stages including 3D reconstruction",
+      "stages": ["depth", "roto", "matanyone", "cleanplate", "colmap", "gsir", "mocap"]
+    }
+  },
+  "supportedVideoFormats": [
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".mkv",
+    ".webm",
+    ".mxf"
+  ],
+  "websocket": {
+    "pingInterval": 25000,
+    "reconnectDelay": 2000,
+    "maxReconnectAttempts": 5
+  },
+  "ui": {
+    "maxProjectsDisplayed": 5,
+    "maxRecentFiles": 10,
+    "progressUpdateInterval": 100
+  }
+}
