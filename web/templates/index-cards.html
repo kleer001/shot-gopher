@@ -18,7 +18,7 @@
             <div class="nav-status">
                 <div id="system-status" class="status-badge">
                     <span class="badge-dot"></span>
-                    <span class="badge-label">SYSTEM</span>
+                    <span class="badge-label status-text">CHECKING...</span>
                 </div>
             </div>
             <div class="nav-links">
@@ -57,6 +57,13 @@
 
                     <!-- Video Info Cards -->
                     <div id="video-info" class="video-cards hidden">
+                        <div class="mini-card" style="grid-column: 1 / -1;">
+                            <div class="mini-icon">📁</div>
+                            <div class="mini-data">
+                                <div class="mini-label">FILE</div>
+                                <div id="video-name" class="mini-value" style="font-size: 12px;">--</div>
+                            </div>
+                        </div>
                         <div class="mini-card">
                             <div class="mini-icon">□</div>
                             <div class="mini-data">
@@ -146,18 +153,25 @@
 
                     <div class="config-label">QUICK PRESETS</div>
                     <div class="preset-row">
-                        <button type="button" class="preset-card" data-preset="quick">
+                        <button type="button" class="preset-card preset-btn" data-preset="quick">
                             <div class="preset-name">Quick</div>
                             <div class="preset-desc">Fast preview</div>
                         </button>
-                        <button type="button" class="preset-card active" data-preset="full">
+                        <button type="button" class="preset-card preset-btn active" data-preset="full">
                             <div class="preset-name">Full VFX</div>
                             <div class="preset-desc">Standard pipeline</div>
                         </button>
-                        <button type="button" class="preset-card" data-preset="all">
+                        <button type="button" class="preset-card preset-btn" data-preset="all">
                             <div class="preset-name">Everything</div>
                             <div class="preset-desc">All stages</div>
                         </button>
+                    </div>
+
+                    <div class="config-options">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin: 16px 0;">
+                            <input type="checkbox" id="skip-existing" style="width: 18px; height: 18px;">
+                            <span style="font-size: 13px;">Skip existing outputs</span>
+                        </label>
                     </div>
 
                     <div class="time-card">
@@ -186,10 +200,19 @@
                     <button type="button" id="cancel-processing-btn" class="btn-abort">ABORT</button>
                 </div>
                 <div class="card-main">
+                    <!-- Hidden progress bar for JavaScript compatibility -->
+                    <div style="display: none;">
+                        <div id="processing-progress-fill"></div>
+                    </div>
+
                     <!-- Big Progress -->
                     <div class="progress-display">
                         <div id="progress-percent" class="progress-big">0%</div>
                         <div id="current-stage-name" class="progress-stage">IDLE</div>
+                    </div>
+
+                    <div style="text-align: center; margin: 12px 0; font-size: 11px; color: var(--text-dim);">
+                        <span id="current-stage-label">STAGE 1/1</span>
                     </div>
 
                     <!-- Stage Badges -->

@@ -18,12 +18,13 @@
             <div class="header-actions">
                 <div id="system-status" class="status-chip">
                     <div class="chip-dot"></div>
-                    <span class="chip-text">CHECKING...</span>
+                    <span class="chip-text status-text">CHECKING...</span>
                 </div>
                 <div class="view-switcher">
                     <a href="/">Classic</a>
                     <a href="/compact">Compact</a>
                     <a href="/dashboard">Dashboard</a>
+                    <a href="/cards">Cards</a>
                 </div>
             </div>
         </header>
@@ -58,6 +59,13 @@
 
                         <!-- Video Info -->
                         <div id="video-info" class="info-grid hidden">
+                            <div class="info-item">
+                                <div class="info-icon">📁</div>
+                                <div class="info-content">
+                                    <div class="info-label">File</div>
+                                    <div id="video-name" class="info-value" style="font-size: 12px;">--</div>
+                                </div>
+                            </div>
                             <div class="info-item">
                                 <div class="info-icon">◻</div>
                                 <div class="info-content">
@@ -141,9 +149,16 @@
                         </div>
 
                         <div class="config-presets">
-                            <button type="button" class="preset-chip" data-preset="quick">Quick</button>
-                            <button type="button" class="preset-chip active" data-preset="full">Full VFX</button>
-                            <button type="button" class="preset-chip" data-preset="all">Everything</button>
+                            <button type="button" class="preset-chip preset-btn" data-preset="quick">Quick</button>
+                            <button type="button" class="preset-chip preset-btn active" data-preset="full">Full VFX</button>
+                            <button type="button" class="preset-chip preset-btn" data-preset="all">Everything</button>
+                        </div>
+
+                        <div class="config-option">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="skip-existing">
+                                <span style="font-size: 12px;">Skip existing outputs</span>
+                            </label>
                         </div>
 
                         <div class="config-estimate">
@@ -174,6 +189,11 @@
                             <button type="button" id="cancel-processing-btn" class="btn-cancel">CANCEL</button>
                         </div>
 
+                        <!-- Hidden progress bar for JavaScript compatibility -->
+                        <div style="display: none;">
+                            <div id="processing-progress-fill"></div>
+                        </div>
+
                         <div class="processing-visual">
                             <div class="visual-circle">
                                 <svg viewBox="0 0 200 200">
@@ -185,6 +205,10 @@
                                     <div id="current-stage-name" class="circle-label">IDLE</div>
                                 </div>
                             </div>
+                        </div>
+
+                        <div style="text-align: center; margin: 12px 0; font-size: 10px; color: var(--text-muted);">
+                            <span id="current-stage-label">STAGE 1/1</span>
                         </div>
 
                         <div class="processing-stages" id="stages-list-progress">
