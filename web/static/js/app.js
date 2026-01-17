@@ -658,8 +658,8 @@ function handleProgressUpdate(data) {
     // Update current stage
     if (data.stage) {
         const stageIndex = data.stage_index !== undefined ? data.stage_index : state.stages.indexOf(data.stage);
-        elements.currentStageLabel.textContent = `Stage ${stageIndex + 1} of ${data.total_stages || state.stages.length}:`;
-        elements.currentStageName.textContent = stageNames[data.stage] || data.stage;
+        elements.currentStageLabel.textContent = `STAGE ${stageIndex + 1}/${data.total_stages || state.stages.length}`;
+        elements.currentStageName.textContent = (stageNames[data.stage] || data.stage).toUpperCase();
 
         // Update stages list
         updateStagesList(data.stage, stageIndex);
