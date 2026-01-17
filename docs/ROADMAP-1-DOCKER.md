@@ -18,6 +18,48 @@ This roadmap transitions the VFX Ingest Platform from conda-based local installa
 - **Container-Aware Code** - Scripts detect and adapt to containerized environment
 - **Backwards Compatible** - Local installation still works during transition
 
+### SOLID/DRY Application in Infrastructure
+
+While SOLID principles primarily apply to object-oriented code, we adapt them for Docker/infrastructure:
+
+**Single Responsibility Principle (SRP):**
+- Each Dockerfile stage has one purpose (base deps → Python deps → ComfyUI → pipeline)
+- Entrypoint script handles validation, startup, and execution as separate functions
+- Separate scripts for different concerns: `download_models.sh`, `verify_models.py`, `run_docker.sh`
+
+**Open/Closed Principle (OCP):**
+- Environment variables allow extension without modifying code
+- Scripts work in both local and container modes through environment detection
+- Volume mounts enable model/project customization without image rebuilds
+
+**DRY (Don't Repeat Yourself):**
+- Path configuration centralized in `env_config.py` with environment variable overrides
+- Model validation logic in single `verify_models.py` (used by both entrypoint and users)
+- Reuse existing Python scripts instead of duplicating logic in shell scripts
+- Docker multi-stage build reuses layers efficiently
+
+**Interface Segregation:**
+- CLI interface unchanged (users don't need to learn Docker internals)
+- Clear volume mount contracts: `/models` (read-only), `/workspace` (read-write)
+- Environment variables as documented interfaces: `VFX_MODELS_DIR`, `VFX_PROJECTS_DIR`
+
+**Dependency Inversion:**
+- Scripts depend on abstractions (environment variables) not concrete paths
+- `is_in_container()` abstracts detection logic from usage
+- ComfyUI manager uses configurable paths, not hardcoded locations
+
+**Separation of Concerns:**
+- **Infrastructure Layer** (Docker): Dependencies, networking, volumes
+- **Configuration Layer** (Environment): Paths, settings, feature flags
+- **Logic Layer** (Python scripts): Unchanged business logic from local installation
+
+**Code Review Checklist:**
+- [ ] No hardcoded paths in Python scripts (use environment variables)
+- [ ] No duplicated validation logic across scripts
+- [ ] Each Docker stage builds on previous (no redundant installs)
+- [ ] Entrypoint functions are focused and testable
+- [ ] Local and container modes share maximum code
+
 ---
 
 ## Phase 1A: Container Foundation ⚪
@@ -847,102 +889,587 @@ if __name__ == "__main__":
 
 ---
 
-## Phase 1D: Integration Testing ⚪
+## Phase 1D: Comprehensive Testing ⚪
 
-**Goal:** End-to-end validation of containerized pipeline
+**Goal:** End-to-end validation of containerized pipeline with test fixtures
 
-### Test Cases
+### Overview
 
-#### Test 1D.1: Ingest Stage
-```bash
-docker-compose run --rm vfx-ingest \
-  --input /workspace/test_video.mp4 \
-  --name TestShot \
-  --stages ingest
-```
-
-**Expected:**
-- Frames extracted to `/workspace/projects/TestShot/source/frames/`
-- FFmpeg runs without errors
-- Frame count matches video
+Comprehensive testing strategy with three test tiers:
+1. **Unit Tests** - Synthetic fixtures (fast, no GPU)
+2. **Integration Tests** - Standard test video (full pipeline validation)
+3. **Performance Tests** - Benchmark against local installation
 
 ---
 
-#### Test 1D.2: Depth Estimation
+### Test Data Preparation
+
+#### Task 1D.0: Setup Test Fixtures
+
+**Standard Test Video:**
+- **Source:** Football CIF sequence (academic standard)
+- **URL:** https://media.xiph.org/video/derf/
+- **Format:** YUV 4:2:0, 352×288, ~260 frames
+- **Size:** ~1-2MB
+- **Content:** Two football players (good for mocap/segmentation)
+- **Why:** Industry standard, reproducible, includes people
+
+**Download and prepare:**
+```bash
+# Create test fixtures directory
+mkdir -p tests/fixtures
+
+# Download Football CIF (YUV format)
+wget https://media.xiph.org/video/derf/y4m/football_cif.y4m -O tests/fixtures/football_cif.y4m
+
+# Convert to MP4 for pipeline testing
+ffmpeg -i tests/fixtures/football_cif.y4m \
+  -c:v libx264 -preset slow -crf 18 \
+  tests/fixtures/football_test.mp4
+
+# Extract first 30 frames for quick tests
+ffmpeg -i tests/fixtures/football_test.mp4 -vframes 30 \
+  tests/fixtures/football_short.mp4
+```
+
+**Synthetic Test Fixtures (for unit tests):**
+```python
+# tests/fixtures/generate_synthetic.py
+"""Generate synthetic test data for unit tests."""
+
+import numpy as np
+from PIL import Image
+from pathlib import Path
+
+def generate_checkerboard(width=640, height=480, square_size=40):
+    """Generate checkerboard pattern (good for COLMAP feature detection)."""
+    img = np.zeros((height, width, 3), dtype=np.uint8)
+    for i in range(0, height, square_size):
+        for j in range(0, width, square_size):
+            if (i // square_size + j // square_size) % 2 == 0:
+                img[i:i+square_size, j:j+square_size] = 255
+    return img
+
+def generate_gradient(width=640, height=480):
+    """Generate gradient image (for depth map testing)."""
+    gradient = np.linspace(0, 255, width, dtype=np.uint8)
+    img = np.tile(gradient, (height, 1))
+    return np.stack([img, img, img], axis=-1)
+
+def generate_test_masks():
+    """Generate test segmentation masks."""
+    # Simple shapes for roto validation
+    pass
+
+if __name__ == "__main__":
+    fixtures_dir = Path("tests/fixtures/synthetic")
+    fixtures_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate checkerboard frames (simulates static camera)
+    for i in range(10):
+        img = generate_checkerboard()
+        Image.fromarray(img).save(fixtures_dir / f"frame_{i:04d}.png")
+
+    # Generate test depth map
+    depth = generate_gradient()
+    Image.fromarray(depth).save(fixtures_dir / "test_depth.png")
+
+    print("✓ Synthetic fixtures generated")
+```
+
+**Success Criteria:**
+- [ ] Football CIF video downloaded and converted
+- [ ] Short test video (30 frames) created
+- [ ] Synthetic fixtures generated
+- [ ] Test fixtures documented in `tests/README.md`
+
+---
+
+### Unit Tests (Synthetic Data)
+
+#### Test 1D.1: Container Environment Detection
+**File:** `tests/test_env_detection.py`
+
+```python
+import os
+import pytest
+from scripts import env_config
+
+def test_container_detection_dockerenv():
+    """Test /.dockerenv file detection."""
+    # Mock /.dockerenv existence
+    with patch('os.path.exists') as mock_exists:
+        mock_exists.return_value = True
+        assert env_config.is_in_container() == True
+
+def test_container_detection_env_var():
+    """Test CONTAINER env var detection."""
+    with patch.dict(os.environ, {'CONTAINER': 'true'}):
+        assert env_config.is_in_container() == True
+
+def test_conda_check_skipped_in_container():
+    """Test conda checks are skipped in containers."""
+    with patch.dict(os.environ, {'CONTAINER': 'true'}):
+        result = env_config.check_conda_env_or_warn()
+        assert result == True  # Should skip and return True
+```
+
+**Success Criteria:**
+- [ ] Container detection works with multiple methods
+- [ ] Conda checks properly skipped in containers
+- [ ] Environment variable overrides respected
+
+---
+
+#### Test 1D.2: Path Resolution
+**File:** `tests/test_path_handling.py`
+
+```python
+def test_container_path_validation():
+    """Test paths are validated in container mode."""
+    with patch.dict(os.environ, {'CONTAINER': 'true'}):
+        # Should reject paths outside /workspace
+        with pytest.raises(SystemExit):
+            validate_project_path('/home/user/project')
+
+        # Should accept /workspace paths
+        assert validate_project_path('/workspace/project') is not None
+
+def test_model_dir_override():
+    """Test VFX_MODELS_DIR override."""
+    with patch.dict(os.environ, {'VFX_MODELS_DIR': '/custom/models'}):
+        assert get_models_dir() == Path('/custom/models')
+```
+
+**Success Criteria:**
+- [ ] Path validation works correctly
+- [ ] Environment overrides respected
+- [ ] Error messages helpful
+
+---
+
+#### Test 1D.3: Frame Extraction (Synthetic)
+**File:** `tests/test_frame_extraction.py`
+
+```python
+def test_frame_extraction_synthetic(tmp_path):
+    """Test frame extraction with synthetic checkerboard video."""
+    # Use synthetic test video (10 frames)
+    input_video = Path("tests/fixtures/synthetic/checkerboard.mp4")
+    output_dir = tmp_path / "frames"
+
+    extract_frames(input_video, output_dir)
+
+    frames = list(output_dir.glob("*.png"))
+    assert len(frames) == 10
+    assert all(f.stat().st_size > 0 for f in frames)
+```
+
+**Success Criteria:**
+- [ ] Frame extraction works with synthetic data
+- [ ] Frame count accurate
+- [ ] No GPU required
+
+---
+
+#### Test 1D.4: COLMAP Input Validation (Synthetic)
+**File:** `tests/test_colmap_validation.py`
+
+```python
+def test_colmap_checkerboard_features():
+    """Test COLMAP can detect features in checkerboard."""
+    image_dir = Path("tests/fixtures/synthetic")
+
+    # Run feature extraction only (fast)
+    result = extract_colmap_features(image_dir)
+
+    assert result['num_images'] == 10
+    assert result['num_features'] > 100  # Checkerboard has many corners
+```
+
+**Success Criteria:**
+- [ ] COLMAP can process synthetic images
+- [ ] Feature detection works on known patterns
+- [ ] Fast execution (<10 seconds)
+
+---
+
+### Integration Tests (Real Video)
+
+#### Test 1D.5: Full Ingest Stage
+**File:** `tests/integration/test_ingest.py`
+
+```bash
+#!/bin/bash
+# Run in container with Football test video
+
+docker-compose run --rm vfx-ingest \
+  --input /workspace/fixtures/football_short.mp4 \
+  --name FootballTest \
+  --stages ingest
+```
+
+**Expected Output:**
+```
+✓ Frames extracted: 30
+✓ Output directory: /workspace/projects/FootballTest/source/frames/
+✓ Frame dimensions: 352×288
+✓ All frames valid PNG format
+```
+
+**Validation:**
+```python
+def test_ingest_stage():
+    project_dir = Path("/workspace/projects/FootballTest")
+    frames_dir = project_dir / "source/frames"
+
+    frames = list(frames_dir.glob("*.png"))
+    assert len(frames) == 30
+
+    # Check first frame is readable
+    img = Image.open(frames[0])
+    assert img.size == (352, 288)
+```
+
+**Success Criteria:**
+- [ ] All 30 frames extracted
+- [ ] Correct frame dimensions
+- [ ] FFmpeg runs without errors
+- [ ] Execution time <30 seconds
+
+---
+
+#### Test 1D.6: Depth Estimation Stage
 ```bash
 docker-compose run --rm vfx-ingest \
-  --name TestShot \
+  --name FootballTest \
   --stages depth
 ```
 
 **Expected:**
 - ComfyUI starts successfully
-- Depth maps generated in `/workspace/projects/TestShot/depth/`
-- GPU utilized correctly
+- 30 depth maps generated
+- GPU memory used efficiently
+- Depth maps have correct dimensions
+
+**Validation:**
+```python
+def test_depth_stage():
+    depth_dir = Path("/workspace/projects/FootballTest/depth")
+    depth_maps = list(depth_dir.glob("*.png"))
+
+    assert len(depth_maps) == 30
+
+    # Check depth map is grayscale and valid range
+    depth_img = np.array(Image.open(depth_maps[0]))
+    assert depth_img.ndim == 2 or depth_img.shape[2] == 1
+    assert 0 <= depth_img.min() <= depth_img.max() <= 255
+```
+
+**Success Criteria:**
+- [ ] All depth maps generated
+- [ ] GPU utilized (check nvidia-smi)
+- [ ] Execution time reasonable (~2-3 min for 30 frames)
+- [ ] Memory usage acceptable
 
 ---
 
-#### Test 1D.3: COLMAP Camera Tracking
+#### Test 1D.7: COLMAP Camera Tracking
 ```bash
 docker-compose run --rm vfx-ingest \
-  --name TestShot \
+  --name FootballTest \
   --stages colmap \
   --colmap-quality medium
 ```
 
 **Expected:**
 - COLMAP runs without installation errors
-- Sparse reconstruction succeeds
-- Camera data exported to JSON and Alembic
+- Camera poses estimated for most frames
+- Sparse point cloud generated
+- Camera data exported (JSON, Alembic)
+
+**Validation:**
+```python
+def test_colmap_stage():
+    colmap_dir = Path("/workspace/projects/FootballTest/colmap")
+
+    # Check outputs exist
+    assert (colmap_dir / "sparse/0/cameras.bin").exists()
+    assert (colmap_dir / "sparse/0/images.bin").exists()
+    assert (colmap_dir / "camera_data.json").exists()
+    assert (colmap_dir / "camera_track.abc").exists()
+
+    # Validate JSON structure
+    with open(colmap_dir / "camera_data.json") as f:
+        data = json.load(f)
+        assert len(data['frames']) > 20  # Should track most frames
+        assert all('quat' in frame for frame in data['frames'].values())
+```
+
+**Success Criteria:**
+- [ ] COLMAP runs without host installation
+- [ ] Camera poses estimated for >70% of frames
+- [ ] JSON export valid and complete
+- [ ] Alembic file readable by Houdini/Maya
+- [ ] Execution time <5 minutes
 
 ---
 
-#### Test 1D.4: Full Pipeline
+#### Test 1D.8: Segmentation Stage
 ```bash
 docker-compose run --rm vfx-ingest \
-  --input /workspace/test_video.mp4 \
-  --name FullTest \
-  --stages ingest,depth,roto,colmap
+  --name FootballTest \
+  --stages roto
+```
+
+**Expected:**
+- SAM3 detects people (2 football players)
+- Masks generated for all frames
+- Alpha mattes exported
+
+**Validation:**
+```python
+def test_segmentation_stage():
+    roto_dir = Path("/workspace/projects/FootballTest/roto")
+    masks = list(roto_dir.glob("*.png"))
+
+    assert len(masks) == 30
+
+    # Check mask has alpha channel
+    mask = np.array(Image.open(masks[0]))
+    assert mask.ndim == 3 and mask.shape[2] == 4  # RGBA
+```
+
+**Success Criteria:**
+- [ ] Masks generated for all frames
+- [ ] People detected in frames
+- [ ] Alpha channel present
+- [ ] Execution time reasonable
+
+---
+
+#### Test 1D.9: Full Pipeline (All Stages)
+```bash
+docker-compose run --rm vfx-ingest \
+  --input /workspace/fixtures/football_short.mp4 \
+  --name FootballFull \
+  --stages ingest,depth,roto,colmap,mocap
 ```
 
 **Expected:**
 - All stages complete successfully
-- Output files present in project directory
-- Performance comparable to local installation
+- Complete project structure created
+- All output files present
+
+**Validation:**
+```python
+def test_full_pipeline():
+    project = Path("/workspace/projects/FootballFull")
+
+    # Check all output directories exist
+    assert (project / "source/frames").exists()
+    assert (project / "depth").exists()
+    assert (project / "roto").exists()
+    assert (project / "colmap").exists()
+    assert (project / "mocap").exists()
+
+    # Count outputs
+    assert len(list((project / "source/frames").glob("*.png"))) == 30
+    assert len(list((project / "depth").glob("*.png"))) == 30
+    assert (project / "colmap/camera_data.json").exists()
+```
+
+**Success Criteria:**
+- [ ] End-to-end pipeline completes
+- [ ] All stages produce output
+- [ ] No errors or warnings
+- [ ] Total execution time <15 minutes
+- [ ] Output files valid and complete
 
 ---
 
-#### Test 1D.5: Volume Mount Validation
-```bash
-# Create test file on host
-echo "test" > ~/VFX-Projects/mount_test.txt
+### Performance Tests
 
-# Check visibility in container
-docker-compose run --rm vfx-ingest ls /workspace/projects/
+#### Test 1D.10: Performance Comparison
+**Goal:** Validate container performance is within 10% of local installation
 
-# Modify from container
-docker-compose run --rm vfx-ingest \
-  bash -c "echo 'from container' > /workspace/projects/container_test.txt"
+```python
+# tests/performance/test_benchmarks.py
 
-# Verify on host
-cat ~/VFX-Projects/container_test.txt
+import time
+from pathlib import Path
+
+def benchmark_stage(stage_name, command, iterations=3):
+    """Run a stage multiple times and measure performance."""
+    times = []
+    for i in range(iterations):
+        start = time.time()
+        run_command(command)
+        elapsed = time.time() - start
+        times.append(elapsed)
+
+    return {
+        'mean': np.mean(times),
+        'std': np.std(times),
+        'min': np.min(times),
+        'max': np.max(times),
+    }
+
+def test_performance_parity():
+    """Compare container vs local performance."""
+
+    # Benchmark in container
+    container_times = benchmark_stage(
+        "depth",
+        "docker-compose run --rm vfx-ingest --name PerfTest --stages depth"
+    )
+
+    # Benchmark local (if available)
+    # local_times = benchmark_stage("depth", "python scripts/run_pipeline.py ...")
+
+    # Container should be within 10% of local
+    # assert container_times['mean'] < local_times['mean'] * 1.10
 ```
 
-**Expected:**
-- Files visible bidirectionally
-- Permissions correct
-- No data loss
+**Metrics to Collect:**
+- Execution time per stage
+- GPU utilization (nvidia-smi)
+- Memory usage (docker stats)
+- Disk I/O
+- CPU usage
+
+**Success Criteria:**
+- [ ] Container within 10% of local performance
+- [ ] GPU fully utilized in compute stages
+- [ ] No memory leaks over multiple runs
+- [ ] Consistent performance across runs (low std dev)
+
+---
+
+### Volume Mount Tests
+
+#### Test 1D.11: Volume Persistence
+```bash
+# Test 1: Write from container, read from host
+docker-compose run --rm vfx-ingest \
+  bash -c "echo 'test data' > /workspace/test_persistence.txt"
+
+cat ~/VFX-Projects/test_persistence.txt
+# Should output: test data
+
+# Test 2: Write from host, read from container
+echo "host data" > ~/VFX-Projects/host_test.txt
+
+docker-compose run --rm vfx-ingest \
+  cat /workspace/host_test.txt
+# Should output: host data
+
+# Test 3: Model volume is read-only
+docker-compose run --rm vfx-ingest \
+  bash -c "touch /models/should_fail.txt"
+# Should fail with "read-only file system"
+```
+
+**Success Criteria:**
+- [ ] Bidirectional file visibility
+- [ ] Permissions preserved
+- [ ] Model volume read-only (safety)
+- [ ] Large files (>1GB) handled correctly
+
+---
+
+### Regression Tests
+
+#### Test 1D.12: Backwards Compatibility
+**Goal:** Ensure local installation still works
+
+```bash
+# Test local execution (without Docker)
+python scripts/run_pipeline.py \
+  --input tests/fixtures/football_short.mp4 \
+  --name LocalTest \
+  --stages ingest,depth
+
+# Validate it still works
+pytest tests/test_local_installation.py
+```
+
+**Success Criteria:**
+- [ ] Local installation unchanged
+- [ ] Can switch between local and Docker modes
+- [ ] Scripts detect environment correctly
+
+---
+
+### Automated Test Suite
+
+#### Task 1D.13: CI/CD Test Runner
+**File:** `tests/run_docker_tests.sh`
+
+```bash
+#!/bin/bash
+set -e
+
+echo "=== VFX Ingest Platform - Docker Test Suite ==="
+
+# 1. Setup test fixtures
+echo "[1/5] Setting up test fixtures..."
+python tests/fixtures/generate_synthetic.py
+./tests/fixtures/download_football.sh
+
+# 2. Build Docker image
+echo "[2/5] Building Docker image..."
+docker-compose build
+
+# 3. Run unit tests (fast, no GPU)
+echo "[3/5] Running unit tests..."
+pytest tests/ -m "not integration" --verbose
+
+# 4. Run integration tests (requires GPU)
+echo "[4/5] Running integration tests..."
+./tests/integration/test_all_stages.sh
+
+# 5. Generate test report
+echo "[5/5] Generating test report..."
+pytest tests/ --html=tests/report.html --self-contained-html
+
+echo "✓ All tests passed!"
+```
+
+**Success Criteria:**
+- [ ] All tests automated
+- [ ] Can run in CI/CD pipeline
+- [ ] Test report generated
+- [ ] <15 minute total execution
+
+---
+
+### Test Documentation
+
+#### Task 1D.14: Testing Guide
+**File:** `tests/README.md`
+
+Document:
+- How to run tests locally
+- How to add new tests
+- Test fixture management
+- CI/CD integration
+- Troubleshooting test failures
 
 ---
 
 ### Phase 1D Exit Criteria
 
-- [ ] All pipeline stages work in container
-- [ ] Output identical to local installation
-- [ ] Performance within 10% of local
+- [ ] All unit tests pass (synthetic data)
+- [ ] All integration tests pass (Football CIF video)
+- [ ] Performance within 10% of local installation
+- [ ] Volume mounts validated
 - [ ] No file permission issues
 - [ ] GPU utilization correct
 - [ ] Error messages helpful
+- [ ] Test fixtures documented
+- [ ] Automated test suite functional
+- [ ] Backwards compatibility verified
 
 ---
 
