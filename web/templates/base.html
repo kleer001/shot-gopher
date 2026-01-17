@@ -1,0 +1,58 @@
+{% import 'components/upload_zone.html' as upload %}
+{% import 'components/video_info.html' as video %}
+{% import 'components/config_form.html' as config %}
+{% import 'components/processing_panel.html' as processing %}
+{% import 'components/projects_list.html' as projects %}
+{% import 'components/error_toast.html' as errors %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}VFX Pipeline{% endblock %}</title>
+    <link rel="stylesheet" href="{% block stylesheet %}/static/css/style.css{% endblock %}">
+</head>
+<body>
+    <div class="container">
+        {% block navigation %}
+        <!-- Navigation can be overridden by templates -->
+        {% endblock %}
+
+        <header>
+            <h1>{% block header_title %}VFX Pipeline Processor{% endblock %}</h1>
+            <div id="system-status" class="system-status">
+                <span class="status-dot"></span>
+                <span class="status-text">Checking ComfyUI...</span>
+            </div>
+        </header>
+
+        <main>
+            {% block content %}
+            <!-- Main content area for template variants -->
+            {% endblock %}
+        </main>
+
+        <footer>
+            <p>VFX Pipeline v1.0 | <a href="https://github.com/kleer001/comfyui_ingest" target="_blank">GitHub</a></p>
+            {% block footer_links %}
+            <!-- Navigation between template variants -->
+            <nav class="template-nav">
+                <a href="/">Classic</a> |
+                <a href="/compact">Compact</a> |
+                <a href="/dashboard">Dashboard</a> |
+                <a href="/split">Split</a> |
+                <a href="/cards">Cards</a>
+            </nav>
+            {% endblock %}
+        </footer>
+    </div>
+
+    <!-- Error Toast (used by all templates) -->
+    {{ errors.error_toast() }}
+
+    <!-- JavaScript -->
+    <script src="/static/js/app.js"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
