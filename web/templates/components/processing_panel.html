@@ -27,17 +27,11 @@ Parameters:
     <div class="progress-container">
         {% if progress_type == 'bar' %}
         <!-- Linear Progress Bar -->
-        <div style="display: none;">
-            <div id="processing-progress-fill"></div>
-        </div>
         <div class="progress-bar">
             <div class="progress-fill" id="processing-progress-fill"></div>
         </div>
         {% elif progress_type == 'ring' %}
         <!-- SVG Progress Ring (Dashboard style) -->
-        <div style="display: none;">
-            <div id="processing-progress-fill"></div>
-        </div>
         <div class="progress-ring">
             <svg viewBox="0 0 120 120">
                 <circle cx="60" cy="60" r="54" class="ring-bg"></circle>
@@ -50,9 +44,6 @@ Parameters:
         </div>
         {% elif progress_type == 'circle' %}
         <!-- SVG Progress Circle (Split style) -->
-        <div style="display: none;">
-            <div id="processing-progress-fill"></div>
-        </div>
         <div class="progress-circle">
             <svg viewBox="0 0 200 200">
                 <circle cx="100" cy="100" r="90" class="circle-bg"></circle>
@@ -65,9 +56,6 @@ Parameters:
         </div>
         {% else %}
         <!-- Text-based Progress (Cards style) -->
-        <div style="display: none;">
-            <div id="processing-progress-fill"></div>
-        </div>
         <div class="progress-display">
             <div id="progress-percent" class="progress-big">0%</div>
             <div id="current-stage-name" class="progress-stage">IDLE</div>

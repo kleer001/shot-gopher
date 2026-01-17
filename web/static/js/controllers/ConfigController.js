@@ -173,10 +173,24 @@ export class ConfigController {
         const config = stateManager.get('config');
         const videoInfo = stateManager.get('videoInfo');
 
-        if (!config || !videoInfo) return;
+        if (!config || !videoInfo) {
+            // No config or video info yet
+            if (this.elements.timeEstimate) {
+                dom.setText(this.elements.timeEstimate, '--');
+            }
+            return;
+        }
 
         const selectedStages = this.getSelectedStages();
         const frameCount = videoInfo.frame_count;
+
+        // Validate frame count exists
+        if (!frameCount || typeof frameCount !== 'number' || frameCount <= 0) {
+            if (this.elements.timeEstimate) {
+                dom.setText(this.elements.timeEstimate, 'Unknown');
+            }
+            return;
+        }
 
         // Calculate estimate
         let totalSeconds = 0;

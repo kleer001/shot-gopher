@@ -134,8 +134,13 @@ export class UploadController {
             uploadFilename: null,
         });
 
-        // Show video info
-        this.displayVideoInfo(result.video_info, result.project_id);
+        // Validate and show video info
+        if (result.video_info && result.video_info.resolution) {
+            this.displayVideoInfo(result.video_info, result.project_id);
+        } else {
+            // Show warning but continue
+            stateManager.showError('Could not extract video info, but upload succeeded');
+        }
 
         // Show config form
         const configForm = dom.getElement(ELEMENTS.CONFIG_FORM);
@@ -146,6 +151,17 @@ export class UploadController {
 
     displayVideoInfo(info, filename) {
         if (!this.elements.videoInfo) return;
+
+        // Validate info has required properties
+        if (!info || !info.resolution || !info.fps || info.frame_count === undefined) {
+            // Show default values for missing info
+            dom.setText(this.elements.videoName, filename);
+            dom.setText(this.elements.videoResolution, 'Unknown');
+            dom.setText(this.elements.videoFrames, 'Unknown');
+            dom.setText(this.elements.videoFps, 'Unknown');
+            dom.show(this.elements.videoInfo);
+            return;
+        }
 
         dom.setText(this.elements.videoName, filename);
         dom.setText(this.elements.videoResolution, `${info.resolution[0]}x${info.resolution[1]}`);
