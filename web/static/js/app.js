@@ -63,6 +63,21 @@ const elements = {
     errorToast: document.getElementById('error-toast'),
     errorMessage: document.getElementById('error-message'),
     errorClose: document.getElementById('error-close'),
+
+    // Classic template only elements
+    logContainer: document.getElementById('log-container'),
+    toggleLogBtn: document.getElementById('toggle-log-btn'),
+    outputsGrid: document.getElementById('outputs-grid'),
+    completeProjectName: document.getElementById('complete-project-name'),
+    cancelConfigBtn: document.getElementById('cancel-config-btn'),
+    openFolderBtn: document.getElementById('open-folder-btn'),
+    runAgainBtn: document.getElementById('run-again-btn'),
+    newProjectBtn: document.getElementById('new-project-btn'),
+    errorBackBtn: document.getElementById('error-back-btn'),
+
+    // SVG progress indicators (Dashboard and Split templates)
+    progressRing: document.getElementById('progress-ring'),
+    progressCircle: document.getElementById('progress-circle'),
 };
 
 // Presets configuration
@@ -127,6 +142,26 @@ function setupEventListeners() {
         elements.clearLogsBtn.addEventListener('click', () => {
             elements.logOutput.innerHTML = '';
         });
+    }
+    if (elements.toggleLogBtn) {
+        elements.toggleLogBtn.addEventListener('click', toggleLog);
+    }
+
+    // Classic template buttons
+    if (elements.cancelConfigBtn) {
+        elements.cancelConfigBtn.addEventListener('click', resetToUpload);
+    }
+    if (elements.openFolderBtn) {
+        elements.openFolderBtn.addEventListener('click', handleOpenFolder);
+    }
+    if (elements.runAgainBtn) {
+        elements.runAgainBtn.addEventListener('click', resetToUpload);
+    }
+    if (elements.newProjectBtn) {
+        elements.newProjectBtn.addEventListener('click', resetToUpload);
+    }
+    if (elements.errorBackBtn) {
+        elements.errorBackBtn.addEventListener('click', resetToUpload);
     }
 
     // Error Toast
@@ -531,6 +566,7 @@ function setupProcessingUI() {
         <div class="stage-item pending" data-stage="${stage}">
             <span class="stage-icon">○</span>
             <span>${stageNames[stage] || stage}</span>
+            <span class="stage-status">pending</span>
         </div>
     `).join('');
 
@@ -540,6 +576,9 @@ function setupProcessingUI() {
     elements.progressFrames.textContent = '0 / 0';
     elements.currentStageLabel.textContent = `STAGE 1/${state.stages.length}`;
     elements.currentStageName.textContent = (stageNames[state.stages[0]] || state.stages[0]).toUpperCase();
+
+    // Reset SVG progress rings
+    updateSVGProgress(0);
 
     // Clear log
     elements.logOutput.innerHTML = '';
@@ -561,8 +600,8 @@ function connectWebSocket() {
     };
 
     state.ws.onclose = () => {
-        // Reconnect if still processing
-        if (state.currentSection === 'processing') {
+        // Reconnect if still processing (projectId is set and we have a WebSocket)
+        if (state.projectId && !elements.processingPanel.classList.contains('hidden')) {
             setTimeout(connectWebSocket, 2000);
         }
     };
@@ -602,6 +641,9 @@ function handleProgressUpdate(data) {
         const percent = Math.round(data.progress * 100);
         elements.processingProgressFill.style.width = `${percent}%`;
         elements.progressPercent.textContent = `${percent}%`;
+
+        // Update SVG progress rings if they exist (Dashboard/Split templates)
+        updateSVGProgress(percent);
     } else if (data.progress === undefined && data.stage) {
         // Indeterminate mode - no progress info yet for this stage
         elements.processingProgressFill.parentElement.classList.add('indeterminate');
@@ -662,12 +704,33 @@ function updateStagesList(currentStage, currentIndex) {
     });
 }
 
+function updateSVGProgress(percent) {
+    // Update Dashboard template progress ring (r=54)
+    if (elements.progressRing) {
+        const radius = 54;
+        const circumference = 2 * Math.PI * radius;
+        const offset = circumference * (1 - percent / 100);
+        elements.progressRing.style.strokeDasharray = circumference;
+        elements.progressRing.style.strokeDashoffset = offset;
+    }
+
+    // Update Split template progress circle (r=90)
+    if (elements.progressCircle) {
+        const radius = 90;
+        const circumference = 2 * Math.PI * radius;
+        const offset = circumference * (1 - percent / 100);
+        elements.progressCircle.style.strokeDasharray = circumference;
+        elements.progressCircle.style.strokeDashoffset = offset;
+    }
+}
+
 function appendLog(message) {
     elements.logOutput.textContent += message + '\n';
     elements.logOutput.scrollTop = elements.logOutput.scrollHeight;
 }
 
 function toggleLog() {
+    if (!elements.logContainer || !elements.toggleLogBtn) return;
     const isHidden = elements.logContainer.classList.toggle('hidden');
     elements.toggleLogBtn.innerHTML = isHidden ?
         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -679,7 +742,7 @@ function toggleLog() {
 }
 
 function updateElapsedTime() {
-    if (state.currentSection !== 'processing' || !state.startTime) return;
+    if (!state.startTime || elements.processingPanel.classList.contains('hidden')) return;
 
     const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
     elements.elapsedTime.textContent = `Elapsed: ${formatTime(elapsed)}`;
@@ -741,7 +804,12 @@ async function loadProjectOutputs(projectId) {
 
         state.projectDir = data.project_dir;
 
-        // Build output cards
+        // Build output cards (only if outputs grid exists - classic template only)
+        if (!elements.outputsGrid) {
+            console.log('Outputs grid not available in this template');
+            return;
+        }
+
         const outputs = data.outputs;
         if (Object.keys(outputs).length === 0) {
             elements.outputsGrid.innerHTML = '<p>No outputs found</p>';
@@ -761,7 +829,9 @@ async function loadProjectOutputs(projectId) {
             </div>
         `).join('');
 
-        elements.completeProjectName.textContent = projectId;
+        if (elements.completeProjectName) {
+            elements.completeProjectName.textContent = projectId;
+        }
         showSection('complete');
     } catch (error) {
         console.error('Failed to load outputs:', error);
@@ -774,12 +844,6 @@ async function handleOpenFolder() {
     } catch (error) {
         console.error('Failed to open folder:', error);
     }
-}
-
-// Error handling
-function showError(message) {
-    elements.errorMessage.textContent = message;
-    showSection('error');
 }
 
 function resetToUpload() {
