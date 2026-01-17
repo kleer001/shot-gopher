@@ -17,14 +17,7 @@ const state = {
 
 // DOM Elements
 const elements = {
-    // Sections
-    uploadSection: document.getElementById('upload-section'),
-    configureSection: document.getElementById('configure-section'),
-    processingSection: document.getElementById('processing-section'),
-    completeSection: document.getElementById('complete-section'),
-    errorSection: document.getElementById('error-section'),
-
-    // Upload
+    // Upload & Config
     dropZone: document.getElementById('drop-zone'),
     fileInput: document.getElementById('file-input'),
     browseBtn: document.getElementById('browse-btn'),
@@ -32,25 +25,27 @@ const elements = {
     uploadFilename: document.getElementById('upload-filename'),
     uploadProgressFill: document.getElementById('upload-progress-fill'),
     uploadPercentText: document.getElementById('upload-percent-text'),
-    projectsList: document.getElementById('projects-list'),
-
-    // System status
-    systemStatus: document.getElementById('system-status'),
-
-    // Configure
-    configFilename: document.getElementById('config-filename'),
-    configVideoMeta: document.getElementById('config-video-meta'),
-    cancelConfigBtn: document.getElementById('cancel-config-btn'),
+    videoInfo: document.getElementById('video-info'),
+    videoName: document.getElementById('video-name'),
+    videoResolution: document.getElementById('video-resolution'),
+    videoFrames: document.getElementById('video-frames'),
+    videoFps: document.getElementById('video-fps'),
     configForm: document.getElementById('config-form'),
-    projectNameInput: document.getElementById('project-name'),
     rotoPromptInput: document.getElementById('roto-prompt'),
     rotoPromptWrapper: document.getElementById('roto-prompt-wrapper'),
     stageRoto: document.getElementById('stage-roto'),
     skipExisting: document.getElementById('skip-existing'),
-    presetButtons: document.querySelectorAll('.btn-preset'),
+    presetButtons: document.querySelectorAll('.preset-btn'),
     timeEstimate: document.getElementById('time-estimate'),
 
-    // Processing
+    // System status
+    systemStatus: document.getElementById('system-status'),
+
+    // Projects
+    projectsList: document.getElementById('projects-list'),
+
+    // Processing Panel
+    processingPanel: document.getElementById('processing-panel'),
     processingProjectName: document.getElementById('processing-project-name'),
     cancelProcessingBtn: document.getElementById('cancel-processing-btn'),
     currentStageLabel: document.getElementById('current-stage-label'),
@@ -61,21 +56,13 @@ const elements = {
     elapsedTime: document.getElementById('elapsed-time'),
     remainingTime: document.getElementById('remaining-time'),
     stagesListProgress: document.getElementById('stages-list-progress'),
-    toggleLogBtn: document.getElementById('toggle-log-btn'),
-    logContainer: document.getElementById('log-container'),
+    clearLogsBtn: document.getElementById('clear-logs-btn'),
     logOutput: document.getElementById('log-output'),
 
-    // Complete
-    completeProjectName: document.getElementById('complete-project-name'),
-    outputsGrid: document.getElementById('outputs-grid'),
-    processingTime: document.getElementById('processing-time'),
-    openFolderBtn: document.getElementById('open-folder-btn'),
-    runAgainBtn: document.getElementById('run-again-btn'),
-    newProjectBtn: document.getElementById('new-project-btn'),
-
-    // Error
+    // Error Toast
+    errorToast: document.getElementById('error-toast'),
     errorMessage: document.getElementById('error-message'),
-    errorBackBtn: document.getElementById('error-back-btn'),
+    errorClose: document.getElementById('error-close'),
 };
 
 // Presets configuration
@@ -121,7 +108,6 @@ function setupEventListeners() {
     elements.dropZone.addEventListener('drop', handleDrop);
 
     // Configure
-    elements.cancelConfigBtn.addEventListener('click', () => showSection('upload'));
     elements.configForm.addEventListener('submit', handleStartProcessing);
     elements.stageRoto.addEventListener('change', toggleRotoPrompt);
 
@@ -137,27 +123,54 @@ function setupEventListeners() {
 
     // Processing
     elements.cancelProcessingBtn.addEventListener('click', handleCancelProcessing);
-    elements.toggleLogBtn.addEventListener('click', toggleLog);
+    if (elements.clearLogsBtn) {
+        elements.clearLogsBtn.addEventListener('click', () => {
+            elements.logOutput.innerHTML = '';
+        });
+    }
 
-    // Complete
-    elements.openFolderBtn.addEventListener('click', handleOpenFolder);
-    elements.runAgainBtn.addEventListener('click', () => showSection('configure'));
-    elements.newProjectBtn.addEventListener('click', resetToUpload);
-
-    // Error
-    elements.errorBackBtn.addEventListener('click', resetToUpload);
+    // Error Toast
+    if (elements.errorClose) {
+        elements.errorClose.addEventListener('click', () => {
+            elements.errorToast.classList.add('hidden');
+        });
+    }
 }
 
-// Section management
+// UI State Management
+function showProcessingPanel() {
+    elements.processingPanel.classList.remove('hidden');
+}
+
+function hideProcessingPanel() {
+    elements.processingPanel.classList.add('hidden');
+}
+
+function showError(message, duration = 5000) {
+    elements.errorMessage.textContent = message;
+    elements.errorToast.classList.remove('hidden');
+
+    if (duration > 0) {
+        setTimeout(() => {
+            elements.errorToast.classList.add('hidden');
+        }, duration);
+    }
+}
+
+function resetUploadForm() {
+    elements.dropZone.classList.remove('hidden');
+    elements.uploadProgress.classList.add('hidden');
+    elements.videoInfo.classList.add('hidden');
+    elements.configForm.classList.add('hidden');
+    state.videoInfo = null;
+    state.projectId = null;
+}
+
+// Legacy compatibility stub
 function showSection(name) {
-    const sections = ['upload', 'configure', 'processing', 'complete', 'error'];
-    sections.forEach(s => {
-        const el = document.getElementById(`${s}-section`);
-        if (el) {
-            el.classList.toggle('active', s === name);
-        }
-    });
-    state.currentSection = name;
+    // Single-page layout doesn't use sections
+    // Keeping for backward compatibility with existing code
+    console.log(`showSection called with: ${name}`);
 }
 
 // System status
@@ -166,17 +179,14 @@ async function checkSystemStatus() {
         const response = await fetch('/api/system/status');
         const data = await response.json();
 
-        const statusDot = elements.systemStatus.querySelector('.status-dot');
-        const statusText = elements.systemStatus.querySelector('.status-text');
-
         if (data.comfyui) {
-            statusDot.classList.add('online');
-            statusDot.classList.remove('offline');
-            statusText.textContent = 'ComfyUI running';
+            elements.systemStatus.classList.add('online');
+            elements.systemStatus.classList.remove('offline');
+            elements.systemStatus.querySelector('.status-text').textContent = 'ONLINE';
         } else {
-            statusDot.classList.add('offline');
-            statusDot.classList.remove('online');
-            statusText.textContent = 'ComfyUI offline';
+            elements.systemStatus.classList.add('offline');
+            elements.systemStatus.classList.remove('online');
+            elements.systemStatus.querySelector('.status-text').textContent = 'OFFLINE';
         }
     } catch (error) {
         console.error('Failed to check system status:', error);
@@ -299,23 +309,19 @@ function handleUploadSuccess(data, filename) {
     state.projectName = data.name;
     state.videoInfo = data.video_info;
 
-    // Update configure form
-    elements.configFilename.textContent = filename;
-    elements.projectNameInput.value = data.name;
-
+    // Update video info display
     if (data.video_info) {
         const info = data.video_info;
-        const meta = `${info.resolution[0]}x${info.resolution[1]} - ${info.fps}fps - ${info.frame_count} frames - ${info.duration}s`;
-        elements.configVideoMeta.textContent = meta;
-    } else {
-        elements.configVideoMeta.textContent = '';
+        elements.videoName.textContent = filename;
+        elements.videoResolution.textContent = `${info.resolution[0]}x${info.resolution[1]}`;
+        elements.videoFrames.textContent = info.frame_count;
+        elements.videoFps.textContent = info.fps.toFixed(2);
+        elements.videoInfo.classList.remove('hidden');
     }
 
-    // Hide upload progress
+    // Hide upload progress, show config form
     elements.uploadProgress.classList.add('hidden');
-
-    // Show configure section
-    showSection('configure');
+    elements.configForm.classList.remove('hidden');
 
     // Update time estimate with video info
     updateTimeEstimate();
@@ -505,8 +511,8 @@ async function handleStartProcessing(e) {
         // Connect WebSocket
         connectWebSocket();
 
-        // Show processing section
-        showSection('processing');
+        // Show processing panel
+        showProcessingPanel();
 
         // Start timer
         state.startTime = Date.now();
@@ -522,27 +528,21 @@ function setupProcessingUI() {
 
     // Build stages list
     elements.stagesListProgress.innerHTML = state.stages.map((stage, index) => `
-        <div class="stage-item" data-stage="${stage}">
-            <div class="stage-icon pending">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                </svg>
-            </div>
-            <span class="stage-name">${stageNames[stage] || stage}</span>
-            <span class="stage-status">pending</span>
+        <div class="stage-item pending" data-stage="${stage}">
+            <span class="stage-icon">○</span>
+            <span>${stageNames[stage] || stage}</span>
         </div>
     `).join('');
 
     // Reset progress
     elements.processingProgressFill.style.width = '0%';
     elements.progressPercent.textContent = '0%';
-    elements.progressFrames.textContent = '';
-    elements.currentStageLabel.textContent = `Stage 1 of ${state.stages.length}:`;
-    elements.currentStageName.textContent = stageNames[state.stages[0]] || state.stages[0];
+    elements.progressFrames.textContent = '0 / 0';
+    elements.currentStageLabel.textContent = `STAGE 1/${state.stages.length}`;
+    elements.currentStageName.textContent = (stageNames[state.stages[0]] || state.stages[0]).toUpperCase();
 
     // Clear log
-    elements.logOutput.textContent = '';
-    elements.logContainer.classList.add('hidden');
+    elements.logOutput.innerHTML = '';
 }
 
 function connectWebSocket() {
@@ -719,14 +719,19 @@ async function handleProcessingComplete() {
     // Calculate processing time
     if (state.startTime) {
         const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
-        elements.processingTime.textContent = `Total processing time: ${formatTime(elapsed)}`;
+        console.log(`Processing complete in ${formatTime(elapsed)}`);
     }
 
-    // Load outputs
-    await loadProjectOutputs(state.projectId);
+    // Hide processing panel after a moment
+    setTimeout(() => {
+        hideProcessingPanel();
+    }, 2000);
 
-    elements.completeProjectName.textContent = state.projectName;
-    showSection('complete');
+    // Reload projects list
+    loadProjects();
+
+    // Reset upload form for new project
+    resetUploadForm();
 }
 
 async function loadProjectOutputs(projectId) {

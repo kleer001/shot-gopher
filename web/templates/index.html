@@ -7,263 +7,216 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>VFX Pipeline</h1>
-            <div id="system-status" class="status-indicator">
-                <span class="status-dot"></span>
-                <span class="status-text">Checking...</span>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1>VFX PIPELINE</h1>
+            </div>
+            <div class="header-right">
+                <div id="system-status" class="system-status">
+                    <span class="status-label">COMFYUI</span>
+                    <span class="status-dot"></span>
+                    <span class="status-text">...</span>
+                </div>
             </div>
         </header>
 
-        <main>
-            <!-- State 1: Upload -->
-            <section id="upload-section" class="section active">
-                <div id="drop-zone" class="drop-zone">
-                    <div class="drop-zone-content">
-                        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="17 8 12 3 7 8"></polyline>
-                            <line x1="12" y1="3" x2="12" y2="15"></line>
-                        </svg>
-                        <p class="drop-text">Drop video here</p>
-                        <p class="drop-subtext">or</p>
-                        <button type="button" id="browse-btn" class="btn btn-secondary">Browse Files...</button>
-                        <p class="supported-formats">Supported: mp4, mov, avi, mkv, webm</p>
-                    </div>
-                    <input type="file" id="file-input" accept=".mp4,.mov,.avi,.mkv,.webm,.mxf" hidden>
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Left Panel: Upload & Config -->
+            <div class="panel panel-upload">
+                <div class="panel-header">
+                    <h2>NEW PROJECT</h2>
                 </div>
-
-                <div id="upload-progress" class="upload-progress hidden">
-                    <p>Uploading: <span id="upload-filename"></span></p>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="upload-progress-fill"></div>
-                    </div>
-                    <p class="upload-percent"><span id="upload-percent-text">0</span>%</p>
-                </div>
-
-                <div class="recent-projects">
-                    <h3>Recent Projects</h3>
-                    <div id="projects-list" class="projects-list">
-                        <p class="no-projects">Loading...</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- State 2: Configure -->
-            <section id="configure-section" class="section">
-                <div class="section-header">
-                    <div class="video-info">
-                        <h2 id="config-filename">video.mp4</h2>
-                        <p id="config-video-meta" class="video-meta">1920x1080 - 24fps - 252 frames - 10.5s</p>
-                    </div>
-                    <button type="button" id="cancel-config-btn" class="btn btn-icon" title="Cancel">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                    </button>
-                </div>
-
-                <form id="config-form">
-                    <div class="form-group">
-                        <label for="project-name">Project Name</label>
-                        <input type="text" id="project-name" name="project-name" placeholder="my_shot">
+                <div class="panel-body">
+                    <!-- Upload Zone -->
+                    <div id="drop-zone" class="drop-zone">
+                        <input type="file" id="file-input" accept=".mp4,.mov,.avi,.mkv,.webm,.mxf" hidden>
+                        <div class="drop-zone-content">
+                            <div class="drop-icon">▲</div>
+                            <div class="drop-text">DROP VIDEO or <button type="button" id="browse-btn" class="link-btn">BROWSE</button></div>
+                            <div class="drop-hint">mp4, mov, avi, mkv, webm</div>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Processing Stages</label>
-                        <div class="stages-list">
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="stage" value="depth" checked>
-                                <span class="checkbox-text">Depth Maps</span>
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="stage" value="roto" checked id="stage-roto">
-                                <span class="checkbox-text">Segmentation (Roto)</span>
-                            </label>
-                            <div class="roto-prompt-wrapper" id="roto-prompt-wrapper">
-                                <label for="roto-prompt">Prompt:</label>
-                                <input type="text" id="roto-prompt" name="roto-prompt" value="person" placeholder="person">
+                    <!-- Upload Progress -->
+                    <div id="upload-progress" class="upload-progress hidden">
+                        <div class="progress-label">
+                            <span>UPLOADING</span>
+                            <span id="upload-percent-text">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="upload-progress-fill"></div>
+                        </div>
+                        <div class="upload-filename" id="upload-filename"></div>
+                    </div>
+
+                    <!-- Video Info -->
+                    <div id="video-info" class="video-info hidden">
+                        <div class="info-row">
+                            <span class="info-label">FILE</span>
+                            <span class="info-value" id="video-name"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">RESOLUTION</span>
+                            <span class="info-value" id="video-resolution"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">FRAMES</span>
+                            <span class="info-value" id="video-frames"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">FPS</span>
+                            <span class="info-value" id="video-fps"></span>
+                        </div>
+                    </div>
+
+                    <!-- Config Form -->
+                    <form id="config-form" class="config-form hidden">
+                        <!-- Stages -->
+                        <div class="form-section">
+                            <div class="section-label">STAGES</div>
+                            <div class="stage-grid">
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="depth" checked>
+                                    <span>Depth</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="roto" checked id="stage-roto">
+                                    <span>Roto</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="matanyone">
+                                    <span>MatAnyone</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="cleanplate" checked>
+                                    <span>CleanPlate</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="colmap">
+                                    <span>COLMAP</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="mocap" disabled>
+                                    <span>MoCap</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="gsir" disabled>
+                                    <span>GS-IR</span>
+                                </label>
                             </div>
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="stage" value="matanyone">
-                                <span class="checkbox-text">Refine Person Mattes (MatAnyone)</span>
-                                <span class="checkbox-note">Requires Roto with person masks</span>
+
+                            <!-- Roto Prompt -->
+                            <div id="roto-prompt-wrapper" class="prompt-wrapper">
+                                <input type="text" id="roto-prompt" name="roto-prompt" value="person" placeholder="person" class="prompt-input">
+                            </div>
+                        </div>
+
+                        <!-- Presets -->
+                        <div class="form-section">
+                            <div class="section-label">PRESETS</div>
+                            <div class="preset-buttons">
+                                <button type="button" class="preset-btn" data-preset="quick">QUICK</button>
+                                <button type="button" class="preset-btn active" data-preset="full">FULL</button>
+                                <button type="button" class="preset-btn" data-preset="all">ALL</button>
+                            </div>
+                        </div>
+
+                        <!-- Options -->
+                        <div class="form-section">
+                            <label class="option-checkbox">
+                                <input type="checkbox" name="skip-existing" id="skip-existing">
+                                <span>Skip existing outputs</span>
                             </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="stage" value="cleanplate" checked>
-                                <span class="checkbox-text">Clean Plate</span>
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="stage" value="colmap">
-                                <span class="checkbox-text">Camera Solve (COLMAP)</span>
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="stage" value="gsir" disabled>
-                                <span class="checkbox-text">Materials (GS-IR)</span>
-                                <span class="checkbox-note">Requires COLMAP</span>
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="stage" value="mocap" disabled>
-                                <span class="checkbox-text">Motion Capture</span>
-                                <span class="checkbox-note">Requires COLMAP</span>
-                            </label>
+                        </div>
+
+                        <!-- Time Estimate -->
+                        <div class="time-estimate">
+                            <span class="estimate-label">EST. TIME</span>
+                            <span id="time-estimate" class="estimate-value">--</span>
+                        </div>
+
+                        <!-- Submit -->
+                        <button type="submit" class="btn-submit">START PROCESSING</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right Panel: Projects -->
+            <div class="panel panel-projects">
+                <div class="panel-header">
+                    <h2>PROJECTS</h2>
+                </div>
+                <div class="panel-body">
+                    <div id="projects-list" class="projects-list">
+                        <div class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Panel: Active Processing (hidden by default) -->
+            <div id="processing-panel" class="panel panel-processing hidden">
+                <div class="panel-header">
+                    <h2>PROCESSING: <span id="processing-project-name"></span></h2>
+                    <button type="button" id="cancel-processing-btn" class="btn-cancel">CANCEL</button>
+                </div>
+                <div class="panel-body">
+                    <div class="processing-grid">
+                        <!-- Stage Progress -->
+                        <div class="stage-progress">
+                            <div class="stage-label">
+                                <span id="current-stage-label">STAGE 1/4</span>
+                                <span id="current-stage-name">DEPTH</span>
+                            </div>
+                            <div class="progress-bar large">
+                                <div class="progress-fill" id="processing-progress-fill"></div>
+                            </div>
+                            <div class="progress-details">
+                                <span id="progress-percent">0%</span>
+                                <span id="progress-frames">0 / 0</span>
+                            </div>
+                        </div>
+
+                        <!-- Stages List -->
+                        <div class="stages-list" id="stages-list-progress">
+                            <!-- Populated dynamically -->
+                        </div>
+
+                        <!-- Time Info -->
+                        <div class="time-info">
+                            <div class="time-row">
+                                <span class="time-label">ELAPSED</span>
+                                <span id="elapsed-time">0s</span>
+                            </div>
+                            <div class="time-row">
+                                <span class="time-label">REMAINING</span>
+                                <span id="remaining-time">--</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="form-group presets">
-                        <label>Quick Presets</label>
-                        <div class="preset-buttons">
-                            <button type="button" class="btn btn-preset" data-preset="quick">Quick Preview</button>
-                            <button type="button" class="btn btn-preset active" data-preset="full">Full VFX</button>
-                            <button type="button" class="btn btn-preset" data-preset="all">Everything</button>
+                    <!-- Console Output -->
+                    <div class="console-section">
+                        <div class="console-header">
+                            <span>CONSOLE</span>
+                            <button type="button" id="clear-logs-btn" class="btn-clear">CLEAR</button>
                         </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="skip-existing" id="skip-existing">
-                            <span class="checkbox-text">Skip existing outputs</span>
-                        </label>
-                    </div>
-
-                    <div class="form-group time-estimate">
-                        <div class="estimate-box">
-                            <span class="estimate-label">Estimated time:</span>
-                            <span id="time-estimate" class="estimate-value">Calculating...</span>
-                        </div>
-                        <p class="estimate-note">Based on selected stages and frame count. Actual time varies by hardware.</p>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary btn-large">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                            </svg>
-                            Start Processing
-                        </button>
-                    </div>
-                </form>
-            </section>
-
-            <!-- State 3: Processing -->
-            <section id="processing-section" class="section">
-                <div class="section-header">
-                    <h2 id="processing-project-name">project_name</h2>
-                    <button type="button" id="cancel-processing-btn" class="btn btn-danger" title="Cancel">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        </svg>
-                        Cancel
-                    </button>
-                </div>
-
-                <div class="progress-container">
-                    <div class="stage-info">
-                        <span id="current-stage-label">Stage 1 of 4:</span>
-                        <span id="current-stage-name">Ingest</span>
-                    </div>
-
-                    <div class="progress-bar large">
-                        <div class="progress-fill" id="processing-progress-fill"></div>
-                    </div>
-
-                    <div class="progress-details">
-                        <span id="progress-percent">0%</span>
-                        <span id="progress-frames">Frame 0 / 0</span>
-                    </div>
-
-                    <div class="time-info">
-                        <span id="elapsed-time">Elapsed: 0s</span>
-                        <span id="remaining-time"></span>
+                        <div id="log-output" class="log-output"></div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <div class="stages-progress">
-                    <div id="stages-list-progress" class="stages-list-progress">
-                        <!-- Populated by JS -->
-                    </div>
-                </div>
-
-                <div class="log-section">
-                    <button type="button" id="toggle-log-btn" class="btn btn-text">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                        Show Log
-                    </button>
-                    <div id="log-container" class="log-container hidden">
-                        <pre id="log-output"></pre>
-                    </div>
-                </div>
-            </section>
-
-            <!-- State 4: Complete -->
-            <section id="complete-section" class="section">
-                <div class="section-header">
-                    <h2 id="complete-project-name">project_name</h2>
-                    <span class="status-badge success">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        Complete
-                    </span>
-                </div>
-
-                <div class="outputs-grid" id="outputs-grid">
-                    <!-- Populated by JS -->
-                </div>
-
-                <div class="completion-info">
-                    <p id="processing-time">Total processing time: --</p>
-                </div>
-
-                <div class="complete-actions">
-                    <button type="button" id="open-folder-btn" class="btn btn-secondary">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                        </svg>
-                        Open Folder
-                    </button>
-                    <button type="button" id="run-again-btn" class="btn btn-secondary">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                        </svg>
-                        Run Again
-                    </button>
-                </div>
-
-                <div class="back-link">
-                    <button type="button" id="new-project-btn" class="btn btn-text">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="19" y1="12" x2="5" y2="12"></line>
-                            <polyline points="12 19 5 12 12 5"></polyline>
-                        </svg>
-                        New Project
-                    </button>
-                </div>
-            </section>
-
-            <!-- Error State -->
-            <section id="error-section" class="section">
-                <div class="error-container">
-                    <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="8" x2="12" y2="12"></line>
-                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                    </svg>
-                    <h2>Error</h2>
-                    <p id="error-message">An error occurred</p>
-                    <button type="button" id="error-back-btn" class="btn btn-primary">Back to Home</button>
-                </div>
-            </section>
-        </main>
-
-        <footer>
-            <p>VFX Pipeline v1.0 | <a href="https://github.com/kleer001/comfyui_ingest" target="_blank">GitHub</a></p>
-        </footer>
+        <!-- Error Toast -->
+        <div id="error-toast" class="error-toast hidden">
+            <div class="error-content">
+                <span class="error-icon">⚠</span>
+                <span class="error-message" id="error-message"></span>
+                <button type="button" class="error-close" id="error-close">✕</button>
+            </div>
+        </div>
     </div>
 
     <script src="/static/js/app.js"></script>
