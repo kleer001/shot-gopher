@@ -1,0 +1,27 @@
+{#
+Video Info Component
+Displays video metadata after upload
+
+Parameters:
+  - css_class: Additional CSS classes for styling (optional)
+#}
+{% macro video_info(css_class='') %}
+<div id="video-info" class="video-info hidden {{ css_class }}">
+    <div class="info-row">
+        <span class="info-label">FILE</span>
+        <span class="info-value" id="video-name">--</span>
+    </div>
+    <div class="info-row">
+        <span class="info-label">RESOLUTION</span>
+        <span class="info-value" id="video-resolution">--</span>
+    </div>
+    <div class="info-row">
+        <span class="info-label">FRAMES</span>
+        <span class="info-value" id="video-frames">--</span>
+    </div>
+    <div class="info-row">
+        <span class="info-label">FPS</span>
+        <span class="info-value" id="video-fps">--</span>
+    </div>
+</div>
+{% endmacro %}

@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from env_config import DEFAULT_PROJECTS_DIR, INSTALL_DIR
+from services.config_service import get_config_service
 
 router = APIRouter()
 
@@ -188,8 +189,15 @@ async def list_projects():
                 proj_id = proj_dir.name
                 if proj_id not in [p["project_id"] for p in projects]:
                     # Check for outputs to determine status
-                    has_depth = (proj_dir / "depth").exists() and any((proj_dir / "depth").iterdir()) if (proj_dir / "depth").exists() else False
-                    has_roto = (proj_dir / "roto").exists() and any((proj_dir / "roto").iterdir()) if (proj_dir / "roto").exists() else False
+                    try:
+                        has_depth = (proj_dir / "depth").is_dir() and any((proj_dir / "depth").iterdir())
+                    except (OSError, StopIteration):
+                        has_depth = False
+
+                    try:
+                        has_roto = (proj_dir / "roto").is_dir() and any((proj_dir / "roto").iterdir())
+                    except (OSError, StopIteration):
+                        has_roto = False
 
                     status = "completed" if (has_depth or has_roto) else "pending"
 
@@ -289,8 +297,9 @@ async def get_outputs(project_id: str):
 
     outputs = {}
 
-    # Check each output directory
-    output_dirs = ["depth", "roto", "cleanplate", "camera", "colmap", "mocap"]
+    # Check each output directory (from configuration)
+    config_service = get_config_service()
+    output_dirs = config_service.get_output_directories()
 
     for dir_name in output_dirs:
         dir_path = project_dir / dir_name
@@ -312,7 +321,7 @@ async def get_outputs(project_id: str):
 
     # Also check for source frames
     frames_dir = project_dir / "source" / "frames"
-    if frames_dir.exists():
+    if frames_dir.exists() and frames_dir.is_dir():
         frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
         if frame_files:
             outputs["source"] = {
@@ -363,6 +372,30 @@ async def system_status():
         pass
 
     return status
+
+
+@router.get("/config")
+async def get_config():
+    """Get pipeline configuration (stages, presets, settings).
+
+    Returns the complete pipeline configuration including:
+    - Stage definitions with metadata
+    - Preset configurations
+    - Supported video formats
+    - WebSocket settings
+    - UI configuration
+
+    This provides a single source of truth for configuration,
+    following the DRY principle.
+    """
+    config_service = get_config_service()
+    return {
+        "stages": config_service.get_stages(),
+        "presets": config_service.get_presets(),
+        "supportedVideoFormats": config_service.get_supported_video_formats(),
+        "websocket": config_service.get_websocket_config(),
+        "ui": config_service.get_ui_config(),
+    }
 
 
 @router.post("/projects/{project_id}/open-folder")

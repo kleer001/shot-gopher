@@ -14,6 +14,12 @@
                 <span class="status-dot"></span>
                 <span class="status-text">Checking...</span>
             </div>
+            <div style="display: flex; gap: 12px; font-size: 0.75rem;">
+                <a href="/compact" style="color: var(--accent); text-decoration: none;">Compact</a>
+                <a href="/dashboard" style="color: var(--accent); text-decoration: none;">Dashboard</a>
+                <a href="/split" style="color: var(--accent); text-decoration: none;">Split</a>
+                <a href="/cards" style="color: var(--accent); text-decoration: none;">Cards</a>
+            </div>
         </header>
 
         <main>
@@ -40,6 +46,20 @@
                         <div class="progress-fill" id="upload-progress-fill"></div>
                     </div>
                     <p class="upload-percent"><span id="upload-percent-text">0</span>%</p>
+                </div>
+
+                <!-- Video Info -->
+                <div id="video-info" class="video-info hidden" style="margin: 20px 0; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px; font-size: 14px;">
+                        <strong>File:</strong>
+                        <span id="video-name">--</span>
+                        <strong>Resolution:</strong>
+                        <span id="video-resolution">--</span>
+                        <strong>Frames:</strong>
+                        <span id="video-frames">--</span>
+                        <strong>FPS:</strong>
+                        <span id="video-fps">--</span>
+                    </div>
                 </div>
 
                 <div class="recent-projects">
@@ -87,6 +107,11 @@
                                 <input type="text" id="roto-prompt" name="roto-prompt" value="person" placeholder="person">
                             </div>
                             <label class="checkbox-label">
+                                <input type="checkbox" name="stage" value="matanyone">
+                                <span class="checkbox-text">Refine Person Mattes (MatAnyone)</span>
+                                <span class="checkbox-note">Requires Roto with person masks</span>
+                            </label>
+                            <label class="checkbox-label">
                                 <input type="checkbox" name="stage" value="cleanplate" checked>
                                 <span class="checkbox-text">Clean Plate</span>
                             </label>
@@ -110,9 +135,9 @@
                     <div class="form-group presets">
                         <label>Quick Presets</label>
                         <div class="preset-buttons">
-                            <button type="button" class="btn btn-preset" data-preset="quick">Quick Preview</button>
-                            <button type="button" class="btn btn-preset active" data-preset="full">Full VFX</button>
-                            <button type="button" class="btn btn-preset" data-preset="all">Everything</button>
+                            <button type="button" class="btn preset-btn" data-preset="quick">Quick Preview</button>
+                            <button type="button" class="btn preset-btn active" data-preset="full">Full VFX</button>
+                            <button type="button" class="btn preset-btn" data-preset="all">Everything</button>
                         </div>
                     </div>
 
@@ -143,7 +168,7 @@
             </section>
 
             <!-- State 3: Processing -->
-            <section id="processing-section" class="section">
+            <section id="processing-panel" class="section">
                 <div class="section-header">
                     <h2 id="processing-project-name">project_name</h2>
                     <button type="button" id="cancel-processing-btn" class="btn btn-danger" title="Cancel">
@@ -182,12 +207,15 @@
                 </div>
 
                 <div class="log-section">
-                    <button type="button" id="toggle-log-btn" class="btn btn-text">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                        Show Log
-                    </button>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <button type="button" id="toggle-log-btn" class="btn btn-text">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                            Show Log
+                        </button>
+                        <button type="button" id="clear-logs-btn" class="btn btn-text">Clear</button>
+                    </div>
                     <div id="log-container" class="log-container hidden">
                         <pre id="log-output"></pre>
                     </div>
@@ -250,7 +278,7 @@
                         <line x1="12" y1="16" x2="12.01" y2="16"></line>
                     </svg>
                     <h2>Error</h2>
-                    <p id="error-message">An error occurred</p>
+                    <p id="error-section-message">An error occurred</p>
                     <button type="button" id="error-back-btn" class="btn btn-primary">Back to Home</button>
                 </div>
             </section>
@@ -261,6 +289,15 @@
         </footer>
     </div>
 
-    <script src="/static/js/app.js"></script>
+    <!-- Error Toast -->
+    <div id="error-toast" class="error-toast hidden">
+        <div class="error-content">
+            <span class="error-icon">⚠</span>
+            <span id="error-message"></span>
+            <button type="button" class="error-close" id="error-close">✕</button>
+        </div>
+    </div>
+
+    <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>

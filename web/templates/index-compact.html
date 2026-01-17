@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VFX Pipeline (Compact)</title>
+    <link rel="stylesheet" href="/static/css/style-compact.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1>VFX PIPELINE</h1>
+                <div style="margin-left: 16px; display: flex; gap: 10px;">
+                    <a href="/" style="color: var(--text-dim); font-size: 10px; text-decoration: none;">Classic</a>
+                    <a href="/dashboard" style="color: var(--text-dim); font-size: 10px; text-decoration: none;">Dashboard</a>
+                    <a href="/split" style="color: var(--text-dim); font-size: 10px; text-decoration: none;">Split</a>
+                    <a href="/cards" style="color: var(--text-dim); font-size: 10px; text-decoration: none;">Cards</a>
+                </div>
+            </div>
+            <div class="header-right">
+                <div id="system-status" class="system-status">
+                    <span class="status-label">COMFYUI</span>
+                    <span class="status-dot"></span>
+                    <span class="status-text">...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Left Panel: Upload & Config -->
+            <div class="panel panel-upload">
+                <div class="panel-header">
+                    <h2>NEW PROJECT</h2>
+                </div>
+                <div class="panel-body">
+                    <!-- Upload Zone -->
+                    <div id="drop-zone" class="drop-zone">
+                        <input type="file" id="file-input" accept=".mp4,.mov,.avi,.mkv,.webm,.mxf" hidden>
+                        <div class="drop-zone-content">
+                            <div class="drop-icon">▲</div>
+                            <div class="drop-text">DROP VIDEO or <button type="button" id="browse-btn" class="link-btn">BROWSE</button></div>
+                            <div class="drop-hint">mp4, mov, avi, mkv, webm</div>
+                        </div>
+                    </div>
+
+                    <!-- Upload Progress -->
+                    <div id="upload-progress" class="upload-progress hidden">
+                        <div class="progress-label">
+                            <span>UPLOADING</span>
+                            <span id="upload-percent-text">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="upload-progress-fill"></div>
+                        </div>
+                        <div class="upload-filename" id="upload-filename"></div>
+                    </div>
+
+                    <!-- Video Info -->
+                    <div id="video-info" class="video-info hidden">
+                        <div class="info-row">
+                            <span class="info-label">FILE</span>
+                            <span class="info-value" id="video-name"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">RESOLUTION</span>
+                            <span class="info-value" id="video-resolution"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">FRAMES</span>
+                            <span class="info-value" id="video-frames"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">FPS</span>
+                            <span class="info-value" id="video-fps"></span>
+                        </div>
+                    </div>
+
+                    <!-- Config Form -->
+                    <form id="config-form" class="config-form hidden">
+                        <!-- Stages -->
+                        <div class="form-section">
+                            <div class="section-label">STAGES</div>
+                            <div class="stage-grid">
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="depth" checked>
+                                    <span>Depth</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="roto" checked id="stage-roto">
+                                    <span>Roto</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="matanyone">
+                                    <span>MatAnyone</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="cleanplate" checked>
+                                    <span>CleanPlate</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="colmap">
+                                    <span>COLMAP</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="mocap" disabled>
+                                    <span>MoCap</span>
+                                </label>
+                                <label class="stage-checkbox">
+                                    <input type="checkbox" name="stage" value="gsir" disabled>
+                                    <span>GS-IR</span>
+                                </label>
+                            </div>
+
+                            <!-- Roto Prompt -->
+                            <div id="roto-prompt-wrapper" class="prompt-wrapper">
+                                <input type="text" id="roto-prompt" name="roto-prompt" value="person" placeholder="person" class="prompt-input">
+                            </div>
+                        </div>
+
+                        <!-- Presets -->
+                        <div class="form-section">
+                            <div class="section-label">PRESETS</div>
+                            <div class="preset-buttons">
+                                <button type="button" class="preset-btn" data-preset="quick">QUICK</button>
+                                <button type="button" class="preset-btn active" data-preset="full">FULL</button>
+                                <button type="button" class="preset-btn" data-preset="all">ALL</button>
+                            </div>
+                        </div>
+
+                        <!-- Options -->
+                        <div class="form-section">
+                            <label class="option-checkbox">
+                                <input type="checkbox" name="skip-existing" id="skip-existing">
+                                <span>Skip existing outputs</span>
+                            </label>
+                        </div>
+
+                        <!-- Time Estimate -->
+                        <div class="time-estimate">
+                            <span class="estimate-label">EST. TIME</span>
+                            <span id="time-estimate" class="estimate-value">--</span>
+                        </div>
+
+                        <!-- Submit -->
+                        <button type="submit" class="btn-submit">START PROCESSING</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right Panel: Projects -->
+            <div class="panel panel-projects">
+                <div class="panel-header">
+                    <h2>PROJECTS</h2>
+                </div>
+                <div class="panel-body">
+                    <div id="projects-list" class="projects-list">
+                        <div class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Panel: Active Processing (hidden by default) -->
+            <div id="processing-panel" class="panel panel-processing hidden">
+                <div class="panel-header">
+                    <h2>PROCESSING: <span id="processing-project-name"></span></h2>
+                    <button type="button" id="cancel-processing-btn" class="btn-cancel">CANCEL</button>
+                </div>
+                <div class="panel-body">
+                    <div class="processing-grid">
+                        <!-- Stage Progress -->
+                        <div class="stage-progress">
+                            <div class="stage-label">
+                                <span id="current-stage-label">STAGE 1/4</span>
+                                <span id="current-stage-name">DEPTH</span>
+                            </div>
+                            <div class="progress-bar large">
+                                <div class="progress-fill" id="processing-progress-fill"></div>
+                            </div>
+                            <div class="progress-details">
+                                <span id="progress-percent">0%</span>
+                                <span id="progress-frames">0 / 0</span>
+                            </div>
+                        </div>
+
+                        <!-- Stages List -->
+                        <div class="stages-list" id="stages-list-progress">
+                            <!-- Populated dynamically -->
+                        </div>
+
+                        <!-- Time Info -->
+                        <div class="time-info">
+                            <div class="time-row">
+                                <span class="time-label">ELAPSED</span>
+                                <span id="elapsed-time">0s</span>
+                            </div>
+                            <div class="time-row">
+                                <span class="time-label">REMAINING</span>
+                                <span id="remaining-time">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Console Output -->
+                    <div class="console-section">
+                        <div class="console-header">
+                            <span>CONSOLE</span>
+                            <button type="button" id="clear-logs-btn" class="btn-clear">CLEAR</button>
+                        </div>
+                        <div id="log-output" class="log-output"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Toast -->
+        <div id="error-toast" class="error-toast hidden">
+            <div class="error-content">
+                <span class="error-icon">⚠</span>
+                <span class="error-message" id="error-message"></span>
+                <button type="button" class="error-close" id="error-close">✕</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

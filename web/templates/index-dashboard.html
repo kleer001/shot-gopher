@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VFX Pipeline (Dashboard)</title>
+    <link rel="stylesheet" href="/static/css/style-dashboard.css">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Top Bar -->
+        <nav class="topbar">
+            <div class="topbar-left">
+                <h1>VFX PIPELINE</h1>
+                <span class="version">DASHBOARD</span>
+            </div>
+            <div class="topbar-right">
+                <div id="system-status" class="sys-status">
+                    <span class="sys-label">COMFYUI</span>
+                    <span class="sys-indicator"></span>
+                    <span class="status-text sys-label">--</span>
+                </div>
+                <a href="/" class="view-link">Classic</a>
+                <a href="/compact" class="view-link">Compact</a>
+                <a href="/split" class="view-link">Split</a>
+                <a href="/cards" class="view-link">Cards</a>
+            </div>
+        </nav>
+
+        <!-- Main Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- Left Column: Upload & Stats -->
+            <div class="col-left">
+                <!-- Upload Card -->
+                <div class="card upload-card">
+                    <div class="card-header">
+                        <h2>NEW PROJECT</h2>
+                    </div>
+                    <div class="card-body">
+                        <div id="drop-zone" class="dropzone">
+                            <input type="file" id="file-input" accept=".mp4,.mov,.avi,.mkv,.webm,.mxf" hidden>
+                            <div class="dropzone-icon">📁</div>
+                            <div class="dropzone-text">Drop video or <button type="button" id="browse-btn" class="link">browse</button></div>
+                        </div>
+
+                        <div id="upload-progress" class="upload-bar hidden">
+                            <div class="upload-info">
+                                <span>Uploading</span>
+                                <span id="upload-percent-text">0%</span>
+                            </div>
+                            <div class="bar">
+                                <div class="bar-fill" id="upload-progress-fill"></div>
+                            </div>
+                            <div class="upload-file" id="upload-filename"></div>
+                        </div>
+
+                        <!-- Video Stats -->
+                        <div id="video-info" class="video-stats hidden">
+                            <div class="stat">
+                                <div class="stat-label">FILE</div>
+                                <div class="stat-value" id="video-name" style="font-size: 11px;">--</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">RESOLUTION</div>
+                                <div class="stat-value" id="video-resolution">--</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">FRAMES</div>
+                                <div class="stat-value" id="video-frames">--</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">FPS</div>
+                                <div class="stat-value" id="video-fps">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Config Card -->
+                <form id="config-form" class="card config-card hidden">
+                    <div class="card-header">
+                        <h2>CONFIGURATION</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="stages-grid">
+                            <label class="stage-toggle">
+                                <input type="checkbox" name="stage" value="depth" checked>
+                                <span>Depth</span>
+                            </label>
+                            <label class="stage-toggle">
+                                <input type="checkbox" name="stage" value="roto" checked id="stage-roto">
+                                <span>Roto</span>
+                            </label>
+                            <label class="stage-toggle">
+                                <input type="checkbox" name="stage" value="matanyone">
+                                <span>MatAnyone</span>
+                            </label>
+                            <label class="stage-toggle">
+                                <input type="checkbox" name="stage" value="cleanplate" checked>
+                                <span>CleanPlate</span>
+                            </label>
+                            <label class="stage-toggle">
+                                <input type="checkbox" name="stage" value="colmap">
+                                <span>COLMAP</span>
+                            </label>
+                            <label class="stage-toggle">
+                                <input type="checkbox" name="stage" value="mocap" disabled>
+                                <span>MoCap</span>
+                            </label>
+                            <label class="stage-toggle">
+                                <input type="checkbox" name="stage" value="gsir" disabled>
+                                <span>GS-IR</span>
+                            </label>
+                        </div>
+
+                        <div id="roto-prompt-wrapper" class="prompt-field">
+                            <input type="text" id="roto-prompt" placeholder="Roto prompt: person" value="person">
+                        </div>
+
+                        <div class="presets">
+                            <button type="button" class="preset preset-btn" data-preset="quick">QUICK</button>
+                            <button type="button" class="preset preset-btn active" data-preset="full">FULL</button>
+                            <button type="button" class="preset preset-btn" data-preset="all">ALL</button>
+                        </div>
+
+                        <div class="config-options">
+                            <label class="option-toggle">
+                                <input type="checkbox" id="skip-existing">
+                                <span>Skip existing outputs</span>
+                            </label>
+                        </div>
+
+                        <div class="est-time">
+                            <span>EST. TIME</span>
+                            <span id="time-estimate" class="est-value">--</span>
+                        </div>
+
+                        <button type="submit" class="btn-start">START PROCESSING</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Right Column: Projects & Activity -->
+            <div class="col-right">
+                <!-- Projects Card -->
+                <div class="card projects-card">
+                    <div class="card-header">
+                        <h2>PROJECTS</h2>
+                    </div>
+                    <div class="card-body">
+                        <div id="projects-list" class="projects-scroll">
+                            <div class="loading-text">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Processing Card (hidden by default) -->
+                <div id="processing-panel" class="card processing-card hidden">
+                    <div class="card-header">
+                        <h2>PROCESSING: <span id="processing-project-name">--</span></h2>
+                        <button type="button" id="cancel-processing-btn" class="btn-stop">STOP</button>
+                    </div>
+                    <div class="card-body">
+                        <!-- Hidden progress bar for JavaScript compatibility -->
+                        <div style="display: none;">
+                            <div id="processing-progress-fill"></div>
+                        </div>
+
+                        <!-- Progress Ring -->
+                        <div class="progress-ring">
+                            <svg viewBox="0 0 120 120">
+                                <circle cx="60" cy="60" r="54" class="ring-bg"></circle>
+                                <circle cx="60" cy="60" r="54" class="ring-progress" id="progress-ring"></circle>
+                            </svg>
+                            <div class="ring-center">
+                                <div id="progress-percent" class="ring-percent">0%</div>
+                                <div id="current-stage-name" class="ring-stage">--</div>
+                            </div>
+                        </div>
+
+                        <!-- Stage Counter -->
+                        <div style="text-align: center; margin: 16px 0; font-size: 11px; color: var(--text-dim);">
+                            <span id="current-stage-label">STAGE 1/1</span>
+                        </div>
+
+                        <!-- Stage Pills -->
+                        <div id="stages-list-progress" class="stages-pills">
+                            <!-- Populated by JS -->
+                        </div>
+
+                        <!-- Metrics -->
+                        <div class="metrics">
+                            <div class="metric">
+                                <div class="metric-label">FRAMES</div>
+                                <div id="progress-frames" class="metric-value">0 / 0</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">ELAPSED</div>
+                                <div id="elapsed-time" class="metric-value">0s</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">REMAINING</div>
+                                <div id="remaining-time" class="metric-value">--</div>
+                            </div>
+                        </div>
+
+                        <!-- Console -->
+                        <div class="console">
+                            <div class="console-header">
+                                <span>CONSOLE</span>
+                                <button type="button" id="clear-logs-btn" class="btn-clear">CLEAR</button>
+                            </div>
+                            <div id="log-output" class="console-output"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Toast -->
+        <div id="error-toast" class="toast hidden">
+            <span class="toast-icon">⚠</span>
+            <span id="error-message" class="toast-message"></span>
+            <button type="button" id="error-close" class="toast-close">×</button>
+        </div>
+    </div>
+
+    <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>
