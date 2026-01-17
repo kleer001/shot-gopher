@@ -48,6 +48,20 @@
                     <p class="upload-percent"><span id="upload-percent-text">0</span>%</p>
                 </div>
 
+                <!-- Video Info -->
+                <div id="video-info" class="video-info hidden" style="margin: 20px 0; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px; font-size: 14px;">
+                        <strong>File:</strong>
+                        <span id="video-name">--</span>
+                        <strong>Resolution:</strong>
+                        <span id="video-resolution">--</span>
+                        <strong>Frames:</strong>
+                        <span id="video-frames">--</span>
+                        <strong>FPS:</strong>
+                        <span id="video-fps">--</span>
+                    </div>
+                </div>
+
                 <div class="recent-projects">
                     <h3>Recent Projects</h3>
                     <div id="projects-list" class="projects-list">
@@ -154,7 +168,7 @@
             </section>
 
             <!-- State 3: Processing -->
-            <section id="processing-section" class="section">
+            <section id="processing-panel" class="section">
                 <div class="section-header">
                     <h2 id="processing-project-name">project_name</h2>
                     <button type="button" id="cancel-processing-btn" class="btn btn-danger" title="Cancel">

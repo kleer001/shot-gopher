@@ -600,8 +600,8 @@ function connectWebSocket() {
     };
 
     state.ws.onclose = () => {
-        // Reconnect if still processing (projectId is set and we have a WebSocket)
-        if (state.projectId && !elements.processingPanel.classList.contains('hidden')) {
+        // Reconnect if still processing (projectId is set and processing panel is visible)
+        if (state.projectId && elements.processingPanel && !elements.processingPanel.classList.contains('hidden')) {
             setTimeout(connectWebSocket, 2000);
         }
     };
@@ -742,7 +742,7 @@ function toggleLog() {
 }
 
 function updateElapsedTime() {
-    if (!state.startTime || elements.processingPanel.classList.contains('hidden')) return;
+    if (!state.startTime || !elements.processingPanel || elements.processingPanel.classList.contains('hidden')) return;
 
     const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
     elements.elapsedTime.textContent = `Elapsed: ${formatTime(elapsed)}`;
