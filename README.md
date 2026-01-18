@@ -56,7 +56,35 @@ This pipeline automates first-pass VFX prep work that traditionally requires man
 
 ## Getting Started
 
-**Quick install** (recommended):
+### Option 1: Docker (Recommended)
+
+Best for: Quick setup, consistent environment, isolation from system packages.
+
+**Requirements:** Linux or WSL2, NVIDIA GPU, Docker installed.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kleer001/comfyui_ingest/main/bootstrap-docker.sh | bash
+```
+
+The installer will:
+- Check prerequisites (NVIDIA driver, Docker)
+- Offer to install NVIDIA Container Toolkit if missing
+- Download models (~15-20GB)
+- Build the Docker image
+- Run a test pipeline
+
+**Run the pipeline:**
+```bash
+cp footage.mp4 ~/VFX-Projects/
+./scripts/run_docker.sh --input /workspace/projects/footage.mp4 --name MyProject
+```
+
+### Option 2: Local Conda Installation
+
+Best for: Development, customization, macOS (CPU-only), systems without Docker.
+
+**Requirements:** Linux or macOS, NVIDIA GPU (optional on macOS), Conda/Miniconda.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kleer001/comfyui_ingest/main/bootstrap.sh | bash
 ```
@@ -68,7 +96,24 @@ cd comfyui_ingest
 python scripts/install_wizard.py
 ```
 
-**Basic usage:**
+**Run the pipeline:**
+```bash
+python scripts/run_pipeline.py footage.mp4 -s ingest,depth,roto,cleanplate,colmap,camera
+```
+
+### Which Should I Use?
+
+| Factor | Docker | Local Conda |
+|--------|--------|-------------|
+| **Setup time** | ~20 min | ~30-60 min |
+| **Isolation** | Full container isolation | Conda environment |
+| **Disk usage** | Higher (Docker layers) | Lower |
+| **Customization** | Rebuild image needed | Direct file editing |
+| **WSL2 support** | Yes | Limited |
+| **macOS support** | No (no GPU passthrough) | Yes (CPU-only) |
+| **Windows native** | No | No |
+
+**Basic usage (local installation):**
 ```bash
 # Process footage with full VFX pipeline
 python scripts/run_pipeline.py footage.mp4 -s ingest,depth,roto,cleanplate,colmap,camera
@@ -104,15 +149,20 @@ Output follows VFX production conventions:
 
 ## System Requirements
 
-**Platform:** Linux (tested on Ubuntu 20.04+)
-**Python:** 3.10 or newer
-**Prerequisites:**
-- Git
-- FFmpeg
-- NVIDIA GPU with CUDA support
-- Conda or Miniconda (recommended for environment management)
+**Platform:** Linux (tested on Ubuntu 20.04+), WSL2 on Windows
+**Python:** 3.10 or newer (local install only)
 
-**Note:** macOS and Windows compatibility untested. Linux strongly recommended. See [Windows Compatibility](docs/windows-compatibility.md) for the Windows support roadmap.
+**For Docker installation:**
+- Docker with docker-compose
+- NVIDIA Container Toolkit (installer can set this up automatically)
+- NVIDIA GPU with CUDA support
+
+**For local Conda installation:**
+- Git, FFmpeg
+- NVIDIA GPU with CUDA support
+- Conda or Miniconda
+
+**Note:** macOS supports local Conda installation (CPU-only, no GPU acceleration). Native Windows is not supported—use WSL2 with Docker instead. See [Windows Compatibility](docs/windows-compatibility.md) for details.
 
 ## Installation Requirements
 
