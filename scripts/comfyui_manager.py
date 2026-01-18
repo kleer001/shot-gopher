@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from env_config import INSTALL_DIR
+from env_config import INSTALL_DIR, is_in_container
 from comfyui_utils import DEFAULT_COMFYUI_URL, check_comfyui_running
 
 # ComfyUI installation path
@@ -142,11 +142,18 @@ def start_comfyui(
     # Build command
     # Set output-directory to repo parent to allow saving to project directories
     # (ComfyUI security blocks saving outside its output folder)
-    output_base = COMFYUI_DIR.parent.parent.parent  # .vfx_pipeline -> comfyui_ingest -> parent
+    # Container-aware: use COMFYUI_OUTPUT_DIR environment variable if in container
+    if is_in_container():
+        output_base = Path(os.environ.get("COMFYUI_OUTPUT_DIR", "/workspace"))
+        listen_addr = "0.0.0.0"  # Must listen on all interfaces in container
+    else:
+        output_base = COMFYUI_DIR.parent.parent.parent  # .vfx_pipeline -> comfyui_ingest -> parent
+        listen_addr = "127.0.0.1"  # Local only for security
+
     cmd = [
         sys.executable,
         "main.py",
-        "--listen", "127.0.0.1",
+        "--listen", listen_addr,
         "--port", "8188",
         "--output-directory", str(output_base),
     ]

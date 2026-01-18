@@ -37,13 +37,54 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Installation directory for tools (ComfyUI, WHAM, ECON, models)
 # This stays inside/near the repo as it's tooling, not project data
-INSTALL_DIR = _REPO_ROOT / ".vfx_pipeline"
+# Allow environment variable override for container support
+INSTALL_DIR = Path(os.environ.get(
+    "VFX_INSTALL_DIR",
+    str(_REPO_ROOT / ".vfx_pipeline")
+))
 
 # Default location for VFX projects (sibling to repo, not inside it)
-DEFAULT_PROJECTS_DIR = _REPO_ROOT.parent / "vfx_projects"
+# Allow environment variable override for container support
+DEFAULT_PROJECTS_DIR = Path(os.environ.get(
+    "VFX_PROJECTS_DIR",
+    str(_REPO_ROOT.parent / "vfx_projects")
+))
 
 # Path to the generated activation script
 ACTIVATION_SCRIPT = INSTALL_DIR / "activate.sh"
+
+
+# =============================================================================
+# CONTAINER DETECTION
+# =============================================================================
+
+def is_in_container() -> bool:
+    """Detect if running inside a container (Docker, Kubernetes, etc.).
+
+    Returns:
+        True if in container, False otherwise.
+    """
+    # Check for Docker-specific file
+    if os.path.exists("/.dockerenv"):
+        return True
+
+    # Check environment variable (set in Dockerfile)
+    if os.environ.get("CONTAINER") == "true":
+        return True
+
+    # Check for Kubernetes
+    if os.environ.get("KUBERNETES_SERVICE_HOST"):
+        return True
+
+    # Check cgroup for container indicators (Linux containers)
+    try:
+        with open("/proc/1/cgroup", "rt") as f:
+            content = f.read()
+            return "docker" in content or "kubepods" in content
+    except Exception:
+        pass
+
+    return False
 
 
 # =============================================================================
@@ -180,6 +221,10 @@ def require_conda_env(env_name: str = None, exit_on_fail: bool = True) -> bool:
     Exits:
         With code 1 if environment is wrong and exit_on_fail=True.
     """
+    # Skip conda checks inside containers (dependencies managed by Docker)
+    if is_in_container():
+        return True
+
     if env_name is None:
         env_name = CONDA_ENV_NAME
 
@@ -205,6 +250,11 @@ def check_conda_env_or_warn(env_name: str = None) -> bool:
     Returns:
         True if environment is correct, False otherwise.
     """
+    # Skip conda checks inside containers (dependencies managed by Docker)
+    if is_in_container():
+        print("Running in container environment - skipping conda checks")
+        return True
+
     if env_name is None:
         env_name = CONDA_ENV_NAME
 
