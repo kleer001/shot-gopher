@@ -50,8 +50,12 @@ else
     echo "✓ Short version already exists"
 fi
 
+# Trim all videos to 2 seconds
+echo "Trimming videos to 2 seconds..."
+python3 "$FIXTURES_DIR/trim_videos.py"
+echo "✓ Videos trimmed"
+
 echo ""
 echo "=== Test Fixtures Ready ==="
-echo "Full video (260 frames): $FOOTBALL_MP4"
-echo "Short video (30 frames): $FOOTBALL_SHORT"
+echo "Videos trimmed to 2 seconds: $FOOTBALL_MP4, $FOOTBALL_SHORT"
 echo ""
