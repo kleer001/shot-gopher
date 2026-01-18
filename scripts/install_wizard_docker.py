@@ -205,12 +205,11 @@ def get_install_instructions_nvidia_runtime(platform_name: str, environment: str
         return """
 Install NVIDIA Container Toolkit:
 
-    distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
     curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \\
-        sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+        sudo gpg --dearmor -o /etc/apt/keyrings/nvidia-container-toolkit-keyring.gpg --yes
 
-    curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \\
-        sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \\
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \\
+        sed 's#deb https://#deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \\
         sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
     sudo apt-get update
@@ -236,6 +235,172 @@ Verify in WSL2:
 """
     else:
         return "See: https://github.com/NVIDIA/nvidia-docker"
+
+
+def cleanup_conflicting_nvidia_repos() -> list[str]:
+    """Find and optionally remove conflicting NVIDIA repository files.
+
+    Returns:
+        List of files that were found (and potentially removed).
+    """
+    conflicting_files = []
+    repo_dir = Path("/etc/apt/sources.list.d")
+
+    if not repo_dir.exists():
+        return []
+
+    for filename in ["libnvidia-container.list", "nvidia-docker.list", "nvidia-container-runtime.list"]:
+        filepath = repo_dir / filename
+        if filepath.exists():
+            conflicting_files.append(str(filepath))
+
+    return conflicting_files
+
+
+def install_nvidia_container_toolkit(environment: str) -> bool:
+    """Install NVIDIA Container Toolkit automatically.
+
+    Args:
+        environment: 'native' or 'wsl2'
+
+    Returns:
+        True if installation succeeded.
+    """
+    print_info("Starting NVIDIA Container Toolkit installation...")
+
+    conflicting = cleanup_conflicting_nvidia_repos()
+    if conflicting:
+        print_warning("Found conflicting repository files:")
+        for f in conflicting:
+            print(f"    - {f}")
+        print()
+        response = input("Remove these files to prevent conflicts? (Y/n): ").strip().lower()
+        if response != 'n':
+            for f in conflicting:
+                try:
+                    subprocess.run(["sudo", "rm", "-f", f], check=True)
+                    print_success(f"Removed {f}")
+                except subprocess.CalledProcessError:
+                    print_error(f"Failed to remove {f}")
+                    return False
+
+    try:
+        print_info("Creating keyrings directory...")
+        subprocess.run(["sudo", "mkdir", "-p", "/etc/apt/keyrings"], check=True)
+
+        print_info("Adding NVIDIA GPG key...")
+        gpg_cmd = (
+            "curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | "
+            "sudo gpg --dearmor -o /etc/apt/keyrings/nvidia-container-toolkit-keyring.gpg --yes"
+        )
+        subprocess.run(gpg_cmd, shell=True, check=True)
+
+        print_info("Adding NVIDIA Container Toolkit repository...")
+        repo_cmd = (
+            "curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | "
+            "sed 's#deb https://#deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | "
+            "sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list > /dev/null"
+        )
+        subprocess.run(repo_cmd, shell=True, check=True)
+
+        print_info("Updating package lists...")
+        subprocess.run(["sudo", "apt-get", "update"], check=True)
+
+        print_info("Installing nvidia-container-toolkit...")
+        subprocess.run(["sudo", "apt-get", "install", "-y", "nvidia-container-toolkit"], check=True)
+
+        print_info("Configuring Docker runtime...")
+        subprocess.run(["sudo", "nvidia-ctk", "runtime", "configure", "--runtime=docker"], check=True)
+
+        print_info("Restarting Docker...")
+        try:
+            subprocess.run(["sudo", "systemctl", "restart", "docker"], check=True)
+        except subprocess.CalledProcessError:
+            subprocess.run(["sudo", "service", "docker", "restart"], check=False)
+
+        import time
+        time.sleep(2)
+
+        print_success("NVIDIA Container Toolkit installed successfully")
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print_error(f"Installation failed: {e}")
+        return False
+    except Exception as e:
+        print_error(f"Unexpected error during installation: {e}")
+        return False
+
+
+def offer_nvidia_toolkit_installation(platform_name: str, environment: str) -> bool:
+    """Offer to install NVIDIA Container Toolkit automatically.
+
+    Args:
+        platform_name: 'linux', 'windows', etc.
+        environment: 'native' or 'wsl2'
+
+    Returns:
+        True if toolkit is working after this function returns.
+    """
+    if check_nvidia_docker():
+        return True
+
+    print()
+    print("The NVIDIA Container Toolkit is required for GPU access in Docker containers.")
+    print()
+
+    if environment == "wsl2":
+        print("Detected: WSL2 environment")
+        print()
+        print("Installation will:")
+        print("  - Add NVIDIA package repository")
+        print("  - Install nvidia-container-toolkit")
+        print("  - Configure Docker to use NVIDIA runtime")
+        print("  - Restart Docker service")
+        print()
+        print("Note: GPU support in WSL2 requires Windows NVIDIA driver (no action needed in WSL)")
+    else:
+        print("Detected: Native Linux")
+        print()
+        print("Installation will:")
+        print("  - Clean up any conflicting repository configurations")
+        print("  - Add NVIDIA package repository with GPG key")
+        print("  - Install nvidia-container-toolkit package")
+        print("  - Configure Docker daemon for NVIDIA runtime")
+        print("  - Restart Docker service")
+
+    print()
+    response = input("Would you like to install NVIDIA Container Toolkit now? (Y/n): ").strip().lower()
+
+    if response == 'n':
+        print_warning("Skipping NVIDIA Container Toolkit installation")
+        print()
+        print("You can install it manually later. See:")
+        print("https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html")
+        print()
+        return False
+
+    if not install_nvidia_container_toolkit(environment):
+        return False
+
+    print_info("Verifying installation...")
+    if check_nvidia_docker():
+        print_success("GPU access verified in Docker containers")
+        return True
+    else:
+        print_error("GPU test failed after installation")
+        print()
+        print("Troubleshooting steps:")
+        print("  1. Check Docker daemon configuration:")
+        print("     cat /etc/docker/daemon.json")
+        print()
+        print("  2. Ensure it contains the nvidia runtime:")
+        print('     {"runtimes": {"nvidia": {"path": "nvidia-container-runtime"}}}')
+        print()
+        print("  3. Restart Docker:")
+        print("     sudo systemctl restart docker")
+        print()
+        return False
 
 
 def download_models(models_dir: Path) -> bool:
@@ -483,10 +648,20 @@ def main():
         if check_nvidia_docker():
             print_success("NVIDIA Docker runtime working")
         else:
-            print_error("NVIDIA Docker runtime not available")
-            print()
-            print(get_install_instructions_nvidia_runtime(platform_name, environment))
-            all_checks_passed = False
+            print_warning("NVIDIA Docker runtime not available")
+            if not args.check_only:
+                if offer_nvidia_toolkit_installation(platform_name, environment):
+                    print_success("NVIDIA Docker runtime now working")
+                else:
+                    print_error("NVIDIA Docker runtime still not available")
+                    print()
+                    print("Manual installation instructions:")
+                    print(get_install_instructions_nvidia_runtime(platform_name, environment))
+                    all_checks_passed = False
+            else:
+                print()
+                print(get_install_instructions_nvidia_runtime(platform_name, environment))
+                all_checks_passed = False
 
     if args.check_only:
         if all_checks_passed:
