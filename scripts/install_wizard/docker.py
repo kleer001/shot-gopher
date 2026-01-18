@@ -3,8 +3,11 @@
 This module provides Docker-specific functionality for the install wizard:
 - DockerManager: Docker and NVIDIA Container Toolkit checks/installation
 - DockerStateManager: Docker-specific state tracking
-- DockerModelDownloader: Simplified model downloads for Docker workflow
+- DockerModelDownloader: Full model downloads for Docker workflow
 - DockerWizard: Main Docker installation orchestrator
+
+The Docker wizard downloads the same models as the conda wizard, just to
+a different location (~/.vfx_pipeline/models/) for container mounting.
 
 Usage:
     from install_wizard.docker import DockerWizard
@@ -21,6 +24,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from .downloader import CheckpointDownloader
 from .platform import PlatformManager
 from .utils import (
     Colors,
@@ -65,7 +69,7 @@ class DockerStateManager:
             "last_updated": None,
             "docker_installed": False,
             "nvidia_runtime_installed": False,
-            "models_downloaded": {},
+            "checkpoints": {},
             "image_built": False,
             "test_completed": False,
         }
@@ -84,24 +88,25 @@ class DockerStateManager:
         except IOError as e:
             print_warning(f"Could not save state: {e}")
 
-    def mark_model_downloaded(self, model_name: str):
-        """Mark a model as downloaded."""
-        self.state["models_downloaded"][model_name] = {
+    def mark_checkpoint_downloaded(self, checkpoint_id: str, dest_dir: Path):
+        """Mark a checkpoint as downloaded (compatible with CheckpointDownloader)."""
+        self.state["checkpoints"][checkpoint_id] = {
             "downloaded": True,
+            "path": str(dest_dir),
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         }
         self.save_state()
 
-    def is_model_downloaded(self, model_name: str) -> bool:
-        """Check if a model is downloaded."""
-        return self.state["models_downloaded"].get(model_name, {}).get("downloaded", False)
+    def is_checkpoint_downloaded(self, checkpoint_id: str) -> bool:
+        """Check if a checkpoint is downloaded."""
+        return self.state["checkpoints"].get(checkpoint_id, {}).get("downloaded", False)
 
     def can_resume(self) -> bool:
         """Check if there's a resumable installation."""
         return (
             not self.state["docker_installed"] or
             not self.state["nvidia_runtime_installed"] or
-            len(self.state["models_downloaded"]) < 4 or
+            len(self.state["checkpoints"]) < 4 or
             not self.state["image_built"]
         )
 
@@ -301,204 +306,97 @@ Verify in WSL2:
             return "See: https://github.com/NVIDIA/nvidia-docker"
 
 
-class DockerModelDownloader:
-    """Handles model downloads for Docker workflow."""
+class DockerCheckpointDownloader(CheckpointDownloader):
+    """Checkpoint downloader configured for Docker's flat directory structure.
 
-    MODELS = {
+    Docker mounts models from ~/.vfx_pipeline/models/ into the container,
+    using a flat structure rather than the nested ComfyUI layout.
+    """
+
+    DOCKER_CHECKPOINTS: Dict = {
         'sam3': {
-            'name': 'SAM3 (Segment Anything Model 3)',
-            'method': 'huggingface',
-            'repo_id': '1038lab/sam3',
-            'size_gb': 3.2,
+            'name': 'SAM3 Model',
+            'requires_auth': False,
+            'use_huggingface': True,
+            'hf_repo_id': '1038lab/sam3',
+            'files': [{'filename': 'sam3.pt', 'size_mb': 3200}],
+            'dest_dir_rel': 'sam3',
+            'instructions': '''SAM3 model will be downloaded from HuggingFace (1038lab/sam3).
+If automatic download fails, manually download from:
+  https://huggingface.co/1038lab/sam3/blob/main/sam3.pt'''
         },
-        'videodepthanything': {
-            'name': 'Video Depth Anything',
-            'method': 'huggingface',
-            'repo_id': 'depth-anything/Video-Depth-Anything-Small',
-            'size_gb': 0.12,
+        'video_depth_anything': {
+            'name': 'Video Depth Anything Model',
+            'requires_auth': False,
+            'use_huggingface': True,
+            'hf_repo_id': 'depth-anything/Video-Depth-Anything-Small',
+            'files': [{'filename': 'video_depth_anything_vits.pth', 'size_mb': 120}],
+            'dest_dir_rel': 'videodepthanything',
+            'instructions': '''Video Depth Anything Small model will be downloaded from HuggingFace.
+This model uses ~6.8GB VRAM (vs 23.6GB for Large), suitable for most GPUs.'''
         },
         'wham': {
-            'name': 'WHAM (4D Human MoCap)',
-            'method': 'huggingface',
-            'repo_id': 'yohanshin/WHAM',
-            'filename': 'wham_vit_w_3dpw.pth.tar',
-            'size_gb': 1.2,
+            'name': 'WHAM Checkpoints',
+            'requires_auth': False,
+            'use_huggingface': True,
+            'hf_repo_id': 'yohanshin/WHAM',
+            'files': [{'filename': 'wham_vit_w_3dpw.pth.tar', 'size_mb': 1200}],
+            'dest_dir_rel': 'wham',
+            'instructions': '''WHAM checkpoints will be downloaded from HuggingFace.
+If automatic download fails, manually download from:
+  https://huggingface.co/yohanshin/WHAM'''
         },
         'matanyone': {
-            'name': 'MatAnyone (Matte Refinement)',
-            'method': 'direct',
-            'url': 'https://github.com/FuouM/ComfyUI-MatAnyone/releases/download/v1.0/matanyone.pth',
-            'filename': 'matanyone.pth',
-            'size_gb': 0.14,
+            'name': 'MatAnyone Model',
+            'requires_auth': False,
+            'use_huggingface': False,
+            'files': [{
+                'url': 'https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth',
+                'filename': 'matanyone.pth',
+                'size_mb': 141,
+            }],
+            'dest_dir_rel': 'matanyone',
+            'instructions': '''MatAnyone model for stable video matting.
+Download from: https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth
+Place in ~/.vfx_pipeline/models/matanyone/matanyone.pth'''
         },
+        'smplx': {
+            'name': 'SMPL-X Models',
+            'requires_auth': True,
+            'auth_type': 'smplx',
+            'auth_file': 'SMPL.login.dat',
+            'login_url': 'https://smpl-x.is.tue.mpg.de/login.php',
+            'download_page': 'https://smpl-x.is.tue.mpg.de/download.php',
+            'files': [{
+                'url': 'https://download.is.tue.mpg.de/download.php?domain=smplx&sfile=models_smplx_v1_1.zip',
+                'filename': 'models_smplx_v1_1.zip',
+                'size_mb': 830,
+                'sha256': None,
+                'extract': True
+            }],
+            'dest_dir_rel': 'smplx',
+            'instructions': '''SMPL-X models require registration:
+1. Register at https://smpl-x.is.tue.mpg.de/register.php
+2. Wait for approval email (usually within 24-48 hours)
+3. Create SMPL.login.dat in repository root with:
+   Line 1: your email
+   Line 2: your password
+4. Re-run the wizard to download models'''
+        }
     }
 
     def __init__(self, models_dir: Path):
-        self.models_dir = models_dir
+        super().__init__(base_dir=models_dir)
+        self.CHECKPOINTS = self.DOCKER_CHECKPOINTS
 
-    def _ensure_huggingface_hub(self) -> bool:
-        """Ensure huggingface_hub is installed with fallback mechanisms."""
-        try:
-            import huggingface_hub
-            return True
-        except ImportError:
-            print_info("Installing huggingface_hub...")
-
-            install_methods = [
-                [sys.executable, '-m', 'pip', 'install', 'huggingface_hub'],
-                [sys.executable, '-m', 'pip', 'install', '--user', 'huggingface_hub'],
-                [sys.executable, '-m', 'pip', 'install', '--break-system-packages', 'huggingface_hub'],
-            ]
-
-            for method in install_methods:
-                result = subprocess.run(method, capture_output=True, text=True)
-                if result.returncode == 0:
-                    try:
-                        import huggingface_hub
-                        print_success("huggingface_hub installed")
-                        return True
-                    except ImportError:
-                        continue
-
-            print_error("Failed to install huggingface_hub")
-            return False
-
-    def _download_from_huggingface(
-        self,
-        repo_id: str,
-        dest_dir: Path,
-        filename: Optional[str] = None
-    ) -> bool:
-        """Download model from HuggingFace with retry logic."""
-        if not self._ensure_huggingface_hub():
-            return False
-
-        try:
-            from huggingface_hub import snapshot_download, hf_hub_download
-
-            dest_dir.mkdir(parents=True, exist_ok=True)
-
-            print(f"  Downloading from HuggingFace: {repo_id}")
-
-            if filename:
-                hf_hub_download(
-                    repo_id=repo_id,
-                    filename=filename,
-                    local_dir=str(dest_dir),
-                    local_dir_use_symlinks=False,
-                )
-            else:
-                snapshot_download(
-                    repo_id=repo_id,
-                    local_dir=str(dest_dir),
-                    local_dir_use_symlinks=False,
-                )
-
-            print_success(f"Downloaded {repo_id}")
-            return True
-
-        except Exception as e:
-            print_error(f"HuggingFace download failed: {e}")
-            return False
-
-    def _download_direct(self, url: str, dest: Path) -> bool:
-        """Download file directly with wget/curl fallback."""
-        dest.parent.mkdir(parents=True, exist_ok=True)
-
-        print(f"  Downloading from {url}")
-        print(f"  -> {dest}")
-
-        methods = [
-            (['wget', '-O', str(dest), url], "wget"),
-            (['curl', '-L', '-o', str(dest), url], "curl"),
-        ]
-
-        for cmd, name in methods:
-            if not shutil.which(cmd[0]):
-                continue
-
-            try:
-                result = subprocess.run(cmd, timeout=600)
-                if result.returncode == 0 and dest.exists() and dest.stat().st_size > 1000:
-                    print_success(f"Downloaded via {name}")
-                    return True
-                if dest.exists():
-                    dest.unlink()
-            except subprocess.TimeoutExpired:
-                print_warning(f"{name} timed out")
-                if dest.exists():
-                    dest.unlink()
-            except Exception as e:
-                print_warning(f"{name} failed: {e}")
-                if dest.exists():
-                    dest.unlink()
-
-        print_error("All download methods failed")
-        return False
-
-    def download_model(
-        self,
-        model_id: str,
-        state_manager: Optional[DockerStateManager] = None
-    ) -> bool:
-        """Download a specific model with progress tracking."""
-        if model_id not in self.MODELS:
-            print_warning(f"Unknown model: {model_id}")
-            return False
-
-        model_info = self.MODELS[model_id]
-        dest_dir = self.models_dir / model_id
-
-        if state_manager and state_manager.is_model_downloaded(model_id):
-            if dest_dir.exists() and any(dest_dir.iterdir()):
-                print_success(f"{model_info['name']} already downloaded")
-                return True
-            else:
-                print_warning(f"{model_info['name']} marked downloaded but files missing, re-downloading...")
-
-        print(f"\n{Colors.BOLD}Downloading {model_info['name']}...{Colors.ENDC}")
-        print(f"  Size: ~{format_size_gb(model_info['size_gb'])}")
-
-        success = False
-        if model_info['method'] == 'huggingface':
-            success = self._download_from_huggingface(
-                model_info['repo_id'],
-                dest_dir,
-                model_info.get('filename')
-            )
-        elif model_info['method'] == 'direct':
-            success = self._download_direct(
-                model_info['url'],
-                dest_dir / model_info['filename']
-            )
-
-        if success and state_manager:
-            state_manager.mark_model_downloaded(model_id)
-
-        return success
-
-    def download_all(
-        self,
-        models: Optional[List[str]] = None,
-        state_manager: Optional[DockerStateManager] = None
-    ) -> bool:
-        """Download all specified models (or all available models)."""
-        if models is None:
-            models = list(self.MODELS.keys())
-
-        print_header("Downloading Models")
-
-        total_size = sum(self.MODELS[m]['size_gb'] for m in models if m in self.MODELS)
-        print(f"Total download size: ~{format_size_gb(total_size)}")
-        print()
-
-        success = True
-        for model_id in models:
-            if not self.download_model(model_id, state_manager):
-                print_error(f"Failed to download {model_id}")
-                success = False
-
-        return success
+    def get_total_size_gb(self, checkpoint_ids: List[str]) -> float:
+        """Calculate total download size in GB."""
+        total_mb = 0
+        for cid in checkpoint_ids:
+            if cid in self.CHECKPOINTS:
+                for f in self.CHECKPOINTS[cid].get('files', []):
+                    total_mb += f.get('size_mb', 0)
+        return total_mb / 1024
 
 
 class DockerWizard:
@@ -511,7 +409,7 @@ class DockerWizard:
 
         self.state_manager = DockerStateManager(self.state_file)
         self.docker_manager = DockerManager()
-        self.model_downloader = DockerModelDownloader(self.models_dir)
+        self.checkpoint_downloader = DockerCheckpointDownloader(self.models_dir)
 
         platform_manager = PlatformManager()
         self.platform_name, self.environment, _ = platform_manager.detect_platform()
@@ -726,6 +624,55 @@ class DockerWizard:
             print()
             return False
 
+    def setup_credentials(self) -> None:
+        """Prompt user to set up credentials for authenticated downloads.
+
+        Sets up SMPL.login.dat for SMPL-X body models (required for mocap).
+        """
+        smpl_creds_file = self.repo_root / "SMPL.login.dat"
+
+        if smpl_creds_file.exists():
+            print_success("SMPL-X credentials file already exists")
+            return
+
+        smplx_dir = self.models_dir / "smplx"
+        if smplx_dir.exists() and any(smplx_dir.iterdir()):
+            return
+
+        print_header("Credentials Setup")
+        print("SMPL-X body models require registration for download.")
+        print("These models are required for the motion capture (mocap) stage.")
+        print()
+
+        print(f"{Colors.BOLD}SMPL-X Credentials Setup{Colors.ENDC}")
+        print("Required for: Body model (skeleton, mesh topology, UV layout)")
+        print()
+        print("Registration: https://smpl-x.is.tue.mpg.de/register.php")
+        print()
+        print("Steps:")
+        print("  1. Register at the website above")
+        print("  2. Wait for approval email (usually within 24-48 hours)")
+        print("  3. Enter your credentials below")
+        print()
+
+        if ask_yes_no("Set up SMPL-X credentials now?", default=True):
+            email = tty_input("Enter your SMPL-X registered email: ").strip()
+            if email and '@' in email:
+                password = tty_input("Enter your SMPL-X password: ").strip()
+                if password:
+                    with open(smpl_creds_file, 'w') as f:
+                        f.write(email + '\n')
+                        f.write(password + '\n')
+                    smpl_creds_file.chmod(0o600)
+                    print_success(f"Credentials saved to {smpl_creds_file}")
+                else:
+                    print_info("Skipped - you can add SMPL.login.dat later")
+            else:
+                print_info("Skipped - you can add SMPL.login.dat later")
+        else:
+            print_info("Skipped - you can add SMPL.login.dat later")
+            print_info("SMPL-X models will not be downloaded without credentials")
+
     def build_docker_image(self) -> bool:
         """Build the Docker image."""
         if self.state_manager.state.get("image_built"):
@@ -823,7 +770,7 @@ class DockerWizard:
             print_error("Test pipeline failed")
             return False
 
-    def print_post_install_instructions(self):
+    def print_post_install_instructions(self, downloaded_smplx: bool):
         """Print post-installation usage instructions."""
         print_header("Next Steps")
 
@@ -845,13 +792,14 @@ class DockerWizard:
         print("  - docs/README-DOCKER.md - Full Docker documentation")
         print()
 
-        smplx_dir = self.models_dir / "smplx"
-        if not (smplx_dir.exists() and any(smplx_dir.iterdir())):
-            print_warning("SMPL-X models not downloaded (optional, required for mocap stage)")
+        if not downloaded_smplx:
+            smplx_dir = self.models_dir / "smplx"
+            print_warning("SMPL-X models not downloaded (required for mocap stage)")
             print("  SMPL-X requires registration:")
             print("  1. Register at https://smpl-x.is.tue.mpg.de/")
-            print("  2. Download SMPL-X models")
-            print(f"  3. Extract to {smplx_dir}/")
+            print("  2. Create SMPL.login.dat with your credentials")
+            print("  3. Re-run: python scripts/install_wizard.py --docker")
+            print(f"  Or manually extract to: {smplx_dir}/")
             print()
 
     def interactive_install(
@@ -920,15 +868,25 @@ class DockerWizard:
                 print_info("Install it manually and run this wizard again")
                 sys.exit(1)
 
+        if not yolo:
+            self.setup_credentials()
+
         print_header("Component Selection")
 
-        models_to_download = ['sam3', 'videodepthanything', 'wham', 'matanyone']
+        checkpoints_to_download = ['sam3', 'video_depth_anything', 'wham', 'matanyone']
+        download_smplx = False
         download_models = True
         build_image = True
         run_test = not skip_test
 
+        smpl_creds_file = self.repo_root / "SMPL.login.dat"
+        if smpl_creds_file.exists():
+            checkpoints_to_download.append('smplx')
+            download_smplx = True
+
         if not yolo:
-            if not ask_yes_no("Download required models (~5GB)?", default=True):
+            total_size = self.checkpoint_downloader.get_total_size_gb(checkpoints_to_download)
+            if not ask_yes_no(f"Download required models (~{total_size:.1f}GB)?", default=True):
                 download_models = False
 
             if not ask_yes_no("Build Docker image?", default=True):
@@ -943,10 +901,7 @@ class DockerWizard:
 
             total_size = 0.0
             if download_models:
-                model_size = sum(
-                    self.model_downloader.MODELS[m]['size_gb']
-                    for m in models_to_download
-                )
+                model_size = self.checkpoint_downloader.get_total_size_gb(checkpoints_to_download)
                 total_size += model_size
                 print(f"  {'Models':30s} {format_size_gb(model_size):>10s}")
 
@@ -980,9 +935,23 @@ class DockerWizard:
                     sys.exit(0)
 
         if download_models:
-            if not self.model_downloader.download_all(models_to_download, self.state_manager):
-                print_error("Model download failed")
-                sys.exit(1)
+            print_header("Downloading Models")
+            total_size = self.checkpoint_downloader.get_total_size_gb(checkpoints_to_download)
+            print(f"Total download size: ~{format_size_gb(total_size)}")
+            print()
+
+            for checkpoint_id in checkpoints_to_download:
+                if not self.checkpoint_downloader.download_checkpoint(
+                    checkpoint_id,
+                    self.state_manager,
+                    self.repo_root
+                ):
+                    if checkpoint_id == 'smplx':
+                        print_warning("SMPL-X download failed - mocap stage will not be available")
+                        download_smplx = False
+                    else:
+                        print_error(f"Failed to download {checkpoint_id}")
+                        sys.exit(1)
 
         if build_image:
             if not self.build_docker_image():
@@ -992,7 +961,7 @@ class DockerWizard:
         if run_test:
             self.run_test_pipeline()
 
-        self.print_post_install_instructions()
+        self.print_post_install_instructions(download_smplx)
 
         print_header("Installation Complete!")
         print_success("Docker-based VFX pipeline is ready to use!")

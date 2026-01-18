@@ -21,7 +21,7 @@ Usage:
 from .cli import main
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
-from .docker import DockerManager, DockerModelDownloader, DockerStateManager, DockerWizard
+from .docker import DockerCheckpointDownloader, DockerManager, DockerStateManager, DockerWizard
 from .downloader import CheckpointDownloader
 from .installers import ComponentInstaller, GitRepoInstaller, PythonPackageInstaller
 from .progress import ProgressBarManager
@@ -42,8 +42,8 @@ __all__ = [
     'InstallationStateManager',
     'InstallationValidator',
     'InstallationWizard',
+    'DockerCheckpointDownloader',
     'DockerManager',
-    'DockerModelDownloader',
     'DockerStateManager',
     'DockerWizard',
     'print_success',
