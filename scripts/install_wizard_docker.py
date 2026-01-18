@@ -419,7 +419,7 @@ def download_models(models_dir: Path) -> bool:
         env["VFX_MODELS_DIR"] = str(models_dir)
 
         result = subprocess.run(
-            [str(download_script)],
+            ["bash", str(download_script)],
             env=env,
             check=True,
             text=True
@@ -515,7 +515,7 @@ def run_test_pipeline(repo_root: Path) -> bool:
 
     print_info("Downloading test video (Football CIF, ~2MB)...")
     try:
-        subprocess.run([str(test_script)], check=True, capture_output=True)
+        subprocess.run(["bash", str(test_script)], check=True, capture_output=True)
     except subprocess.CalledProcessError:
         print_warning("Test video download failed, skipping test")
         return True
@@ -540,7 +540,7 @@ def run_test_pipeline(repo_root: Path) -> bool:
     try:
         subprocess.run(
             [
-                str(run_script),
+                "bash", str(run_script),
                 "--input", "/workspace/projects/football_short.mp4",
                 "--name", "FootballTest",
                 "--stages", "depth"
