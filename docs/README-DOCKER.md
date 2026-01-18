@@ -35,10 +35,12 @@ This downloads:
 - WHAM (4D Human Motion Capture)
 - MatAnyone (Matte Refinement)
 
-**Manual step:** SMPL-X models require registration:
-1. Register at https://smpl-x.is.tue.mpg.de/
-2. Download SMPL-X models
-3. Extract to `~/.vfx_pipeline/models/smplx/`
+**Optional:** SMPL-X models (required for mocap stage only):
+- Can be downloaded automatically with the install wizard
+- Register at https://smpl-x.is.tue.mpg.de/
+- Create `SMPL.login.dat` with credentials (email on line 1, password on line 2)
+- Run: `python3 scripts/install_wizard.py --component mocap`
+- The wizard handles authentication and download automatically
 
 Verify models:
 ```bash

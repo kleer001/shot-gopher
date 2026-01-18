@@ -527,12 +527,20 @@ def main():
 
         verify_models(models_dir)
 
-        # Remind about SMPL-X
-        print()
-        print_warning("SMPL-X models require manual registration:")
-        print("  1. Register at https://smpl-x.is.tue.mpg.de/")
-        print("  2. Download SMPL-X models")
-        print(f"  3. Extract to {models_dir / 'smplx'}/")
+        # Check for SMPL-X (optional, requires registration)
+        smplx_dir = models_dir / "smplx"
+        if not smplx_dir.exists() or not list(smplx_dir.glob("*.npz")):
+            print()
+            print_warning("SMPL-X models not found (optional, required for mocap stage)")
+            print("  SMPL-X can be downloaded automatically with credentials:")
+            print()
+            print("  1. Register at https://smpl-x.is.tue.mpg.de/")
+            print("  2. Create SMPL.login.dat in repository root with:")
+            print("     Line 1: your email")
+            print("     Line 2: your password")
+            print("  3. Run: python3 scripts/install_wizard.py --component mocap")
+            print()
+            print("  The wizard will handle authentication and download automatically.")
 
     # Build Docker image
     print_header("Building Docker Image")
