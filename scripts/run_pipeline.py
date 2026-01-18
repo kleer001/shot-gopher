@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 # Environment check and configuration
-from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR
+from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR, is_in_container
 
 # ComfyUI utilities (shared with run_segmentation.py)
 from comfyui_utils import (
@@ -914,6 +914,16 @@ def run_pipeline(
         project_name = input_path.stem.replace(" ", "_")
 
     project_dir = projects_dir / project_name
+
+    # Container-aware path validation
+    if is_in_container():
+        # In container, ensure project_dir is under /workspace for volume mount safety
+        if not str(project_dir).startswith("/workspace"):
+            print(f"Error: In container, project directory must be under /workspace", file=sys.stderr)
+            print(f"  Got: {project_dir}", file=sys.stderr)
+            print(f"  Mount your project directory to /workspace or set VFX_PROJECTS_DIR=/workspace/projects", file=sys.stderr)
+            return False
+
     source_frames = project_dir / "source" / "frames"
     workflows_dir = Path(__file__).parent.parent / "workflow_templates"
 

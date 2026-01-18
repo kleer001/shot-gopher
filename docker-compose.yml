@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  vfx-ingest:
+    build: .
+    image: vfx-ingest:latest
+    container_name: vfx-ingest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - START_COMFYUI=true
+      - VFX_MODELS_DIR=/models
+      - VFX_PROJECTS_DIR=/workspace/projects
+    volumes:
+      # Model storage (read-only for safety)
+      - ${HOME}/.vfx_pipeline/models:/models:ro
+      # Project workspace (read-write)
+      - ${HOME}/VFX-Projects:/workspace/projects
+      # Optional: mount specific project
+      # - ./my_project:/workspace/project
+    ports:
+      - "8188:8188"  # ComfyUI web interface
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

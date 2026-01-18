@@ -1,0 +1,48 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+
+# Testing
+.pytest_cache/
+tests/
+test_*/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docs (don't need in image)
+docs/
+*.md
+
+# Large files that should be mounted
+.vfx_pipeline/models/
+.vfx_pipeline/ComfyUI/output/
+
+# Project files (mounted at runtime)
+../vfx_projects/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Temporary files
+*.tmp
+*.log
