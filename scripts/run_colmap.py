@@ -1273,6 +1273,17 @@ def run_colmap_pipeline(
 
     with VirtualDisplay():
         try:
+            # Debug: List actual image files
+            image_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg")) + list(frames_dir.glob("*.jpeg"))
+            print(f"    Image path: {frames_dir}")
+            print(f"    Found {len(image_files)} image files")
+            if image_files:
+                print(f"    First image: {image_files[0].name}")
+                print(f"    Last image: {image_files[-1].name}")
+            else:
+                exts = set(f.suffix.lower() for f in frames_dir.iterdir() if f.is_file())
+                print(f"    WARNING: No png/jpg found. File extensions present: {exts}")
+
             # Feature extraction
             print("[1/4] Feature Extraction")
             extract_features(
