@@ -88,7 +88,8 @@ ENV CONTAINER=true \
     VFX_INSTALL_DIR=/app/.vfx_pipeline \
     VFX_MODELS_DIR=/models \
     VFX_PROJECTS_DIR=/workspace/projects \
-    COMFYUI_OUTPUT_DIR=/workspace
+    COMFYUI_OUTPUT_DIR=/workspace \
+    QT_QPA_PLATFORM=offscreen
 
 # Expose ports
 EXPOSE 8188

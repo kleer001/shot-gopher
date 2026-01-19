@@ -1194,9 +1194,8 @@ def run_pipeline(
                     stage_name=f"matanyone ({person_dir.name})" if len(person_dirs) > 1 else "matanyone",
                 ):
                     print(f"  → MatAnyone stage failed for {person_dir.name}", file=sys.stderr)
-                    # Continue with other instances instead of failing completely
-                    if len(person_dirs) == 1:
-                        return False
+                    print(f"    (cleanplate will use raw roto masks instead)", file=sys.stderr)
+                    # Non-fatal: continue to next stage, cleanplate can use raw masks
 
             # Combine all refined mattes into roto/combined/
             valid_output_dirs = [d for d in output_dirs if d.exists() and list(d.glob("*.png"))]
