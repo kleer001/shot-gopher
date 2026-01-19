@@ -385,8 +385,14 @@ def match_features(
         try:
             _run_matcher(gpu=True)
         except subprocess.CalledProcessError as e:
-            # Check for GPU SIFT initialization failure
-            if "max_num_matches" in str(e.stdout) or "sift.cc" in str(e.stdout):
+            error_output = str(e.stdout) if hasattr(e, 'stdout') and e.stdout else str(e)
+            is_gpu_error = (
+                "context" in error_output.lower()
+                or "opengl" in error_output.lower()
+                or "sift" in error_output.lower()
+                or e.returncode < 0
+            )
+            if is_gpu_error:
                 print("    GPU SIFT matching failed, falling back to CPU...")
                 _run_matcher(gpu=False)
             else:

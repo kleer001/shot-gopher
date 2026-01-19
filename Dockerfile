@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     wget \
     curl \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Create application directory
