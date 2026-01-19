@@ -7,7 +7,8 @@
 FROM colmap/colmap:20231029.4 AS colmap-source
 
 # Stage 2: Base image with system dependencies
-FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04 AS base
+# Using devel image for nvcc (CUDA compiler) needed by SAM3 GPU NMS
+FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS base
 
 # Prevent interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
@@ -94,10 +95,11 @@ RUN for dir in */; do \
 
 # Install SAM3 GPU-accelerated NMS (speeds up video tracking 5-10x)
 # Only attempt if nvcc (CUDA compiler) is available
+# UV_SYSTEM_PYTHON=1 tells uv to install into system Python (no venv in Docker)
 RUN cd ComfyUI-SAM3 && \
     if command -v nvcc >/dev/null 2>&1; then \
         echo "CUDA toolkit found, installing SAM3 GPU NMS..." && \
-        python3 install.py; \
+        UV_SYSTEM_PYTHON=1 python3 install.py; \
     else \
         echo "Skipping SAM3 GPU NMS (nvcc not available - will use CPU fallback at runtime)"; \
     fi
