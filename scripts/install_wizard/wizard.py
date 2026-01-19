@@ -13,7 +13,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import CondaPackageInstaller, GitRepoInstaller, PythonPackageInstaller, SystemPackageInstaller
+from .installers import CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, PythonPackageInstaller, SystemPackageInstaller
 from .platform import PlatformManager
 from .state import InstallationStateManager
 from .utils import (
@@ -117,6 +117,18 @@ class InstallationWizard:
                     'https://github.com/yohanshin/WHAM.git',
                     self.install_dir / "WHAM",
                     size_gb=3.0  # Code + checkpoints
+                )
+            ]
+        }
+
+        # GS-IR (Gaussian Splatting Inverse Rendering for material decomposition)
+        self.components['gsir'] = {
+            'name': 'GS-IR',
+            'required': False,
+            'installers': [
+                GSIRInstaller(
+                    install_dir=self.install_dir / "GS-IR",
+                    size_gb=2.0
                 )
             ]
         }
@@ -552,8 +564,8 @@ class InstallationWizard:
             to_install = [component]
         elif yolo:
             # YOLO mode: auto-select full stack (option 3)
-            print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture)")
-            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham']
+            print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture + GS-IR)")
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham', 'gsir']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -561,7 +573,7 @@ class InstallationWizard:
             print("="*60)
             print("1. Core pipeline only (COLMAP, segmentation)")
             print("2. Core + ComfyUI (workflows ready to use)")
-            print("3. Full stack (Core + ComfyUI + Motion capture)")
+            print("3. Full stack (Core + ComfyUI + Motion capture + GS-IR)")
             print("4. Custom selection")
             print("5. Nothing (check only)")
 
@@ -574,7 +586,7 @@ class InstallationWizard:
                     to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham', 'gsir']
                     break
                 elif choice == '4':
                     to_install = []
@@ -692,6 +704,13 @@ class InstallationWizard:
             else:
                 print("  ⚠ WHAM checkpoints not downloaded - run wizard again or visit:")
                 print("    https://github.com/yohanshin/WHAM")
+
+        # GS-IR status
+        if status.get('gsir', False):
+            gsir_path = self.install_dir / "GS-IR"
+            print("\n🎨 GS-IR (Material Decomposition):")
+            print(f"  ✓ Installed at {gsir_path}")
+            print("  Use with pipeline: --stages gsir")
 
         # ComfyUI
         if status.get('comfyui', False):

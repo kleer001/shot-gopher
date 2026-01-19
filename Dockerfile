@@ -68,8 +68,32 @@ RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https:/
 # Install smplx (required for mocap)
 RUN pip3 install --no-cache-dir smplx
 
-# Stage 4: ComfyUI and custom nodes
-FROM python-deps AS comfyui
+# Install kornia (required for GS-IR)
+RUN pip3 install --no-cache-dir kornia
+
+# Stage 4: GS-IR (Gaussian Splatting Inverse Rendering)
+FROM python-deps AS gsir
+
+WORKDIR /app/.vfx_pipeline
+
+# Clone GS-IR with submodules
+RUN git clone --recursive https://github.com/lzhnb/GS-IR.git GS-IR
+
+# Install nvdiffrast (required for GS-IR rendering)
+RUN pip3 install --no-cache-dir git+https://github.com/NVlabs/nvdiffrast.git
+
+# Build and install GS-IR submodules (CUDA extensions)
+WORKDIR /app/.vfx_pipeline/GS-IR
+RUN pip3 install --no-cache-dir ./submodules/diff-gaussian-rasterization && \
+    pip3 install --no-cache-dir ./submodules/simple-knn
+
+# Install gs-ir module
+RUN cd gs-ir && pip3 install --no-cache-dir -e .
+
+WORKDIR /app
+
+# Stage 5: ComfyUI and custom nodes
+FROM gsir AS comfyui
 
 # Create .vfx_pipeline directory structure
 RUN mkdir -p /app/.vfx_pipeline
@@ -106,7 +130,7 @@ RUN cd ComfyUI-SAM3 && \
 
 WORKDIR /app
 
-# Stage 5: Pipeline scripts
+# Stage 6: Pipeline scripts
 FROM comfyui AS pipeline
 
 # Copy pipeline scripts
@@ -129,6 +153,7 @@ ENV CONTAINER=true \
     VFX_MODELS_DIR=/models \
     VFX_PROJECTS_DIR=/workspace/projects \
     COMFYUI_OUTPUT_DIR=/workspace \
+    GSIR_PATH=/app/.vfx_pipeline/GS-IR \
     QT_QPA_PLATFORM=offscreen
 
 # Expose ports

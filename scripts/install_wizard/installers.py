@@ -4,13 +4,14 @@ This module provides installer classes for different types of components
 including Python packages and Git repositories.
 """
 
+import shutil
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from env_config import INSTALL_DIR
 
-from .utils import check_python_package, print_error, print_success, print_warning, run_command
+from .utils import check_python_package, print_error, print_info, print_success, print_warning, run_command
 
 if TYPE_CHECKING:
     from .conda import CondaEnvironmentManager
@@ -268,4 +269,104 @@ class GitRepoInstaller(ComponentInstaller):
 
         self.installed = True
         print_success(f"{self.name} cloned to {self.install_dir}")
+        return True
+
+
+class GSIRInstaller(ComponentInstaller):
+    """Installer for GS-IR (Gaussian Splatting Inverse Rendering).
+
+    GS-IR requires special handling due to CUDA submodules that need to be built.
+    """
+
+    def __init__(self, install_dir: Optional[Path] = None, size_gb: float = 2.0):
+        super().__init__("GS-IR", size_gb)
+        self.install_dir = install_dir or INSTALL_DIR / "GS-IR"
+        self.conda_manager: Optional['CondaEnvironmentManager'] = None
+
+    def set_conda_manager(self, conda_manager: 'CondaEnvironmentManager'):
+        self.conda_manager = conda_manager
+
+    def check(self) -> bool:
+        if not self.install_dir.exists():
+            return False
+        train_py = self.install_dir / "train.py"
+        gsir_module = self.install_dir / "gs-ir"
+        self.installed = train_py.exists() and gsir_module.exists()
+        return self.installed
+
+    def _run_pip(self, args: list) -> bool:
+        if self.conda_manager and self.conda_manager.conda_exe:
+            cmd = [
+                self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                "pip"
+            ] + args
+        else:
+            cmd = [sys.executable, "-m", "pip"] + args
+        success, _ = run_command(cmd, check=False)
+        return success
+
+    def install(self) -> bool:
+        print(f"\nInstalling GS-IR from https://github.com/lzhnb/GS-IR.git...")
+
+        self.install_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        if self.install_dir.exists():
+            print_info("GS-IR directory exists, updating...")
+            success, _ = run_command(["git", "-C", str(self.install_dir), "pull"])
+            success2, _ = run_command(["git", "-C", str(self.install_dir), "submodule", "update", "--init", "--recursive"])
+            if not success or not success2:
+                print_warning("Failed to update GS-IR, continuing with existing version")
+        else:
+            success, _ = run_command([
+                "git", "clone", "--recursive",
+                "https://github.com/lzhnb/GS-IR.git",
+                str(self.install_dir)
+            ])
+            if not success:
+                print_error("Failed to clone GS-IR")
+                return False
+
+        print("  Installing kornia...")
+        if not self._run_pip(["install", "kornia"]):
+            print_warning("Failed to install kornia")
+
+        print("  Installing nvdiffrast...")
+        if not self._run_pip(["install", "git+https://github.com/NVlabs/nvdiffrast.git"]):
+            print_warning("Failed to install nvdiffrast")
+
+        if not shutil.which("nvcc"):
+            print_warning("CUDA compiler (nvcc) not found - CUDA extensions may fail to build")
+            print_info("Ensure CUDA toolkit is installed and nvcc is in PATH")
+
+        diff_gauss = self.install_dir / "submodules" / "diff-gaussian-rasterization"
+        simple_knn = self.install_dir / "submodules" / "simple-knn"
+
+        print("  Building diff-gaussian-rasterization...")
+        if diff_gauss.exists():
+            if not self._run_pip(["install", str(diff_gauss)]):
+                print_error("Failed to build diff-gaussian-rasterization")
+                return False
+        else:
+            print_error(f"Submodule not found: {diff_gauss}")
+            return False
+
+        print("  Building simple-knn...")
+        if simple_knn.exists():
+            if not self._run_pip(["install", str(simple_knn)]):
+                print_error("Failed to build simple-knn")
+                return False
+        else:
+            print_error(f"Submodule not found: {simple_knn}")
+            return False
+
+        gsir_module = self.install_dir / "gs-ir"
+        print("  Installing gs-ir module...")
+        if gsir_module.exists():
+            if not self._run_pip(["install", "-e", str(gsir_module)]):
+                print_warning("Failed to install gs-ir module (may work without it)")
+        else:
+            print_warning("gs-ir module directory not found")
+
+        self.installed = True
+        print_success(f"GS-IR installed to {self.install_dir}")
         return True
