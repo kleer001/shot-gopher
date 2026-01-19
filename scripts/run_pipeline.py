@@ -1086,9 +1086,7 @@ def run_pipeline(
                     stage_name=f"roto ({prompt})" if len(prompts) > 1 else "roto",
                 ):
                     print(f"  → Segmentation failed for '{prompt}'", file=sys.stderr)
-                    if len(prompts) == 1:
-                        return False
-                    # Continue with other prompts for multi-prompt case
+                    # Non-fatal: continue with other prompts or stages
 
         # Generate preview movie from first subdirectory with masks
         if auto_movie:
@@ -1216,59 +1214,60 @@ def run_pipeline(
         roto_dir = project_dir / "roto"
         combined_dir = roto_dir / "combined"
 
-        # Refresh workflow from template if template is newer
-        refresh_workflow_from_template(workflow_path, "03_cleanplate.json")
+        # Check for ANY roto data before proceeding
+        has_combined_mattes = combined_dir.exists() and list(combined_dir.glob("*.png"))
+        mask_dirs = []
+        for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
+            if subdir.is_dir() and subdir.name != "combined" and list(subdir.glob("*.png")):
+                mask_dirs.append(subdir)
+        has_any_roto = has_combined_mattes or mask_dirs
 
-        if not workflow_path.exists():
-            print("  → Skipping (workflow not found)")
-        elif skip_existing and list(cleanplate_dir.glob("*.png")):
-            print("  → Skipping (cleanplates exist)")
+        if not has_any_roto:
+            print("")
+            print("  " + "=" * 50)
+            print("  !!!  NO ROTO DATA FOUND - SKIPPING CLEANPLATE  !!!")
+            print("  " + "=" * 50)
+            print("  Run the 'roto' stage first to generate masks.")
+            print("")
         else:
-            # Check for combined MatAnyone mattes first (preferred)
-            has_combined_mattes = combined_dir.exists() and list(combined_dir.glob("*.png"))
+            # Refresh workflow from template if needed
+            refresh_workflow_from_template(workflow_path, "03_cleanplate.json")
 
-            # Collect all mask directories (excluding 'combined' which we handle separately)
-            mask_dirs = []
-            for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
-                if subdir.is_dir() and subdir.name != "combined" and list(subdir.glob("*.png")):
-                    mask_dirs.append(subdir)
-
-            # Clear any existing combined masks in roto/ base
-            for old_file in roto_dir.glob("*.png"):
-                old_file.unlink()
-
-            # Determine mask source for cleanplate
-            if has_combined_mattes:
-                # Use roto/combined/ directly (MatAnyone refined + combined)
-                print(f"  → Using combined MatAnyone mattes from roto/combined/")
-                # Copy combined mattes to roto/ for cleanplate workflow
-                for i, mask_file in enumerate(sorted(combined_dir.glob("*.png"))):
-                    out_name = f"mask_{i+1:05d}.png"
-                    shutil.copy2(mask_file, roto_dir / out_name)
-            elif len(mask_dirs) > 1:
-                # Multiple sources without combined - consolidate them
-                count = combine_mask_sequences(mask_dirs, roto_dir, prefix="combined")
-                print(f"  → Consolidated {count} frames from {len(mask_dirs)} mask sources")
-            elif len(mask_dirs) == 1:
-                # Single source - copy to roto/ with consistent naming
-                source_dir = mask_dirs[0]
-                for i, mask_file in enumerate(sorted(source_dir.glob("*.png"))):
-                    out_name = f"mask_{i+1:05d}.png"
-                    shutil.copy2(mask_file, roto_dir / out_name)
-                print(f"  → Using masks from {source_dir.name}/")
+            if not workflow_path.exists():
+                print("  → Skipping (workflow not found)")
+            elif skip_existing and list(cleanplate_dir.glob("*.png")):
+                print("  → Skipping (cleanplates exist)")
             else:
-                print("  → Warning: No masks found in roto/ subdirectories")
+                # Clear any existing combined masks in roto/ base
+                for old_file in roto_dir.glob("*.png"):
+                    old_file.unlink()
 
-            # Update ProPainterInpaint resolution to match source frames
-            update_cleanplate_resolution(workflow_path, source_frames)
-            if not run_comfyui_workflow(
-                workflow_path, comfyui_url,
-                output_dir=cleanplate_dir,
-                total_frames=total_frames,
-                stage_name="cleanplate",
-            ):
-                print("  → Cleanplate stage failed", file=sys.stderr)
-                return False
+                # Determine mask source for cleanplate
+                if has_combined_mattes:
+                    print(f"  → Using combined MatAnyone mattes from roto/combined/")
+                    for i, mask_file in enumerate(sorted(combined_dir.glob("*.png"))):
+                        out_name = f"mask_{i+1:05d}.png"
+                        shutil.copy2(mask_file, roto_dir / out_name)
+                elif len(mask_dirs) > 1:
+                    count = combine_mask_sequences(mask_dirs, roto_dir, prefix="combined")
+                    print(f"  → Consolidated {count} frames from {len(mask_dirs)} mask sources")
+                elif len(mask_dirs) == 1:
+                    source_dir = mask_dirs[0]
+                    for i, mask_file in enumerate(sorted(source_dir.glob("*.png"))):
+                        out_name = f"mask_{i+1:05d}.png"
+                        shutil.copy2(mask_file, roto_dir / out_name)
+                    print(f"  → Using masks from {source_dir.name}/")
+
+                # Update ProPainterInpaint resolution to match source frames
+                update_cleanplate_resolution(workflow_path, source_frames)
+                if not run_comfyui_workflow(
+                    workflow_path, comfyui_url,
+                    output_dir=cleanplate_dir,
+                    total_frames=total_frames,
+                    stage_name="cleanplate",
+                ):
+                    print("  → Cleanplate stage failed", file=sys.stderr)
+                    # Non-fatal: continue to 3D stages (colmap, mocap, camera)
         # Generate preview movie
         if auto_movie and list(cleanplate_dir.glob("*.png")):
             generate_preview_movie(cleanplate_dir, project_dir / "preview" / "cleanplate.mp4", fps)
