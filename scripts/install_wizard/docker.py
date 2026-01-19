@@ -315,87 +315,33 @@ class DockerCheckpointDownloader(CheckpointDownloader):
 
     Docker mounts models from ~/.vfx_pipeline/models/ into the container,
     using a flat structure rather than the nested ComfyUI layout.
+
+    Inherits checkpoint source configs (URLs, auth, files) from base class
+    and only overrides dest_dir_rel for Docker's directory layout.
     """
 
-    DOCKER_CHECKPOINTS: Dict = {
-        'sam3': {
-            'name': 'SAM3 Model',
-            'requires_auth': False,
-            'use_huggingface': True,
-            'hf_repo_id': '1038lab/sam3',
-            'files': [{'filename': 'sam3.pt', 'size_mb': 3200}],
-            'dest_dir_rel': 'sam3',
-            'instructions': '''SAM3 model will be downloaded from HuggingFace (1038lab/sam3).
-If automatic download fails, manually download from:
-  https://huggingface.co/1038lab/sam3/blob/main/sam3.pt'''
-        },
-        'video_depth_anything': {
-            'name': 'Video Depth Anything Model',
-            'requires_auth': False,
-            'use_huggingface': True,
-            'hf_repo_id': 'depth-anything/Video-Depth-Anything-Small',
-            'files': [{'filename': 'video_depth_anything_vits.pth', 'size_mb': 120}],
-            'dest_dir_rel': 'videodepthanything',
-            'instructions': '''Video Depth Anything Small model will be downloaded from HuggingFace.
-This model uses ~6.8GB VRAM (vs 23.6GB for Large), suitable for most GPUs.'''
-        },
-        'wham': {
-            'name': 'WHAM Checkpoints',
-            'requires_auth': False,
-            'use_huggingface': False,
-            'use_gdown': True,
-            'files': [{
-                'url': 'https://drive.google.com/uc?id=1i7kt9RlCCCNEW2aYaDWVr-G778JkLNcB',
-                'filename': 'wham_vit_w_3dpw.pth.tar',
-                'size_mb': 1200,
-            }],
-            'dest_dir_rel': 'wham',
-            'instructions': '''WHAM checkpoints are hosted on Google Drive.
-If automatic download fails, manually download from:
-  https://drive.google.com/file/d/1i7kt9RlCCCNEW2aYaDWVr-G778JkLNcB/view'''
-        },
-        'matanyone': {
-            'name': 'MatAnyone Model',
-            'requires_auth': False,
-            'use_huggingface': False,
-            'files': [{
-                'url': 'https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth',
-                'filename': 'matanyone.pth',
-                'size_mb': 141,
-            }],
-            'dest_dir_rel': 'matanyone',
-            'instructions': '''MatAnyone model for stable video matting.
-Download from: https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth
-Place in ~/.vfx_pipeline/models/matanyone/matanyone.pth'''
-        },
-        'smplx': {
-            'name': 'SMPL-X Models',
-            'requires_auth': True,
-            'auth_type': 'smplx',
-            'auth_file': 'SMPL.login.dat',
-            'login_url': 'https://smpl-x.is.tue.mpg.de/login.php',
-            'download_page': 'https://smpl-x.is.tue.mpg.de/download.php',
-            'files': [{
-                'url': 'https://download.is.tue.mpg.de/download.php?domain=smplx&sfile=models_smplx_v1_1.zip',
-                'filename': 'models_smplx_v1_1.zip',
-                'size_mb': 830,
-                'sha256': None,
-                'extract': True
-            }],
-            'dest_dir_rel': 'smplx',
-            'instructions': '''SMPL-X models require registration:
-1. Register at https://smpl-x.is.tue.mpg.de/register.php
-2. Wait for approval email (usually within 24-48 hours)
-3. Create SMPL.login.dat in repository root with:
-   Line 1: your email
-   Line 2: your password
-4. Re-run the wizard to download models'''
-        }
+    DOCKER_DEST_DIRS: Dict[str, str] = {
+        'sam3': 'sam3',
+        'video_depth_anything': 'videodepthanything',
+        'wham': 'wham',
+        'matanyone': 'matanyone',
+        'smplx': 'smplx',
     }
 
     def __init__(self, models_dir: Path):
         super().__init__(base_dir=models_dir)
-        self.CHECKPOINTS = self.DOCKER_CHECKPOINTS
+        self.CHECKPOINTS = self._build_docker_checkpoints()
+
+    def _build_docker_checkpoints(self) -> Dict:
+        """Build Docker checkpoints by copying base configs with Docker dest_dir_rel."""
+        import copy
+        docker_checkpoints = {}
+        for checkpoint_id, dest_dir in self.DOCKER_DEST_DIRS.items():
+            if checkpoint_id in CheckpointDownloader.CHECKPOINTS:
+                config = copy.deepcopy(CheckpointDownloader.CHECKPOINTS[checkpoint_id])
+                config['dest_dir_rel'] = dest_dir
+                docker_checkpoints[checkpoint_id] = config
+        return docker_checkpoints
 
     def get_total_size_gb(self, checkpoint_ids: List[str]) -> float:
         """Calculate total download size in GB."""
