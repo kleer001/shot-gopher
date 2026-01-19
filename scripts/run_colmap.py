@@ -17,9 +17,12 @@ Example:
 
 import argparse
 import json
+import os
+import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -75,38 +78,36 @@ class VirtualDisplay:
     needs an X server for OpenGL context. This starts a virtual framebuffer.
     """
 
-    def __init__(self):
-        self._process = None
-        self._display = None
-        self._original_display = None
+    def __init__(self) -> None:
+        self._process: Optional[subprocess.Popen] = None
+        self._display: Optional[str] = None
+        self._env_modified: bool = False
 
     def _needs_virtual_display(self) -> bool:
         """Check if we need to start a virtual display."""
-        import os
         if not is_in_container():
             return False
-        display = os.environ.get("DISPLAY")
-        if display:
-            return False
-        return True
+        return not os.environ.get("DISPLAY")
 
-    def _find_free_display(self) -> int:
+    def _find_free_display(self) -> Optional[int]:
         """Find an unused display number."""
         for display_num in range(99, 199):
             lock_file = Path(f"/tmp/.X{display_num}-lock")
             socket_file = Path(f"/tmp/.X11-unix/X{display_num}")
             if not lock_file.exists() and not socket_file.exists():
                 return display_num
-        return 99
+        return None
 
-    def __enter__(self):
-        import os
+    def __enter__(self) -> "VirtualDisplay":
         if not self._needs_virtual_display():
             return self
 
         display_num = self._find_free_display()
+        if display_num is None:
+            print("    Warning: No free display numbers (99-198), GPU may not work")
+            return self
+
         self._display = f":{display_num}"
-        self._original_display = os.environ.get("DISPLAY")
 
         try:
             self._process = subprocess.Popen(
@@ -114,13 +115,13 @@ class VirtualDisplay:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            import time
             time.sleep(0.5)
             if self._process.poll() is not None:
                 print("    Warning: Xvfb failed to start, GPU may not work")
                 self._process = None
             else:
                 os.environ["DISPLAY"] = self._display
+                self._env_modified = True
                 print(f"    Started virtual display {self._display} for GPU OpenGL")
         except FileNotFoundError:
             print("    Warning: Xvfb not found, GPU may not work in headless mode")
@@ -128,18 +129,25 @@ class VirtualDisplay:
 
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        import os
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[object],
+    ) -> bool:
         if self._process:
-            self._process.terminate()
             try:
+                self._process.terminate()
                 self._process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self._process.kill()
-            if self._original_display:
-                os.environ["DISPLAY"] = self._original_display
-            elif "DISPLAY" in os.environ:
-                del os.environ["DISPLAY"]
+                self._process.wait()
+            except ProcessLookupError:
+                pass
+
+        if self._env_modified and "DISPLAY" in os.environ:
+            del os.environ["DISPLAY"]
+
         return False
 
 
@@ -174,7 +182,6 @@ def run_colmap_command(
     Returns:
         CompletedProcess result
     """
-    import re
     cmd = ["colmap", command]
     for key, value in args.items():
         if value is True:
@@ -828,7 +835,6 @@ def cubic_bezier(p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray,
 
 def extract_frame_number(filename: str) -> int:
     """Extract frame number from filename like 'frame_0001.png' or 'depth_00001.png'."""
-    import re
     match = re.search(r'(\d+)', filename)
     if match:
         return int(match.group(1))
