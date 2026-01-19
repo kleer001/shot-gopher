@@ -20,6 +20,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -163,6 +164,39 @@ def check_colmap_available() -> bool:
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
+
+
+def verify_database_has_features(database_path: Path) -> tuple[int, int]:
+    """Verify COLMAP database has extracted features.
+
+    Args:
+        database_path: Path to COLMAP database.db
+
+    Returns:
+        Tuple of (num_images_with_features, total_keypoints)
+    """
+    if not database_path.exists():
+        return 0, 0
+
+    try:
+        conn = sqlite3.connect(str(database_path))
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM images")
+        num_images = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM keypoints")
+        num_keypoint_rows = cursor.fetchone()[0]
+
+        cursor.execute("SELECT SUM(rows) FROM keypoints")
+        result = cursor.fetchone()[0]
+        total_keypoints = result if result else 0
+
+        conn.close()
+        return num_keypoint_rows, total_keypoints
+    except sqlite3.Error as e:
+        print(f"    Warning: Could not read database: {e}")
+        return 0, 0
 
 
 def run_colmap_command(
@@ -1233,6 +1267,14 @@ def run_colmap_pipeline(
                 mask_path=mask_path,
                 use_gpu=True,
             )
+
+            # Verify features were extracted
+            num_images, total_keypoints = verify_database_has_features(database_path)
+            if num_images == 0 or total_keypoints == 0:
+                print(f"    Error: No features extracted from images", file=sys.stderr)
+                print(f"    This can happen if images are too small, dark, or featureless", file=sys.stderr)
+                return False
+            print(f"    Extracted {total_keypoints:,} keypoints from {num_images} images")
 
             # Feature matching
             print("\n[2/4] Feature Matching")
