@@ -209,6 +209,9 @@ __marimo__/
 # VFX Pipeline installation artifacts
 .vfx_pipeline/
 
+# VFX Pipeline logs (user-specific debug logs)
+logs/
+
 # Credentials and tokens (DO NOT COMMIT)
 SMPL.login.dat
 HF_TOKEN.dat
