@@ -166,16 +166,19 @@ def check_colmap_available() -> bool:
         return False
 
 
-def verify_database_has_features(database_path: Path) -> tuple[int, int]:
+def verify_database_has_features(database_path: Path, verbose: bool = False) -> tuple[int, int]:
     """Verify COLMAP database has extracted features.
 
     Args:
         database_path: Path to COLMAP database.db
+        verbose: Print diagnostic information
 
     Returns:
         Tuple of (num_images_with_features, total_keypoints)
     """
     if not database_path.exists():
+        if verbose:
+            print(f"    DEBUG: Database does not exist: {database_path}")
         return 0, 0
 
     try:
@@ -188,9 +191,23 @@ def verify_database_has_features(database_path: Path) -> tuple[int, int]:
         cursor.execute("SELECT COUNT(*) FROM keypoints")
         num_keypoint_rows = cursor.fetchone()[0]
 
-        cursor.execute("SELECT SUM(rows) FROM keypoints")
+        cursor.execute("SELECT SUM(rows) FROM keypoints WHERE rows IS NOT NULL")
         result = cursor.fetchone()[0]
         total_keypoints = result if result else 0
+
+        cursor.execute("SELECT COUNT(*) FROM descriptors")
+        num_descriptor_rows = cursor.fetchone()[0]
+
+        if verbose:
+            print(f"    DEBUG: Database path: {database_path}")
+            print(f"    DEBUG: Database size: {database_path.stat().st_size:,} bytes")
+            print(f"    DEBUG: images table: {num_images} rows")
+            print(f"    DEBUG: keypoints table: {num_keypoint_rows} rows")
+            print(f"    DEBUG: descriptors table: {num_descriptor_rows} rows")
+            print(f"    DEBUG: total keypoints (SUM): {total_keypoints}")
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+            print(f"    DEBUG: tables in database: {tables}")
 
         conn.close()
         return num_keypoint_rows, total_keypoints
@@ -1272,6 +1289,7 @@ def run_colmap_pipeline(
             num_images, total_keypoints = verify_database_has_features(database_path)
             if num_images == 0 or total_keypoints == 0:
                 print(f"    Error: No features extracted from images", file=sys.stderr)
+                verify_database_has_features(database_path, verbose=True)
                 print(f"    This can happen if images are too small, dark, or featureless", file=sys.stderr)
                 return False
             print(f"    Extracted {total_keypoints:,} keypoints from {num_images} images")
