@@ -68,23 +68,79 @@ QUALITY_PRESETS = {
 }
 
 
-def is_headless_environment() -> bool:
-    """Detect if running in a headless environment without display/OpenGL support.
+class VirtualDisplay:
+    """Context manager that starts Xvfb for headless GPU OpenGL support.
 
-    Returns:
-        True if headless (GPU OpenGL context unlikely to work), False otherwise.
+    In container environments without a display, COLMAP's GPU SIFT extraction
+    needs an X server for OpenGL context. This starts a virtual framebuffer.
     """
-    import os
 
-    if is_in_container():
+    def __init__(self):
+        self._process = None
+        self._display = None
+        self._original_display = None
+
+    def _needs_virtual_display(self) -> bool:
+        """Check if we need to start a virtual display."""
+        import os
+        if not is_in_container():
+            return False
         display = os.environ.get("DISPLAY")
-        if not display:
-            return True
-        xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
-        if not xdg_runtime or not os.path.exists(xdg_runtime):
-            return True
+        if display:
+            return False
+        return True
 
-    return False
+    def _find_free_display(self) -> int:
+        """Find an unused display number."""
+        for display_num in range(99, 199):
+            lock_file = Path(f"/tmp/.X{display_num}-lock")
+            socket_file = Path(f"/tmp/.X11-unix/X{display_num}")
+            if not lock_file.exists() and not socket_file.exists():
+                return display_num
+        return 99
+
+    def __enter__(self):
+        import os
+        if not self._needs_virtual_display():
+            return self
+
+        display_num = self._find_free_display()
+        self._display = f":{display_num}"
+        self._original_display = os.environ.get("DISPLAY")
+
+        try:
+            self._process = subprocess.Popen(
+                ["Xvfb", self._display, "-screen", "0", "1024x768x24", "-nolisten", "tcp"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            import time
+            time.sleep(0.5)
+            if self._process.poll() is not None:
+                print("    Warning: Xvfb failed to start, GPU may not work")
+                self._process = None
+            else:
+                os.environ["DISPLAY"] = self._display
+                print(f"    Started virtual display {self._display} for GPU OpenGL")
+        except FileNotFoundError:
+            print("    Warning: Xvfb not found, GPU may not work in headless mode")
+            self._process = None
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        import os
+        if self._process:
+            self._process.terminate()
+            try:
+                self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+            if self._original_display:
+                os.environ["DISPLAY"] = self._original_display
+            elif "DISPLAY" in os.environ:
+                del os.environ["DISPLAY"]
+        return False
 
 
 def check_colmap_available() -> bool:
@@ -1110,19 +1166,13 @@ def run_colmap_pipeline(
         print(f"Error: No images found in {frames_dir}", file=sys.stderr)
         return False
 
-    headless = is_headless_environment()
-    use_gpu = not headless
-
     print(f"\n{'='*60}")
     print(f"COLMAP Reconstruction")
     print(f"{'='*60}")
     print(f"Project: {project_dir}")
     print(f"Frames: {frame_count}")
     print(f"Quality: {quality}")
-    if headless:
-        print(f"Mode: CPU (headless environment detected)")
-    else:
-        print(f"Mode: GPU (with CPU fallback)")
+    print(f"Mode: GPU (with CPU fallback)")
     if quality == "slow":
         print(f"  Warning: Slow-camera mode uses aggressive settings for minimal motion")
         print(f"           Results may be jittery due to low parallax")
@@ -1158,99 +1208,100 @@ def run_colmap_pipeline(
     if dense_path.exists():
         shutil.rmtree(dense_path)
 
-    try:
-        # Feature extraction
-        print("[1/4] Feature Extraction")
-        extract_features(
-            database_path=database_path,
-            image_path=frames_dir,
-            camera_model=camera_model,
-            max_features=preset["sift_max_features"],
-            single_camera=True,
-            mask_path=mask_path,
-            use_gpu=use_gpu,
-        )
-
-        # Feature matching
-        print("\n[2/4] Feature Matching")
-        match_features(
-            database_path=database_path,
-            matcher_type=preset["matcher"],
-            sequential_overlap=preset.get("sequential_overlap", 10),
-            use_gpu=use_gpu,
-        )
-
-        # Sparse reconstruction
-        print("\n[3/4] Sparse Reconstruction")
-        if not run_sparse_reconstruction(
-            database_path=database_path,
-            image_path=frames_dir,
-            output_path=sparse_path,
-            refine_focal=preset["ba_refine_focal"],
-            min_tri_angle=preset.get("min_tri_angle", 1.5),
-            min_num_inliers=preset.get("min_num_inliers", 15),
-        ):
-            print("Sparse reconstruction failed", file=sys.stderr)
-            return False
-
-        # Export camera data
-        print("\n[4/4] Exporting Camera Data")
-        camera_dir = project_dir / "camera"
-        sparse_model = sparse_path / "0"
-        if not export_colmap_to_pipeline_format(
-            sparse_model,
-            camera_dir,
-            total_frames=frame_count,
-            max_gap=max_gap,
-        ):
-            print("Camera export failed", file=sys.stderr)
-            return False
-
-        # Optional: Dense reconstruction
-        if run_dense:
-            print("\n[Dense] Running Dense Reconstruction")
-            if run_dense_reconstruction(
+    with VirtualDisplay():
+        try:
+            # Feature extraction
+            print("[1/4] Feature Extraction")
+            extract_features(
+                database_path=database_path,
                 image_path=frames_dir,
-                sparse_path=sparse_model,
-                output_path=dense_path,
-                max_image_size=preset["dense_max_size"],
+                camera_model=camera_model,
+                max_features=preset["sift_max_features"],
+                single_camera=True,
+                mask_path=mask_path,
+                use_gpu=True,
+            )
+
+            # Feature matching
+            print("\n[2/4] Feature Matching")
+            match_features(
+                database_path=database_path,
+                matcher_type=preset["matcher"],
+                sequential_overlap=preset.get("sequential_overlap", 10),
+                use_gpu=True,
+            )
+
+            # Sparse reconstruction
+            print("\n[3/4] Sparse Reconstruction")
+            if not run_sparse_reconstruction(
+                database_path=database_path,
+                image_path=frames_dir,
+                output_path=sparse_path,
+                refine_focal=preset["ba_refine_focal"],
+                min_tri_angle=preset.get("min_tri_angle", 1.5),
+                min_num_inliers=preset.get("min_num_inliers", 15),
             ):
-                # Copy point cloud to project
-                if (dense_path / "fused.ply").exists():
-                    shutil.copy(
-                        dense_path / "fused.ply",
-                        project_dir / "camera" / "pointcloud.ply"
-                    )
-                    print(f"    Point cloud saved to camera/pointcloud.ply")
-            else:
-                print("    Dense reconstruction failed (continuing)", file=sys.stderr)
+                print("Sparse reconstruction failed", file=sys.stderr)
+                return False
 
-        # Optional: Mesh generation
-        if run_mesh and run_dense:
-            print("\n[Mesh] Generating Mesh")
-            mesh_path = project_dir / "camera" / "mesh.ply"
-            if run_mesh_reconstruction(dense_path, mesh_path):
-                print(f"    Mesh saved to camera/mesh.ply")
-            else:
-                print("    Mesh generation failed (continuing)", file=sys.stderr)
+            # Export camera data
+            print("\n[4/4] Exporting Camera Data")
+            camera_dir = project_dir / "camera"
+            sparse_model = sparse_path / "0"
+            if not export_colmap_to_pipeline_format(
+                sparse_model,
+                camera_dir,
+                total_frames=frame_count,
+                max_gap=max_gap,
+            ):
+                print("Camera export failed", file=sys.stderr)
+                return False
 
-        print(f"\n{'='*60}")
-        print(f"COLMAP Reconstruction Complete")
-        print(f"{'='*60}")
-        print(f"Sparse model: {sparse_model}")
-        print(f"Camera data: {camera_dir}")
-        if run_dense:
-            print(f"Dense model: {dense_path}")
-        print()
+            # Optional: Dense reconstruction
+            if run_dense:
+                print("\n[Dense] Running Dense Reconstruction")
+                if run_dense_reconstruction(
+                    image_path=frames_dir,
+                    sparse_path=sparse_model,
+                    output_path=dense_path,
+                    max_image_size=preset["dense_max_size"],
+                ):
+                    # Copy point cloud to project
+                    if (dense_path / "fused.ply").exists():
+                        shutil.copy(
+                            dense_path / "fused.ply",
+                            project_dir / "camera" / "pointcloud.ply"
+                        )
+                        print(f"    Point cloud saved to camera/pointcloud.ply")
+                else:
+                    print("    Dense reconstruction failed (continuing)", file=sys.stderr)
 
-        return True
+            # Optional: Mesh generation
+            if run_mesh and run_dense:
+                print("\n[Mesh] Generating Mesh")
+                mesh_path = project_dir / "camera" / "mesh.ply"
+                if run_mesh_reconstruction(dense_path, mesh_path):
+                    print(f"    Mesh saved to camera/mesh.ply")
+                else:
+                    print("    Mesh generation failed (continuing)", file=sys.stderr)
 
-    except subprocess.CalledProcessError as e:
-        print(f"\nCOLMAP command failed: {e}", file=sys.stderr)
-        return False
-    except subprocess.TimeoutExpired:
-        print(f"\nCOLMAP command timed out", file=sys.stderr)
-        return False
+            print(f"\n{'='*60}")
+            print(f"COLMAP Reconstruction Complete")
+            print(f"{'='*60}")
+            print(f"Sparse model: {sparse_model}")
+            print(f"Camera data: {camera_dir}")
+            if run_dense:
+                print(f"Dense model: {dense_path}")
+            print()
+
+            return True
+
+        except subprocess.CalledProcessError as e:
+            print(f"\nCOLMAP command failed: {e}", file=sys.stderr)
+            return False
+        except subprocess.TimeoutExpired:
+            print(f"\nCOLMAP command timed out", file=sys.stderr)
+            return False
 
 
 def main():
