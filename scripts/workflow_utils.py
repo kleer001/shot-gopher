@@ -166,21 +166,55 @@ def update_matanyone_input(
 
 def update_cleanplate_resolution(
     workflow_path: Path,
-    source_frames_dir: Path
+    source_frames_dir: Path,
+    max_processing_width: int = None,
+    max_processing_height: int = None
 ) -> None:
-    """Update ProPainterInpaint resolution in cleanplate workflow to match source frames.
+    """Update ProPainterInpaint internal processing resolution in cleanplate workflow.
+
+    ProPainter's width/height control the INTERNAL optical flow processing resolution,
+    not the output resolution. The output is automatically scaled to match input.
+    Higher resolution = better quality but more VRAM. For 24GB VRAM with 180 frames,
+    960x540 is typically safe. For 16GB or less, use 640x360.
 
     Args:
         workflow_path: Path to workflow JSON
         source_frames_dir: Directory containing source frames
+        max_processing_width: Max internal width (default: from CLEANPLATE_MAX_WIDTH env or 960)
+        max_processing_height: Max internal height (default: from CLEANPLATE_MAX_HEIGHT env or 540)
     """
+    if max_processing_width is None:
+        max_processing_width = int(os.environ.get("CLEANPLATE_MAX_WIDTH", "960"))
+    if max_processing_height is None:
+        max_processing_height = int(os.environ.get("CLEANPLATE_MAX_HEIGHT", "540"))
+
     frames = sorted(source_frames_dir.glob("frame_*.png"))
     if not frames:
         print("  → Warning: No source frames found, using default resolution")
         return
 
-    width, height = get_image_dimensions(frames[0])
-    print(f"  → Setting cleanplate resolution to {width}x{height}")
+    source_width, source_height = get_image_dimensions(frames[0])
+
+    proc_width = min(source_width, max_processing_width)
+    proc_height = min(source_height, max_processing_height)
+
+    source_aspect = source_width / source_height
+    proc_aspect = proc_width / proc_height
+
+    if abs(source_aspect - proc_aspect) > 0.01:
+        if source_aspect > proc_aspect:
+            proc_height = int(proc_width / source_aspect)
+        else:
+            proc_width = int(proc_height * source_aspect)
+
+    proc_width = (proc_width // 8) * 8
+    proc_height = (proc_height // 8) * 8
+
+    if proc_width < source_width or proc_height < source_height:
+        print(f"  → Source resolution: {source_width}x{source_height}")
+        print(f"  → ProPainter internal processing: {proc_width}x{proc_height} (capped for VRAM)")
+    else:
+        print(f"  → Setting cleanplate resolution to {proc_width}x{proc_height}")
 
     with open(workflow_path) as f:
         workflow = json.load(f)
@@ -189,8 +223,8 @@ def update_cleanplate_resolution(
         if node.get("type") == "ProPainterInpaint":
             widgets = node.get("widgets_values", [])
             if len(widgets) >= 2:
-                widgets[0] = width
-                widgets[1] = height
+                widgets[0] = proc_width
+                widgets[1] = proc_height
                 node["widgets_values"] = widgets
             break
 
