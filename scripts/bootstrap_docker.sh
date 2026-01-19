@@ -157,8 +157,9 @@ python3 scripts/install_wizard_docker.py "$@"
 
 print_header "Installation Complete!"
 
+PROJECTS_DIR="$(dirname "$INSTALL_DIR")/vfx_projects"
 echo "Next steps:"
-echo "  1. Copy your video: cp video.mp4 ~/VFX-Projects/"
+echo "  1. Copy your video: cp video.mp4 $PROJECTS_DIR/"
 echo "  2. Run pipeline: ./scripts/run_docker.sh --name MyProject /workspace/projects/video.mp4"
 echo "  3. Read: $INSTALL_DIR/QUICKSTART.md"
 echo ""

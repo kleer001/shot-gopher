@@ -11,8 +11,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Model directory (default: ~/.vfx_pipeline/models)
-MODEL_DIR="${VFX_MODELS_DIR:-${HOME}/.vfx_pipeline/models}"
+# Get repo root directory (parent of scripts/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Model directory (default: <repo>/.vfx_pipeline/models)
+MODEL_DIR="${VFX_MODELS_DIR:-${REPO_ROOT}/.vfx_pipeline/models}"
 
 echo -e "${BLUE}=== VFX Ingest Platform - Model Downloader ===${NC}"
 echo -e "Models will be downloaded to: ${GREEN}${MODEL_DIR}${NC}"

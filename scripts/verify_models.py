@@ -5,8 +5,11 @@ import os
 import sys
 from pathlib import Path
 
-# Model directory - use environment variable or default
-MODEL_DIR = Path(os.environ.get("VFX_MODELS_DIR") or Path.home() / ".vfx_pipeline/models")
+# Get repo root (parent of scripts/)
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Model directory - use environment variable or default to repo-relative path
+MODEL_DIR = Path(os.environ.get("VFX_MODELS_DIR") or _REPO_ROOT / ".vfx_pipeline" / "models")
 
 REQUIRED_MODELS = {
     "sam3": {

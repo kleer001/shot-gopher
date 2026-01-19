@@ -11,11 +11,11 @@ services:
       - VFX_PROJECTS_DIR=/workspace/projects
     volumes:
       # Model storage (read-only for safety)
-      - ${HOME}/.vfx_pipeline/models:/models:ro
+      # Default: <repo>/.vfx_pipeline/models (set by run_docker.sh)
+      - ${VFX_MODELS_DIR:-./.vfx_pipeline/models}:/models:ro
       # Project workspace (read-write)
-      - ${HOME}/VFX-Projects:/workspace/projects
-      # Optional: mount specific project
-      # - ./my_project:/workspace/project
+      # Default: <repo>/../vfx_projects (set by run_docker.sh)
+      - ${VFX_PROJECTS_DIR:-../vfx_projects}:/workspace/projects
     ports:
       - "8188:8188"  # ComfyUI web interface
     stdin_open: true

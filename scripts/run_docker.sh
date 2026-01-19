@@ -10,9 +10,15 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Default paths
-MODELS_DIR="${VFX_MODELS_DIR:-${HOME}/.vfx_pipeline/models}"
-PROJECTS_DIR="${VFX_PROJECTS_DIR:-${HOME}/VFX-Projects}"
+# Get repo root directory (parent of scripts/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Default paths relative to repo (not home directory)
+# Models: <repo>/.vfx_pipeline/models/
+# Projects: <repo>/../vfx_projects/ (sibling to repo)
+MODELS_DIR="${VFX_MODELS_DIR:-${REPO_ROOT}/.vfx_pipeline/models}"
+PROJECTS_DIR="${VFX_PROJECTS_DIR:-$(dirname "$REPO_ROOT")/vfx_projects}"
 
 # Detect docker compose command (plugin vs standalone)
 if docker compose version > /dev/null 2>&1; then
@@ -52,6 +58,10 @@ if [ ! -d "$PROJECTS_DIR" ]; then
     echo -e "${YELLOW}Creating projects directory: $PROJECTS_DIR${NC}"
     mkdir -p "$PROJECTS_DIR"
 fi
+
+# Export paths for docker-compose volume mounts
+export VFX_MODELS_DIR="$MODELS_DIR"
+export VFX_PROJECTS_DIR="$PROJECTS_DIR"
 
 # Check if image exists
 if ! docker image inspect vfx-ingest:latest > /dev/null 2>&1; then

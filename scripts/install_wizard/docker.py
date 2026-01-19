@@ -6,8 +6,8 @@ This module provides Docker-specific functionality for the install wizard:
 - DockerModelDownloader: Full model downloads for Docker workflow
 - DockerWizard: Main Docker installation orchestrator
 
-The Docker wizard downloads the same models as the conda wizard, just to
-a different location (~/.vfx_pipeline/models/) for container mounting.
+The Docker wizard downloads the same models as the conda wizard, to
+<repo>/.vfx_pipeline/models/ for container mounting.
 
 Usage:
     from install_wizard.docker import DockerWizard
@@ -314,7 +314,7 @@ Verify in WSL2:
 class DockerCheckpointDownloader(CheckpointDownloader):
     """Checkpoint downloader configured for Docker's flat directory structure.
 
-    Docker mounts models from ~/.vfx_pipeline/models/ into the container,
+    Docker mounts models from <repo>/.vfx_pipeline/models/ into the container,
     using a flat structure rather than the nested ComfyUI layout.
 
     Inherits checkpoint source configs (URLs, auth, files) from base class
@@ -359,7 +359,8 @@ class DockerWizard:
 
     def __init__(self):
         self.repo_root = Path(__file__).parent.parent.parent
-        self.models_dir = Path.home() / ".vfx_pipeline" / "models"
+        self.models_dir = self.repo_root / ".vfx_pipeline" / "models"
+        self.projects_dir = self.repo_root.parent / "vfx_projects"
         self.state_file = self.models_dir / "docker_install_state.json"
 
         self.state_manager = DockerStateManager(self.state_file)
@@ -661,12 +662,12 @@ class DockerWizard:
             return True
 
         test_video = self.repo_root / "tests" / "fixtures" / "football_short.mp4"
-        projects_dir = Path.home() / "VFX-Projects"
+        projects_dir = self.projects_dir
         projects_dir.mkdir(parents=True, exist_ok=True)
 
         if test_video.exists():
             shutil.copy2(test_video, projects_dir / "football_short.mp4")
-            print_success("Test video copied to ~/VFX-Projects/")
+            print_success(f"Test video copied to {projects_dir}/")
         else:
             print_warning("Test video not found, skipping test")
             return True
@@ -706,7 +707,7 @@ class DockerWizard:
         print_header("Next Steps")
 
         print_info("Quick start:")
-        print("  1. Copy your video to ~/VFX-Projects/")
+        print(f"  1. Copy your video to {self.projects_dir}/")
         print("  2. Run:")
         print("     ./scripts/run_docker.sh --name MyProject /workspace/projects/video.mp4")
         print()
