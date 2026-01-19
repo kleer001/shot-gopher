@@ -1,0 +1,123 @@
+"""Matte and mask combination utilities.
+
+Functions for combining multiple matte/mask sequences into unified outputs.
+"""
+
+from pathlib import Path
+
+__all__ = [
+    "combine_mattes",
+    "combine_mask_sequences",
+]
+
+
+def combine_mattes(
+    input_dirs: list,
+    output_dir: Path,
+    output_prefix: str = "combined"
+) -> bool:
+    """Combine multiple matte directories into a single combined output.
+
+    Takes the maximum (union) of all mattes at each frame.
+
+    Args:
+        input_dirs: List of directories containing matte images
+        output_dir: Directory to write combined mattes
+        output_prefix: Prefix for output filenames
+
+    Returns:
+        True if successful, False otherwise
+    """
+    import cv2
+    import numpy as np
+
+    if not input_dirs:
+        print("  → No input directories to combine")
+        return False
+
+    first_dir = input_dirs[0]
+    frame_files = sorted(first_dir.glob("*.png"))
+    if not frame_files:
+        print(f"  → No PNG files found in {first_dir}")
+        return False
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    num_frames = len(frame_files)
+    print(f"  → Combining {len(input_dirs)} matte directories ({num_frames} frames)")
+
+    for frame_idx in range(num_frames):
+        combined = None
+
+        for input_dir in input_dirs:
+            dir_files = sorted(input_dir.glob("*.png"))
+            if frame_idx >= len(dir_files):
+                continue
+
+            frame_file = dir_files[frame_idx]
+            matte = cv2.imread(str(frame_file), cv2.IMREAD_GRAYSCALE)
+            if matte is None:
+                continue
+
+            if combined is None:
+                combined = matte.astype(np.float32)
+            else:
+                combined = np.maximum(combined, matte.astype(np.float32))
+
+        if combined is not None:
+            out_file = output_dir / f"{output_prefix}_{frame_idx:05d}_.png"
+            cv2.imwrite(str(out_file), combined.astype(np.uint8))
+
+        if (frame_idx + 1) % 50 == 0:
+            print(f"    Combined {frame_idx + 1}/{num_frames} frames...")
+
+    print(f"  → Combined mattes written to: {output_dir}")
+    return True
+
+
+def combine_mask_sequences(
+    source_dirs: list[Path],
+    output_dir: Path,
+    prefix: str = "combined"
+) -> int:
+    """Combine multiple mask sequences by OR-ing them together.
+
+    Args:
+        source_dirs: List of directories containing mask sequences
+        output_dir: Output directory for combined masks
+        prefix: Filename prefix for combined masks
+
+    Returns:
+        Number of frames processed
+    """
+    from PIL import Image
+    import numpy as np
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if not source_dirs:
+        return 0
+
+    frame_files = sorted(source_dirs[0].glob("*.png"))
+    if not frame_files:
+        return 0
+
+    count = 0
+    for i, frame_file in enumerate(frame_files):
+        combined = None
+        for src_dir in source_dirs:
+            src_files = sorted(src_dir.glob("*.png"))
+            if i < len(src_files):
+                img = Image.open(src_files[i]).convert('L')
+                arr = np.array(img)
+                if combined is None:
+                    combined = arr
+                else:
+                    combined = np.maximum(combined, arr)
+
+        if combined is not None:
+            out_name = f"{prefix}_{i+1:05d}.png"
+            result = Image.fromarray(combined)
+            result.save(output_dir / out_name)
+            count += 1
+
+    return count
