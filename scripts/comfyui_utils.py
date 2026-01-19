@@ -25,6 +25,32 @@ def check_comfyui_running(url: str = DEFAULT_COMFYUI_URL) -> bool:
         return False
 
 
+def free_comfyui_memory(url: str = DEFAULT_COMFYUI_URL, unload_models: bool = True) -> bool:
+    """Free ComfyUI memory by unloading cached models.
+
+    Calls ComfyUI's /free endpoint to release GPU memory.
+
+    Args:
+        url: ComfyUI API URL
+        unload_models: If True, unload all cached models from VRAM
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        data = json.dumps({"unload_models": unload_models}).encode("utf-8")
+        req = urllib.request.Request(
+            f"{url}/free",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=30) as response:
+            return response.status == 200
+    except Exception:
+        return False
+
+
 def get_node_definitions(comfyui_url: str = DEFAULT_COMFYUI_URL, retries: int = 3) -> dict:
     """Get node type definitions from ComfyUI's object_info endpoint.
 

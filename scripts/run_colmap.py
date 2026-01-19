@@ -17,16 +17,20 @@ Example:
 
 import argparse
 import json
+import os
+import re
 import shutil
+import sqlite3
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
 # Environment check - ensure correct conda environment is active
-from env_config import check_conda_env_or_warn
+from env_config import check_conda_env_or_warn, is_in_container
 
 # Log capture for debugging
 from log_manager import LogCapture
@@ -71,6 +75,86 @@ QUALITY_PRESETS = {
 }
 
 
+class VirtualDisplay:
+    """Context manager that starts Xvfb for headless GPU OpenGL support.
+
+    In container environments without a display, COLMAP's GPU SIFT extraction
+    needs an X server for OpenGL context. This starts a virtual framebuffer.
+    """
+
+    def __init__(self) -> None:
+        self._process: Optional[subprocess.Popen] = None
+        self._display: Optional[str] = None
+        self._env_modified: bool = False
+
+    def _needs_virtual_display(self) -> bool:
+        """Check if we need to start a virtual display."""
+        if not is_in_container():
+            return False
+        return not os.environ.get("DISPLAY")
+
+    def _find_free_display(self) -> Optional[int]:
+        """Find an unused display number."""
+        for display_num in range(99, 199):
+            lock_file = Path(f"/tmp/.X{display_num}-lock")
+            socket_file = Path(f"/tmp/.X11-unix/X{display_num}")
+            if not lock_file.exists() and not socket_file.exists():
+                return display_num
+        return None
+
+    def __enter__(self) -> "VirtualDisplay":
+        if not self._needs_virtual_display():
+            return self
+
+        display_num = self._find_free_display()
+        if display_num is None:
+            print("    Warning: No free display numbers (99-198), GPU may not work")
+            return self
+
+        self._display = f":{display_num}"
+
+        try:
+            self._process = subprocess.Popen(
+                ["Xvfb", self._display, "-screen", "0", "1024x768x24", "-nolisten", "tcp"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(0.5)
+            if self._process.poll() is not None:
+                print("    Warning: Xvfb failed to start, GPU may not work")
+                self._process = None
+            else:
+                os.environ["DISPLAY"] = self._display
+                self._env_modified = True
+                print(f"    Started virtual display {self._display} for GPU OpenGL")
+        except FileNotFoundError:
+            print("    Warning: Xvfb not found, GPU may not work in headless mode")
+            self._process = None
+
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[object],
+    ) -> bool:
+        if self._process:
+            try:
+                self._process.terminate()
+                self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+                self._process.wait()
+            except ProcessLookupError:
+                pass
+
+        if self._env_modified and "DISPLAY" in os.environ:
+            del os.environ["DISPLAY"]
+
+        return False
+
+
 def check_colmap_available() -> bool:
     """Check if COLMAP is installed and accessible."""
     try:
@@ -83,6 +167,102 @@ def check_colmap_available() -> bool:
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
+
+
+def diagnose_colmap_environment(verbose: bool = False) -> dict:
+    """Diagnose COLMAP installation and GPU support.
+
+    Returns:
+        Dict with diagnostic info: version, gpu_available, cuda_available, etc.
+    """
+    info = {
+        "colmap_available": False,
+        "gpu_sift_available": False,
+        "cuda_available": False,
+        "opengl_available": False,
+        "display_set": bool(os.environ.get("DISPLAY")),
+    }
+
+    try:
+        result = subprocess.run(
+            ["colmap", "feature_extractor", "--help"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            info["colmap_available"] = True
+            output = result.stdout + result.stderr
+            info["gpu_sift_available"] = "SiftExtraction.use_gpu" in output
+
+        if verbose:
+            print(f"    DIAG: COLMAP available: {info['colmap_available']}")
+            print(f"    DIAG: GPU SIFT option available: {info['gpu_sift_available']}")
+            print(f"    DIAG: DISPLAY={os.environ.get('DISPLAY', 'not set')}")
+
+        result = subprocess.run(
+            ["nvidia-smi", "-L"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            info["cuda_available"] = True
+            if verbose:
+                for line in result.stdout.strip().split('\n'):
+                    print(f"    DIAG: GPU: {line}")
+
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        if verbose:
+            print(f"    DIAG: Error during diagnosis: {e}")
+
+    return info
+
+
+def verify_database_has_features(database_path: Path, verbose: bool = False) -> tuple[int, int]:
+    """Verify COLMAP database has extracted features.
+
+    Args:
+        database_path: Path to COLMAP database.db
+        verbose: Print diagnostic information
+
+    Returns:
+        Tuple of (num_images_with_features, total_keypoints)
+    """
+    if not database_path.exists():
+        if verbose:
+            print(f"    DEBUG: Database does not exist: {database_path}")
+        return 0, 0
+
+    try:
+        conn = sqlite3.connect(str(database_path))
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM images")
+        num_images = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM keypoints")
+        num_keypoint_rows = cursor.fetchone()[0]
+
+        cursor.execute("SELECT SUM(rows) FROM keypoints WHERE rows IS NOT NULL")
+        result = cursor.fetchone()[0]
+        total_keypoints = result if result else 0
+
+        cursor.execute("SELECT COUNT(*) FROM descriptors")
+        num_descriptor_rows = cursor.fetchone()[0]
+
+        if verbose:
+            print(f"    DEBUG: Database path: {database_path}")
+            print(f"    DEBUG: Database size: {database_path.stat().st_size:,} bytes")
+            print(f"    DEBUG: images table: {num_images} rows")
+            print(f"    DEBUG: keypoints table: {num_keypoint_rows} rows")
+            print(f"    DEBUG: descriptors table: {num_descriptor_rows} rows")
+            print(f"    DEBUG: total keypoints (SUM): {total_keypoints}")
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+            print(f"    DEBUG: tables in database: {tables}")
+
+        conn.close()
+        return num_keypoint_rows, total_keypoints
+    except sqlite3.Error as e:
+        print(f"    Warning: Could not read database: {e}")
+        return 0, 0
 
 
 def run_colmap_command(
@@ -102,7 +282,6 @@ def run_colmap_command(
     Returns:
         CompletedProcess result
     """
-    import re
     cmd = ["colmap", command]
     for key, value in args.items():
         if value is True:
@@ -208,7 +387,8 @@ def extract_features(
     camera_model: str = "OPENCV",
     max_features: int = 8192,
     single_camera: bool = True,
-    mask_path: Optional[Path] = None
+    mask_path: Optional[Path] = None,
+    use_gpu: bool = True
 ) -> None:
     """Extract SIFT features from images.
 
@@ -219,22 +399,89 @@ def extract_features(
         max_features: Maximum features per image
         single_camera: If True, assume all images from same camera
         mask_path: Optional path to mask directory (excludes masked regions from feature extraction)
+        use_gpu: Whether to use GPU for SIFT extraction (falls back to CPU on failure)
     """
-    args = {
-        "database_path": str(database_path),
-        "image_path": str(image_path),
-        "ImageReader.camera_model": camera_model,
-        "ImageReader.single_camera": 1 if single_camera else 0,
-        "SiftExtraction.max_num_features": max_features,
-        "SiftExtraction.use_gpu": 1,
-    }
+    def _build_args(gpu: bool) -> dict:
+        """Build argument dict with specified GPU setting."""
+        args = {
+            "database_path": str(database_path),
+            "image_path": str(image_path),
+            "ImageReader.camera_model": camera_model,
+            "ImageReader.single_camera": 1 if single_camera else 0,
+            "SiftExtraction.max_num_features": max_features,
+            "SiftExtraction.use_gpu": 1 if gpu else 0,
+        }
+        if gpu:
+            args["SiftExtraction.gpu_index"] = "0"
+        if mask_path and mask_path.exists():
+            args["ImageReader.mask_path"] = str(mask_path)
+        return args
 
-    # Add mask path if provided (excludes dynamic regions from feature extraction)
     if mask_path and mask_path.exists():
-        args["ImageReader.mask_path"] = str(mask_path)
         print(f"    Using masks from: {mask_path}")
 
-    run_colmap_command("feature_extractor", args, "Extracting features")
+    def _check_features_extracted() -> bool:
+        """Check if any features were actually extracted."""
+        if not database_path.exists():
+            return False
+        try:
+            conn = sqlite3.connect(str(database_path))
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM keypoints")
+            count = cursor.fetchone()[0]
+            conn.close()
+            return count > 0
+        except sqlite3.Error:
+            return False
+
+    def _run_extraction_with_fallback() -> str:
+        """Run extraction with GPU->CPU fallback. Returns last COLMAP output."""
+        last_output = ""
+
+        if use_gpu:
+            try:
+                args = _build_args(gpu=True)
+                result = run_colmap_command("feature_extractor", args, "Extracting features (GPU)")
+                last_output = result.stdout
+                if not _check_features_extracted():
+                    print("    GPU extraction produced no features, retrying with CPU...")
+                    if database_path.exists():
+                        database_path.unlink()
+                    args = _build_args(gpu=False)
+                    result = run_colmap_command("feature_extractor", args, "Extracting features (CPU)")
+                    last_output = result.stdout
+            except subprocess.CalledProcessError as e:
+                error_output = str(e.stdout) if hasattr(e, 'stdout') and e.stdout else str(e)
+                last_output = error_output
+                is_gpu_error = (
+                    "context" in error_output.lower()
+                    or "opengl" in error_output.lower()
+                    or e.returncode < 0
+                )
+                if is_gpu_error:
+                    print("    GPU feature extraction failed (OpenGL context error), falling back to CPU...")
+                    if database_path.exists():
+                        database_path.unlink()
+                    args = _build_args(gpu=False)
+                    result = run_colmap_command("feature_extractor", args, "Extracting features (CPU)")
+                    last_output = result.stdout
+                else:
+                    raise
+        else:
+            args = _build_args(gpu=False)
+            result = run_colmap_command("feature_extractor", args, "Extracting features (CPU)")
+            last_output = result.stdout
+
+        return last_output
+
+    colmap_output = _run_extraction_with_fallback()
+
+    if not _check_features_extracted():
+        print("    WARNING: Feature extraction completed but database is empty!")
+        print("    Last 1500 chars of COLMAP output:")
+        print("-" * 60)
+        print(colmap_output[-1500:] if colmap_output else "(no output captured)")
+        print("-" * 60)
 
 
 def match_features(
@@ -283,8 +530,14 @@ def match_features(
         try:
             _run_matcher(gpu=True)
         except subprocess.CalledProcessError as e:
-            # Check for GPU SIFT initialization failure
-            if "max_num_matches" in str(e.stdout) or "sift.cc" in str(e.stdout):
+            error_output = str(e.stdout) if hasattr(e, 'stdout') and e.stdout else str(e)
+            is_gpu_error = (
+                "context" in error_output.lower()
+                or "opengl" in error_output.lower()
+                or "sift" in error_output.lower()
+                or e.returncode < 0
+            )
+            if is_gpu_error:
                 print("    GPU SIFT matching failed, falling back to CPU...")
                 _run_matcher(gpu=False)
             else:
@@ -733,7 +986,6 @@ def cubic_bezier(p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray,
 
 def extract_frame_number(filename: str) -> int:
     """Extract frame number from filename like 'frame_0001.png' or 'depth_00001.png'."""
-    import re
     match = re.search(r'(\d+)', filename)
     if match:
         return int(match.group(1))
@@ -1058,6 +1310,7 @@ def run_colmap_pipeline(
         print("  Conda: conda install -c conda-forge colmap", file=sys.stderr)
         return False
 
+    diag = diagnose_colmap_environment(verbose=True)
     preset = QUALITY_PRESETS.get(quality, QUALITY_PRESETS["medium"])
 
     frames_dir = project_dir / "source" / "frames"
@@ -1077,9 +1330,10 @@ def run_colmap_pipeline(
     print(f"Project: {project_dir}")
     print(f"Frames: {frame_count}")
     print(f"Quality: {quality}")
+    print(f"Mode: GPU (with CPU fallback)")
     if quality == "slow":
-        print(f"  ⚠️  Slow-camera mode: Using aggressive settings for minimal motion")
-        print(f"      Note: Results may be jittery due to low parallax")
+        print(f"  Warning: Slow-camera mode uses aggressive settings for minimal motion")
+        print(f"           Results may be jittery due to low parallax")
 
     # Check for segmentation masks
     mask_dir = project_dir / "roto"
@@ -1112,97 +1366,118 @@ def run_colmap_pipeline(
     if dense_path.exists():
         shutil.rmtree(dense_path)
 
-    try:
-        # Feature extraction
-        print("[1/4] Feature Extraction")
-        extract_features(
-            database_path=database_path,
-            image_path=frames_dir,
-            camera_model=camera_model,
-            max_features=preset["sift_max_features"],
-            single_camera=True,
-            mask_path=mask_path,
-        )
+    with VirtualDisplay():
+        try:
+            # Debug: List actual image files
+            image_files = sorted(
+                list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg")) + list(frames_dir.glob("*.jpeg"))
+            )
+            print(f"    Image path: {frames_dir}")
+            print(f"    Found {len(image_files)} image files")
+            if image_files:
+                print(f"    First: {image_files[0].name}, Last: {image_files[-1].name}")
 
-        # Feature matching
-        print("\n[2/4] Feature Matching")
-        match_features(
-            database_path=database_path,
-            matcher_type=preset["matcher"],
-            sequential_overlap=preset.get("sequential_overlap", 10),
-        )
-
-        # Sparse reconstruction
-        print("\n[3/4] Sparse Reconstruction")
-        if not run_sparse_reconstruction(
-            database_path=database_path,
-            image_path=frames_dir,
-            output_path=sparse_path,
-            refine_focal=preset["ba_refine_focal"],
-            min_tri_angle=preset.get("min_tri_angle", 1.5),
-            min_num_inliers=preset.get("min_num_inliers", 15),
-        ):
-            print("Sparse reconstruction failed", file=sys.stderr)
-            return False
-
-        # Export camera data
-        print("\n[4/4] Exporting Camera Data")
-        camera_dir = project_dir / "camera"
-        sparse_model = sparse_path / "0"
-        if not export_colmap_to_pipeline_format(
-            sparse_model,
-            camera_dir,
-            total_frames=frame_count,
-            max_gap=max_gap,
-        ):
-            print("Camera export failed", file=sys.stderr)
-            return False
-
-        # Optional: Dense reconstruction
-        if run_dense:
-            print("\n[Dense] Running Dense Reconstruction")
-            if run_dense_reconstruction(
+            # Feature extraction
+            print("[1/4] Feature Extraction")
+            extract_features(
+                database_path=database_path,
                 image_path=frames_dir,
-                sparse_path=sparse_model,
-                output_path=dense_path,
-                max_image_size=preset["dense_max_size"],
+                camera_model=camera_model,
+                max_features=preset["sift_max_features"],
+                single_camera=True,
+                mask_path=mask_path,
+                use_gpu=True,
+            )
+
+            # Verify features were extracted
+            num_images, total_keypoints = verify_database_has_features(database_path)
+            if num_images == 0 or total_keypoints == 0:
+                print(f"    Error: No features extracted from images", file=sys.stderr)
+                verify_database_has_features(database_path, verbose=True)
+                print(f"    This can happen if images are too small, dark, or featureless", file=sys.stderr)
+                return False
+            print(f"    Extracted {total_keypoints:,} keypoints from {num_images} images")
+
+            # Feature matching
+            print("\n[2/4] Feature Matching")
+            match_features(
+                database_path=database_path,
+                matcher_type=preset["matcher"],
+                sequential_overlap=preset.get("sequential_overlap", 10),
+                use_gpu=True,
+            )
+
+            # Sparse reconstruction
+            print("\n[3/4] Sparse Reconstruction")
+            if not run_sparse_reconstruction(
+                database_path=database_path,
+                image_path=frames_dir,
+                output_path=sparse_path,
+                refine_focal=preset["ba_refine_focal"],
+                min_tri_angle=preset.get("min_tri_angle", 1.5),
+                min_num_inliers=preset.get("min_num_inliers", 15),
             ):
-                # Copy point cloud to project
-                if (dense_path / "fused.ply").exists():
-                    shutil.copy(
-                        dense_path / "fused.ply",
-                        project_dir / "camera" / "pointcloud.ply"
-                    )
-                    print(f"    Point cloud saved to camera/pointcloud.ply")
-            else:
-                print("    Dense reconstruction failed (continuing)", file=sys.stderr)
+                print("Sparse reconstruction failed", file=sys.stderr)
+                return False
 
-        # Optional: Mesh generation
-        if run_mesh and run_dense:
-            print("\n[Mesh] Generating Mesh")
-            mesh_path = project_dir / "camera" / "mesh.ply"
-            if run_mesh_reconstruction(dense_path, mesh_path):
-                print(f"    Mesh saved to camera/mesh.ply")
-            else:
-                print("    Mesh generation failed (continuing)", file=sys.stderr)
+            # Export camera data
+            print("\n[4/4] Exporting Camera Data")
+            camera_dir = project_dir / "camera"
+            sparse_model = sparse_path / "0"
+            if not export_colmap_to_pipeline_format(
+                sparse_model,
+                camera_dir,
+                total_frames=frame_count,
+                max_gap=max_gap,
+            ):
+                print("Camera export failed", file=sys.stderr)
+                return False
 
-        print(f"\n{'='*60}")
-        print(f"COLMAP Reconstruction Complete")
-        print(f"{'='*60}")
-        print(f"Sparse model: {sparse_model}")
-        print(f"Camera data: {camera_dir}")
-        if run_dense:
-            print(f"Dense model: {dense_path}")
-        print()
+            # Optional: Dense reconstruction
+            if run_dense:
+                print("\n[Dense] Running Dense Reconstruction")
+                if run_dense_reconstruction(
+                    image_path=frames_dir,
+                    sparse_path=sparse_model,
+                    output_path=dense_path,
+                    max_image_size=preset["dense_max_size"],
+                ):
+                    # Copy point cloud to project
+                    if (dense_path / "fused.ply").exists():
+                        shutil.copy(
+                            dense_path / "fused.ply",
+                            project_dir / "camera" / "pointcloud.ply"
+                        )
+                        print(f"    Point cloud saved to camera/pointcloud.ply")
+                else:
+                    print("    Dense reconstruction failed (continuing)", file=sys.stderr)
 
-        return True
+            # Optional: Mesh generation
+            if run_mesh and run_dense:
+                print("\n[Mesh] Generating Mesh")
+                mesh_path = project_dir / "camera" / "mesh.ply"
+                if run_mesh_reconstruction(dense_path, mesh_path):
+                    print(f"    Mesh saved to camera/mesh.ply")
+                else:
+                    print("    Mesh generation failed (continuing)", file=sys.stderr)
 
-    except subprocess.CalledProcessError as e:
-        print(f"\nCOLMAP command failed: {e}", file=sys.stderr)
-        return False
-    except subprocess.TimeoutExpired:
-        print(f"\nCOLMAP command timed out", file=sys.stderr)
-        return False
+            print(f"\n{'='*60}")
+            print(f"COLMAP Reconstruction Complete")
+            print(f"{'='*60}")
+            print(f"Sparse model: {sparse_model}")
+            print(f"Camera data: {camera_dir}")
+            if run_dense:
+                print(f"Dense model: {dense_path}")
+            print()
+
+            return True
+
+        except subprocess.CalledProcessError as e:
+            print(f"\nCOLMAP command failed: {e}", file=sys.stderr)
+            return False
+        except subprocess.TimeoutExpired:
+            print(f"\nCOLMAP command timed out", file=sys.stderr)
+            return False
 
 
 def main():
