@@ -371,10 +371,30 @@ def extract_features(
     if mask_path and mask_path.exists():
         print(f"    Using masks from: {mask_path}")
 
+    def _check_features_extracted() -> bool:
+        """Check if any features were actually extracted."""
+        if not database_path.exists():
+            return False
+        try:
+            conn = sqlite3.connect(str(database_path))
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM keypoints")
+            count = cursor.fetchone()[0]
+            conn.close()
+            return count > 0
+        except sqlite3.Error:
+            return False
+
     if use_gpu:
         try:
             args = _build_args(gpu=True)
             run_colmap_command("feature_extractor", args, "Extracting features (GPU)")
+            if not _check_features_extracted():
+                print("    GPU extraction produced no features, retrying with CPU...")
+                if database_path.exists():
+                    database_path.unlink()
+                args = _build_args(gpu=False)
+                run_colmap_command("feature_extractor", args, "Extracting features (CPU)")
         except subprocess.CalledProcessError as e:
             error_output = str(e.stdout) if hasattr(e, 'stdout') and e.stdout else str(e)
             if "context" in error_output.lower() or "opengl" in error_output.lower() or e.returncode < 0:
