@@ -28,6 +28,7 @@ REQUIRED_MODELS=(
     "/models/sam3"
     "/models/videodepthanything"
     "/models/wham"
+    "/models/matanyone"
 )
 
 MISSING_MODELS=0
@@ -43,6 +44,24 @@ done
 if [ $MISSING_MODELS -eq 1 ]; then
     echo -e "${YELLOW}Some models are missing. Pipeline may fail on certain stages.${NC}"
     echo "Run model download script on host: ./scripts/download_models.sh"
+fi
+
+# Symlink models to locations expected by custom nodes
+echo -e "${YELLOW}Linking models to custom node paths...${NC}"
+
+# MatAnyone expects checkpoint in its own directory
+MATANYONE_SRC="/models/matanyone/matanyone.pth"
+MATANYONE_DST="/app/.vfx_pipeline/ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint"
+if [ -f "$MATANYONE_SRC" ]; then
+    mkdir -p "$MATANYONE_DST"
+    if [ ! -e "$MATANYONE_DST/matanyone.pth" ]; then
+        ln -sf "$MATANYONE_SRC" "$MATANYONE_DST/matanyone.pth"
+        echo -e "${GREEN}  ✓ Linked MatAnyone model${NC}"
+    else
+        echo -e "${GREEN}  ✓ MatAnyone model already linked${NC}"
+    fi
+else
+    echo -e "${YELLOW}  WARNING: MatAnyone model not found at $MATANYONE_SRC${NC}"
 fi
 
 # Start ComfyUI in background if requested
