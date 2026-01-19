@@ -31,6 +31,7 @@ from pipeline_constants import (
 )
 from pipeline_utils import (
     clear_gpu_memory,
+    clear_output_directory,
     extract_frames,
     get_video_info,
     generate_preview_movie,
@@ -93,6 +94,7 @@ def run_pipeline(
     roto_prompt: Optional[str] = None,
     separate_instances: bool = False,
     auto_movie: bool = False,
+    overwrite: bool = True,
 ) -> bool:
     """Run the full VFX pipeline.
 
@@ -114,6 +116,7 @@ def run_pipeline(
         roto_prompt: Segmentation prompt (default: 'person')
         separate_instances: Separate multi-person masks into individual instances
         auto_movie: Generate preview MP4s from completed image sequences
+        overwrite: Clear existing output before running stages (default: True)
 
     Returns:
         True if all stages successful
@@ -235,6 +238,8 @@ def run_pipeline(
         elif skip_existing and list(depth_dir.glob("*.png")):
             print("  → Skipping (depth maps exist)")
         else:
+            if overwrite:
+                clear_output_directory(depth_dir)
             if not run_comfyui_workflow(
                 workflow_path, comfyui_url,
                 output_dir=depth_dir,
@@ -260,8 +265,8 @@ def run_pipeline(
         elif skip_existing and (list(roto_dir.glob("*.png")) or list(roto_dir.glob("*/*.png"))):
             print("  → Skipping (masks exist)")
         else:
-            for old_file in roto_dir.glob("*.png"):
-                old_file.unlink()
+            if overwrite:
+                clear_output_directory(roto_dir)
 
             prompts = [p.strip() for p in (roto_prompt or "person").split(",")]
             prompts = [p for p in prompts if p]
@@ -343,6 +348,11 @@ def run_pipeline(
         elif not person_dirs:
             print("  → Skipping (no person masks found in roto/)")
         else:
+            if overwrite:
+                clear_output_directory(matte_dir)
+                if combined_dir.exists():
+                    clear_output_directory(combined_dir)
+
             output_dirs = []
 
             for i, person_dir in enumerate(person_dirs):
@@ -412,6 +422,9 @@ def run_pipeline(
             elif skip_existing and list(cleanplate_dir.glob("*.png")):
                 print("  → Skipping (cleanplates exist)")
             else:
+                if overwrite:
+                    clear_output_directory(cleanplate_dir)
+
                 for old_file in roto_dir.glob("*.png"):
                     old_file.unlink()
 
@@ -636,6 +649,11 @@ def main():
         action="store_true",
         help="Generate preview MP4s from completed image sequences (depth, roto, cleanplate)"
     )
+    parser.add_argument(
+        "--no-overwrite",
+        action="store_true",
+        help="Keep existing output files instead of clearing them before running stages"
+    )
 
     args = parser.parse_args()
 
@@ -681,6 +699,7 @@ def main():
         roto_prompt=args.prompt,
         separate_instances=args.separate_instances,
         auto_movie=args.auto_movie,
+        overwrite=not args.no_overwrite,
     )
 
     sys.exit(0 if success else 1)

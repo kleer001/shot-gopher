@@ -19,7 +19,39 @@ __all__ = [
     "generate_preview_movie",
     "get_image_dimensions",
     "clear_gpu_memory",
+    "clear_output_directory",
 ]
+
+
+def clear_output_directory(output_dir: Path) -> int:
+    """Clear existing files from output directory to prevent accumulation.
+
+    Completely removes the directory and recreates it empty to ensure
+    no stale files remain and ComfyUI counters reset properly.
+
+    Args:
+        output_dir: Path to the output directory
+
+    Returns:
+        Number of files that were in the directory
+    """
+    import shutil
+
+    print(f"  → Output directory: {output_dir}")
+
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return 0
+
+    file_count = sum(1 for _ in output_dir.rglob("*") if _.is_file())
+
+    shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if file_count > 0:
+        print(f"  → Cleared directory ({file_count} files removed)")
+
+    return file_count
 
 
 def clear_gpu_memory(comfyui_url: str = None) -> None:
