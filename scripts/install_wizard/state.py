@@ -28,7 +28,12 @@ class InstallationStateManager:
 
         try:
             with open(self.state_file, 'r') as f:
-                return json.load(f)
+                loaded_state = json.load(f)
+            initial_state = self._create_initial_state()
+            for key, value in initial_state.items():
+                if key not in loaded_state:
+                    loaded_state[key] = value
+            return loaded_state
         except (json.JSONDecodeError, IOError):
             print_warning(f"Could not load state from {self.state_file}, creating new state")
             return self._create_initial_state()
