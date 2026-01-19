@@ -73,7 +73,7 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/comfyui_ingest/main/script
 
 **Prerequisites:** NVIDIA GPU with driver, Docker with nvidia-container-toolkit
 
-**Run:** `./scripts/run_docker.sh /workspace/projects/video.mp4 --name MyProject`
+**Run:** `./scripts/run_docker.sh --name MyProject /workspace/projects/video.mp4`
 
 ---
 
@@ -122,7 +122,7 @@ After installation, you're ready to process your first video. The pipeline suppo
 
 ```bash
 # Docker
-./scripts/run_docker.sh video.mp4 --name MyProject --stages all
+./scripts/run_docker.sh --name MyProject --stages all video.mp4
 
 # Conda
 python scripts/run_pipeline.py video.mp4 -s ingest,depth,roto,cleanplate,colmap,camera

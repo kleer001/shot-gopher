@@ -159,6 +159,6 @@ print_header "Installation Complete!"
 
 echo "Next steps:"
 echo "  1. Copy your video: cp video.mp4 ~/VFX-Projects/"
-echo "  2. Run pipeline: ./scripts/run_docker.sh /workspace/projects/video.mp4 --name MyProject"
+echo "  2. Run pipeline: ./scripts/run_docker.sh --name MyProject /workspace/projects/video.mp4"
 echo "  3. Read: $INSTALL_DIR/QUICKSTART.md"
 echo ""

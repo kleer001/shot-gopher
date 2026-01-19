@@ -110,9 +110,9 @@ cp /path/to/your/video.mp4 ~/VFX-Projects/
 
 # Run pipeline
 ./scripts/run_docker.sh \
-  /workspace/projects/video.mp4 \
   --name MyProject \
-  --stages all
+  --stages all \
+  /workspace/projects/video.mp4
 ```
 
 ### Available Stages
@@ -122,9 +122,9 @@ cp /path/to/your/video.mp4 ~/VFX-Projects/
 ./scripts/run_docker.sh --list-stages
 
 # Common workflows:
-./scripts/run_docker.sh /workspace/projects/video.mp4 --name Test --stages depth,roto
-./scripts/run_docker.sh /workspace/projects/video.mp4 --name Test --stages colmap,camera
-./scripts/run_docker.sh /workspace/projects/video.mp4 --name Test --stages all
+./scripts/run_docker.sh --name Test --stages depth,roto /workspace/projects/video.mp4
+./scripts/run_docker.sh --name Test --stages colmap,camera /workspace/projects/video.mp4
+./scripts/run_docker.sh --name Test --stages all /workspace/projects/video.mp4
 ```
 
 ### Use ComfyUI Web Interface
@@ -291,13 +291,13 @@ python3 tests/test_phase_1_complete.py
 **Try different stages:**
 ```bash
 # Depth only
-./scripts/run_docker.sh /workspace/projects/video.mp4 --name Test --stages depth
+./scripts/run_docker.sh --name Test --stages depth /workspace/projects/video.mp4
 
 # Segmentation with custom prompt
-./scripts/run_docker.sh /workspace/projects/video.mp4 --name Test --stages roto --prompt "person, car"
+./scripts/run_docker.sh --name Test --stages roto --prompt "person, car" /workspace/projects/video.mp4
 
 # Camera tracking
-./scripts/run_docker.sh /workspace/projects/video.mp4 --name Test --stages colmap,camera
+./scripts/run_docker.sh --name Test --stages colmap,camera /workspace/projects/video.mp4
 ```
 
 **Access ComfyUI workflows:**

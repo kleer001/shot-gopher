@@ -193,7 +193,7 @@ try {
     Write-Host "Next steps:" -ForegroundColor Cyan
     Write-Host "  1. Access WSL: wsl -d Ubuntu-22.04" -ForegroundColor White
     Write-Host "  2. Navigate to: cd ~/comfyui_ingest" -ForegroundColor White
-    Write-Host "  3. Run pipeline: ./scripts/run_docker.sh /workspace/projects/video.mp4 --name MyProject" -ForegroundColor White
+    Write-Host "  3. Run pipeline: ./scripts/run_docker.sh --name MyProject /workspace/projects/video.mp4" -ForegroundColor White
     Write-Host ""
     Write-Host "Projects are saved in WSL at: ~/VFX-Projects/" -ForegroundColor Cyan
     Write-Host "Access from Windows at: \\wsl$\Ubuntu-22.04\home\<username>\VFX-Projects\" -ForegroundColor Cyan
