@@ -64,6 +64,16 @@ RUN for dir in */; do \
         fi; \
     done
 
+# Install SAM3 GPU-accelerated NMS (speeds up video tracking 5-10x)
+# Only attempt if nvcc (CUDA compiler) is available
+RUN cd ComfyUI-SAM3 && \
+    if command -v nvcc >/dev/null 2>&1; then \
+        echo "CUDA toolkit found, installing SAM3 GPU NMS..." && \
+        python3 install.py; \
+    else \
+        echo "Skipping SAM3 GPU NMS (nvcc not available - will use CPU fallback at runtime)"; \
+    fi
+
 WORKDIR /app
 
 # Stage 4: Pipeline scripts
@@ -88,7 +98,8 @@ ENV CONTAINER=true \
     VFX_INSTALL_DIR=/app/.vfx_pipeline \
     VFX_MODELS_DIR=/models \
     VFX_PROJECTS_DIR=/workspace/projects \
-    COMFYUI_OUTPUT_DIR=/workspace
+    COMFYUI_OUTPUT_DIR=/workspace \
+    QT_QPA_PLATFORM=offscreen
 
 # Expose ports
 EXPOSE 8188

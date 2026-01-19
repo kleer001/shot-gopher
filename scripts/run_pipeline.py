@@ -14,6 +14,7 @@ Example:
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -36,21 +37,33 @@ from comfyui_manager import ensure_comfyui, stop_comfyui, kill_all_comfyui_proce
 WORKFLOW_TEMPLATES_DIR = Path(__file__).parent.parent / "workflow_templates"
 
 
-def clear_gpu_memory() -> None:
+def clear_gpu_memory(comfyui_url: str = None) -> None:
     """Clear GPU VRAM to free memory after a stage completes.
 
     This helps prevent out-of-memory errors when running multiple
-    GPU-intensive stages sequentially. Safe to call even if CUDA
-    is not available.
+    GPU-intensive stages sequentially. Unloads ComfyUI's cached models
+    and clears PyTorch's CUDA cache.
+
+    Args:
+        comfyui_url: ComfyUI API URL for model unloading (optional)
     """
+    from comfyui_utils import free_comfyui_memory, DEFAULT_COMFYUI_URL
+
+    url = comfyui_url or DEFAULT_COMFYUI_URL
+    models_freed = free_comfyui_memory(url, unload_models=True)
+
     try:
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
-            print("  → Cleared GPU memory")
+            if models_freed:
+                print("  → Cleared GPU memory (models unloaded)")
+            else:
+                print("  → Cleared GPU memory")
     except ImportError:
-        pass  # torch not installed, skip
+        if models_freed:
+            print("  → Cleared GPU memory (models unloaded)")
     except Exception as e:
         print(f"  → Warning: Could not clear GPU memory: {e}")
 
@@ -511,8 +524,13 @@ def get_comfyui_output_dir() -> Path:
 
     This must match the --output-directory argument passed to ComfyUI in comfyui_manager.py.
     """
-    from env_config import INSTALL_DIR
-    # ComfyUI is started with: --output-directory <INSTALL_DIR.parent.parent>
+    from env_config import INSTALL_DIR, is_in_container
+    # Container-aware: use COMFYUI_OUTPUT_DIR environment variable if in container
+    # (same logic as comfyui_manager.py start_comfyui())
+    if is_in_container():
+        return Path(os.environ.get("COMFYUI_OUTPUT_DIR", "/workspace"))
+    # ComfyUI is started with: --output-directory <COMFYUI_DIR.parent.parent.parent>
+    # where COMFYUI_DIR = INSTALL_DIR / "ComfyUI"
     # See comfyui_manager.py start_comfyui()
     return INSTALL_DIR.parent.parent
 
@@ -1186,9 +1204,8 @@ def run_pipeline(
                     stage_name=f"matanyone ({person_dir.name})" if len(person_dirs) > 1 else "matanyone",
                 ):
                     print(f"  → MatAnyone stage failed for {person_dir.name}", file=sys.stderr)
-                    # Continue with other instances instead of failing completely
-                    if len(person_dirs) == 1:
-                        return False
+                    print(f"    (cleanplate will use raw roto masks instead)", file=sys.stderr)
+                    # Non-fatal: continue to next stage, cleanplate can use raw masks
 
             # Combine all refined mattes into roto/combined/
             valid_output_dirs = [d for d in output_dirs if d.exists() and list(d.glob("*.png"))]
