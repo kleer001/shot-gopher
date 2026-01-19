@@ -74,19 +74,26 @@ STAGES = {
 STAGE_ORDER = ["ingest", "depth", "roto", "matanyone", "cleanplate", "colmap", "mocap", "gsir", "camera"]
 
 
+STAGES_REQUIRING_FRAMES = {"depth", "roto", "matanyone", "cleanplate", "colmap", "mocap", "gsir", "camera"}
+
+
 def sanitize_stages(stages: list[str]) -> list[str]:
-    """Deduplicate and reorder stages according to pipeline dependencies.
+    """Deduplicate, inject dependencies, and reorder stages.
+
+    Automatically adds 'ingest' if any frame-dependent stage is requested,
+    ensuring frames are extracted before processing.
 
     Args:
         stages: List of stage names (may have duplicates or wrong order)
 
     Returns:
-        Deduplicated list in correct execution order
+        Deduplicated list in correct execution order with dependencies
     """
-    # Deduplicate while preserving which stages were requested
     requested = set(stages)
 
-    # Return in correct order, only including requested stages
+    if requested & STAGES_REQUIRING_FRAMES:
+        requested.add("ingest")
+
     return [s for s in STAGE_ORDER if s in requested]
 
 
