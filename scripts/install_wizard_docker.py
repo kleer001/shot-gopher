@@ -21,9 +21,9 @@ Automates Docker setup for Linux and Windows/WSL2:
 Usage:
     python scripts/install_wizard_docker.py
     python scripts/install_wizard_docker.py --check-only
-    python scripts/install_wizard_docker.py --skip-test
-    python scripts/install_wizard_docker.py --yolo  # Non-interactive full install
-    python scripts/install_wizard_docker.py --resume # Resume interrupted install
+    python scripts/install_wizard_docker.py --test       # Run test pipeline after install
+    python scripts/install_wizard_docker.py --yolo       # Non-interactive full install
+    python scripts/install_wizard_docker.py --resume     # Resume interrupted install
 """
 
 import argparse
@@ -43,7 +43,7 @@ def main():
 Examples:
     python scripts/install_wizard_docker.py                  # Interactive install
     python scripts/install_wizard_docker.py --check-only     # Check prerequisites only
-    python scripts/install_wizard_docker.py --skip-test      # Skip test pipeline
+    python scripts/install_wizard_docker.py --test           # Run test pipeline after install
     python scripts/install_wizard_docker.py --yolo           # Non-interactive full install
     python scripts/install_wizard_docker.py --resume         # Resume interrupted install
 
@@ -57,9 +57,9 @@ Note: You can also use the unified wizard with --docker flag:
         help="Only check prerequisites without installing"
     )
     parser.add_argument(
-        "--skip-test",
+        "--test", "-t",
         action="store_true",
-        help="Skip test pipeline execution"
+        help="Run test pipeline after installation"
     )
     parser.add_argument(
         "--yolo", "-y",
@@ -77,7 +77,7 @@ Note: You can also use the unified wizard with --docker flag:
     wizard = DockerWizard()
     wizard.interactive_install(
         check_only=args.check_only,
-        skip_test=args.skip_test,
+        run_test=args.test,
         yolo=args.yolo,
         resume=args.resume
     )
