@@ -64,13 +64,13 @@ Or use the wrapper script which builds automatically:
 Using wrapper script (recommended):
 ```bash
 ./scripts/run_docker.sh --help
-./scripts/run_docker.sh --input video.mp4 --name MyProject --stages depth,roto
+./scripts/run_docker.sh video.mp4 --name MyProject --stages depth,roto
 ```
 
 Or directly with docker-compose:
 ```bash
 docker-compose run --rm vfx-ingest --help
-docker-compose run --rm vfx-ingest --input /workspace/video.mp4 --name MyProject
+docker-compose run --rm vfx-ingest /workspace/video.mp4 --name MyProject
 ```
 
 ## Directory Structure
@@ -117,13 +117,13 @@ volumes:
 ```bash
 # Full pipeline (all stages)
 ./scripts/run_docker.sh \
-  --input ~/Videos/shot001.mp4 \
+  ~/Videos/shot001.mp4 \
   --name Shot001 \
   --stages all
 
 # Specific stages
 ./scripts/run_docker.sh \
-  --input ~/Videos/shot001.mp4 \
+  ~/Videos/shot001.mp4 \
   --name Shot001 \
   --stages ingest,depth,roto
 ```
@@ -133,14 +133,14 @@ volumes:
 ```bash
 # COLMAP camera tracking
 ./scripts/run_docker.sh \
-  --input ~/Videos/shot001.mp4 \
+  ~/Videos/shot001.mp4 \
   --name Shot001 \
   --stages ingest,colmap \
   --colmap-quality high
 
 # Custom segmentation prompt
 ./scripts/run_docker.sh \
-  --input ~/Videos/shot001.mp4 \
+  ~/Videos/shot001.mp4 \
   --name Shot001 \
   --stages roto \
   --prompt "person, car"
@@ -217,7 +217,7 @@ ls -ld ~/VFX-Projects
 
 # Or process fewer frames
 ./scripts/run_docker.sh \
-  --input video.mp4 \
+  video.mp4 \
   --name Test \
   --stages depth \
   --skip-existing  # Skip already-processed stages
@@ -267,7 +267,7 @@ cp tests/fixtures/football_short.mp4 ~/VFX-Projects/
 
 # Test with Football CIF
 ./scripts/run_docker.sh \
-  --input /workspace/projects/football_short.mp4 \
+  /workspace/projects/football_short.mp4 \
   --name FootballTest \
   --stages ingest,depth
 ```
@@ -332,10 +332,10 @@ Already using local conda installation? Both work simultaneously:
 ```bash
 # Local conda (as before)
 conda activate vfx-pipeline
-python scripts/run_pipeline.py --input video.mp4 --name Local
+python scripts/run_pipeline.py video.mp4 --name Local
 
 # Docker (new)
-./scripts/run_docker.sh --input video.mp4 --name Docker
+./scripts/run_docker.sh video.mp4 --name Docker
 ```
 
 Projects are compatible - you can process with Docker and view with local tools.

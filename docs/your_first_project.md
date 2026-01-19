@@ -24,7 +24,7 @@ python scripts/run_pipeline.py --help
 Process a video file with all pipeline stages:
 
 ```bash
-./scripts/run_docker.sh --input /path/to/video.mp4 --name MyFirstProject --stages all
+./scripts/run_docker.sh /path/to/video.mp4 --name MyFirstProject --stages all
 ```
 
 This will:
@@ -43,7 +43,7 @@ This will:
 Run only depth estimation and segmentation:
 
 ```bash
-./scripts/run_docker.sh --input /path/to/video.mp4 --name MyProject --stages depth,roto
+./scripts/run_docker.sh /path/to/video.mp4 --name MyProject --stages depth,roto
 ```
 
 ### Common Workflows
@@ -51,7 +51,7 @@ Run only depth estimation and segmentation:
 **Quick preview** (depth and segmentation only):
 ```bash
 ./scripts/run_docker.sh \
-  --input ~/Videos/test_shot.mp4 \
+  ~/Videos/test_shot.mp4 \
   --name TestShot \
   --stages ingest,depth,roto
 ```
@@ -59,15 +59,15 @@ Run only depth estimation and segmentation:
 **Full VFX prep** (everything except motion capture):
 ```bash
 ./scripts/run_docker.sh \
-  --input ~/Videos/shot001.mp4 \
+  ~/Videos/shot001.mp4 \
   --name Shot001 \
-  --stages ingest,depth,roto,matte,cleanplate,colmap,camera
+  --stages ingest,depth,roto,matanyone,cleanplate,colmap,camera
 ```
 
 **Camera tracking only** (for existing frame sequences):
 ```bash
 ./scripts/run_docker.sh \
-  --input ~/VFX-Projects/Shot001/source/frames/ \
+  ~/VFX-Projects/Shot001/source/frames/ \
   --name Shot001 \
   --stages colmap,camera
 ```
@@ -77,7 +77,7 @@ Run only depth estimation and segmentation:
 Custom segmentation prompt (specify objects to mask):
 ```bash
 ./scripts/run_docker.sh \
-  --input ~/Videos/shot001.mp4 \
+  ~/Videos/shot001.mp4 \
   --name Shot001 \
   --stages roto \
   --prompt "person, car, building"
@@ -86,7 +86,7 @@ Custom segmentation prompt (specify objects to mask):
 High-quality COLMAP reconstruction:
 ```bash
 ./scripts/run_docker.sh \
-  --input ~/Videos/shot001.mp4 \
+  ~/Videos/shot001.mp4 \
   --name Shot001 \
   --stages colmap \
   --colmap-quality high
@@ -175,12 +175,11 @@ python scripts/run_pipeline.py video.mp4 \
   --name CustomRoto
 ```
 
-High-quality COLMAP with custom matcher:
+High-quality COLMAP reconstruction:
 ```bash
 python scripts/run_pipeline.py video.mp4 \
   -s colmap \
-  --colmap-quality high \
-  --colmap-matcher exhaustive
+  --colmap-quality high
 ```
 
 ### Available Stages
@@ -190,7 +189,7 @@ python scripts/run_pipeline.py video.mp4 \
 | `ingest` | Extract frames from video | PNG sequence in `source/frames/` |
 | `depth` | Monocular depth estimation | Depth maps in `depth/` |
 | `roto` | Text-prompted segmentation | Binary masks in `roto/` |
-| `matte` | Alpha matte refinement (humans) | Alpha mattes in `matte/` |
+| `matanyone` | Alpha matte refinement (humans) | Alpha mattes in `matte/` |
 | `cleanplate` | Video inpainting | Clean backgrounds in `cleanplate/` |
 | `colmap` | Structure-from-Motion camera solve | Point cloud, camera poses in `colmap/` |
 | `camera` | Export camera to multiple formats | Alembic, JSON, meshes in `camera/` |
@@ -383,7 +382,7 @@ cp ~/Videos/my_shot.mp4 ~/Desktop/
 ```bash
 # Full pipeline
 ./scripts/run_docker.sh \
-  --input ~/Desktop/my_shot.mp4 \
+  ~/Desktop/my_shot.mp4 \
   --name MyShot \
   --stages all
 ```
@@ -423,7 +422,7 @@ ReadGeo {
 ```bash
 # Re-run specific stage with different settings
 ./scripts/run_docker.sh \
-  --input ~/Desktop/my_shot.mp4 \
+  ~/Desktop/my_shot.mp4 \
   --name MyShot \
   --stages roto \
   --prompt "person only"  # Different prompt

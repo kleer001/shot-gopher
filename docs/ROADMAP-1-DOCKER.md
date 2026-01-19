@@ -1104,7 +1104,7 @@ def test_colmap_checkerboard_features():
 # Run in container with Football test video
 
 docker-compose run --rm vfx-ingest \
-  --input /workspace/fixtures/football_short.mp4 \
+  /workspace/fixtures/football_short.mp4 \
   --name FootballTest \
   --stages ingest
 ```
@@ -1251,7 +1251,7 @@ def test_segmentation_stage():
 #### Test 1D.9: Full Pipeline (All Stages)
 ```bash
 docker-compose run --rm vfx-ingest \
-  --input /workspace/fixtures/football_short.mp4 \
+  /workspace/fixtures/football_short.mp4 \
   --name FootballFull \
   --stages ingest,depth,roto,colmap,mocap
 ```
@@ -1386,7 +1386,7 @@ docker-compose run --rm vfx-ingest \
 ```bash
 # Test local execution (without Docker)
 python scripts/run_pipeline.py \
-  --input tests/fixtures/football_short.mp4 \
+  tests/fixtures/football_short.mp4 \
   --name LocalTest \
   --stages ingest,depth
 
