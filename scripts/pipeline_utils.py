@@ -22,21 +22,33 @@ __all__ = [
 ]
 
 
-def clear_gpu_memory() -> None:
+def clear_gpu_memory(comfyui_url: str = None) -> None:
     """Clear GPU VRAM to free memory after a stage completes.
 
     This helps prevent out-of-memory errors when running multiple
-    GPU-intensive stages sequentially. Safe to call even if CUDA
-    is not available.
+    GPU-intensive stages sequentially. Unloads ComfyUI's cached models
+    and clears PyTorch's CUDA cache.
+
+    Args:
+        comfyui_url: ComfyUI API URL for model unloading (optional)
     """
+    from comfyui_utils import free_comfyui_memory, DEFAULT_COMFYUI_URL
+
+    url = comfyui_url or DEFAULT_COMFYUI_URL
+    models_freed = free_comfyui_memory(url, unload_models=True)
+
     try:
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
-            print("  → Cleared GPU memory")
+            if models_freed:
+                print("  → Cleared GPU memory (models unloaded)")
+            else:
+                print("  → Cleared GPU memory")
     except ImportError:
-        pass
+        if models_freed:
+            print("  → Cleared GPU memory (models unloaded)")
     except Exception as e:
         print(f"  → Warning: Could not clear GPU memory: {e}")
 

@@ -123,7 +123,7 @@ def run_pipeline(
     if needs_comfyui:
         print("\n[GPU Cleanup]")
         kill_all_comfyui_processes()
-        clear_gpu_memory()
+        clear_gpu_memory(comfyui_url)
 
     comfyui_was_started = False
     if needs_comfyui and auto_start_comfyui:
@@ -243,7 +243,7 @@ def run_pipeline(
         if auto_movie and list(depth_dir.glob("*.png")):
             generate_preview_movie(depth_dir, project_dir / "preview" / "depth.mp4", fps)
 
-        clear_gpu_memory()
+        clear_gpu_memory(comfyui_url)
 
     if "roto" in stages:
         print("\n=== Stage: roto ===")
@@ -318,7 +318,7 @@ def run_pipeline(
             else:
                 print("  → No person directories to separate")
 
-        clear_gpu_memory()
+        clear_gpu_memory(comfyui_url)
 
     if "matanyone" in stages:
         print("\n=== Stage: matanyone ===")
@@ -365,8 +365,7 @@ def run_pipeline(
                     stage_name=f"matanyone ({person_dir.name})" if len(person_dirs) > 1 else "matanyone",
                 ):
                     print(f"  → MatAnyone stage failed for {person_dir.name}", file=sys.stderr)
-                    if len(person_dirs) == 1:
-                        return False
+                    print(f"    (cleanplate will use raw roto masks instead)", file=sys.stderr)
 
             valid_output_dirs = [d for d in output_dirs if d.exists() and list(d.glob("*.png"))]
             if valid_output_dirs:
@@ -379,7 +378,7 @@ def run_pipeline(
             if auto_movie and list(combined_dir.glob("*.png")):
                 generate_preview_movie(combined_dir, project_dir / "preview" / "matte.mp4", fps)
 
-        clear_gpu_memory()
+        clear_gpu_memory(comfyui_url)
 
     if "cleanplate" in stages:
         print("\n=== Stage: cleanplate ===")
@@ -439,7 +438,7 @@ def run_pipeline(
         if auto_movie and list(cleanplate_dir.glob("*.png")):
             generate_preview_movie(cleanplate_dir, project_dir / "preview" / "cleanplate.mp4", fps)
 
-        clear_gpu_memory()
+        clear_gpu_memory(comfyui_url)
 
     if "colmap" in stages:
         print("\n=== Stage: colmap ===")
@@ -465,7 +464,7 @@ def run_pipeline(
                 fps=fps,
             )
 
-        clear_gpu_memory()
+        clear_gpu_memory(comfyui_url)
 
     if "mocap" in stages:
         print("\n=== Stage: mocap ===")
@@ -482,7 +481,7 @@ def run_pipeline(
             ):
                 print("  → Motion capture failed", file=sys.stderr)
 
-        clear_gpu_memory()
+        clear_gpu_memory(comfyui_url)
 
     if "gsir" in stages:
         print("\n=== Stage: gsir ===")
@@ -501,7 +500,7 @@ def run_pipeline(
             ):
                 print("  → GS-IR material decomposition failed", file=sys.stderr)
 
-        clear_gpu_memory()
+        clear_gpu_memory(comfyui_url)
 
     if "camera" in stages:
         print("\n=== Stage: camera ===")
