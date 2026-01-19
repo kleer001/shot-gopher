@@ -511,8 +511,13 @@ def get_comfyui_output_dir() -> Path:
 
     This must match the --output-directory argument passed to ComfyUI in comfyui_manager.py.
     """
-    from env_config import INSTALL_DIR
-    # ComfyUI is started with: --output-directory <INSTALL_DIR.parent.parent>
+    from env_config import INSTALL_DIR, is_in_container
+    # Container-aware: use COMFYUI_OUTPUT_DIR environment variable if in container
+    # (same logic as comfyui_manager.py start_comfyui())
+    if is_in_container():
+        return Path(os.environ.get("COMFYUI_OUTPUT_DIR", "/workspace"))
+    # ComfyUI is started with: --output-directory <COMFYUI_DIR.parent.parent.parent>
+    # where COMFYUI_DIR = INSTALL_DIR / "ComfyUI"
     # See comfyui_manager.py start_comfyui()
     return INSTALL_DIR.parent.parent
 
