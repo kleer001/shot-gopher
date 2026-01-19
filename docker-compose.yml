@@ -16,6 +16,8 @@ services:
       # Project workspace (read-write)
       # Default: <repo>/../vfx_projects (set by run_docker.sh)
       - ${VFX_PROJECTS_DIR:-../vfx_projects}:/workspace/projects
+      # Dev: mount scripts for live editing (no rebuild needed)
+      - ./scripts:/app/scripts:ro
     ports:
       - "8188:8188"  # ComfyUI web interface
     stdin_open: true
