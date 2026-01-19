@@ -26,7 +26,7 @@ from typing import Optional
 import numpy as np
 
 # Environment check - ensure correct conda environment is active
-from env_config import check_conda_env_or_warn
+from env_config import check_conda_env_or_warn, is_in_container
 
 
 # COLMAP quality presets
@@ -66,6 +66,25 @@ QUALITY_PRESETS = {
         "min_num_inliers": 10,  # Lower threshold (default 15)
     },
 }
+
+
+def is_headless_environment() -> bool:
+    """Detect if running in a headless environment without display/OpenGL support.
+
+    Returns:
+        True if headless (GPU OpenGL context unlikely to work), False otherwise.
+    """
+    import os
+
+    if is_in_container():
+        display = os.environ.get("DISPLAY")
+        if not display:
+            return True
+        xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
+        if not xdg_runtime or not os.path.exists(xdg_runtime):
+            return True
+
+    return False
 
 
 def check_colmap_available() -> bool:
@@ -205,7 +224,8 @@ def extract_features(
     camera_model: str = "OPENCV",
     max_features: int = 8192,
     single_camera: bool = True,
-    mask_path: Optional[Path] = None
+    mask_path: Optional[Path] = None,
+    use_gpu: bool = True
 ) -> None:
     """Extract SIFT features from images.
 
@@ -216,22 +236,44 @@ def extract_features(
         max_features: Maximum features per image
         single_camera: If True, assume all images from same camera
         mask_path: Optional path to mask directory (excludes masked regions from feature extraction)
+        use_gpu: Whether to use GPU for SIFT extraction (falls back to CPU on failure)
     """
-    args = {
-        "database_path": str(database_path),
-        "image_path": str(image_path),
-        "ImageReader.camera_model": camera_model,
-        "ImageReader.single_camera": 1 if single_camera else 0,
-        "SiftExtraction.max_num_features": max_features,
-        "SiftExtraction.use_gpu": 1,
-    }
+    def _build_args(gpu: bool) -> dict:
+        """Build argument dict with specified GPU setting."""
+        args = {
+            "database_path": str(database_path),
+            "image_path": str(image_path),
+            "ImageReader.camera_model": camera_model,
+            "ImageReader.single_camera": 1 if single_camera else 0,
+            "SiftExtraction.max_num_features": max_features,
+            "SiftExtraction.use_gpu": 1 if gpu else 0,
+        }
+        if gpu:
+            args["SiftExtraction.gpu_index"] = "0"
+        if mask_path and mask_path.exists():
+            args["ImageReader.mask_path"] = str(mask_path)
+        return args
 
-    # Add mask path if provided (excludes dynamic regions from feature extraction)
     if mask_path and mask_path.exists():
-        args["ImageReader.mask_path"] = str(mask_path)
         print(f"    Using masks from: {mask_path}")
 
-    run_colmap_command("feature_extractor", args, "Extracting features")
+    if use_gpu:
+        try:
+            args = _build_args(gpu=True)
+            run_colmap_command("feature_extractor", args, "Extracting features (GPU)")
+        except subprocess.CalledProcessError as e:
+            error_output = str(e.stdout) if hasattr(e, 'stdout') and e.stdout else str(e)
+            if "context" in error_output.lower() or "opengl" in error_output.lower() or e.returncode < 0:
+                print("    GPU feature extraction failed (OpenGL context error), falling back to CPU...")
+                if database_path.exists():
+                    database_path.unlink()
+                args = _build_args(gpu=False)
+                run_colmap_command("feature_extractor", args, "Extracting features (CPU)")
+            else:
+                raise
+    else:
+        args = _build_args(gpu=False)
+        run_colmap_command("feature_extractor", args, "Extracting features (CPU)")
 
 
 def match_features(
@@ -1068,15 +1110,22 @@ def run_colmap_pipeline(
         print(f"Error: No images found in {frames_dir}", file=sys.stderr)
         return False
 
+    headless = is_headless_environment()
+    use_gpu = not headless
+
     print(f"\n{'='*60}")
     print(f"COLMAP Reconstruction")
     print(f"{'='*60}")
     print(f"Project: {project_dir}")
     print(f"Frames: {frame_count}")
     print(f"Quality: {quality}")
+    if headless:
+        print(f"Mode: CPU (headless environment detected)")
+    else:
+        print(f"Mode: GPU (with CPU fallback)")
     if quality == "slow":
-        print(f"  ⚠️  Slow-camera mode: Using aggressive settings for minimal motion")
-        print(f"      Note: Results may be jittery due to low parallax")
+        print(f"  Warning: Slow-camera mode uses aggressive settings for minimal motion")
+        print(f"           Results may be jittery due to low parallax")
 
     # Check for segmentation masks
     mask_dir = project_dir / "roto"
@@ -1119,6 +1168,7 @@ def run_colmap_pipeline(
             max_features=preset["sift_max_features"],
             single_camera=True,
             mask_path=mask_path,
+            use_gpu=use_gpu,
         )
 
         # Feature matching
@@ -1127,6 +1177,7 @@ def run_colmap_pipeline(
             database_path=database_path,
             matcher_type=preset["matcher"],
             sequential_overlap=preset.get("sequential_overlap", 10),
+            use_gpu=use_gpu,
         )
 
         # Sparse reconstruction
