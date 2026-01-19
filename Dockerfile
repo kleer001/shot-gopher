@@ -1,75 +1,10 @@
 # VFX Ingest Platform - Docker Image
 # Multi-stage build for optimized layer caching
 
-# Stage 1: Build COLMAP from source with CUDA support using vcpkg
-# Use devel image for nvcc compiler
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS colmap-builder
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install build dependencies and vcpkg prerequisites
-RUN apt-get update && apt-get install -y \
-    git \
-    cmake \
-    ninja-build \
-    build-essential \
-    pkg-config \
-    curl \
-    zip \
-    unzip \
-    tar \
-    autoconf \
-    automake \
-    libtool \
-    python3 \
-    libgl1-mesa-dev \
-    libglu1-mesa-dev \
-    libxrandr-dev \
-    libxinerama-dev \
-    libxcursor-dev \
-    libxi-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Clone vcpkg and bootstrap
-WORKDIR /opt
-RUN git clone https://github.com/Microsoft/vcpkg.git && \
-    cd vcpkg && \
-    ./bootstrap-vcpkg.sh
-
-# Install COLMAP dependencies via vcpkg (static linking)
-# This ensures FreeImage is statically linked, triggering FreeImage_Initialise()
-ENV VCPKG_ROOT=/opt/vcpkg
-RUN /opt/vcpkg/vcpkg install \
-    freeimage \
-    boost-program-options \
-    boost-filesystem \
-    boost-graph \
-    boost-system \
-    eigen3 \
-    flann \
-    sqlite3 \
-    ceres[suitesparse] \
-    glew \
-    cgal \
-    glog \
-    gtest \
-    --triplet x64-linux
-
-# Clone and build COLMAP with vcpkg dependencies
-WORKDIR /tmp
-RUN git clone https://github.com/colmap/colmap.git && \
-    cd colmap && \
-    git checkout 3.9.1 && \
-    mkdir build && cd build && \
-    cmake .. -GNinja \
-        -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
-        -DCMAKE_CUDA_ARCHITECTURES="60;70;75;80;86;89;90" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCUDA_ENABLED=ON \
-        -DGUI_ENABLED=OFF \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    ninja && \
-    ninja install
+# Stage 1: Get COLMAP from official pre-built image (with CUDA + FreeImage support)
+# Using 20231029.4 tag which is compatible with Ubuntu 22.04 (before 24.04 release)
+# This image is built properly, so FreeImage_Initialise() works
+FROM colmap/colmap:20231029.4 AS colmap-source
 
 # Stage 2: Base image with system dependencies
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04 AS base
@@ -77,9 +12,7 @@ FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04 AS base
 # Prevent interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system packages
-# Note: Most COLMAP dependencies are statically linked via vcpkg
-# Only system libraries needed at runtime (OpenGL, X11, etc.)
+# Install system packages and COLMAP runtime dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
@@ -92,11 +25,26 @@ RUN apt-get update && apt-get install -y \
     libglu1-mesa \
     libglew2.2 \
     libgomp1 \
+    libboost-filesystem1.74.0 \
+    libboost-program-options1.74.0 \
+    libboost-graph1.74.0 \
+    libgoogle-glog0v5 \
+    libceres2 \
+    libmetis5 \
+    libfreeimage3 \
+    libsqlite3-0 \
+    libflann1.9 \
+    libqt5core5a \
+    libqt5widgets5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy built COLMAP from builder stage
-# With vcpkg static linking, all dependencies (including FreeImage) are in the binary
-COPY --from=colmap-builder /usr/local/bin/colmap /usr/local/bin/colmap
+# Copy COLMAP from official image
+# The official image has proper FreeImage initialization built in
+COPY --from=colmap-source /usr/local/bin/colmap /usr/local/bin/colmap
+# Copy COLMAP's shared libraries (official image uses dynamic linking)
+COPY --from=colmap-source /usr/local/lib/libcolmap* /usr/local/lib/
+# Update library cache
+RUN ldconfig || true
 
 # Create application directory
 WORKDIR /app
