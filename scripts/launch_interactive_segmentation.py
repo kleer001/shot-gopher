@@ -31,7 +31,7 @@ import sys
 import webbrowser
 from pathlib import Path
 
-from env_config import check_conda_env_or_warn, INSTALL_DIR
+from env_config import check_conda_env_or_warn, is_in_container, INSTALL_DIR
 from workflow_utils import WORKFLOW_TEMPLATES_DIR
 
 
@@ -238,6 +238,7 @@ def main():
         output=project_dir / "roto" / "custom"
     ))
 
+    in_container = is_in_container()
     sam3_installed, sam3_path = check_sam3_installed()
 
     print(f"\n{'='*60}")
@@ -246,6 +247,13 @@ def main():
 
     if sam3_installed:
         print(f"ComfyUI-SAM3: INSTALLED at {sam3_path}")
+    elif in_container:
+        print("ComfyUI-SAM3: NOT FOUND (unexpected in Docker)")
+        print("""
+The Docker image should include ComfyUI-SAM3 pre-installed.
+If you're seeing this error, the Docker image may need rebuilding:
+  docker compose build --no-cache
+""")
     else:
         print("ComfyUI-SAM3: NOT FOUND")
         print("""
@@ -255,7 +263,25 @@ Re-run the install wizard to ensure all custom nodes are installed:
 Then restart ComfyUI.
 """)
 
-    if args.open:
+    if in_container:
+        print(f"\n{'='*60}")
+        print("Docker Mode - Access from Host")
+        print(f"{'='*60}")
+        print(f"""
+Running in Docker container. ComfyUI should be running automatically.
+
+1. Open ComfyUI from your HOST machine's browser:
+   http://localhost:8188
+
+2. Load the workflow via: Menu > Load
+
+3. Navigate to the workflow file:
+   {workflow_path}
+
+   Note: In Docker, the project is mounted at /workspace/projects/
+   The workflow path above is the container path.
+""")
+    elif args.open:
         if not check_comfyui_running(args.url):
             print(f"\nWarning: ComfyUI not running at {args.url}")
             print("  Start ComfyUI first: python main.py --listen")

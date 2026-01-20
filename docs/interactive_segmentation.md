@@ -15,6 +15,45 @@ For complex shots where automatic text-prompt segmentation doesn't work well (e.
 - Project set up with source frames (`setup_project.py` or ingest stage complete)
 - ComfyUI running
 
+## Docker Usage
+
+When running in Docker, the interactive segmentation workflow requires accessing ComfyUI's web interface from your host machine.
+
+### Docker Quick Start
+
+1. **Start the container with ComfyUI running:**
+   ```bash
+   docker compose up -d
+   ```
+
+2. **Set up the project and run initial stages:**
+   ```bash
+   docker compose exec vfx-ingest python /app/scripts/run_pipeline.py \
+     /workspace/projects/MyProject --stages ingest
+   ```
+
+3. **Prepare the interactive segmentation workflow:**
+   ```bash
+   docker compose exec vfx-ingest python /app/scripts/launch_interactive_segmentation.py \
+     /workspace/projects/MyProject
+   ```
+
+4. **Access ComfyUI from your host browser:**
+   - Open http://localhost:8188
+   - Click **Menu** > **Load**
+   - Navigate to `/workspace/projects/MyProject/workflows/05_interactive_segmentation.json`
+
+5. **Click points and run as described below**
+
+### Docker Path Mapping
+
+| Host Path | Container Path |
+|-----------|----------------|
+| `$VFX_PROJECTS_DIR/MyProject` | `/workspace/projects/MyProject` |
+| (Read-only models) | `/models` |
+
+The workflow file paths in ComfyUI will show container paths (e.g., `/workspace/projects/...`). This is expected and correct when running in Docker.
+
 ## Quick Start
 
 ### 1. Prepare the Workflow
@@ -110,6 +149,28 @@ This can happen with fast motion or heavy occlusion. Solutions:
 
 Make sure you're clicking in the **Interactive Selector** node's image preview area, not elsewhere in the UI.
 
+### Docker: "Node not found" error
+
+If running in Docker and seeing missing node errors, the Docker image may need rebuilding:
+```bash
+docker compose build --no-cache
+```
+
+### Docker: Cannot load workflow file
+
+When using Docker, ensure you're loading the workflow from the container path:
+- Container path: `/workspace/projects/MyProject/workflows/05_interactive_segmentation.json`
+- NOT the host path
+
+The workflow paths are relative to the container's filesystem.
+
+### Docker: Masks not saving
+
+Verify your project directory is correctly mounted. Check:
+```bash
+docker compose exec vfx-ingest ls -la /workspace/projects/MyProject/roto/custom/
+```
+
 ## Comparison with Automatic Segmentation
 
 | Feature | Automatic (`02_segmentation.json`) | Interactive (`05_interactive_segmentation.json`) |
@@ -121,6 +182,8 @@ Make sure you're clicking in the **Interactive Selector** node's image preview a
 | Output | `roto/[prompt_name]/` | `roto/custom/` |
 
 ## Command Reference
+
+### Local Installation
 
 ```bash
 # Basic usage
@@ -134,4 +197,14 @@ python scripts/launch_interactive_segmentation.py <project_dir> --url http://loc
 
 # Force overwrite existing workflow
 python scripts/launch_interactive_segmentation.py <project_dir> --force
+```
+
+### Docker
+
+```bash
+# Prepare workflow (use container path for project)
+docker compose exec vfx-ingest python /app/scripts/launch_interactive_segmentation.py \
+  /workspace/projects/MyProject
+
+# Then open http://localhost:8188 in your host browser
 ```
