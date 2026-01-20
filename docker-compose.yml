@@ -1,6 +1,12 @@
 services:
   vfx-ingest:
-    build: .
+    build:
+      context: .
+      args:
+        # Set CUDA_ARCH env var before build to target your GPU:
+        #   export CUDA_ARCH=$(./scripts/detect_cuda_arch.sh)
+        #   docker compose build
+        CUDA_ARCH: ${CUDA_ARCH:-7.5 8.6 8.9}
     image: vfx-ingest:latest
     container_name: vfx-ingest
     runtime: nvidia
