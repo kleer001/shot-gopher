@@ -15,46 +15,50 @@ For complex shots where automatic text-prompt segmentation doesn't work well (e.
 - Project set up with source frames (`setup_project.py` or ingest stage complete)
 - ComfyUI running
 
-## Docker Usage
+## Docker Usage (Recommended)
 
-When running in Docker, the interactive segmentation workflow requires accessing ComfyUI's web interface from your host machine.
+The simplest way to run interactive segmentation is with Docker mode. One command handles everything:
+
+```bash
+python scripts/launch_interactive_segmentation.py /path/to/your/project --docker
+```
+
+This will:
+1. Start a Docker container with ComfyUI and SAM3
+2. Wait for ComfyUI to be ready
+3. Prepare the workflow with correct paths
+4. Open your browser to ComfyUI
+5. Wait for you to finish (press Enter when done)
+6. Clean up the container automatically
+
+### Requirements
+
+- Docker with nvidia-container-toolkit installed
+- Docker image built: `docker compose build`
+- Models downloaded to `.vfx_pipeline/models/` (or specify `--models-dir`)
 
 ### Docker Quick Start
 
-1. **Start the container with ComfyUI running:**
-   ```bash
-   docker compose up -d
-   ```
+```bash
+# One command does everything
+python scripts/launch_interactive_segmentation.py /path/to/projects/MyShot --docker
 
-2. **Set up the project and run initial stages:**
-   ```bash
-   docker compose exec vfx-ingest python /app/scripts/run_pipeline.py \
-     /workspace/projects/MyProject --stages ingest
-   ```
+# If models are in a different location
+python scripts/launch_interactive_segmentation.py /path/to/projects/MyShot --docker \
+  --models-dir /path/to/models
+```
 
-3. **Prepare the interactive segmentation workflow:**
-   ```bash
-   docker compose exec vfx-ingest python /app/scripts/launch_interactive_segmentation.py \
-     /workspace/projects/MyProject
-   ```
+The script will:
+- Mount your project directory automatically
+- Mount the models directory (read-only)
+- Start ComfyUI on port 8188
+- Open your browser
+- Wait for you to press Enter when done
+- Stop and remove the container
 
-4. **Access ComfyUI from your host browser:**
-   - Open http://localhost:8188
-   - Click **Menu** > **Load**
-   - Navigate to `/workspace/projects/MyProject/workflows/05_interactive_segmentation.json`
+## Local Installation Quick Start
 
-5. **Click points and run as described below**
-
-### Docker Path Mapping
-
-| Host Path | Container Path |
-|-----------|----------------|
-| `$VFX_PROJECTS_DIR/MyProject` | `/workspace/projects/MyProject` |
-| (Read-only models) | `/models` |
-
-The workflow file paths in ComfyUI will show container paths (e.g., `/workspace/projects/...`). This is expected and correct when running in Docker.
-
-## Quick Start
+If you have ComfyUI installed locally (not using Docker), follow these steps:
 
 ### 1. Prepare the Workflow
 
@@ -156,20 +160,16 @@ If running in Docker and seeing missing node errors, the Docker image may need r
 docker compose build --no-cache
 ```
 
-### Docker: Cannot load workflow file
+### Docker: Container won't start
 
-When using Docker, ensure you're loading the workflow from the container path:
-- Container path: `/workspace/projects/MyProject/workflows/05_interactive_segmentation.json`
-- NOT the host path
-
-The workflow paths are relative to the container's filesystem.
+Check that:
+1. Docker daemon is running: `docker info`
+2. NVIDIA container toolkit is installed: `docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi`
+3. Image exists: `docker images | grep vfx-ingest`
 
 ### Docker: Masks not saving
 
-Verify your project directory is correctly mounted. Check:
-```bash
-docker compose exec vfx-ingest ls -la /workspace/projects/MyProject/roto/custom/
-```
+Masks are saved to your project's `roto/custom/` directory on the host. If they're not appearing, check the ComfyUI output in the browser for errors.
 
 ## Comparison with Automatic Segmentation
 
@@ -183,13 +183,26 @@ docker compose exec vfx-ingest ls -la /workspace/projects/MyProject/roto/custom/
 
 ## Command Reference
 
-### Local Installation
+### Docker Mode (Recommended)
 
 ```bash
-# Basic usage
+# All-in-one: start container, open browser, cleanup when done
+python scripts/launch_interactive_segmentation.py <project_dir> --docker
+
+# Specify models directory
+python scripts/launch_interactive_segmentation.py <project_dir> --docker --models-dir /path/to/models
+
+# Custom ComfyUI URL (if using non-default port)
+python scripts/launch_interactive_segmentation.py <project_dir> --docker --url http://localhost:9999
+```
+
+### Local Mode (ComfyUI installed locally)
+
+```bash
+# Prepare workflow only (then manually open ComfyUI)
 python scripts/launch_interactive_segmentation.py <project_dir>
 
-# Open browser automatically
+# Prepare workflow and open browser
 python scripts/launch_interactive_segmentation.py <project_dir> --open
 
 # Custom ComfyUI URL
@@ -197,14 +210,4 @@ python scripts/launch_interactive_segmentation.py <project_dir> --url http://loc
 
 # Force overwrite existing workflow
 python scripts/launch_interactive_segmentation.py <project_dir> --force
-```
-
-### Docker
-
-```bash
-# Prepare workflow (use container path for project)
-docker compose exec vfx-ingest python /app/scripts/launch_interactive_segmentation.py \
-  /workspace/projects/MyProject
-
-# Then open http://localhost:8188 in your host browser
 ```
