@@ -1,48 +1,73 @@
 """REST API endpoints for VFX Pipeline web interface."""
 
 import json
-import os
 import shutil
 import subprocess
-import uuid
-from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
 from pydantic import BaseModel
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from env_config import DEFAULT_PROJECTS_DIR, INSTALL_DIR
-from services.config_service import get_config_service
+from web.services.config_service import get_config_service
+from web.services.project_service import ProjectService
+from web.services.pipeline_service import PipelineService
+from web.repositories.project_repository import ProjectRepository
+from web.repositories.job_repository import JobRepository
+from web.models.dto import (
+    ProjectCreateRequest,
+    JobStartRequest,
+    SystemStatusResponse,
+    ProjectOutputsResponse
+)
 
 router = APIRouter()
 
-# Store for active jobs (in-memory for MVP)
-active_jobs = {}
+_project_repo = None
+_job_repo = None
+_project_service = None
+_pipeline_service = None
 
 
-class ProjectConfig(BaseModel):
-    """Configuration for starting a pipeline job."""
-    stages: list[str] = ["ingest", "depth", "roto", "cleanplate"]
-    roto_prompt: str = "person"
-    skip_existing: bool = False
+def get_project_repo() -> ProjectRepository:
+    """Get project repository instance."""
+    global _project_repo
+    if _project_repo is None:
+        _project_repo = ProjectRepository(Path(DEFAULT_PROJECTS_DIR))
+    return _project_repo
 
 
-class ProjectInfo(BaseModel):
-    """Information about a project."""
-    project_id: str
-    name: str
-    project_dir: str
-    status: str  # "pending", "processing", "completed", "failed"
-    created_at: str
-    video_info: Optional[dict] = None
-    stages: Optional[list[str]] = None
-    current_stage: Optional[str] = None
-    progress: Optional[float] = None
-    error: Optional[str] = None
+def get_job_repo() -> JobRepository:
+    """Get job repository instance."""
+    global _job_repo
+    if _job_repo is None:
+        _job_repo = JobRepository()
+    return _job_repo
+
+
+def get_project_service(
+    project_repo: ProjectRepository = Depends(get_project_repo)
+) -> ProjectService:
+    """Get project service instance."""
+    global _project_service
+    if _project_service is None:
+        _project_service = ProjectService(project_repo)
+    return _project_service
+
+
+def get_pipeline_service(
+    job_repo: JobRepository = Depends(get_job_repo),
+    project_repo: ProjectRepository = Depends(get_project_repo)
+) -> PipelineService:
+    """Get pipeline service instance."""
+    global _pipeline_service
+    if _pipeline_service is None:
+        _pipeline_service = PipelineService(job_repo, project_repo)
+    return _pipeline_service
 
 
 def get_video_info(video_path: Path) -> dict:
@@ -60,7 +85,6 @@ def get_video_info(video_path: Path) -> dict:
 
         data = json.loads(result.stdout)
 
-        # Find video stream
         video_stream = None
         for stream in data.get("streams", []):
             if stream.get("codec_type") == "video":
@@ -70,12 +94,10 @@ def get_video_info(video_path: Path) -> dict:
         if not video_stream:
             return {}
 
-        # Extract info
         duration = float(data.get("format", {}).get("duration", 0))
         width = int(video_stream.get("width", 0))
         height = int(video_stream.get("height", 0))
 
-        # Parse frame rate
         fps_str = video_stream.get("r_frame_rate", "24/1")
         if "/" in fps_str:
             num, den = fps_str.split("/")
@@ -98,11 +120,8 @@ def get_video_info(video_path: Path) -> dict:
 
 def sanitize_project_name(name: str) -> str:
     """Sanitize project name for filesystem use."""
-    # Remove/replace problematic characters
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
-    # Remove leading/trailing underscores
     safe_name = safe_name.strip("_")
-    # Ensure not empty
     return safe_name or "project"
 
 
@@ -110,194 +129,125 @@ def sanitize_project_name(name: str) -> str:
 async def upload_video(
     file: UploadFile = File(...),
     name: Optional[str] = Form(None),
+    project_service: ProjectService = Depends(get_project_service),
 ):
     """Upload a video file and create a new project."""
-    # Validate file type
-    allowed_extensions = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"}
+    config_service = get_config_service()
+    allowed_extensions = set(config_service.get_supported_video_formats())
     file_ext = Path(file.filename).suffix.lower()
+
     if file_ext not in allowed_extensions:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported file type: {file_ext}. Allowed: {', '.join(allowed_extensions)}"
         )
 
-    # Generate project name and ID
     base_name = name or Path(file.filename).stem
     project_name = sanitize_project_name(base_name)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    project_id = f"{project_name}_{timestamp}"
-
-    # Create project directory
-    projects_dir = Path(DEFAULT_PROJECTS_DIR)
-    projects_dir.mkdir(parents=True, exist_ok=True)
-
-    project_dir = projects_dir / project_name
-
-    # Handle existing project directory
-    if project_dir.exists():
-        # Add timestamp to make unique
-        project_dir = projects_dir / f"{project_name}_{timestamp}"
-
-    project_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save uploaded video
-    source_dir = project_dir / "source"
-    source_dir.mkdir(exist_ok=True)
-    video_path = source_dir / f"input{file_ext}"
 
     try:
-        with open(video_path, "wb") as f:
-            shutil.copyfileobj(file.file, f)
+        project_dto = project_service.create_project(
+            ProjectCreateRequest(name=project_name, stages=[]),
+            Path(DEFAULT_PROJECTS_DIR)
+        )
+    except ValueError as e:
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        project_name = f"{project_name}_{timestamp}"
+        project_dto = project_service.create_project(
+            ProjectCreateRequest(name=project_name, stages=[]),
+            Path(DEFAULT_PROJECTS_DIR)
+        )
+
+    video_filename = f"input{file_ext}"
+    try:
+        video_content = await file.read()
+        project_dto = project_service.save_uploaded_video(
+            project_name,
+            video_filename,
+            video_content
+        )
     except Exception as e:
-        # Clean up on failure
-        shutil.rmtree(project_dir, ignore_errors=True)
+        project_service.delete_project(project_name)
         raise HTTPException(status_code=500, detail=f"Failed to save video: {e}")
 
-    # Get video info
-    video_info = get_video_info(video_path)
-
-    # Store project info
-    project_info = ProjectInfo(
-        project_id=project_id,
-        name=project_name,
-        project_dir=str(project_dir),
-        status="pending",
-        created_at=datetime.now().isoformat(),
-        video_info=video_info,
-    )
-    active_jobs[project_id] = project_info.model_dump()
+    project = get_project_repo().get(project_name)
+    video_info = get_video_info(project.video_path) if project.video_path else {}
 
     return {
-        "project_id": project_id,
+        "project_id": project_name,
         "name": project_name,
-        "project_dir": str(project_dir),
+        "project_dir": str(project.path),
         "video_info": video_info,
     }
 
 
 @router.get("/projects")
-async def list_projects():
+async def list_projects(
+    project_service: ProjectService = Depends(get_project_service)
+):
     """List all projects."""
-    # Include active jobs
-    projects = list(active_jobs.values())
-
-    # Also scan projects directory for existing projects
-    projects_dir = Path(DEFAULT_PROJECTS_DIR)
-    if projects_dir.exists():
-        for proj_dir in sorted(projects_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-            if proj_dir.is_dir():
-                proj_id = proj_dir.name
-                if proj_id not in [p["project_id"] for p in projects]:
-                    # Check for outputs to determine status
-                    try:
-                        has_depth = (proj_dir / "depth").is_dir() and any((proj_dir / "depth").iterdir())
-                    except (OSError, StopIteration):
-                        has_depth = False
-
-                    try:
-                        has_roto = (proj_dir / "roto").is_dir() and any((proj_dir / "roto").iterdir())
-                    except (OSError, StopIteration):
-                        has_roto = False
-
-                    status = "completed" if (has_depth or has_roto) else "pending"
-
-                    projects.append({
-                        "project_id": proj_id,
-                        "name": proj_id,
-                        "project_dir": str(proj_dir),
-                        "status": status,
-                        "created_at": datetime.fromtimestamp(proj_dir.stat().st_mtime).isoformat(),
-                    })
-
-    # Limit to most recent 20
-    return {"projects": projects[:20]}
+    response = project_service.list_projects()
+    return {"projects": [p.model_dump() for p in response.projects[:20]]}
 
 
 @router.get("/projects/{project_id}")
-async def get_project(project_id: str):
+async def get_project(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+):
     """Get project details and status."""
-    if project_id in active_jobs:
-        return active_jobs[project_id]
+    project = project_service.get_project(project_id)
 
-    # Check if project exists on disk
-    projects_dir = Path(DEFAULT_PROJECTS_DIR)
-    project_dir = projects_dir / project_id
-
-    if not project_dir.exists():
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Build info from disk
-    return {
-        "project_id": project_id,
-        "name": project_id,
-        "project_dir": str(project_dir),
-        "status": "completed",
-        "created_at": datetime.fromtimestamp(project_dir.stat().st_mtime).isoformat(),
-    }
+    return project.model_dump()
 
 
 @router.post("/projects/{project_id}/start")
-async def start_processing(project_id: str, config: ProjectConfig):
+async def start_processing(
+    project_id: str,
+    config: JobStartRequest,
+    pipeline_service: PipelineService = Depends(get_pipeline_service),
+):
     """Start pipeline processing for a project."""
-    from .pipeline_runner import start_pipeline
-
-    if project_id not in active_jobs:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    project = active_jobs[project_id]
-
-    if project["status"] == "processing":
-        raise HTTPException(status_code=400, detail="Project is already processing")
-
-    # Update project with config
-    project["stages"] = config.stages
-    project["status"] = "processing"
-    project["progress"] = 0.0
-    project["current_stage"] = config.stages[0] if config.stages else None
-
-    # Start pipeline in background
-    start_pipeline(
-        project_id=project_id,
-        project_dir=project["project_dir"],
-        stages=config.stages,
-        roto_prompt=config.roto_prompt,
-        skip_existing=config.skip_existing,
-    )
-
-    return {"status": "started", "project_id": project_id}
+    try:
+        response = pipeline_service.start_job(project_id, config)
+        return response.model_dump()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/projects/{project_id}/stop")
-async def stop_processing(project_id: str):
+async def stop_processing(
+    project_id: str,
+    pipeline_service: PipelineService = Depends(get_pipeline_service),
+):
     """Stop pipeline processing for a project."""
-    from .pipeline_runner import stop_pipeline
-
-    if project_id not in active_jobs:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    stopped = stop_pipeline(project_id)
+    stopped = pipeline_service.stop_job(project_id)
 
     if stopped:
-        active_jobs[project_id]["status"] = "stopped"
         return {"status": "stopped"}
     else:
         return {"status": "not_running"}
 
 
 @router.get("/projects/{project_id}/outputs")
-async def get_outputs(project_id: str):
+async def get_outputs(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+):
     """Get list of output files for a project."""
-    if project_id in active_jobs:
-        project_dir = Path(active_jobs[project_id]["project_dir"])
-    else:
-        project_dir = Path(DEFAULT_PROJECTS_DIR) / project_id
+    project = project_service.get_project(project_id)
 
-    if not project_dir.exists():
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    outputs = {}
+    project_entity = get_project_repo().get(project_id)
+    project_dir = project_entity.path
 
-    # Check each output directory (from configuration)
+    outputs = {}
     config_service = get_config_service()
     output_dirs = config_service.get_output_directories()
 
@@ -315,11 +265,10 @@ async def get_outputs(project_id: str):
             if files:
                 outputs[dir_name] = {
                     "count": len(files),
-                    "files": files[:10],  # First 10 files
+                    "files": files[:10],
                     "total_files": len(files),
                 }
 
-    # Also check for source frames
     frames_dir = project_dir / "source" / "frames"
     if frames_dir.exists() and frames_dir.is_dir():
         frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
@@ -347,7 +296,6 @@ async def system_status():
         "install_dir": str(INSTALL_DIR),
     }
 
-    # Check ComfyUI
     try:
         import urllib.request
         req = urllib.request.Request("http://127.0.0.1:8188/system_stats", method="GET")
@@ -356,14 +304,12 @@ async def system_status():
     except Exception:
         status["comfyui"] = False
 
-    # Check disk space
     try:
         projects_dir = Path(DEFAULT_PROJECTS_DIR)
         if projects_dir.exists():
             stat = shutil.disk_usage(projects_dir)
             status["disk_space_gb"] = round(stat.free / (1024**3), 1)
         else:
-            # Check parent
             parent = projects_dir.parent
             if parent.exists():
                 stat = shutil.disk_usage(parent)
@@ -376,18 +322,7 @@ async def system_status():
 
 @router.get("/config")
 async def get_config():
-    """Get pipeline configuration (stages, presets, settings).
-
-    Returns the complete pipeline configuration including:
-    - Stage definitions with metadata
-    - Preset configurations
-    - Supported video formats
-    - WebSocket settings
-    - UI configuration
-
-    This provides a single source of truth for configuration,
-    following the DRY principle.
-    """
+    """Get pipeline configuration (stages, presets, settings)."""
     config_service = get_config_service()
     return {
         "stages": config_service.get_stages(),
@@ -399,24 +334,26 @@ async def get_config():
 
 
 @router.post("/projects/{project_id}/open-folder")
-async def open_folder(project_id: str):
+async def open_folder(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+):
     """Open the project folder in the system file manager."""
-    if project_id in active_jobs:
-        project_dir = Path(active_jobs[project_id]["project_dir"])
-    else:
-        project_dir = Path(DEFAULT_PROJECTS_DIR) / project_id
+    project = project_service.get_project(project_id)
 
-    if not project_dir.exists():
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Try to open file manager
+    project_entity = get_project_repo().get(project_id)
+    project_dir = project_entity.path
+
     try:
         import platform
         system = platform.system()
 
         if system == "Linux":
             subprocess.Popen(["xdg-open", str(project_dir)])
-        elif system == "Darwin":  # macOS
+        elif system == "Darwin":
             subprocess.Popen(["open", str(project_dir)])
         elif system == "Windows":
             subprocess.Popen(["explorer", str(project_dir)])
