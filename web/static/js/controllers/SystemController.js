@@ -23,6 +23,7 @@ export class SystemController {
             errorToast: dom.getElement(ELEMENTS.ERROR_TOAST),
             errorMessage: dom.getElement('error-message'),
             errorClose: dom.getElement('error-close'),
+            shutdownBtn: dom.getElement('shutdown-btn'),
         };
 
         // Find status text element
@@ -41,6 +42,13 @@ export class SystemController {
         if (this.elements.errorClose) {
             this.elements.errorClose.addEventListener('click', () => {
                 this.hideError();
+            });
+        }
+
+        // Shutdown button
+        if (this.elements.shutdownBtn) {
+            this.elements.shutdownBtn.addEventListener('click', () => {
+                this.handleShutdown();
             });
         }
 
@@ -114,6 +122,59 @@ export class SystemController {
             dom.hide(this.elements.errorToast);
         }
         stateManager.clearError();
+    }
+
+    async handleShutdown() {
+        const confirmed = confirm(
+            'Shutdown the VFX Pipeline platform?\n\n' +
+            'The web interface will close and the server will stop.\n' +
+            'You can restart it by running: ./start-platform.sh'
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            // Disable the button to prevent double-clicks
+            if (this.elements.shutdownBtn) {
+                this.elements.shutdownBtn.disabled = true;
+                dom.setText(this.elements.shutdownBtn, 'Shutting down...');
+            }
+
+            // Call shutdown API
+            await apiService.shutdownSystem();
+
+            // Show confirmation message
+            this.showError('Server is shutting down. You can close this window.');
+
+            // Stop auto-refresh
+            this.stopAutoRefresh();
+
+            // After a brief delay, show final message
+            setTimeout(() => {
+                document.body.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                        <div style="text-align: center;">
+                            <h1 style="color: #2ecc71; margin-bottom: 20px;">✓ Shutdown Complete</h1>
+                            <p style="font-size: 1.2em; margin-bottom: 30px;">The VFX Pipeline platform has been shut down successfully.</p>
+                            <p style="color: #888;">You can close this window.</p>
+                            <p style="color: #888; margin-top: 20px;">To restart: <code style="background: #f5f5f5; padding: 4px 8px; border-radius: 4px;">./start-platform.sh</code></p>
+                        </div>
+                    </div>
+                `;
+            }, 2000);
+
+        } catch (error) {
+            console.error('Failed to shutdown system:', error);
+            this.showError('Failed to shutdown server. Please try again or use ./stop-platform.sh');
+
+            // Re-enable button on error
+            if (this.elements.shutdownBtn) {
+                this.elements.shutdownBtn.disabled = false;
+                dom.setText(this.elements.shutdownBtn, 'Shutdown');
+            }
+        }
     }
 
     startAutoRefresh() {

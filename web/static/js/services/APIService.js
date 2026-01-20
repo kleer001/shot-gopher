@@ -108,6 +108,13 @@ export class APIService {
     }
 
     /**
+     * Shutdown the system
+     */
+    async shutdownSystem() {
+        return this.post('/api/system/shutdown', {});
+    }
+
+    /**
      * Get projects list
      */
     async getProjects() {

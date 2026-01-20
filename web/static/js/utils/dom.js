@@ -182,3 +182,26 @@ export function isVisible(element) {
     const el = typeof element === 'string' ? getElement(element) : element;
     return el && !el.classList.contains(CSS_CLASSES.HIDDEN);
 }
+
+/**
+ * Escape HTML to prevent XSS attacks
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped HTML
+ */
+export function escapeHTML(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Set element HTML content with escaped text (XSS-safe)
+ * @param {HTMLElement|string} element - Element or ID
+ * @param {string} text - Text content to escape and set
+ */
+export function setHTMLSafe(element, text) {
+    const el = typeof element === 'string' ? getElement(element) : element;
+    if (el) {
+        el.textContent = text;
+    }
+}

@@ -182,6 +182,19 @@ async def upload_video(
     }
 
 
+@router.post("/projects")
+async def create_project(
+    request: ProjectCreateRequest,
+    project_service: ProjectService = Depends(get_project_service),
+):
+    """Create a new project (without video upload)."""
+    try:
+        project = project_service.create_project(request, Path(DEFAULT_PROJECTS_DIR))
+        return project.model_dump()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/projects")
 async def list_projects(
     project_service: ProjectService = Depends(get_project_service)
@@ -203,6 +216,28 @@ async def get_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     return project.model_dump()
+
+
+@router.delete("/projects/{project_id}")
+async def delete_project(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+    pipeline_service: PipelineService = Depends(get_pipeline_service),
+):
+    """Delete a project."""
+    job = pipeline_service.get_job_status(project_id)
+    if job and job.status == JobStatus.RUNNING:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete project while pipeline is running. Stop the job first."
+        )
+
+    deleted = project_service.delete_project(project_id)
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    return {"status": "deleted", "project_id": project_id}
 
 
 @router.post("/projects/{project_id}/start")
@@ -318,6 +353,28 @@ async def system_status():
         pass
 
     return status
+
+
+@router.post("/system/shutdown")
+async def shutdown_system():
+    """Shutdown the web server gracefully."""
+    import signal
+    import os
+
+    def delayed_shutdown():
+        """Shutdown after a brief delay to allow response to be sent."""
+        import time
+        time.sleep(1)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    import threading
+    shutdown_thread = threading.Thread(target=delayed_shutdown)
+    shutdown_thread.start()
+
+    return {
+        "status": "shutdown_initiated",
+        "message": "Server is shutting down..."
+    }
 
 
 @router.get("/config")

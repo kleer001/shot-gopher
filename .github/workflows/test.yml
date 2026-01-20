@@ -12,7 +12,16 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest
+        pip install pytest pytest-asyncio pytest-mock
         pip install -r requirements.txt
+    - name: Set up test environment
+      run: |
+        mkdir -p $HOME/.vfx_pipeline/ComfyUI
+        mkdir -p $HOME/vfx_projects
+        mkdir -p $HOME/vfx_models
     - name: Run tests
-      run: pytest
+      env:
+        VFX_PROJECTS_DIR: ${{ github.workspace }}/test_projects
+        VFX_MODELS_DIR: ${{ github.workspace }}/test_models
+        INSTALL_DIR: ${{ github.workspace }}/test_install
+      run: python -m pytest -v --tb=short

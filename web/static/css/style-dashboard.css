@@ -106,6 +106,28 @@ body {
     background: var(--bg-hover);
 }
 
+.shutdown-link {
+    color: var(--text-dim);
+    background: transparent;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.shutdown-link:hover {
+    color: white;
+    background: var(--error);
+    border-color: var(--error);
+}
+
+.shutdown-link:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Dashboard Grid */
 .dashboard-grid {
     flex: 1;
