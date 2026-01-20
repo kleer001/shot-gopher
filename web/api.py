@@ -3,16 +3,17 @@
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
 from pydantic import BaseModel
 
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from env_config import DEFAULT_PROJECTS_DIR, INSTALL_DIR
+from install_wizard.platform import PlatformManager
 from web.services.config_service import get_config_service
 from web.services.project_service import ProjectService
 from web.services.pipeline_service import PipelineService
@@ -71,10 +72,18 @@ def get_pipeline_service(
 
 
 def get_video_info(video_path: Path) -> dict:
-    """Extract video metadata using ffprobe."""
+    """Extract video metadata using ffprobe.
+
+    Uses PlatformManager.find_tool to locate ffprobe on Windows
+    even if it's not in PATH.
+    """
     try:
+        ffprobe_path = PlatformManager.find_tool("ffprobe")
+        if not ffprobe_path:
+            return {}
+
         cmd = [
-            "ffprobe", "-v", "quiet",
+            str(ffprobe_path), "-v", "quiet",
             "-print_format", "json",
             "-show_format", "-show_streams",
             str(video_path)
