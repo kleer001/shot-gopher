@@ -13,7 +13,7 @@ Complete documentation for the comfyui_ingest VFX pipeline toolset.
 This VFX pipeline provides a complete workflow for processing footage through:
 - Frame extraction
 - Depth analysis (ComfyUI + Depth-Anything-V3)
-- Segmentation/rotoscoping (ComfyUI + SAM2)
+- Segmentation/rotoscoping (ComfyUI + SAM3)
 - Camera tracking (COLMAP or Depth-Anything-V3)
 - Human motion capture (WHAM + ECON)
 - Material decomposition (GS-IR)

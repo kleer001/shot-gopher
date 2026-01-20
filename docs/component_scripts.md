@@ -159,7 +159,7 @@ python scripts/run_segmentation.py <input_dir> <output_dir> [options]
 - `output_dir` - Directory for output masks
 
 **Segmentation**:
-- `--model` - Segmentation model: `sam2`, `yolov8`, `detectron2` (default: `sam2`)
+- `--model` - Segmentation model: `sam3`, `yolov8`, `detectron2` (default: `sam3`)
 - `--classes` - Object classes to segment (comma-separated)
 - `--confidence` - Detection confidence threshold (default: 0.5)
 
@@ -207,7 +207,7 @@ Scene boundaries prevent mask propagation across cuts.
 
 - Lower `--scene-threshold` for more sensitive detection
 - Higher `--confidence` reduces false positives
-- SAM2 is most accurate but slowest
+- SAM3 is most accurate but slowest
 - YOLOv8 is fastest but less accurate
 
 ---

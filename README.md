@@ -185,7 +185,7 @@ Output follows VFX production conventions:
 - ComfyUI: 2.0 GB
 - PyTorch (with CUDA): 6.0 GB
 - Custom nodes (VideoHelperSuite, SAM3, ProPainter, etc.): 5.3 GB
-- Model checkpoints (Depth Anything V3, SAM2): 1.0 GB
+- Model checkpoints (Depth Anything V3, SAM3): 1.0 GB
 
 **Core Total: ~14 GB**
 

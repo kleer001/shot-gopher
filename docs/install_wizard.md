@@ -36,12 +36,12 @@ This clones the repository and runs the wizard automatically.
 
 Before running the wizard, you should set up credentials for downloading licensed models.
 
-### HuggingFace Token (SAM2 Model)
+### HuggingFace Token (SAM3 Model)
 
-Required for: Video segmentation (SAM2)
+Required for: Video segmentation (SAM3)
 
 1. Create account: https://huggingface.co/join
-2. Accept license: https://huggingface.co/facebook/sam2.1-hiera-large
+2. Accept license: https://huggingface.co/facebook/sam3
 3. Create token: https://huggingface.co/settings/tokens (Read access)
 4. Save to `HF_TOKEN.dat` in repository root
 
@@ -177,7 +177,7 @@ What would you like to install?
 - ComfyUI
 - VideoHelperSuite custom node
 - DepthAnythingV3 custom node
-- SAM2 custom node
+- SAM3 custom node
 
 **Option 3** adds:
 - WHAM (motion capture)
@@ -202,7 +202,7 @@ Choose individual components:
   [ ] ComfyUI base
   [ ] VideoHelperSuite
   [ ] DepthAnythingV3
-  [ ] SAM2
+  [ ] SAM3
 
 [Motion Capture]
   [ ] WHAM (pose estimation)
