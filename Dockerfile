@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     curl \
     xvfb \
+    ninja-build \
     libgl1-mesa-glx \
     libglu1-mesa \
     libglew2.2 \
@@ -84,6 +85,12 @@ WORKDIR /app/.vfx_pipeline
 # Clone GS-IR with submodules
 RUN git clone --recursive https://github.com/lzhnb/GS-IR.git GS-IR
 
+# Fix missing <cstdint> includes in GS-IR source (upstream bug)
+# Required for uint32_t type definition in CUDA compilation
+RUN cd GS-IR/gs-ir && \
+    sed -i '1i#include <cstdint>' src/utils.h && \
+    sed -i '1i#include <cstdint>' src/pbr_utils.cuh
+
 # Install nvdiffrast (required for GS-IR rendering)
 # --no-build-isolation required so it can find PyTorch during build
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -98,8 +105,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
     pip3 install --no-build-isolation ./submodules/simple-knn
 
-# Install gs-ir module
-RUN cd gs-ir && pip3 install --no-cache-dir -e .
+# Install gs-ir module (has CUDA extensions, needs TORCH_CUDA_ARCH_LIST)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    cd gs-ir && TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" pip3 install --no-build-isolation -e .
 
 WORKDIR /app
 
