@@ -19,25 +19,25 @@
         <!-- Navigation can be overridden by templates -->
         {% endblock %}
 
-        <header>
+        <header role="banner">
             <h1>{% block header_title %}VFX Pipeline Processor{% endblock %}</h1>
-            <div id="system-status" class="system-status">
-                <span class="status-dot"></span>
+            <div id="system-status" class="system-status" role="status" aria-live="polite" aria-label="System status">
+                <span class="status-dot" aria-hidden="true"></span>
                 <span class="status-text">Checking ComfyUI...</span>
             </div>
         </header>
 
-        <main>
+        <main role="main">
             {% block content %}
             <!-- Main content area for template variants -->
             {% endblock %}
         </main>
 
-        <footer>
-            <p>VFX Pipeline v1.0 | <a href="https://github.com/kleer001/comfyui_ingest" target="_blank">GitHub</a></p>
+        <footer role="contentinfo">
+            <p>VFX Pipeline v1.0 | <a href="https://github.com/kleer001/comfyui_ingest" target="_blank" rel="noopener noreferrer">GitHub</a></p>
             {% block footer_links %}
             <!-- Navigation between template variants -->
-            <nav class="template-nav">
+            <nav class="template-nav" role="navigation" aria-label="View templates">
                 <a href="/">Classic</a> |
                 <a href="/compact">Compact</a> |
                 <a href="/dashboard">Dashboard</a> |

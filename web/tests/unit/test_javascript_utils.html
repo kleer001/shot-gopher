@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScript Utilities Test Suite</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .test-suite {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-case {
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #ddd;
+        }
+        .test-case.pass {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        .test-case.fail {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        .test-summary {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .test-summary.all-pass {
+            background: #d4edda;
+            color: #155724;
+        }
+        .test-summary.some-fail {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .error-details {
+            margin-top: 5px;
+            padding: 5px;
+            background: #fff;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>JavaScript Utilities Test Suite</h1>
+    <div id="test-results"></div>
+
+    <!-- Load utilities -->
+    <script src="/static/js/utils/dom.js"></script>
+    <script src="/static/js/utils/time.js"></script>
+
+    <!-- Simple test framework -->
+    <script>
+        class TestRunner {
+            constructor() {
+                this.results = [];
+            }
+
+            assert(condition, message) {
+                this.results.push({
+                    passed: condition,
+                    message: message,
+                    error: condition ? null : "Assertion failed"
+                });
+            }
+
+            assertEqual(actual, expected, message) {
+                const passed = actual === expected;
+                this.results.push({
+                    passed: passed,
+                    message: message,
+                    error: passed ? null : `Expected: ${expected}, Got: ${actual}`
+                });
+            }
+
+            assertNotEqual(actual, notExpected, message) {
+                const passed = actual !== notExpected;
+                this.results.push({
+                    passed: passed,
+                    message: message,
+                    error: passed ? null : `Expected not: ${notExpected}, Got: ${actual}`
+                });
+            }
+
+            assertContains(haystack, needle, message) {
+                const passed = haystack.includes(needle);
+                this.results.push({
+                    passed: passed,
+                    message: message,
+                    error: passed ? null : `"${haystack}" does not contain "${needle}"`
+                });
+            }
+
+            assertThrows(fn, message) {
+                let threw = false;
+                try {
+                    fn();
+                } catch (e) {
+                    threw = true;
+                }
+                this.results.push({
+                    passed: threw,
+                    message: message,
+                    error: threw ? null : "Expected function to throw an error"
+                });
+            }
+
+            clear() {
+                this.results = [];
+            }
+
+            getResults() {
+                return this.results;
+            }
+        }
+
+        // Test suites
+        const suites = [];
+
+        function runTests() {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = '';
+
+            let totalPassed = 0;
+            let totalFailed = 0;
+
+            suites.forEach(suite => {
+                const suiteDiv = document.createElement('div');
+                suiteDiv.className = 'test-suite';
+                suiteDiv.innerHTML = `<h2>${suite.name}</h2>`;
+
+                const runner = new TestRunner();
+                suite.tests(runner);
+                const results = runner.getResults();
+
+                results.forEach(result => {
+                    const testDiv = document.createElement('div');
+                    testDiv.className = `test-case ${result.passed ? 'pass' : 'fail'}`;
+                    testDiv.innerHTML = `
+                        <strong>${result.passed ? '✓' : '✗'}</strong> ${result.message}
+                        ${result.error ? `<div class="error-details">${result.error}</div>` : ''}
+                    `;
+                    suiteDiv.appendChild(testDiv);
+
+                    if (result.passed) {
+                        totalPassed++;
+                    } else {
+                        totalFailed++;
+                    }
+                });
+
+                resultsDiv.appendChild(suiteDiv);
+            });
+
+            // Summary
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = `test-summary ${totalFailed === 0 ? 'all-pass' : 'some-fail'}`;
+            summaryDiv.innerHTML = `
+                Total: ${totalPassed + totalFailed} tests |
+                Passed: ${totalPassed} |
+                Failed: ${totalFailed}
+            `;
+            resultsDiv.appendChild(summaryDiv);
+        }
+
+        // DOM Utilities Tests
+        suites.push({
+            name: "DOM Utilities",
+            tests: (t) => {
+                // Test escapeHtml
+                if (typeof escapeHtml !== 'undefined') {
+                    t.assertEqual(
+                        escapeHtml('<script>alert("xss")</script>'),
+                        '&lt;script&gt;alert("xss")&lt;/script&gt;',
+                        'escapeHtml should escape script tags'
+                    );
+
+                    t.assertEqual(
+                        escapeHtml('Hello & goodbye'),
+                        'Hello &amp; goodbye',
+                        'escapeHtml should escape ampersands'
+                    );
+
+                    t.assertEqual(
+                        escapeHtml('Quote: "test"'),
+                        'Quote: "test"',
+                        'escapeHtml should handle quotes'
+                    );
+
+                    t.assertEqual(
+                        escapeHtml('Normal text'),
+                        'Normal text',
+                        'escapeHtml should not modify normal text'
+                    );
+                } else {
+                    t.assert(false, 'escapeHtml function not found');
+                }
+
+                // Test clearElement
+                if (typeof clearElement !== 'undefined') {
+                    const testDiv = document.createElement('div');
+                    testDiv.innerHTML = '<p>Test</p><p>Content</p>';
+                    clearElement(testDiv);
+                    t.assertEqual(testDiv.innerHTML, '', 'clearElement should remove all children');
+                } else {
+                    t.assert(false, 'clearElement function not found');
+                }
+
+                // Test createElement
+                if (typeof createElement !== 'undefined') {
+                    const div = createElement('div', 'test-class', 'Test content');
+                    t.assertEqual(div.tagName, 'DIV', 'createElement should create correct tag');
+                    t.assertEqual(div.className, 'test-class', 'createElement should set class');
+                    t.assertEqual(div.textContent, 'Test content', 'createElement should set content');
+                } else {
+                    t.assert(false, 'createElement function not found');
+                }
+            }
+        });
+
+        // Time Utilities Tests
+        suites.push({
+            name: "Time Utilities",
+            tests: (t) => {
+                // Test formatDuration
+                if (typeof formatDuration !== 'undefined') {
+                    t.assertEqual(formatDuration(0), '0s', 'formatDuration should handle 0 seconds');
+                    t.assertEqual(formatDuration(30), '30s', 'formatDuration should format seconds');
+                    t.assertEqual(formatDuration(90), '1m 30s', 'formatDuration should format minutes and seconds');
+                    t.assertEqual(formatDuration(3661), '1h 1m 1s', 'formatDuration should format hours, minutes, seconds');
+                } else {
+                    t.assert(false, 'formatDuration function not found');
+                }
+
+                // Test formatTimestamp
+                if (typeof formatTimestamp !== 'undefined') {
+                    const date = new Date('2026-01-20T12:30:45');
+                    const formatted = formatTimestamp(date);
+                    t.assertContains(formatted, '2026', 'formatTimestamp should include year');
+                    t.assertContains(formatted, '01', 'formatTimestamp should include month');
+                    t.assertContains(formatted, '20', 'formatTimestamp should include day');
+                } else {
+                    t.assert(false, 'formatTimestamp function not found');
+                }
+
+                // Test getRelativeTime
+                if (typeof getRelativeTime !== 'undefined') {
+                    const now = new Date();
+                    const oneMinuteAgo = new Date(now - 60 * 1000);
+                    const oneHourAgo = new Date(now - 60 * 60 * 1000);
+
+                    t.assertContains(
+                        getRelativeTime(oneMinuteAgo),
+                        'minute',
+                        'getRelativeTime should format minutes'
+                    );
+                    t.assertContains(
+                        getRelativeTime(oneHourAgo),
+                        'hour',
+                        'getRelativeTime should format hours'
+                    );
+                } else {
+                    t.assert(false, 'getRelativeTime function not found');
+                }
+            }
+        });
+
+        // XSS Protection Tests
+        suites.push({
+            name: "XSS Protection",
+            tests: (t) => {
+                if (typeof escapeHtml !== 'undefined') {
+                    const xssPayloads = [
+                        '<img src=x onerror=alert(1)>',
+                        '<svg onload=alert(1)>',
+                        'javascript:alert(1)',
+                        '<iframe src=javascript:alert(1)>',
+                        '<body onload=alert(1)>',
+                    ];
+
+                    xssPayloads.forEach(payload => {
+                        const escaped = escapeHtml(payload);
+                        t.assertNotEqual(
+                            escaped,
+                            payload,
+                            `XSS payload should be escaped: ${payload.substring(0, 30)}...`
+                        );
+                        t.assert(
+                            !escaped.includes('<script'),
+                            'Escaped content should not contain script tags'
+                        );
+                    });
+                }
+            }
+        });
+
+        // API Client Tests (if available)
+        suites.push({
+            name: "API Client Basics",
+            tests: (t) => {
+                // These tests just verify the API client structure exists
+                // Actual API tests should be done in integration tests
+                t.assert(true, 'Placeholder: API client structure tests should be implemented');
+            }
+        });
+
+        // Run all tests when page loads
+        window.addEventListener('DOMContentLoaded', runTests);
+    </script>
+</body>
+</html>
