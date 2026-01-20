@@ -86,15 +86,14 @@ RUN git clone --recursive https://github.com/lzhnb/GS-IR.git GS-IR
 
 # Install nvdiffrast (required for GS-IR rendering)
 # --no-build-isolation required so it can find PyTorch during build
-# TORCH_CUDA_ARCH_LIST must be set inline for subprocess to see it
-RUN TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
+# Export TORCH_CUDA_ARCH_LIST explicitly in shell for pip subprocess
+RUN export TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" && \
     pip3 install --no-cache-dir --no-build-isolation git+https://github.com/NVlabs/nvdiffrast.git
 
 # Build and install GS-IR submodules (CUDA extensions)
 WORKDIR /app/.vfx_pipeline/GS-IR
-RUN TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
+RUN export TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" && \
     pip3 install --no-cache-dir --no-build-isolation ./submodules/diff-gaussian-rasterization && \
-    TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
     pip3 install --no-cache-dir --no-build-isolation ./submodules/simple-knn
 
 # Install gs-ir module
