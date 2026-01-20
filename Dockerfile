@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     curl \
     xvfb \
+    ninja-build \
     libgl1-mesa-glx \
     libglu1-mesa \
     libglew2.2 \
@@ -98,8 +99,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
     pip3 install --no-build-isolation ./submodules/simple-knn
 
-# Install gs-ir module
-RUN cd gs-ir && pip3 install --no-cache-dir -e .
+# Install gs-ir module (has CUDA extensions, needs TORCH_CUDA_ARCH_LIST)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    cd gs-ir && TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" pip3 install --no-build-isolation -e .
 
 WORKDIR /app
 
