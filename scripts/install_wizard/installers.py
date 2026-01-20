@@ -331,7 +331,7 @@ class GSIRInstaller(ComponentInstaller):
             print_warning("Failed to install kornia")
 
         print("  Installing nvdiffrast...")
-        if not self._run_pip(["install", "git+https://github.com/NVlabs/nvdiffrast.git"]):
+        if not self._run_pip(["install", "--no-build-isolation", "git+https://github.com/NVlabs/nvdiffrast.git"]):
             print_warning("Failed to install nvdiffrast")
 
         if not shutil.which("nvcc"):
@@ -343,7 +343,7 @@ class GSIRInstaller(ComponentInstaller):
 
         print("  Building diff-gaussian-rasterization...")
         if diff_gauss.exists():
-            if not self._run_pip(["install", str(diff_gauss)]):
+            if not self._run_pip(["install", "--no-build-isolation", str(diff_gauss)]):
                 print_error("Failed to build diff-gaussian-rasterization")
                 return False
         else:
@@ -352,7 +352,7 @@ class GSIRInstaller(ComponentInstaller):
 
         print("  Building simple-knn...")
         if simple_knn.exists():
-            if not self._run_pip(["install", str(simple_knn)]):
+            if not self._run_pip(["install", "--no-build-isolation", str(simple_knn)]):
                 print_error("Failed to build simple-knn")
                 return False
         else:

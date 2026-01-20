@@ -80,12 +80,13 @@ WORKDIR /app/.vfx_pipeline
 RUN git clone --recursive https://github.com/lzhnb/GS-IR.git GS-IR
 
 # Install nvdiffrast (required for GS-IR rendering)
-RUN pip3 install --no-cache-dir git+https://github.com/NVlabs/nvdiffrast.git
+# --no-build-isolation required so it can find PyTorch during build
+RUN pip3 install --no-cache-dir --no-build-isolation git+https://github.com/NVlabs/nvdiffrast.git
 
 # Build and install GS-IR submodules (CUDA extensions)
 WORKDIR /app/.vfx_pipeline/GS-IR
-RUN pip3 install --no-cache-dir ./submodules/diff-gaussian-rasterization && \
-    pip3 install --no-cache-dir ./submodules/simple-knn
+RUN pip3 install --no-cache-dir --no-build-isolation ./submodules/diff-gaussian-rasterization && \
+    pip3 install --no-cache-dir --no-build-isolation ./submodules/simple-knn
 
 # Install gs-ir module
 RUN cd gs-ir && pip3 install --no-cache-dir -e .
