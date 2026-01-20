@@ -24,6 +24,19 @@ def client(temp_projects_dir, monkeypatch):
     """Create test client with temporary projects directory."""
     monkeypatch.setenv("VFX_PROJECTS_DIR", str(temp_projects_dir))
 
+    import importlib
+    import sys
+    if "env_config" in sys.modules:
+        importlib.reload(sys.modules["env_config"])
+    if "web.api" in sys.modules:
+        importlib.reload(sys.modules["web.api"])
+
+    import web.api as api_module
+    api_module._project_repo = None
+    api_module._job_repo = None
+    api_module._project_service = None
+    api_module._pipeline_service = None
+
     with TestClient(app) as test_client:
         yield test_client
 
@@ -138,25 +151,21 @@ class TestVideoUploadFlow:
     """Test video upload workflow."""
 
     def test_upload_video_to_project(self, client, sample_video):
-        """Test uploading a video file to a project."""
-        client.post("/api/projects", json={
-            "name": "upload_test",
-            "stages": ["ingest"]
-        })
-
-        files = {"video": ("test_video.mp4", sample_video, "video/mp4")}
-        response = client.post("/api/projects/upload_test/upload-video", files=files)
+        """Test uploading a video file (creates project automatically)."""
+        files = {"file": ("test_video.mp4", sample_video, "video/mp4")}
+        response = client.post("/api/upload", files=files, data={"name": "upload_test"})
 
         assert response.status_code == 200
         data = response.json()
-        assert "video_path" in data
+        assert "project_id" in data
+        assert data["project_id"] == "upload_test"
 
     def test_upload_video_to_nonexistent_project_fails(self, client, sample_video):
-        """Test that uploading to non-existent project fails."""
-        files = {"video": ("test_video.mp4", sample_video, "video/mp4")}
-        response = client.post("/api/projects/nonexistent/upload-video", files=files)
+        """Test that uploading with unsupported format fails."""
+        files = {"file": ("test.txt", b"not a video", "text/plain")}
+        response = client.post("/api/upload", files=files)
 
-        assert response.status_code == 404
+        assert response.status_code == 400
 
 
 class TestProjectManagementFlow:
@@ -166,7 +175,6 @@ class TestProjectManagementFlow:
         """Test retrieving project details."""
         client.post("/api/projects", json={
             "name": "detail_test",
-            "description": "Project for detail testing",
             "stages": ["ingest", "depth"]
         })
 
@@ -175,7 +183,7 @@ class TestProjectManagementFlow:
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "detail_test"
-        assert data["description"] == "Project for detail testing"
+        assert data["status"] in ["created", "processing", "complete", "failed", "unknown"]
         assert len(data["stages"]) == 2
 
     def test_get_nonexistent_project_fails(self, client):
@@ -214,22 +222,17 @@ class TestConfigurationFlow:
         assert "stages" in data
         assert "presets" in data
         assert "supportedVideoFormats" in data
-        assert isinstance(data["stages"], list)
+        assert isinstance(data["stages"], dict)
         assert len(data["stages"]) > 0
 
     def test_get_video_info(self, client, sample_video):
-        """Test getting video metadata."""
-        client.post("/api/projects", json={
-            "name": "video_info_test",
-            "stages": ["ingest"]
-        })
+        """Test uploading video includes video metadata."""
+        files = {"file": ("test.mp4", sample_video, "video/mp4")}
+        response = client.post("/api/upload", files=files, data={"name": "video_info_test"})
 
-        files = {"video": ("test.mp4", sample_video, "video/mp4")}
-        client.post("/api/projects/video_info_test/upload-video", files=files)
-
-        response = client.get("/api/projects/video_info_test/video-info")
-
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
+        data = response.json()
+        assert "video_info" in data
 
 
 class TestSystemStatusFlow:
@@ -259,31 +262,24 @@ class TestCompleteUserJourney:
     """Test complete end-to-end user workflows."""
 
     def test_complete_project_lifecycle(self, client, sample_video):
-        """Test the complete lifecycle: create → upload → process → delete."""
+        """Test the complete lifecycle: upload → verify → delete."""
         project_name = "lifecycle_test"
 
-        response = client.post("/api/projects", json={
-            "name": project_name,
-            "description": "Complete lifecycle test",
-            "stages": ["ingest"]
-        })
+        files = {"file": ("test.mp4", sample_video, "video/mp4")}
+        response = client.post("/api/upload", files=files, data={"name": project_name})
         assert response.status_code == 200
         created_project = response.json()
-        assert created_project["status"] == "created"
+        assert created_project["project_id"] == project_name
 
         response = client.get("/api/projects")
         assert response.status_code == 200
         projects = response.json()["projects"]
         assert any(p["name"] == project_name for p in projects)
 
-        files = {"video": ("test.mp4", sample_video, "video/mp4")}
-        response = client.post(f"/api/projects/{project_name}/upload-video", files=files)
-        assert response.status_code == 200
-
         response = client.get(f"/api/projects/{project_name}")
         assert response.status_code == 200
         project_details = response.json()
-        assert "video_path" in project_details or "video" in str(project_details)
+        assert project_details["video_path"] is not None
 
         response = client.delete(f"/api/projects/{project_name}")
         assert response.status_code == 200
