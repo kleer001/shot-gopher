@@ -79,6 +79,10 @@ WORKDIR /app/.vfx_pipeline
 # Clone GS-IR with submodules
 RUN git clone --recursive https://github.com/lzhnb/GS-IR.git GS-IR
 
+# Set CUDA architectures for building without GPU visible
+# Covers: V100(7.0), RTX 20xx/T4(7.5), A100(8.0), RTX 30xx(8.6), RTX 40xx(8.9)
+ENV TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9"
+
 # Install nvdiffrast (required for GS-IR rendering)
 # --no-build-isolation required so it can find PyTorch during build
 RUN pip3 install --no-cache-dir --no-build-isolation git+https://github.com/NVlabs/nvdiffrast.git
