@@ -38,6 +38,14 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
+# Check if .env exists (required for Docker build configuration)
+if [ ! -f "${REPO_ROOT}/.env" ]; then
+    echo -e "${YELLOW}No .env file found - running GPU detection...${NC}"
+    echo ""
+    "${REPO_ROOT}/scripts/setup_build.sh"
+    echo ""
+fi
+
 # Check models directory exists
 if [ ! -d "$MODELS_DIR" ]; then
     echo -e "${YELLOW}WARNING: Models directory not found at $MODELS_DIR${NC}"
