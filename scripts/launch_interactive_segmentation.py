@@ -7,22 +7,22 @@ opens ComfyUI in the browser for manual point selection.
 This workflow is for complex shots where automated text prompts don't provide
 sufficient control (e.g., segmenting individual legs, specific body parts).
 
+The script auto-detects your environment:
+- If local ComfyUI + SAM3 is installed → uses local mode
+- If Docker image exists → uses Docker mode (starts container, opens browser, cleanup)
+
 Usage:
-    # Local mode (ComfyUI installed locally)
-    python launch_interactive_segmentation.py <project_dir> --open
+    # Auto-detect mode (recommended)
+    python launch_interactive_segmentation.py /path/to/projects/My_Shot
 
-    # Docker mode (recommended - handles everything automatically)
-    python launch_interactive_segmentation.py <project_dir> --docker
-
-Example:
-    # Start Docker container, open browser, wait for user, cleanup
+    # Force Docker mode
     python launch_interactive_segmentation.py /path/to/projects/My_Shot --docker
 
-    # Local mode with browser
-    python launch_interactive_segmentation.py /path/to/projects/My_Shot --open
+    # Force local mode
+    python launch_interactive_segmentation.py /path/to/projects/My_Shot --local --open
 
 Requirements:
-    - Docker mode: Docker with nvidia-container-toolkit installed
+    - Docker mode: Docker with nvidia-container-toolkit, image built
     - Local mode: ComfyUI-SAM3 extension installed, ComfyUI running
 """
 
@@ -431,6 +431,31 @@ def check_sam3_installed() -> tuple[bool, Path | None]:
     return False, None
 
 
+def check_local_installation() -> bool:
+    """Check if local ComfyUI installation with SAM3 is available."""
+    if not COMFYUI_DIR.exists():
+        return False
+    sam3_installed, _ = check_sam3_installed()
+    return sam3_installed
+
+
+def detect_execution_mode() -> str:
+    """Auto-detect the best execution mode based on available installations.
+
+    Returns:
+        'local' if local ComfyUI+SAM3 is installed
+        'docker' if Docker is available with the vfx-ingest image
+        'none' if neither is available
+    """
+    if check_local_installation():
+        return "local"
+
+    if check_docker_available() and check_docker_image_exists():
+        return "docker"
+
+    return "none"
+
+
 def create_output_dirs(project_dir: Path) -> None:
     """Create output directories for custom segmentation."""
     custom_roto_dir = project_dir / "roto" / "custom"
@@ -559,21 +584,29 @@ def main():
         type=Path,
         help="Project directory (must have source/frames/)"
     )
-    parser.add_argument(
+
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
         "--docker", "-d",
         action="store_true",
-        help="Run in Docker mode: start container, open browser, cleanup when done"
+        help="Force Docker mode (auto-detected if not specified)"
     )
+    mode_group.add_argument(
+        "--local", "-l",
+        action="store_true",
+        help="Force local mode (auto-detected if not specified)"
+    )
+
     parser.add_argument(
         "--models-dir", "-m",
         type=Path,
         default=None,
-        help="Path to models directory (Docker mode only, auto-detected if not specified)"
+        help="Path to models directory (Docker mode, auto-detected if not specified)"
     )
     parser.add_argument(
         "--open", "-o",
         action="store_true",
-        help="Open ComfyUI in browser after preparing workflow (local mode)"
+        help="Open ComfyUI in browser (local mode only, Docker always opens browser)"
     )
     parser.add_argument(
         "--url", "-u",
@@ -598,6 +631,23 @@ def main():
         return run_internal_prepare(args.project_dir)
 
     if args.docker:
+        mode = "docker"
+    elif args.local:
+        mode = "local"
+    else:
+        mode = detect_execution_mode()
+        if mode == "none":
+            print("Error: No valid execution environment detected.", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Options:", file=sys.stderr)
+            print("  1. Install locally: python scripts/install_wizard.py", file=sys.stderr)
+            print("  2. Build Docker image: docker compose build", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Or force a mode with --docker or --local", file=sys.stderr)
+            return 1
+        print(f"Auto-detected mode: {mode}")
+
+    if mode == "docker":
         models_dir = args.models_dir or find_default_models_dir()
         return run_docker_mode(args.project_dir, models_dir, args.url)
 

@@ -15,15 +15,21 @@ For complex shots where automatic text-prompt segmentation doesn't work well (e.
 - Project set up with source frames (`setup_project.py` or ingest stage complete)
 - ComfyUI running
 
-## Docker Usage (Recommended)
+## Quick Start
 
-The simplest way to run interactive segmentation is with Docker mode. One command handles everything:
+The script auto-detects your environment. Just run:
 
 ```bash
-python scripts/launch_interactive_segmentation.py /path/to/your/project --docker
+python scripts/launch_interactive_segmentation.py /path/to/your/project
 ```
 
-This will:
+It will automatically:
+- Use **local mode** if ComfyUI + SAM3 is installed locally
+- Use **Docker mode** if the Docker image exists (recommended for most users)
+
+### Docker Mode (Auto-detected)
+
+If you have Docker set up, the script will:
 1. Start a Docker container with ComfyUI and SAM3
 2. Wait for ComfyUI to be ready
 3. Prepare the workflow with correct paths
@@ -31,30 +37,18 @@ This will:
 5. Wait for you to finish (press Enter when done)
 6. Clean up the container automatically
 
-### Requirements
-
+**Requirements for Docker mode:**
 - Docker with nvidia-container-toolkit installed
 - Docker image built: `docker compose build`
 - Models downloaded to `.vfx_pipeline/models/` (or specify `--models-dir`)
 
-### Docker Quick Start
+### Specify Models Directory
 
 ```bash
-# One command does everything
-python scripts/launch_interactive_segmentation.py /path/to/projects/MyShot --docker
-
 # If models are in a different location
-python scripts/launch_interactive_segmentation.py /path/to/projects/MyShot --docker \
+python scripts/launch_interactive_segmentation.py /path/to/projects/MyShot \
   --models-dir /path/to/models
 ```
-
-The script will:
-- Mount your project directory automatically
-- Mount the models directory (read-only)
-- Start ComfyUI on port 8188
-- Open your browser
-- Wait for you to press Enter when done
-- Stop and remove the container
 
 ## Local Installation Quick Start
 
@@ -183,30 +177,21 @@ Masks are saved to your project's `roto/custom/` directory on the host. If they'
 
 ## Command Reference
 
-### Docker Mode (Recommended)
-
 ```bash
-# All-in-one: start container, open browser, cleanup when done
-python scripts/launch_interactive_segmentation.py <project_dir> --docker
-
-# Specify models directory
-python scripts/launch_interactive_segmentation.py <project_dir> --docker --models-dir /path/to/models
-
-# Custom ComfyUI URL (if using non-default port)
-python scripts/launch_interactive_segmentation.py <project_dir> --docker --url http://localhost:9999
-```
-
-### Local Mode (ComfyUI installed locally)
-
-```bash
-# Prepare workflow only (then manually open ComfyUI)
+# Auto-detect mode (recommended)
 python scripts/launch_interactive_segmentation.py <project_dir>
 
-# Prepare workflow and open browser
-python scripts/launch_interactive_segmentation.py <project_dir> --open
+# Force Docker mode
+python scripts/launch_interactive_segmentation.py <project_dir> --docker
+
+# Force local mode with browser
+python scripts/launch_interactive_segmentation.py <project_dir> --local --open
+
+# Specify models directory (Docker mode)
+python scripts/launch_interactive_segmentation.py <project_dir> --models-dir /path/to/models
 
 # Custom ComfyUI URL
-python scripts/launch_interactive_segmentation.py <project_dir> --url http://localhost:8188
+python scripts/launch_interactive_segmentation.py <project_dir> --url http://localhost:9999
 
 # Force overwrite existing workflow
 python scripts/launch_interactive_segmentation.py <project_dir> --force
