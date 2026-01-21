@@ -48,8 +48,11 @@ COPY --from=colmap-source /usr/local/lib/libcolmap* /usr/local/lib/
 # Copy FreeImage library from official image to ensure compatibility
 # The apt version (libfreeimage3) may not have proper initialization
 COPY --from=colmap-source /usr/lib/x86_64-linux-gnu/libfreeimage* /usr/lib/x86_64-linux-gnu/
-# Update library cache
-RUN ldconfig || true
+# Ensure COLMAP is executable and update library cache
+RUN chmod +x /usr/local/bin/colmap && ldconfig
+
+# Ensure /usr/local/bin is in PATH (for shutil.which to find colmap)
+ENV PATH="/usr/local/bin:$PATH"
 
 # Create application directory
 WORKDIR /app
