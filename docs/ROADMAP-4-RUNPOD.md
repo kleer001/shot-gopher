@@ -8,6 +8,36 @@
 
 ---
 
+## Prerequisites
+
+### Option A: Use Existing Local Installation (Recommended)
+
+If you've already run the install wizard locally, you have models downloaded to `~/.vfx_pipeline/models/`. This roadmap can upload those directly to RunPod instead of re-downloading.
+
+```bash
+# Check if models exist locally
+ls -la ~/.vfx_pipeline/models/
+# Should show: sam3/, videodepthanything/, wham/, matanyone/, smplx/ (optional)
+```
+
+### Option B: Fresh Cloud Installation
+
+If you don't have local models, this roadmap will download them directly to RunPod's network volumes (slower, but works).
+
+### Shared Configuration
+
+Model metadata (URLs, checksums, sizes) is defined in `scripts/install_wizard/downloader.py:CheckpointDownloader.CHECKPOINTS`. Both local and cloud installations use the same source of truth:
+
+| Model | Source | Size | Config Key |
+|-------|--------|------|------------|
+| SAM3 | HuggingFace `1038lab/sam3` | ~3.2GB | `sam3` |
+| Video Depth Anything | HuggingFace `depth-anything/Video-Depth-Anything-Small` | ~120MB | `video_depth_anything` |
+| WHAM | Google Drive | ~1.2GB | `wham` |
+| MatAnyone | GitHub Release | ~141MB | `matanyone` |
+| SMPL-X | Requires registration | ~830MB | `smplx` |
+
+---
+
 ## Overview
 
 This roadmap deploys the existing Docker-based VFX pipeline to RunPod's cloud GPU infrastructure. Users access the web UI via a public URL while heavy GPU processing happens on RunPod's servers.
@@ -133,7 +163,26 @@ runpod volume create \
 
 Models must be uploaded once; they persist across pod restarts.
 
-**Option A: Via Temporary Pod**
+**Option A: Upload Existing Local Models (Recommended)**
+
+If you've already run `python scripts/install_wizard.py --docker`, your models are at `~/.vfx_pipeline/models/`. Upload them directly:
+
+```bash
+# Install runpodctl
+brew install runpod/runpodctl/runpodctl  # macOS
+# or: curl -fsSL https://github.com/runpod/runpodctl/releases/latest/download/runpodctl-linux-amd64 -o runpodctl && chmod +x runpodctl
+
+# Upload local models (fastest method)
+runpodctl send ~/.vfx_pipeline/models --volume vfx-models
+
+# This uploads the exact same models the install wizard downloaded,
+# using the structure defined in scripts/install_wizard/docker.py:DockerCheckpointDownloader.DOCKER_DEST_DIRS
+```
+
+**Option B: Download Fresh to RunPod**
+
+If you don't have local models, use a temporary pod to download them. This reuses the same download logic from the install wizard:
+
 ```bash
 # Start a cheap CPU pod with volume attached
 runpod pod create \
@@ -144,33 +193,34 @@ runpod pod create \
 
 # SSH into pod
 runpod pod ssh model-uploader
-
-# Inside pod: download models
-apt update && apt install -y wget python3 python3-pip
-pip3 install huggingface_hub gdown
-
-# Download SAM3
-python3 -c "from huggingface_hub import snapshot_download; snapshot_download('1038lab/sam3', local_dir='/models/sam3')"
-
-# Download Video Depth Anything
-python3 -c "from huggingface_hub import snapshot_download; snapshot_download('depth-anything/Video-Depth-Anything-Small', local_dir='/models/videodepthanything')"
-
-# Download other models...
-# (Use same logic as scripts/download_models.sh)
-
-# Exit and terminate pod
-exit
-runpod pod terminate model-uploader
 ```
 
-**Option B: Via runpodctl (faster for local files)**
-```bash
-# Install runpodctl
-brew install runpod/runpodctl/runpodctl  # macOS
-# or download from https://github.com/runpod/runpodctl
+Inside the pod, download using the same sources as `scripts/install_wizard/downloader.py`:
 
-# Upload local models directory
-runpodctl send ~/.vfx_pipeline/models --volume vfx-models
+```bash
+apt update && apt install -y wget python3 python3-pip git
+pip3 install huggingface_hub gdown
+
+# SAM3 (from CheckpointDownloader.CHECKPOINTS['sam3'])
+python3 -c "from huggingface_hub import snapshot_download; snapshot_download('1038lab/sam3', local_dir='/models/sam3')"
+
+# Video Depth Anything (from CheckpointDownloader.CHECKPOINTS['video_depth_anything'])
+python3 -c "from huggingface_hub import snapshot_download; snapshot_download('depth-anything/Video-Depth-Anything-Small', local_dir='/models/videodepthanything')"
+
+# WHAM (from CheckpointDownloader.CHECKPOINTS['wham'])
+pip3 install gdown
+gdown "https://drive.google.com/uc?id=1i7kt9RlCCCNEW2aYaDWVr-G778JkLNcB" -O /models/wham/wham_vit_w_3dpw.pth.tar
+mkdir -p /models/wham && mv wham_vit_w_3dpw.pth.tar /models/wham/
+
+# MatAnyone (from CheckpointDownloader.CHECKPOINTS['matanyone'])
+mkdir -p /models/matanyone
+wget -O /models/matanyone/matanyone.pth "https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth"
+
+# SMPL-X requires manual registration - see scripts/install_wizard/downloader.py for instructions
+# Register at: https://smpl-x.is.tue.mpg.de/register.php
+
+exit
+runpod pod terminate model-uploader
 ```
 
 **Validation:**
@@ -179,12 +229,13 @@ runpodctl send ~/.vfx_pipeline/models --volume vfx-models
 runpod pod create --name verify-models --image ubuntu:22.04 --volume vfx-models:/models --gpu-count 0
 runpod pod ssh verify-models
 ls -la /models/
-# Should show: sam3/, videodepthanything/, wham/, matanyone/, smplx/
+# Should show: sam3/, videodepthanything/, wham/, matanyone/, smplx/ (if registered)
 ```
 
 **Success Criteria:**
 - [ ] All required models uploaded
 - [ ] Models accessible from volume mount
+- [ ] Directory structure matches `DockerCheckpointDownloader.DOCKER_DEST_DIRS`
 - [ ] Total size ~15-20GB
 
 ---
@@ -205,91 +256,70 @@ ls -la /models/
 
 ### Tasks
 
-#### Task 4B.1: Create RunPod-Specific Dockerfile
+#### Task 4B.1: Extend Existing Dockerfile for RunPod
 
-RunPod has specific requirements for exposed ports and health checks.
+Rather than duplicating the existing `Dockerfile`, create a thin extension that adds RunPod-specific requirements (SSH, environment variables).
+
+**Approach:** Use a multi-stage build that inherits from the existing image.
 
 **File:** `Dockerfile.runpod`
 
 ```dockerfile
-# Multi-stage build for RunPod deployment
-# Based on existing Dockerfile with RunPod-specific additions
+# RunPod extension of existing VFX Ingest image
+# Inherits all dependencies from the main Dockerfile
 
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS base
+# Build the base image first (reuses existing Dockerfile)
+FROM vfx-ingest:latest AS base
 
-# System dependencies
-RUN apt-get update && apt-get install -y \
-    colmap \
-    ffmpeg \
-    git \
-    python3.10 \
-    python3-pip \
-    wget \
-    curl \
-    openssh-server \
-    && rm -rf /var/lib/apt/lists/*
+# Add RunPod-specific requirements
+USER root
 
-# RunPod requires SSH for web terminal
-RUN mkdir /var/run/sshd
-RUN echo 'root:runpod' | chpasswd
-RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+# SSH server for RunPod web terminal
+RUN apt-get update && apt-get install -y openssh-server && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir /var/run/sshd && \
+    echo 'root:runpod' | chpasswd && \
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 
-WORKDIR /app
+# RunPod-specific entrypoint (extends docker/entrypoint.sh)
+COPY docker/runpod_entrypoint.sh /app/runpod_entrypoint.sh
+RUN chmod +x /app/runpod_entrypoint.sh
 
-# Python dependencies
-COPY requirements.txt /tmp/
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
-RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# ComfyUI and custom nodes
-RUN mkdir -p /app/.vfx_pipeline
-RUN git clone https://github.com/comfyanonymous/ComfyUI.git /app/.vfx_pipeline/ComfyUI
-
-WORKDIR /app/.vfx_pipeline/ComfyUI/custom_nodes
-RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
-    git clone https://github.com/yuvraj108c/ComfyUI-Video-Depth-Anything.git && \
-    git clone https://github.com/PozzettiAndrea/ComfyUI-SAM3.git && \
-    git clone https://github.com/daniabib/ComfyUI_ProPainter_Nodes.git && \
-    git clone https://github.com/FuouM/ComfyUI-MatAnyone.git
-
-RUN for dir in */; do \
-        if [ -f "$dir/requirements.txt" ]; then \
-            pip3 install --no-cache-dir -r "$dir/requirements.txt"; \
-        fi; \
-    done
-
-WORKDIR /app
-
-# Copy pipeline code
-COPY scripts/ /app/scripts/
-COPY workflow_templates/ /app/workflow_templates/
-COPY web/ /app/web/
-COPY start_web.py /app/
-
-# RunPod entrypoint
-COPY docker/runpod_entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-
-# Environment
-ENV CONTAINER=true \
-    RUNPOD=true \
-    VFX_INSTALL_DIR=/app/.vfx_pipeline \
+# Override environment for RunPod volume paths
+# These match the volume mount points configured in RunPod
+ENV RUNPOD=true \
     VFX_MODELS_DIR=/runpod-volume/models \
     VFX_PROJECTS_DIR=/runpod-volume/projects \
-    COMFYUI_OUTPUT_DIR=/runpod-volume/projects \
-    PYTHONPATH=/app/scripts:$PYTHONPATH
+    COMFYUI_OUTPUT_DIR=/runpod-volume/projects
 
-# Expose ports
-# 22 = SSH (RunPod web terminal)
-# 5000 = FastAPI Web UI
-# 8188 = ComfyUI
+# Expose additional port for SSH
 EXPOSE 22 5000 8188
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/app/runpod_entrypoint.sh"]
+```
+
+**Alternative: Build from scratch (if base image not available)**
+
+If you can't build the base image locally first, use the full Dockerfile but note that most of the code is **identical to the existing `Dockerfile`**. The only additions are:
+
+1. SSH server installation (3 lines)
+2. `RUNPOD=true` environment variable
+3. Different volume paths (`/runpod-volume/` instead of `/workspace/`)
+4. RunPod-specific entrypoint
+
+**Build sequence:**
+```bash
+# Option 1: Build base first, then extend
+docker build -t vfx-ingest:latest .
+docker build -f Dockerfile.runpod -t vfx-ingest:runpod .
+
+# Option 2: Build directly (if Dockerfile.runpod is self-contained)
+docker build -f Dockerfile.runpod -t vfx-ingest:runpod .
 ```
 
 **Success Criteria:**
 - [ ] Dockerfile builds successfully
+- [ ] Reuses existing Dockerfile logic (DRY)
 - [ ] SSH server configured for RunPod terminal
 - [ ] All ports exposed correctly
 

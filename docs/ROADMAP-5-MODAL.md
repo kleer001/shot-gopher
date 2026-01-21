@@ -8,6 +8,51 @@
 
 ---
 
+## Prerequisites
+
+### Option A: Use Existing Local Installation (Recommended)
+
+If you've already run the install wizard locally, you have models at `~/.vfx_pipeline/models/`. This roadmap can upload those to Modal instead of re-downloading.
+
+```bash
+# Check if models exist locally
+ls -la ~/.vfx_pipeline/models/
+# Should show: sam3/, videodepthanything/, wham/, matanyone/, smplx/ (optional)
+```
+
+### Option B: Fresh Cloud Installation
+
+If you don't have local models, this roadmap downloads them directly to Modal's volumes.
+
+### Shared Configuration
+
+Model metadata is defined in `scripts/install_wizard/downloader.py:CheckpointDownloader.CHECKPOINTS`. This single source of truth is used by:
+
+- Local conda installation (`scripts/install_wizard/wizard.py`)
+- Docker installation (`scripts/install_wizard/docker.py`)
+- Cloud deployments (this roadmap)
+
+| Model | Config Key | HuggingFace/Source |
+|-------|------------|-------------------|
+| SAM3 | `sam3` | `1038lab/sam3` |
+| Video Depth Anything | `video_depth_anything` | `depth-anything/Video-Depth-Anything-Small` |
+| WHAM | `wham` | Google Drive |
+| MatAnyone | `matanyone` | GitHub Release |
+| SMPL-X | `smplx` | Requires registration |
+
+The Docker directory layout is defined in `DockerCheckpointDownloader.DOCKER_DEST_DIRS`:
+```python
+{
+    'sam3': 'sam3',
+    'video_depth_anything': 'videodepthanything',
+    'wham': 'wham',
+    'matanyone': 'matanyone',
+    'smplx': 'smplx',
+}
+```
+
+---
+
 ## Overview
 
 This roadmap deploys the VFX pipeline to Modal's serverless GPU infrastructure. Modal uses a Python-first approach where infrastructure is defined in code, offering excellent developer experience and 1-second cold starts.
@@ -163,9 +208,13 @@ modal run scripts/modal_setup.py
 
 #### Task 5A.4: Upload Models to Modal Volume
 
+**Option A: Upload Existing Local Models (Recommended)**
+
+If you've already run `python scripts/install_wizard.py --docker`, upload those models directly:
+
 ```python
 # scripts/modal_upload_models.py
-"""Upload models to Modal volume."""
+"""Upload local models to Modal volume."""
 
 import modal
 from pathlib import Path
@@ -173,7 +222,47 @@ from pathlib import Path
 app = modal.App("vfx-model-upload")
 models_volume = modal.Volume.from_name("vfx-models")
 
-# Image with huggingface_hub for downloading
+@app.local_entrypoint()
+def main():
+    """Upload models from local machine to Modal volume."""
+    local_models = Path.home() / ".vfx_pipeline" / "models"
+
+    if not local_models.exists():
+        print("ERROR: Local models not found at ~/.vfx_pipeline/models/")
+        print("Run: python scripts/install_wizard.py --docker")
+        return
+
+    # Upload each model directory
+    # Directory names match DockerCheckpointDownloader.DOCKER_DEST_DIRS
+    for model_dir in local_models.iterdir():
+        if model_dir.is_dir():
+            print(f"Uploading {model_dir.name}...")
+            # Modal's put_directory uploads local files to volume
+            models_volume.put_directory(str(model_dir), f"/{model_dir.name}")
+            print(f"  ✓ {model_dir.name} uploaded")
+
+    models_volume.commit()
+    print("All models uploaded to Modal volume")
+```
+
+```bash
+modal run scripts/modal_upload_models.py
+```
+
+**Option B: Download Fresh to Modal**
+
+If you don't have local models, download them directly on Modal. This uses the same sources defined in `scripts/install_wizard/downloader.py:CheckpointDownloader.CHECKPOINTS`:
+
+```python
+# scripts/modal_download_models.py
+"""Download models directly to Modal volume (uses same sources as install wizard)."""
+
+import modal
+from pathlib import Path
+
+app = modal.App("vfx-model-download")
+models_volume = modal.Volume.from_name("vfx-models")
+
 download_image = (
     modal.Image.debian_slim()
     .pip_install("huggingface_hub", "gdown", "requests")
@@ -182,43 +271,66 @@ download_image = (
 @app.function(
     image=download_image,
     volumes={"/models": models_volume},
-    timeout=3600,  # 1 hour for large downloads
+    timeout=3600,
 )
 def download_models():
-    """Download all required models to the volume."""
+    """Download models using same sources as scripts/install_wizard/downloader.py."""
     from huggingface_hub import snapshot_download
     from pathlib import Path
     import subprocess
 
     models_dir = Path("/models")
-    models_dir.mkdir(exist_ok=True)
-
     results = {}
 
-    # SAM3
+    # SAM3 - from CheckpointDownloader.CHECKPOINTS['sam3']['hf_repo_id']
     sam3_dir = models_dir / "sam3"
     if not sam3_dir.exists():
-        print("Downloading SAM3...")
+        print("Downloading SAM3 (HuggingFace: 1038lab/sam3)...")
         snapshot_download("1038lab/sam3", local_dir=str(sam3_dir))
         results["sam3"] = "downloaded"
     else:
         results["sam3"] = "exists"
 
-    # Video Depth Anything
+    # Video Depth Anything - from CheckpointDownloader.CHECKPOINTS['video_depth_anything']['hf_repo_id']
     depth_dir = models_dir / "videodepthanything"
     if not depth_dir.exists():
-        print("Downloading Video Depth Anything...")
-        snapshot_download(
-            "depth-anything/Video-Depth-Anything-Small",
-            local_dir=str(depth_dir)
-        )
+        print("Downloading Video Depth Anything (HuggingFace: depth-anything/Video-Depth-Anything-Small)...")
+        snapshot_download("depth-anything/Video-Depth-Anything-Small", local_dir=str(depth_dir))
         results["videodepthanything"] = "downloaded"
     else:
         results["videodepthanything"] = "exists"
 
-    # Commit changes to volume
-    models_volume.commit()
+    # WHAM - from CheckpointDownloader.CHECKPOINTS['wham'] (Google Drive)
+    wham_dir = models_dir / "wham"
+    if not wham_dir.exists():
+        print("Downloading WHAM (Google Drive)...")
+        wham_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run([
+            "gdown", "https://drive.google.com/uc?id=1i7kt9RlCCCNEW2aYaDWVr-G778JkLNcB",
+            "-O", str(wham_dir / "wham_vit_w_3dpw.pth.tar")
+        ], check=True)
+        results["wham"] = "downloaded"
+    else:
+        results["wham"] = "exists"
 
+    # MatAnyone - from CheckpointDownloader.CHECKPOINTS['matanyone'] (GitHub Release)
+    matanyone_dir = models_dir / "matanyone"
+    if not matanyone_dir.exists():
+        print("Downloading MatAnyone (GitHub Release)...")
+        matanyone_dir.mkdir(parents=True, exist_ok=True)
+        import urllib.request
+        urllib.request.urlretrieve(
+            "https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth",
+            str(matanyone_dir / "matanyone.pth")
+        )
+        results["matanyone"] = "downloaded"
+    else:
+        results["matanyone"] = "exists"
+
+    # SMPL-X requires manual registration - see CheckpointDownloader.CHECKPOINTS['smplx']['instructions']
+    # Register at: https://smpl-x.is.tue.mpg.de/register.php
+
+    models_volume.commit()
     return results
 
 
@@ -229,33 +341,12 @@ def main():
 ```
 
 ```bash
-# Run model download (runs on Modal's infrastructure)
-modal run scripts/modal_upload_models.py
-```
-
-**Alternative: Upload local models**
-```python
-@app.function(volumes={"/models": models_volume})
-def upload_local_models():
-    """Upload models from local machine."""
-    import shutil
-    from pathlib import Path
-
-    # This runs locally, uploads to volume
-    local_models = Path.home() / ".vfx_pipeline" / "models"
-
-    for model_dir in local_models.iterdir():
-        if model_dir.is_dir():
-            dest = Path("/models") / model_dir.name
-            if not dest.exists():
-                shutil.copytree(model_dir, dest)
-                print(f"Uploaded: {model_dir.name}")
-
-    models_volume.commit()
+modal run scripts/modal_download_models.py
 ```
 
 **Success Criteria:**
-- [ ] Models downloaded/uploaded to volume
+- [ ] Models uploaded/downloaded to volume
+- [ ] Directory structure matches `DockerCheckpointDownloader.DOCKER_DEST_DIRS`
 - [ ] Volume persists across function calls
 - [ ] ~15-20GB of models stored
 
@@ -278,28 +369,43 @@ def upload_local_models():
 
 #### Task 5B.1: Create Base Image Definition
 
-Modal builds images from Python code - no Dockerfile needed.
+Modal builds images from Python code. This mirrors the existing `Dockerfile` setup but in Modal's declarative format.
+
+**Note:** The dependencies below match those in the existing `Dockerfile` and `requirements.txt`. If the Dockerfile changes, update this definition to match.
 
 **File:** `modal_app/image.py`
 
 ```python
-"""Modal image definition for VFX Ingest Pipeline."""
+"""Modal image definition for VFX Ingest Pipeline.
+
+This mirrors the setup in the existing Dockerfile but uses Modal's
+Python-based image builder. Key references:
+- Base image: Same as Dockerfile (nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04)
+- Python deps: requirements.txt
+- ComfyUI nodes: Same repos as Dockerfile
+- Environment: Same as docker/entrypoint.sh
+"""
 
 import modal
 
 def create_vfx_image() -> modal.Image:
     """
-    Create the Modal image with all VFX pipeline dependencies.
+    Create Modal image matching the existing Dockerfile setup.
 
-    This replaces the Dockerfile with Python code.
+    Uses the same:
+    - CUDA base image
+    - System dependencies (colmap, ffmpeg)
+    - Python packages (requirements.txt)
+    - ComfyUI custom nodes
+    - Environment variables (scripts/env_config.py)
     """
     image = (
-        # Start with CUDA base
+        # Same base as Dockerfile
         modal.Image.from_registry(
             "nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04",
             add_python="3.10"
         )
-        # System dependencies
+        # System dependencies - matches Dockerfile apt-get install
         .apt_install(
             "git",
             "ffmpeg",
@@ -309,13 +415,15 @@ def create_vfx_image() -> modal.Image:
             "libgl1-mesa-glx",
             "libglib2.0-0",
         )
-        # Python dependencies
+        # PyTorch with CUDA - matches Dockerfile pip install
         .pip_install(
             "torch",
             "torchvision",
             "torchaudio",
             index_url="https://download.pytorch.org/whl/cu121"
         )
+        # Python packages - should match requirements.txt
+        # TODO: Consider reading from requirements.txt directly
         .pip_install(
             "numpy",
             "scipy",
@@ -328,7 +436,7 @@ def create_vfx_image() -> modal.Image:
             "httpx",
             "aiofiles",
         )
-        # Clone ComfyUI and custom nodes
+        # ComfyUI and custom nodes - same repos as Dockerfile
         .run_commands(
             "mkdir -p /app/.vfx_pipeline",
             "git clone https://github.com/comfyanonymous/ComfyUI.git /app/.vfx_pipeline/ComfyUI",
@@ -355,7 +463,7 @@ def create_vfx_image() -> modal.Image:
         .copy_local_dir("workflow_templates", "/app/workflow_templates")
         .copy_local_dir("web", "/app/web")
         .copy_local_file("start_web.py", "/app/start_web.py")
-        # Set environment
+        # Environment - matches scripts/env_config.py container detection
         .env({
             "CONTAINER": "true",
             "MODAL": "true",
@@ -373,9 +481,25 @@ def create_vfx_image() -> modal.Image:
 vfx_image = create_vfx_image()
 ```
 
+**Alternative: Use Existing Docker Image**
+
+If you already have the Docker image built, Modal can use it directly:
+
+```python
+# Use pre-built Docker image instead of rebuilding
+vfx_image = modal.Image.from_registry(
+    "yourusername/vfx-ingest:latest",
+    add_python="3.10"
+).env({
+    "MODAL": "true",
+    "VFX_MODELS_DIR": "/models",
+    "VFX_PROJECTS_DIR": "/projects",
+})
+```
+
 **Success Criteria:**
 - [ ] Image definition compiles
-- [ ] All dependencies specified
+- [ ] Dependencies match existing Dockerfile
 - [ ] Local code mounted correctly
 
 ---
