@@ -7,8 +7,9 @@ FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS colmap-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install COLMAP build dependencies
+# Install COLMAP build dependencies (complete list from official docs)
 # GCC 10 required: Ubuntu 22.04's CUDA toolkit doesn't support GCC 11 (the default)
+# Reference: https://colmap.github.io/legacy/3.9/install.html
 RUN apt-get update && apt-get install -y \
     git \
     cmake \
@@ -28,9 +29,13 @@ RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
     libglew-dev \
     qtbase5-dev \
+    libqt5opengl5-dev \
     libceres-dev \
     libflann-dev \
     libcgal-dev \
+    libgmp-dev \
+    libmpfr-dev \
+    liblz4-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set GCC 10 as the compiler for CUDA compatibility
@@ -91,6 +96,11 @@ RUN apt-get update && apt-get install -y \
     libflann1.9 \
     libqt5core5a \
     libqt5widgets5 \
+    libqt5opengl5 \
+    libcgal13 \
+    libgmp10 \
+    libmpfr6 \
+    liblz4-1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy COLMAP from builder stage (same Ubuntu version = compatible libraries)
