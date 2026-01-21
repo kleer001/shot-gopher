@@ -1,176 +1,62 @@
 # Windows Native Setup for IT Department
 
-This document provides IT administrators with the minimal setup requirements to enable users to run the ComfyUI Ingest pipeline **natively on Windows** without Docker or WSL2.
+This document lists **only the items requiring administrator privileges**. Everything else is handled automatically by the install wizard or can be installed by the user.
 
 For Docker/WSL2 installation, see [windows_for_it_dept_docker.md](windows_for_it_dept_docker.md).
 
-## Key Feature: Automatic Tool Installation
+## What IT Needs to Do
 
-**FFmpeg and COLMAP are now auto-installed by the wizard.** When these tools are missing, the install wizard automatically downloads and installs them to a sandboxed directory within the repository (`.vfx_pipeline/tools/`). No user home directory pollution, no IT intervention required for these tools.
+| Item | Why Admin Required |
+|------|-------------------|
+| NVIDIA GPU Driver | System-level hardware driver |
+| CUDA Toolkit | Installs to Program Files |
+| PowerShell Execution Policy | System security setting |
+| Long Paths Registry Key | System registry modification |
 
-This means:
-- IT only needs to install: GPU drivers, CUDA, Git, and Miniconda
-- FFmpeg, COLMAP, 7-Zip, aria2 are handled automatically
-- All auto-installed tools are sandboxed (delete repo = everything gone)
+**Everything else is automatic:** Git, Miniconda, FFmpeg, COLMAP, 7-Zip, and all Python dependencies are either user-installable or auto-installed by the wizard to a sandboxed directory.
 
-## Prerequisites
+---
 
-- Windows 10 (version 1903+) or Windows 11 (64-bit)
-- NVIDIA GPU with minimum 9 GB VRAM
-- Administrator access (for initial setup only)
+## 1. NVIDIA GPU Driver (REQUIRED)
 
-## Required Software Installation
+Download and install the latest driver for the user's graphics card.
 
-IT administrators must install the following software. After initial setup, users can operate without administrator privileges.
-
-### 1. NVIDIA GPU Driver
-
-Download and install the latest NVIDIA GPU driver for the user's graphics card.
-
-**Download Link:** https://www.nvidia.com/download/index.aspx
+**Download:** https://www.nvidia.com/download/index.aspx
 
 **Verification:**
 ```powershell
 nvidia-smi
 ```
-Should display GPU information and driver version.
 
-### 2. CUDA Toolkit
+---
 
-Required for GPU-accelerated machine learning. Install CUDA Toolkit 11.8 or 12.x (match PyTorch requirements).
+## 2. CUDA Toolkit (REQUIRED)
 
-**Download Link:** https://developer.nvidia.com/cuda-toolkit-archive
+Required for GPU-accelerated machine learning.
 
-**Recommended Version:** CUDA 11.8 or CUDA 12.1
+**Download:** https://developer.nvidia.com/cuda-toolkit-archive
+
+**Recommended:** CUDA 11.8 or CUDA 12.1
 
 **Installation Notes:**
-- Default installation path: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.x`
-- Ensure "Add to PATH" is selected during installation
+- Select "Add to PATH" during installation
+- Default path: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.x`
 
 **Verification:**
 ```powershell
 nvcc --version
 ```
 
-### 3. Git for Windows
+---
 
-Required for cloning the repository and version control.
+## 3. PowerShell Execution Policy (REQUIRED)
 
-**Installation Options (choose one):**
+Without this, users cannot run the activation script.
 
-```powershell
-# Option A: winget (built into Windows 10/11)
-winget install Git.Git
-
-# Option B: Chocolatey
-choco install git
-
-# Option C: Manual download
-# https://git-scm.com/download/win
-```
-
-**Verification:**
-```powershell
-git --version
-```
-
-### 4. Miniconda (Python Environment Manager)
-
-Required for managing Python dependencies in isolated environments.
-
-**Installation Options (choose one):**
+**Error if not set:** "cannot be loaded because running scripts is disabled on this system"
 
 ```powershell
-# Option A: winget
-winget install Anaconda.Miniconda3
-
-# Option B: Chocolatey
-choco install miniconda3
-
-# Option C: Manual download
-# https://docs.conda.io/en/latest/miniconda.html
-```
-
-**Default Installation Path:** `C:\Users\<USERNAME>\miniconda3`
-
-**Post-Installation:**
-- Ensure conda is added to the user's PATH
-- Initialize conda for PowerShell: `conda init powershell`
-
-**Verification:**
-```powershell
-conda --version
-```
-
-### 5. FFmpeg (Auto-Installed)
-
-**IT installation NOT required.** The install wizard automatically downloads and installs FFmpeg to `.vfx_pipeline/tools/ffmpeg/` if not found in system PATH.
-
-If you prefer system-wide installation:
-
-```powershell
-# Option A: winget (recommended)
-winget install ffmpeg
-
-# Option B: Chocolatey
-choco install ffmpeg
-```
-
-### 6. COLMAP (Auto-Installed)
-
-**IT installation NOT required.** The install wizard automatically downloads and installs COLMAP to `.vfx_pipeline/tools/colmap/` if not found in system PATH.
-
-If you prefer system-wide installation:
-
-```powershell
-# Option A: Chocolatey
-choco install colmap
-
-# Option B: Manual download from https://colmap.github.io/install.html
-```
-
-### 7. Visual Studio Build Tools (Optional)
-
-Required only if users need to compile C++ extensions for certain Python packages.
-
-**Download Link:** https://visualstudio.microsoft.com/visual-cpp-build-tools/
-
-**Required Components:**
-- "Desktop development with C++" workload
-- Windows 10/11 SDK
-- MSVC v143 build tools
-
-## Optional Software
-
-### 7-Zip
-
-For extracting model archives. Usually pre-installed on Windows.
-
-```powershell
-# If not installed:
-winget install 7zip.7zip
-```
-
-### aria2
-
-For faster parallel downloads of large model files.
-
-```powershell
-winget install aria2.aria2
-```
-
-## Critical System Configuration
-
-**These settings are REQUIRED for the pipeline to function correctly. Without them, users will encounter errors that cannot be resolved without administrator access.**
-
-### 1. PowerShell Execution Policy (REQUIRED)
-
-**Impact if not configured:** Users will see "cannot be loaded because running scripts is disabled on this system" when running the activation script.
-
-Allow running local PowerShell scripts:
-
-```powershell
-# Run as Administrator (one-time setup)
+# Run as Administrator (one-time)
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine
 ```
 
@@ -180,15 +66,15 @@ Get-ExecutionPolicy -List
 # LocalMachine should show "RemoteSigned"
 ```
 
-### 2. Enable Long Paths (REQUIRED)
+---
 
-**Impact if not configured:** Installation fails with "path too long" errors when installing deep nested dependencies like ComfyUI custom nodes.
+## 4. Enable Long Paths (REQUIRED)
 
-Windows has a 260-character path limit by default. This pipeline requires long path support due to nested node_modules and model directories.
+Without this, installation fails with "path too long" errors.
 
 **Option A: Group Policy (Domain environments)**
-1. Open Group Policy Editor (`gpedit.msc`)
-2. Navigate to: Computer Configuration > Administrative Templates > System > Filesystem
+1. Open `gpedit.msc`
+2. Computer Configuration > Administrative Templates > System > Filesystem
 3. Enable "Enable Win32 long paths"
 
 **Option B: Registry (Standalone machines)**
@@ -203,125 +89,51 @@ Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 # Should return 1
 ```
 
-## Optional System Configuration
+---
 
-### 3. Enable Developer Mode (Optional)
+## Optional: Developer Mode
 
-Allows creating symbolic links without administrator privileges:
+Allows creating symbolic links without admin. Not strictly required.
 
-1. Open Windows Settings
-2. Navigate to: Privacy & Security > For Developers
-3. Enable "Developer Mode"
+Settings > Privacy & Security > For Developers > Enable "Developer Mode"
 
-## Verification Checklist
+---
 
-After installation, verify all components are accessible:
+## Optional: Antivirus Exclusion
 
-```powershell
-# Run these commands in a new PowerShell window
+If users report slow downloads or disappearing files, add an exclusion for the repository directory:
+- `C:\path\to\comfyui_ingest`
 
-# GPU and CUDA
-nvidia-smi
-nvcc --version
+---
 
-# Core tools
-git --version
-conda --version
-ffmpeg -version
+## What Users Do (No Admin Required)
 
-# Optional
-colmap --help
-7z --help
-aria2c --version
-```
-
-## User Instructions
-
-Once IT has completed the above setup, users can bootstrap the pipeline by running in PowerShell:
+After IT completes the above, users run:
 
 ```powershell
-# Clone the repository
+# Install Git (user install, no admin)
+winget install Git.Git --scope user
+
+# Install Miniconda (user install, no admin)
+winget install Anaconda.Miniconda3 --scope user
+
+# Clone and run wizard
 git clone https://github.com/kleer001/comfyui_ingest.git
 cd comfyui_ingest
-
-# Run the install wizard
 python scripts/install_wizard.py
 ```
 
-The install wizard will:
-1. Detect the Windows environment
-2. Create the conda environment
-3. **Auto-install missing tools** (FFmpeg, COLMAP) to `.vfx_pipeline/tools/`
-4. Install Python dependencies
-5. Generate activation scripts (`activate.ps1`, `activate.bat`)
-6. Download required AI models
+The wizard automatically:
+- Creates conda environment
+- Auto-installs FFmpeg, COLMAP to `.vfx_pipeline/tools/`
+- Installs all Python dependencies
+- Downloads AI models
 
-All tools and models are installed within the repository directory - no files are placed in the user's home directory.
+All files stay within the repository directory - no system pollution.
 
-## Post-Setup User Capabilities
-
-After this one-time setup, users can operate independently without administrator privileges:
-- Clone and update the repository
-- Download and manage AI models
-- Run the pipeline on video projects
-- Install Python packages in their conda environment
-- Process video projects
-
-## Troubleshooting
-
-### Conda Not Found
-
-If `conda` is not recognized after installation:
-
-```powershell
-# Initialize conda for PowerShell
-& "$env:USERPROFILE\miniconda3\Scripts\conda.exe" init powershell
-
-# Restart PowerShell
-```
-
-### CUDA Not Detected
-
-1. Verify NVIDIA driver is installed: `nvidia-smi`
-2. Verify CUDA toolkit: `nvcc --version`
-3. Check PATH includes CUDA bin directory:
-   ```powershell
-   $env:PATH -split ";" | Select-String "CUDA"
-   ```
-
-### FFmpeg or COLMAP Not Found (After Auto-Install)
-
-The wizard auto-installs these tools to `.vfx_pipeline/tools/`. If they're still not found:
-
-```powershell
-# Check if auto-installed
-ls .vfx_pipeline\tools\
-
-# The wizard searches in this order:
-# 1. .vfx_pipeline/tools/<tool>/  (auto-installed)
-# 2. System PATH
-# 3. Standard install locations (Program Files)
-```
-
-If auto-install failed, check the wizard output for download errors (usually network-related).
-
-### Permission Denied Errors
-
-If users encounter permission errors:
-1. Ensure Developer Mode is enabled (for symlinks)
-2. Check antivirus isn't blocking the application
-3. Verify folder permissions on the installation directory
-
-### Antivirus Interference
-
-Some antivirus software may flag or slow down ML model downloads. Consider adding exclusions for the repository directory only:
-- `C:\path\to\comfyui_ingest` (contains all tools, models, and environments)
-
-Since everything is sandboxed within the repo, only one exclusion is needed.
+---
 
 ## Support
 
-For issues specific to this pipeline, see:
-- Troubleshooting guide: [windows-troubleshooting.md](windows-troubleshooting.md)
-- Repository: https://github.com/kleer001/comfyui_ingest
+- Troubleshooting: [windows-troubleshooting.md](windows-troubleshooting.md)
 - Issues: https://github.com/kleer001/comfyui_ingest/issues
