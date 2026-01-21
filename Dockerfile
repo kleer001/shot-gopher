@@ -138,13 +138,14 @@ RUN for dir in */; do \
 
 # Install SAM3 GPU-accelerated NMS (speeds up video tracking 5-10x)
 # Only attempt if nvcc (CUDA compiler) is available
-# The install.py uses comfy_env which may have API compatibility issues
-# If it fails, we fall back to CPU NMS at runtime (slower but functional)
+# Note: SAM3's install.py uses an outdated comfy_env API (passes config= argument)
+# The new comfy_env API auto-discovers config from cwd, so we call it directly
 RUN cd ComfyUI-SAM3 && \
     if command -v nvcc >/dev/null 2>&1; then \
-        echo "CUDA toolkit found, attempting SAM3 GPU NMS installation..." && \
-        UV_SYSTEM_PYTHON=1 python3 install.py || \
-        echo "WARNING: SAM3 GPU NMS installation failed (comfy_env API mismatch). Will use CPU fallback at runtime."; \
+        echo "CUDA toolkit found, installing comfy-env and SAM3 GPU NMS..." && \
+        pip3 install --no-cache-dir comfy-env && \
+        python3 -c "from comfy_env import install; install()" || \
+        echo "WARNING: SAM3 GPU NMS installation failed. Will use CPU fallback at runtime."; \
     else \
         echo "Skipping SAM3 GPU NMS (nvcc not available - will use CPU fallback at runtime)"; \
     fi
