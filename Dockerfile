@@ -97,7 +97,6 @@ RUN apt-get update && apt-get install -y \
     libqt5core5a \
     libqt5widgets5 \
     libqt5opengl5 \
-    libcgal13 \
     libgmp10 \
     libmpfr6 \
     liblz4-1 \
