@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y \
     qtbase5-dev \
     libceres-dev \
     libflann-dev \
+    libcgal-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set GCC 10 as the compiler for CUDA compatibility
@@ -51,7 +52,7 @@ RUN cmake .. -GNinja \
     -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
     -DCUDA_ENABLED=ON \
     -DGUI_ENABLED=OFF \
-    -DCGAL_ENABLED=OFF \
+    -DCGAL_ENABLED=ON \
     -DTESTS_ENABLED=OFF \
     && ninja \
     && ninja install
