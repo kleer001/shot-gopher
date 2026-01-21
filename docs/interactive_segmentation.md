@@ -11,36 +11,40 @@ For complex shots where automatic text-prompt segmentation doesn't work well (e.
 
 ## Prerequisites
 
-- VFX Pipeline installed (via `install_wizard.py` or Docker)
+- VFX Pipeline installed (via `install_wizard.py` or Docker image built)
 - Project set up with source frames (`setup_project.py` or ingest stage complete)
-- ComfyUI running
 
 ## Quick Start
 
-### 1. Prepare the Workflow
+Just run:
 
 ```bash
 python scripts/launch_interactive_segmentation.py /path/to/your/project
 ```
 
-This copies the interactive workflow template to your project and populates it with the correct paths.
+The script auto-detects your environment and handles everything:
+1. Starts ComfyUI (local installation or Docker container)
+2. Prepares the workflow with correct paths
+3. Opens your browser to ComfyUI
+4. Waits for you to finish (press Enter when done)
+5. Cleans up automatically
 
-### 2. Open ComfyUI
+### Requirements
 
-Either add `--open` to automatically open your browser:
+**Local mode** (auto-detected if ComfyUI is installed):
+- ComfyUI installed via `install_wizard.py`
+- SAM3 extension (can install via ComfyUI Manager in browser if missing)
 
-```bash
-python scripts/launch_interactive_segmentation.py /path/to/your/project --open
-```
+**Docker mode** (auto-detected if no local install, Docker image exists):
+- Docker with nvidia-container-toolkit
+- Image built: `docker compose build`
+- Models in `.vfx_pipeline/models/` (or specify `--models-dir`)
 
-Or manually navigate to `http://localhost:8188`
+### Using the Workflow
 
-### 3. Load the Workflow
-
-In ComfyUI:
-1. Click **Menu** (top-left hamburger icon)
-2. Click **Load**
-3. Navigate to: `your_project/workflows/05_interactive_segmentation.json`
+Once ComfyUI opens in your browser:
+1. Click **Menu** > **Load**
+2. Navigate to: `your_project/workflows/05_interactive_segmentation.json`
 
 ### 4. Select Objects
 
@@ -110,6 +114,24 @@ This can happen with fast motion or heavy occlusion. Solutions:
 
 Make sure you're clicking in the **Interactive Selector** node's image preview area, not elsewhere in the UI.
 
+### Docker: "Node not found" error
+
+If running in Docker and seeing missing node errors, the Docker image may need rebuilding:
+```bash
+docker compose build --no-cache
+```
+
+### Docker: Container won't start
+
+Check that:
+1. Docker daemon is running: `docker info`
+2. NVIDIA container toolkit is installed: `docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi`
+3. Image exists: `docker images | grep vfx-ingest`
+
+### Docker: Masks not saving
+
+Masks are saved to your project's `roto/custom/` directory on the host. If they're not appearing, check the ComfyUI output in the browser for errors.
+
 ## Comparison with Automatic Segmentation
 
 | Feature | Automatic (`02_segmentation.json`) | Interactive (`05_interactive_segmentation.json`) |
@@ -123,15 +145,18 @@ Make sure you're clicking in the **Interactive Selector** node's image preview a
 ## Command Reference
 
 ```bash
-# Basic usage
+# Auto-detect mode (recommended)
 python scripts/launch_interactive_segmentation.py <project_dir>
 
-# Open browser automatically
-python scripts/launch_interactive_segmentation.py <project_dir> --open
+# Force Docker mode
+python scripts/launch_interactive_segmentation.py <project_dir> --docker
+
+# Force local mode
+python scripts/launch_interactive_segmentation.py <project_dir> --local
+
+# Specify models directory (Docker mode)
+python scripts/launch_interactive_segmentation.py <project_dir> --models-dir /path/to/models
 
 # Custom ComfyUI URL
-python scripts/launch_interactive_segmentation.py <project_dir> --url http://localhost:8188
-
-# Force overwrite existing workflow
-python scripts/launch_interactive_segmentation.py <project_dir> --force
+python scripts/launch_interactive_segmentation.py <project_dir> --url http://localhost:9999
 ```

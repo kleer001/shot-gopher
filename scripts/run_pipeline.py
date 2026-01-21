@@ -4,22 +4,31 @@
 Single command to process footage through the entire pipeline:
   Movie file → Frame extraction → ComfyUI workflows → Post-processing
 
+Auto-detects your environment:
+- Local ComfyUI installed → runs locally
+- Docker image exists → runs in container
+
 Usage:
     python run_pipeline.py <input_movie> [options]
 
 Example:
     python run_pipeline.py /path/to/footage.mp4 --name "My_Shot" --stages all
-    python run_pipeline.py /path/to/footage.mp4 --stages depth,camera
+    python run_pipeline.py /path/to/footage.mp4 --stages depth,roto,cleanplate
+    python run_pipeline.py /path/to/footage.mp4 --docker  # Force Docker mode
 """
 
 import argparse
 import json
+import os
 import shutil
+import signal
+import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
-from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR, is_in_container
+from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR, is_in_container, INSTALL_DIR
 from comfyui_utils import DEFAULT_COMFYUI_URL, run_comfyui_workflow
 from comfyui_manager import ensure_comfyui, stop_comfyui, kill_all_comfyui_processes
 
@@ -54,6 +63,198 @@ from stage_runners import (
 
 # Log capture for debugging
 from log_manager import LogCapture
+
+# Docker configuration
+CONTAINER_NAME = "vfx-pipeline-run"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+COMFYUI_DIR = INSTALL_DIR / "ComfyUI"
+
+
+def check_docker_available() -> bool:
+    """Check if Docker is available and running."""
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=10
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def check_docker_image_exists() -> bool:
+    """Check if the vfx-ingest Docker image exists."""
+    try:
+        result = subprocess.run(
+            ["docker", "images", "-q", "vfx-ingest:latest"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        return bool(result.stdout.strip())
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def check_local_comfyui_installed() -> bool:
+    """Check if local ComfyUI installation exists."""
+    return COMFYUI_DIR.exists() and (COMFYUI_DIR / "main.py").exists()
+
+
+def detect_execution_mode() -> str:
+    """Auto-detect the best execution mode.
+
+    Returns:
+        'local' if local ComfyUI is installed
+        'docker' if Docker is available with the vfx-ingest image
+        'none' if neither is available
+    """
+    if check_local_comfyui_installed():
+        return "local"
+
+    if check_docker_available() and check_docker_image_exists():
+        return "docker"
+
+    return "none"
+
+
+def find_default_models_dir() -> Path:
+    """Find the default models directory."""
+    env_models = os.environ.get("VFX_MODELS_DIR")
+    if env_models:
+        return Path(env_models)
+    default_path = INSTALL_DIR / "models"
+    if default_path.exists():
+        return default_path
+    return REPO_ROOT / ".vfx_pipeline" / "models"
+
+
+def run_docker_mode(
+    input_path: Path,
+    project_name: Optional[str],
+    projects_dir: Path,
+    models_dir: Path,
+    original_args: list[str],
+) -> int:
+    """Run the pipeline in Docker mode.
+
+    Args:
+        input_path: Path to input movie file
+        project_name: Project name (or None to derive from input)
+        projects_dir: Directory for projects
+        models_dir: Path to models directory
+        original_args: Original command line arguments (to forward to container)
+
+    Returns:
+        Exit code
+    """
+    input_path = input_path.resolve()
+    projects_dir = projects_dir.resolve()
+    models_dir = models_dir.resolve()
+
+    if not project_name:
+        project_name = input_path.stem.replace(" ", "_")
+
+    print(f"\n{'='*60}")
+    print("VFX Pipeline (Docker Mode)")
+    print(f"{'='*60}")
+    print(f"Input: {input_path}")
+    print(f"Project: {project_name}")
+    print(f"Projects dir: {projects_dir}")
+    print(f"Models: {models_dir}")
+
+    if not input_path.exists():
+        print(f"Error: Input file not found: {input_path}", file=sys.stderr)
+        return 1
+
+    if not models_dir.exists():
+        print(f"Error: Models directory not found: {models_dir}", file=sys.stderr)
+        print("Run model download or specify --models-dir", file=sys.stderr)
+        return 1
+
+    if not check_docker_available():
+        print("Error: Docker is not available or not running", file=sys.stderr)
+        return 1
+
+    if not check_docker_image_exists():
+        print("Error: Docker image 'vfx-ingest:latest' not found", file=sys.stderr)
+        print("Build it first: docker compose build", file=sys.stderr)
+        return 1
+
+    projects_dir.mkdir(parents=True, exist_ok=True)
+
+    container_input = f"/workspace/input/{input_path.name}"
+    container_projects = "/workspace/projects"
+
+    forward_args = []
+    skip_next = False
+    for i, arg in enumerate(original_args[1:]):
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in ("--docker", "-D"):
+            continue
+        if arg in ("--local", "-L"):
+            continue
+        if arg in ("--models-dir",) and i + 1 < len(original_args) - 1:
+            skip_next = True
+            continue
+        if arg.startswith("--models-dir="):
+            continue
+        if arg in ("--projects-dir", "-p") and i + 1 < len(original_args) - 1:
+            skip_next = True
+            continue
+        if arg.startswith("--projects-dir="):
+            continue
+        if i == 0:
+            forward_args.append(container_input)
+        else:
+            forward_args.append(arg)
+
+    forward_args.extend(["--projects-dir", container_projects])
+    forward_args.append("--local")
+
+    print(f"\nStarting Docker container...")
+
+    def signal_handler(sig, frame):
+        print("\n\nInterrupted! Cleaning up...")
+        subprocess.run(["docker", "stop", CONTAINER_NAME], capture_output=True)
+        subprocess.run(["docker", "rm", "-f", CONTAINER_NAME], capture_output=True)
+        sys.exit(130)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    try:
+        cmd = [
+            "docker", "run",
+            "--rm",
+            "--name", CONTAINER_NAME,
+            "--gpus", "all",
+            "-e", "NVIDIA_VISIBLE_DEVICES=all",
+            "-e", "START_COMFYUI=false",
+            "-v", f"{input_path.parent}:/workspace/input:ro",
+            "-v", f"{projects_dir}:/workspace/projects",
+            "-v", f"{models_dir}:/models:ro",
+            "-v", f"{REPO_ROOT / 'scripts'}:/app/scripts:ro",
+            "-v", f"{REPO_ROOT / 'workflow_templates'}:/app/workflow_templates:ro",
+            "vfx-ingest:latest",
+            "python", "/app/scripts/run_pipeline.py",
+        ] + forward_args
+
+        print(f"Running: docker run ... python /app/scripts/run_pipeline.py {' '.join(forward_args)}")
+        print()
+
+        result = subprocess.run(cmd, cwd=REPO_ROOT)
+        return result.returncode
+
+    except Exception as e:
+        print(f"Error running Docker container: {e}", file=sys.stderr)
+        return 1
+
+    finally:
+        subprocess.run(["docker", "rm", "-f", CONTAINER_NAME], capture_output=True)
 
 
 def sanitize_stages(stages: list[str]) -> list[str]:
@@ -541,8 +742,6 @@ def run_pipeline(
 
 
 def main():
-    check_conda_env_or_warn()
-
     parser = argparse.ArgumentParser(
         description="Automated VFX pipeline runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -589,9 +788,27 @@ def main():
         help="Skip stages that have existing output"
     )
     parser.add_argument(
-        "--list-stages", "-l",
+        "--list-stages",
         action="store_true",
         help="List available stages and exit"
+    )
+
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--docker", "-D",
+        action="store_true",
+        help="Force Docker mode (auto-detected if not specified)"
+    )
+    mode_group.add_argument(
+        "--local", "-L",
+        action="store_true",
+        help="Force local mode (auto-detected if not specified)"
+    )
+    parser.add_argument(
+        "--models-dir",
+        type=Path,
+        default=None,
+        help="Path to models directory (Docker mode, auto-detected if not specified)"
     )
 
     parser.add_argument(
@@ -662,6 +879,36 @@ def main():
         for name, desc in STAGES.items():
             print(f"  {name}: {desc}")
         sys.exit(0)
+
+    if args.docker:
+        mode = "docker"
+    elif args.local:
+        mode = "local"
+    else:
+        mode = detect_execution_mode()
+        if mode == "none":
+            print("Error: No valid execution environment detected.", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Options:", file=sys.stderr)
+            print("  1. Install locally: python scripts/install_wizard.py", file=sys.stderr)
+            print("  2. Build Docker image: docker compose build", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Or force a mode with --docker or --local", file=sys.stderr)
+            sys.exit(1)
+        print(f"Auto-detected mode: {mode}")
+
+    if mode == "docker":
+        models_dir = args.models_dir or find_default_models_dir()
+        exit_code = run_docker_mode(
+            input_path=args.input,
+            project_name=args.name,
+            projects_dir=args.projects_dir,
+            models_dir=models_dir,
+            original_args=sys.argv,
+        )
+        sys.exit(exit_code)
+
+    check_conda_env_or_warn()
 
     input_path = args.input.resolve()
     if not input_path.exists():
