@@ -431,6 +431,25 @@ comfyui_ingest/
 - **Hardcoded file paths** (use environment variables and `env_config.py`)
 - **Conda checks in containers** (detect environment and skip appropriately)
 - **Duplicated logic** (consolidate in shared utilities)
+- **Installing to user home directories** (NEVER install tools, models, or data to `~/`, `~/.local/`, `~/.vfx_pipeline/`, etc.)
+
+### Sandboxing Requirements
+All installations MUST be sandboxed within the repo directory structure:
+- **Tools:** Install to `.vfx_pipeline/tools/` (relative to repo root)
+- **Models:** Install to `.vfx_pipeline/models/` (relative to repo root)
+- **Environments:** Conda/venv environments in `.vfx_pipeline/` (relative to repo root)
+- **Projects:** Sister directories to the repo, NOT inside user home
+
+The `INSTALL_DIR` variable in `env_config.py` defines the sandboxed root:
+```python
+INSTALL_DIR = REPO_ROOT / ".vfx_pipeline"  # NOT Path.home() / ".vfx_pipeline"
+```
+
+This ensures:
+- Deleting the repo removes everything (no pollution)
+- Multiple installations can coexist
+- Portable across systems
+- No IT/admin permissions needed for user directories
 
 ### Planning Override
 - **Override Keyword:** "YOLO!" (skip planning, execute immediately)

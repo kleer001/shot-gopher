@@ -12,6 +12,11 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from env_config import INSTALL_DIR
+
+# Repo-local tools directory (sandboxed, no home directory pollution)
+TOOLS_DIR = INSTALL_DIR / "tools"
+
 
 def _is_windows() -> bool:
     """Check if running on Windows."""
@@ -92,7 +97,10 @@ class PlatformManager:
     def find_tool(tool_name: str) -> Optional[Path]:
         """Find a tool executable with cross-platform path search.
 
-        Searches PATH first, then platform-specific common locations.
+        Search order (sandboxed tools take priority):
+        1. Repo-local tools directory (.vfx_pipeline/tools/)
+        2. System PATH
+        3. Platform-specific standard locations
 
         Args:
             tool_name: Name of the tool (e.g., 'colmap', 'ffmpeg', '7z')
@@ -100,16 +108,22 @@ class PlatformManager:
         Returns:
             Path to the executable if found, None otherwise.
         """
+        # 1. Check repo-local tools directory FIRST (sandboxed)
+        local_paths = PlatformManager._get_local_tool_paths(tool_name)
+        for path in local_paths:
+            if path.exists():
+                return path
+
+        # 2. Check system PATH
         path_result = shutil.which(tool_name)
         if path_result:
             return Path(path_result)
 
-        home = Path.home()
-
+        # 3. Check platform-specific standard locations (fallback)
         if _is_windows():
-            search_paths = PlatformManager._get_windows_tool_paths(tool_name, home)
+            search_paths = PlatformManager._get_windows_tool_paths(tool_name)
         else:
-            search_paths = PlatformManager._get_unix_tool_paths(tool_name, home)
+            search_paths = PlatformManager._get_unix_tool_paths(tool_name)
 
         for path in search_paths:
             if path.exists():
@@ -118,44 +132,53 @@ class PlatformManager:
         return None
 
     @staticmethod
-    def _get_windows_tool_paths(tool_name: str, home: Path) -> List[Path]:
-        """Get Windows-specific search paths for a tool."""
-        localappdata = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
+    def _get_local_tool_paths(tool_name: str) -> List[Path]:
+        """Get repo-local tool paths (sandboxed, highest priority)."""
+        tool_dir = TOOLS_DIR / tool_name
+
+        if _is_windows():
+            return [
+                tool_dir / f"{tool_name}.exe",
+                tool_dir / f"{tool_name.upper()}.bat",
+                tool_dir / "bin" / f"{tool_name}.exe",
+                tool_dir / f"{tool_name.upper()}.exe",
+            ]
+        else:
+            return [
+                tool_dir / tool_name,
+                tool_dir / "bin" / tool_name,
+            ]
+
+    @staticmethod
+    def _get_windows_tool_paths(tool_name: str) -> List[Path]:
+        """Get Windows system-wide search paths for a tool.
+
+        NOTE: Only searches system directories (Program Files, etc.).
+        User home directories are NOT searched - all user tools should
+        be installed to the repo-local .vfx_pipeline/tools/ directory.
+        """
         programfiles = Path(os.environ.get("PROGRAMFILES", "C:/Program Files"))
         programfiles_x86 = Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)"))
-        programdata = Path(os.environ.get("PROGRAMDATA", "C:/ProgramData"))
 
         tool_paths: Dict[str, List[Path]] = {
             "colmap": [
                 programfiles / "COLMAP" / "COLMAP.bat",
                 programfiles_x86 / "COLMAP" / "COLMAP.bat",
                 Path("C:/COLMAP/COLMAP.bat"),
-                localappdata / "COLMAP" / "COLMAP.bat",
-                home / "COLMAP" / "COLMAP.bat",
-                programdata / "chocolatey" / "bin" / "colmap.exe",
-                home / "scoop" / "apps" / "colmap" / "current" / "COLMAP.bat",
             ],
             "ffmpeg": [
                 programfiles / "FFmpeg" / "bin" / "ffmpeg.exe",
                 programfiles_x86 / "FFmpeg" / "bin" / "ffmpeg.exe",
                 Path("C:/ffmpeg/bin/ffmpeg.exe"),
-                home / "ffmpeg" / "bin" / "ffmpeg.exe",
-                programdata / "chocolatey" / "bin" / "ffmpeg.exe",
-                home / "scoop" / "apps" / "ffmpeg" / "current" / "bin" / "ffmpeg.exe",
             ],
             "ffprobe": [
                 programfiles / "FFmpeg" / "bin" / "ffprobe.exe",
                 programfiles_x86 / "FFmpeg" / "bin" / "ffprobe.exe",
                 Path("C:/ffmpeg/bin/ffprobe.exe"),
-                home / "ffmpeg" / "bin" / "ffprobe.exe",
-                programdata / "chocolatey" / "bin" / "ffprobe.exe",
-                home / "scoop" / "apps" / "ffmpeg" / "current" / "bin" / "ffprobe.exe",
             ],
             "7z": [
                 programfiles / "7-Zip" / "7z.exe",
                 programfiles_x86 / "7-Zip" / "7z.exe",
-                programdata / "chocolatey" / "bin" / "7z.exe",
-                home / "scoop" / "apps" / "7zip" / "current" / "7z.exe",
             ],
             "nvidia-smi": [
                 programfiles / "NVIDIA Corporation" / "NVSMI" / "nvidia-smi.exe",
@@ -168,22 +191,23 @@ class PlatformManager:
                 programfiles / "NVIDIA GPU Computing Toolkit" / "CUDA" / "v11.7" / "bin" / "nvcc.exe",
                 Path("C:/CUDA/bin/nvcc.exe"),
             ],
-            "aria2c": [
-                programdata / "chocolatey" / "bin" / "aria2c.exe",
-                home / "scoop" / "apps" / "aria2" / "current" / "aria2c.exe",
-            ],
+            "aria2c": [],
         }
 
         return tool_paths.get(tool_name, [])
 
     @staticmethod
-    def _get_unix_tool_paths(tool_name: str, home: Path) -> List[Path]:
-        """Get Unix-specific search paths for a tool."""
+    def _get_unix_tool_paths(tool_name: str) -> List[Path]:
+        """Get Unix system-wide search paths for a tool.
+
+        NOTE: Only searches system directories (/usr/bin, /usr/local/bin).
+        User home directories are NOT searched - all user tools should
+        be installed to the repo-local .vfx_pipeline/tools/ directory.
+        """
         tool_paths: Dict[str, List[Path]] = {
             "colmap": [
                 Path("/usr/local/bin/colmap"),
                 Path("/usr/bin/colmap"),
-                home / ".local" / "bin" / "colmap",
             ],
             "ffmpeg": [
                 Path("/usr/local/bin/ffmpeg"),
@@ -506,3 +530,124 @@ Choose installation method:
   • Docker: python scripts/install_wizard_docker.py
   • Conda: python scripts/install_wizard.py
 """
+
+    # =========================================================================
+    # SANDBOXED TOOL INSTALLATION
+    # =========================================================================
+
+    # Tool download URLs - GitHub releases and official builds
+    TOOL_DOWNLOADS: Dict[str, Dict[str, str]] = {
+        "colmap": {
+            "windows": "https://github.com/colmap/colmap/releases/download/3.9.1/COLMAP-3.9.1-windows-cuda.zip",
+            "linux": "https://github.com/colmap/colmap/releases/download/3.9.1/COLMAP-3.9.1-linux-no-cuda.tar.gz",
+        },
+        "ffmpeg": {
+            "windows": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
+            "linux": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz",
+        },
+    }
+
+    @staticmethod
+    def get_tools_dir() -> Path:
+        """Get the repo-local tools directory."""
+        return TOOLS_DIR
+
+    @staticmethod
+    def install_tool(tool_name: str, force: bool = False) -> Optional[Path]:
+        """Download and install a tool to the repo-local tools directory.
+
+        Tools are installed to .vfx_pipeline/tools/<tool_name>/ to keep
+        everything sandboxed within the repo directory. No files are
+        placed in the user's home directory.
+
+        Args:
+            tool_name: Name of the tool to install ('colmap', 'ffmpeg')
+            force: Re-download even if already installed
+
+        Returns:
+            Path to the installed executable, or None if installation failed
+        """
+        import tempfile
+        import zipfile
+        import tarfile
+
+        if tool_name not in PlatformManager.TOOL_DOWNLOADS:
+            print(f"    Error: No download URL configured for {tool_name}")
+            return None
+
+        platform_key = "windows" if _is_windows() else "linux"
+        url = PlatformManager.TOOL_DOWNLOADS[tool_name].get(platform_key)
+
+        if not url:
+            print(f"    Error: {tool_name} not available for {platform_key}")
+            return None
+
+        tool_dir = TOOLS_DIR / tool_name
+
+        if not force:
+            existing = PlatformManager.find_tool(tool_name)
+            if existing and str(TOOLS_DIR) in str(existing):
+                print(f"    {tool_name} already installed at {existing}")
+                return existing
+
+        print(f"    Downloading {tool_name}...")
+        print(f"    URL: {url}")
+
+        TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+
+        try:
+            import urllib.request
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(url).suffix) as tmp:
+                tmp_path = Path(tmp.name)
+
+            urllib.request.urlretrieve(url, tmp_path)
+            print(f"    Downloaded to {tmp_path}")
+
+            if tool_dir.exists():
+                import shutil
+                shutil.rmtree(tool_dir)
+            tool_dir.mkdir(parents=True, exist_ok=True)
+
+            print(f"    Extracting to {tool_dir}...")
+
+            if url.endswith('.zip'):
+                with zipfile.ZipFile(tmp_path, 'r') as zf:
+                    zf.extractall(tool_dir)
+            elif url.endswith('.tar.gz') or url.endswith('.tar.xz'):
+                with tarfile.open(tmp_path, 'r:*') as tf:
+                    tf.extractall(tool_dir)
+
+            tmp_path.unlink()
+
+            PlatformManager._flatten_single_subdir(tool_dir)
+
+            installed_path = PlatformManager.find_tool(tool_name)
+            if installed_path:
+                print(f"    Successfully installed {tool_name} at {installed_path}")
+                return installed_path
+            else:
+                print(f"    Warning: {tool_name} extracted but executable not found")
+                return None
+
+        except Exception as e:
+            print(f"    Error installing {tool_name}: {e}")
+            return None
+
+    @staticmethod
+    def _flatten_single_subdir(tool_dir: Path) -> None:
+        """If extraction created a single subdirectory, flatten it.
+
+        Many archives extract to a single directory like 'COLMAP-3.9.1-windows/'.
+        This flattens that so executables are directly accessible.
+        """
+        import shutil
+
+        subdirs = [d for d in tool_dir.iterdir() if d.is_dir()]
+        files = [f for f in tool_dir.iterdir() if f.is_file()]
+
+        if len(subdirs) == 1 and len(files) == 0:
+            single_dir = subdirs[0]
+            for item in single_dir.iterdir():
+                shutil.move(str(item), str(tool_dir / item.name))
+            single_dir.rmdir()
