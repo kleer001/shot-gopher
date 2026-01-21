@@ -138,11 +138,13 @@ RUN for dir in */; do \
 
 # Install SAM3 GPU-accelerated NMS (speeds up video tracking 5-10x)
 # Only attempt if nvcc (CUDA compiler) is available
-# UV_SYSTEM_PYTHON=1 tells uv to install into system Python (no venv in Docker)
+# The install.py uses comfy_env which may have API compatibility issues
+# If it fails, we fall back to CPU NMS at runtime (slower but functional)
 RUN cd ComfyUI-SAM3 && \
     if command -v nvcc >/dev/null 2>&1; then \
-        echo "CUDA toolkit found, installing SAM3 GPU NMS..." && \
-        UV_SYSTEM_PYTHON=1 python3 install.py; \
+        echo "CUDA toolkit found, attempting SAM3 GPU NMS installation..." && \
+        UV_SYSTEM_PYTHON=1 python3 install.py || \
+        echo "WARNING: SAM3 GPU NMS installation failed (comfy_env API mismatch). Will use CPU fallback at runtime."; \
     else \
         echo "Skipping SAM3 GPU NMS (nvcc not available - will use CPU fallback at runtime)"; \
     fi
