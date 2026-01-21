@@ -240,10 +240,9 @@ def run_docker_mode(
             "-v", f"{REPO_ROOT / 'scripts'}:/app/scripts:ro",
             "-v", f"{REPO_ROOT / 'workflow_templates'}:/app/workflow_templates:ro",
             "vfx-ingest:latest",
-            "python", "/app/scripts/run_pipeline.py",
         ] + forward_args
 
-        print(f"Running: docker run ... python /app/scripts/run_pipeline.py {' '.join(forward_args)}")
+        print(f"Running: docker run ... {' '.join(forward_args)}")
         print()
 
         result = subprocess.run(cmd, cwd=REPO_ROOT)
