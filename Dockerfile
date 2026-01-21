@@ -1,19 +1,16 @@
 # VFX Ingest Platform - Docker Image
 # Multi-stage build for optimized layer caching
 
-# Stage 1: Get COLMAP from official pre-built image (with CUDA + FreeImage support)
-# Using latest tag which has FreeImage initialization fixes (PR #1549, #2332)
-# See: https://github.com/colmap/colmap/issues/1548
-FROM colmap/colmap:latest AS colmap-source
-
-# Stage 2: Base image with system dependencies
+# Stage 1: Base image with system dependencies
 # Using devel image for nvcc (CUDA compiler) needed by SAM3 GPU NMS
 FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS base
 
 # Prevent interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system packages and COLMAP runtime dependencies
+# Install system packages including COLMAP via apt
+# Using apt ensures all dependencies are properly resolved and compatible
+# Note: apt COLMAP has CUDA support when running with nvidia-docker
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
@@ -25,34 +22,11 @@ RUN apt-get update && apt-get install -y \
     ninja-build \
     libgl1-mesa-glx \
     libglu1-mesa \
-    libglew2.2 \
-    libgomp1 \
-    libboost-filesystem1.74.0 \
-    libboost-program-options1.74.0 \
-    libboost-graph1.74.0 \
-    libgoogle-glog0v5 \
-    libceres2 \
-    libmetis5 \
-    libfreeimage3 \
-    libsqlite3-0 \
-    libflann1.9 \
-    libqt5core5a \
-    libqt5widgets5 \
+    colmap \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy COLMAP from official image
-# The official image has proper FreeImage initialization built in
-COPY --from=colmap-source /usr/local/bin/colmap /usr/local/bin/colmap
-# Copy COLMAP's shared libraries (official image uses dynamic linking)
-COPY --from=colmap-source /usr/local/lib/libcolmap* /usr/local/lib/
-# Copy FreeImage library from official image to ensure compatibility
-# The apt version (libfreeimage3) may not have proper initialization
-COPY --from=colmap-source /usr/lib/x86_64-linux-gnu/libfreeimage* /usr/lib/x86_64-linux-gnu/
-# Ensure COLMAP is executable and update library cache
-RUN chmod +x /usr/local/bin/colmap && ldconfig
-
-# Ensure /usr/local/bin is in PATH (for shutil.which to find colmap)
-ENV PATH="/usr/local/bin:$PATH"
+# Verify COLMAP is installed and working
+RUN colmap -h | head -5
 
 # Create application directory
 WORKDIR /app
@@ -60,7 +34,7 @@ WORKDIR /app
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 
-# Stage 3: Python dependencies
+# Stage 2: Python dependencies
 FROM base AS python-deps
 
 # Copy requirements
@@ -78,7 +52,7 @@ RUN pip3 install --no-cache-dir smplx
 # Install kornia (required for GS-IR)
 RUN pip3 install --no-cache-dir kornia
 
-# Stage 4: GS-IR (Gaussian Splatting Inverse Rendering)
+# Stage 3: GS-IR (Gaussian Splatting Inverse Rendering)
 FROM python-deps AS gsir
 
 # CUDA architecture for CUDA extension builds (GPU not visible during docker build)
@@ -117,7 +91,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 WORKDIR /app
 
-# Stage 5: ComfyUI and custom nodes
+# Stage 4: ComfyUI and custom nodes
 FROM gsir AS comfyui
 
 # Create .vfx_pipeline directory structure
@@ -158,7 +132,7 @@ RUN cd ComfyUI-SAM3 && \
 
 WORKDIR /app
 
-# Stage 6: Pipeline scripts
+# Stage 5: Pipeline scripts
 FROM comfyui AS pipeline
 
 # Copy pipeline scripts
