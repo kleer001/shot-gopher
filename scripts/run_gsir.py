@@ -47,20 +47,14 @@ def check_gsir_available() -> tuple[bool, Optional[Path]]:
 
     Returns:
         Tuple of (is_available, gsir_path or None)
+        The path returned is the GS-IR repo root containing train.py
     """
-    # Check if gsir module is importable
-    try:
-        result = subprocess.run(
-            [sys.executable, "-c", "import gs_ir; print(gs_ir.__file__)"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if result.returncode == 0:
-            module_path = Path(result.stdout.strip()).parent
-            return True, module_path
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
+    # Check GSIR_PATH environment variable first (most reliable)
+    gsir_env = os.environ.get("GSIR_PATH")
+    if gsir_env:
+        gsir_path = Path(gsir_env)
+        if (gsir_path / "train.py").exists():
+            return True, gsir_path
 
     # Check common installation locations
     common_paths = [
@@ -73,12 +67,21 @@ def check_gsir_available() -> tuple[bool, Optional[Path]]:
         if (path / "train.py").exists():
             return True, path
 
-    # Check if train.py is in PATH via gsir command
-    gsir_env = os.environ.get("GSIR_PATH")
-    if gsir_env:
-        gsir_path = Path(gsir_env)
-        if (gsir_path / "train.py").exists():
-            return True, gsir_path
+    # Check if gsir module is importable and find repo root from module path
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import gs_ir; print(gs_ir.__file__)"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            module_path = Path(result.stdout.strip()).parent
+            for parent in [module_path] + list(module_path.parents):
+                if (parent / "train.py").exists():
+                    return True, parent
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
 
     return False, None
 
