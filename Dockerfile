@@ -1,16 +1,53 @@
 # VFX Ingest Platform - Docker Image
 # Multi-stage build for optimized layer caching
 
-# Stage 1: Get COLMAP from official pre-built image
-# Using official image which is Ubuntu 24.04 based with all dependencies resolved
-FROM colmap/colmap:latest AS colmap-source
+# Stage 1: Build COLMAP from source with CUDA support
+# The official colmap/colmap:latest image does NOT have GPU support
+# We must build from source with CUDA enabled
+FROM nvidia/cuda:12.6.1-cudnn-devel-ubuntu24.04 AS colmap-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install COLMAP build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    cmake \
+    ninja-build \
+    build-essential \
+    libboost-program-options-dev \
+    libboost-graph-dev \
+    libboost-system-dev \
+    libeigen3-dev \
+    libcgal-dev \
+    libceres-dev \
+    libgoogle-glog-dev \
+    libgflags-dev \
+    libglew-dev \
+    libsqlite3-dev \
+    libfreeimage-dev \
+    qtbase6-dev \
+    libqt6opengl6-dev \
+    libmetis-dev \
+    libmkl-full-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone and build COLMAP with CUDA support
+ARG COLMAP_VERSION=3.11.1
+ARG CUDA_ARCHITECTURES="75;86;89"
+
+RUN git clone --branch ${COLMAP_VERSION} --depth 1 https://github.com/colmap/colmap.git /colmap-src && \
+    mkdir -p /colmap-src/build && cd /colmap-src/build && \
+    cmake .. -GNinja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/colmap-install \
+        -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
+        -DBLA_VENDOR=Intel10_64lp && \
+    ninja install && \
+    rm -rf /colmap-src
 
 # Stage 2: Base image with system dependencies
-# Using Ubuntu 24.04 to match COLMAP image (avoids glibc mismatch)
-# CUDA 12.6 works with PyTorch cu124 wheels (backward compatible)
 FROM nvidia/cuda:12.6.1-cudnn-devel-ubuntu24.04 AS base
 
-# Prevent interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system packages and COLMAP runtime dependencies
@@ -35,7 +72,7 @@ RUN apt-get update && apt-get install -y \
     libgoogle-glog0v6t64 \
     libceres4 \
     libmetis5 \
-    libopenimageio2.4t64 \
+    libfreeimage3 \
     libsqlite3-0 \
     libqt6core6t64 \
     libqt6widgets6t64 \
@@ -45,16 +82,13 @@ RUN apt-get update && apt-get install -y \
     libmkl-intel-thread \
     libmkl-core \
     libomp5 \
-    libfreeimage3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy COLMAP from official image
-COPY --from=colmap-source /usr/local/bin/colmap /usr/local/bin/colmap
-COPY --from=colmap-source /usr/local/lib/ /usr/local/lib/
-COPY --from=colmap-source /usr/local/share/ /usr/local/share/
+# Copy COLMAP from builder stage (GPU-enabled build)
+COPY --from=colmap-builder /colmap-install/ /usr/local/
 
-# Ensure COLMAP is executable and update library cache
-RUN chmod +x /usr/local/bin/colmap && ldconfig
+# Update library cache
+RUN ldconfig
 
 # Ensure /usr/local/bin is in PATH (for shutil.which to find colmap)
 ENV PATH="/usr/local/bin:$PATH"
