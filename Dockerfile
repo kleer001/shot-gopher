@@ -9,6 +9,7 @@ FROM nvidia/cuda:12.6.1-cudnn-devel-ubuntu24.04 AS colmap-builder
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install COLMAP build dependencies
+# Reference: https://github.com/colmap/colmap/blob/main/cmake/FindDependencies.cmake
 RUN apt-get update && apt-get install -y \
     git \
     cmake \
@@ -26,6 +27,8 @@ RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
     libfreeimage-dev \
     libflann-dev \
+    libopenimageio-dev \
+    libsuitesparse-dev \
     qt6-base-dev \
     qt6-base-private-dev \
     libmetis-dev \
@@ -84,6 +87,8 @@ RUN apt-get update && apt-get install -y \
     libmkl-core \
     libomp5 \
     libflann1.10 \
+    libopenimageio2.5t64 \
+    libcholmod5 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy COLMAP from builder stage (GPU-enabled build)
