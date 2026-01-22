@@ -31,7 +31,9 @@ RUN apt-get update && apt-get install -y \
     libmetis-dev \
     libgoogle-glog-dev \
     libgtest-dev \
+    libgmock-dev \
     libsqlite3-dev \
+    libmkl-full-dev \
     libglew-dev \
     libcgal-dev \
     libceres-dev \
@@ -54,6 +56,7 @@ RUN git clone --branch 3.13.0 --depth 1 https://github.com/colmap/colmap.git /co
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CUDA_ARCHITECTURES="${COLMAP_CUDA_ARCHS}" \
         -DCMAKE_INSTALL_PREFIX=/colmap-install \
+        -DBLA_VENDOR=Intel10_64lp \
         -DTESTS_ENABLED=OFF && \
     ninja && \
     ninja install
@@ -90,6 +93,9 @@ RUN apt-get update && apt-get install -y \
     libqt5core5a \
     libqt5widgets5 \
     libcurl4 \
+    libmkl-intel-lp64 \
+    libmkl-intel-thread \
+    libmkl-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy COLMAP from the build stage
