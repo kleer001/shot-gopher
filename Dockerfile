@@ -1,73 +1,14 @@
 # VFX Ingest Platform - Docker Image
 # Multi-stage build for optimized layer caching
 
-# Stage 1: Build COLMAP from source
-# The official colmap/colmap:latest image now uses Ubuntu 24.04 (PR #3363, June 2025)
-# which is incompatible with our Ubuntu 22.04 base due to glibc version mismatch.
-# Building from source ensures compatibility with Ubuntu 22.04 + CUDA 12.1.
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS colmap-builder
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-# CUDA architectures to build for (RTX 30xx = 8.6, RTX 40xx = 8.9, etc.)
-# Can be overridden at build time: docker build --build-arg COLMAP_CUDA_ARCHS="86"
-ARG COLMAP_CUDA_ARCHS="75;80;86;89"
-
-# Install GCC 10 (required for Ubuntu 22.04 + CUDA compilation)
-# and all COLMAP build dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    cmake \
-    ninja-build \
-    build-essential \
-    gcc-10 \
-    g++-10 \
-    libboost-program-options-dev \
-    libboost-graph-dev \
-    libboost-system-dev \
-    libeigen3-dev \
-    libopenimageio-dev \
-    openimageio-tools \
-    libopenexr-dev \
-    libimath-dev \
-    libmetis-dev \
-    libgoogle-glog-dev \
-    libgtest-dev \
-    libgmock-dev \
-    libsqlite3-dev \
-    libmkl-full-dev \
-    libglew-dev \
-    libcgal-dev \
-    libceres-dev \
-    qtbase5-dev \
-    libqt5opengl5-dev \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set GCC 10 as the compiler (required for Ubuntu 22.04 + CUDA builds)
-ENV CC=/usr/bin/gcc-10
-ENV CXX=/usr/bin/g++-10
-ENV CUDAHOSTCXX=/usr/bin/g++-10
-
-# Clone and build COLMAP from main branch
-# Note: Using main branch (not 3.13.0) because OpenImageIO support was added
-# in PR #3459, merged December 4, 2025 - after the 3.13.0 release (Nov 7, 2025)
-RUN git clone --depth 1 https://github.com/colmap/colmap.git /colmap && \
-    cd /colmap && \
-    mkdir build && cd build && \
-    cmake .. -GNinja \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_CUDA_ARCHITECTURES="${COLMAP_CUDA_ARCHS}" \
-        -DCMAKE_INSTALL_PREFIX=/colmap-install \
-        -DBLA_VENDOR=Intel10_64lp \
-        -DTESTS_ENABLED=OFF && \
-    ninja && \
-    ninja install
+# Stage 1: Get COLMAP from official pre-built image
+# Using official image which is Ubuntu 24.04 based with all dependencies resolved
+FROM colmap/colmap:latest AS colmap-source
 
 # Stage 2: Base image with system dependencies
-# Using devel image for nvcc (CUDA compiler) needed by SAM3 GPU NMS
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS base
+# Using Ubuntu 24.04 to match COLMAP image (avoids glibc mismatch)
+# CUDA 12.4 has PyTorch wheels available
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu24.04 AS base
 
 # Prevent interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
@@ -76,8 +17,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
-    python3.10 \
+    python3 \
     python3-pip \
+    python3-venv \
     wget \
     curl \
     xvfb \
@@ -86,26 +28,27 @@ RUN apt-get update && apt-get install -y \
     libglu1-mesa \
     libglew2.2 \
     libgomp1 \
-    libboost-filesystem1.74.0 \
-    libboost-program-options1.74.0 \
-    libboost-graph1.74.0 \
-    libgoogle-glog0v5 \
-    libceres2 \
+    libboost-filesystem1.83.0 \
+    libboost-program-options1.83.0 \
+    libboost-graph1.83.0 \
+    libgoogle-glog0v2t64 \
+    libceres3t64 \
     libmetis5 \
-    libopenimageio2.2 \
+    libopenimageio2.5t64 \
     libsqlite3-0 \
-    libqt5core5a \
-    libqt5widgets5 \
-    libcurl4 \
+    libqt6core6t64 \
+    libqt6widgets6t64 \
+    libqt6openglwidgets6 \
+    libcurl4t64 \
     libmkl-intel-lp64 \
     libmkl-intel-thread \
     libmkl-core \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy COLMAP from the build stage
-COPY --from=colmap-builder /colmap-install/bin/colmap /usr/local/bin/colmap
-COPY --from=colmap-builder /colmap-install/lib/ /usr/local/lib/
-COPY --from=colmap-builder /colmap-install/share/ /usr/local/share/
+# Copy COLMAP from official image
+COPY --from=colmap-source /usr/local/bin/colmap /usr/local/bin/colmap
+COPY --from=colmap-source /usr/local/lib/ /usr/local/lib/
+COPY --from=colmap-source /usr/local/share/ /usr/local/share/
 
 # Ensure COLMAP is executable and update library cache
 RUN chmod +x /usr/local/bin/colmap && ldconfig
@@ -126,16 +69,16 @@ FROM base AS python-deps
 COPY requirements.txt /tmp/
 
 # Install Python packages
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
 
-# Install PyTorch with CUDA support
-RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# Install PyTorch with CUDA 12.4 support
+RUN pip3 install --no-cache-dir --break-system-packages torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # Install smplx (required for mocap)
-RUN pip3 install --no-cache-dir smplx
+RUN pip3 install --no-cache-dir --break-system-packages smplx
 
 # Install kornia (required for GS-IR)
-RUN pip3 install --no-cache-dir kornia
+RUN pip3 install --no-cache-dir --break-system-packages kornia
 
 # Stage 4: GS-IR (Gaussian Splatting Inverse Rendering)
 FROM python-deps AS gsir
@@ -160,19 +103,19 @@ RUN cd GS-IR/gs-ir && \
 # --no-build-isolation required so it can find PyTorch during build
 RUN --mount=type=cache,target=/root/.cache/pip \
     TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
-    pip3 install --no-build-isolation git+https://github.com/NVlabs/nvdiffrast.git
+    pip3 install --no-build-isolation --break-system-packages git+https://github.com/NVlabs/nvdiffrast.git
 
 # Build and install GS-IR submodules (CUDA extensions)
 WORKDIR /app/.vfx_pipeline/GS-IR
 RUN --mount=type=cache,target=/root/.cache/pip \
     TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
-    pip3 install --no-build-isolation ./submodules/diff-gaussian-rasterization && \
+    pip3 install --no-build-isolation --break-system-packages ./submodules/diff-gaussian-rasterization && \
     TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
-    pip3 install --no-build-isolation ./submodules/simple-knn
+    pip3 install --no-build-isolation --break-system-packages ./submodules/simple-knn
 
 # Install gs-ir module (has CUDA extensions, needs TORCH_CUDA_ARCH_LIST)
 RUN --mount=type=cache,target=/root/.cache/pip \
-    cd gs-ir && TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" pip3 install --no-build-isolation -e .
+    cd gs-ir && TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" pip3 install --no-build-isolation --break-system-packages -e .
 
 WORKDIR /app
 
@@ -184,7 +127,7 @@ RUN mkdir -p /app/.vfx_pipeline
 
 # Clone ComfyUI and install its requirements
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git /app/.vfx_pipeline/ComfyUI && \
-    pip3 install --no-cache-dir -r /app/.vfx_pipeline/ComfyUI/requirements.txt
+    pip3 install --no-cache-dir --break-system-packages -r /app/.vfx_pipeline/ComfyUI/requirements.txt
 
 # Clone custom nodes
 WORKDIR /app/.vfx_pipeline/ComfyUI/custom_nodes
@@ -197,7 +140,7 @@ RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
 # Install custom node dependencies
 RUN for dir in */; do \
         if [ -f "$dir/requirements.txt" ]; then \
-            pip3 install --no-cache-dir -r "$dir/requirements.txt"; \
+            pip3 install --no-cache-dir --break-system-packages -r "$dir/requirements.txt"; \
         fi; \
     done
 
@@ -208,7 +151,7 @@ RUN for dir in */; do \
 RUN cd ComfyUI-SAM3 && \
     if command -v nvcc >/dev/null 2>&1; then \
         echo "CUDA toolkit found, installing comfy-env and SAM3 GPU NMS..." && \
-        pip3 install --no-cache-dir comfy-env && \
+        pip3 install --no-cache-dir --break-system-packages comfy-env && \
         python3 -c "from comfy_env import install; install()" || \
         echo "WARNING: SAM3 GPU NMS installation failed. Will use CPU fallback at runtime."; \
     else \
