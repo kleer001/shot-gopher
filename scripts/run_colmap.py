@@ -438,6 +438,9 @@ def extract_features(
         mask_path: Optional path to mask directory (excludes masked regions from feature extraction)
         use_gpu: Whether to use GPU for SIFT extraction (falls back to CPU on failure)
     """
+    diag = diagnose_colmap_environment(verbose=False)
+    gpu_sift_available = diag.get("gpu_sift_available", False)
+
     def _build_args(gpu: bool) -> dict:
         """Build argument dict with specified GPU setting."""
         args = {
@@ -446,10 +449,11 @@ def extract_features(
             "ImageReader.camera_model": camera_model,
             "ImageReader.single_camera": 1 if single_camera else 0,
             "SiftExtraction.max_num_features": max_features,
-            "SiftExtraction.use_gpu": 1 if gpu else 0,
         }
-        if gpu:
-            args["SiftExtraction.gpu_index"] = "0"
+        if gpu_sift_available:
+            args["SiftExtraction.use_gpu"] = 1 if gpu else 0
+            if gpu:
+                args["SiftExtraction.gpu_index"] = "0"
         if mask_path and mask_path.exists():
             args["ImageReader.mask_path"] = str(mask_path)
         return args
@@ -535,30 +539,33 @@ def match_features(
         sequential_overlap: Number of overlapping frames for sequential matcher
         use_gpu: Whether to use GPU for SIFT matching (falls back to CPU on failure)
     """
+    diag = diagnose_colmap_environment(verbose=False)
+    gpu_sift_available = diag.get("gpu_sift_available", False)
+
     def _run_matcher(gpu: bool):
         """Run the matcher with specified GPU setting."""
         if matcher_type == "sequential":
             args = {
                 "database_path": str(database_path),
                 "SequentialMatching.overlap": sequential_overlap,
-                "SiftMatching.use_gpu": 1 if gpu else 0,
                 "SiftMatching.max_num_matches": 32768,
             }
-            # Explicitly set GPU index to avoid multi-GPU initialization issues (Issue #627)
-            if gpu:
-                args["SiftMatching.gpu_index"] = "0"
-            mode = "GPU" if gpu else "CPU"
+            if gpu_sift_available:
+                args["SiftMatching.use_gpu"] = 1 if gpu else 0
+                if gpu:
+                    args["SiftMatching.gpu_index"] = "0"
+            mode = "GPU" if gpu and gpu_sift_available else "CPU"
             run_colmap_command("sequential_matcher", args, f"Matching features (sequential, {mode})")
         elif matcher_type == "exhaustive":
             args = {
                 "database_path": str(database_path),
-                "SiftMatching.use_gpu": 1 if gpu else 0,
                 "SiftMatching.max_num_matches": 32768,
             }
-            # Explicitly set GPU index to avoid multi-GPU initialization issues (Issue #627)
-            if gpu:
-                args["SiftMatching.gpu_index"] = "0"
-            mode = "GPU" if gpu else "CPU"
+            if gpu_sift_available:
+                args["SiftMatching.use_gpu"] = 1 if gpu else 0
+                if gpu:
+                    args["SiftMatching.gpu_index"] = "0"
+            mode = "GPU" if gpu and gpu_sift_available else "CPU"
             run_colmap_command("exhaustive_matcher", args, f"Matching features (exhaustive, {mode})")
         else:
             raise ValueError(f"Unknown matcher type: {matcher_type}")
