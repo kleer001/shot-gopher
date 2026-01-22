@@ -124,6 +124,59 @@ class DockerStateManager:
 class DockerManager:
     """Manages Docker-specific operations."""
 
+    REQUIRED_CUDA_VERSION = (12, 6)
+
+    @staticmethod
+    def get_driver_cuda_version() -> Tuple[Optional[Tuple[int, int]], str]:
+        """Get the maximum CUDA version supported by the installed NVIDIA driver.
+
+        Returns:
+            Tuple of ((major, minor) version or None, message)
+        """
+        if not shutil.which("nvidia-smi"):
+            return None, "nvidia-smi not found"
+
+        try:
+            result = subprocess.run(
+                ["nvidia-smi"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                return None, "nvidia-smi failed to execute"
+
+            import re
+            cuda_match = re.search(r'CUDA Version:\s*(\d+)\.(\d+)', result.stdout)
+            if cuda_match:
+                major = int(cuda_match.group(1))
+                minor = int(cuda_match.group(2))
+                return (major, minor), f"CUDA {major}.{minor}"
+            return None, "Could not parse CUDA version from nvidia-smi"
+        except Exception as e:
+            return None, f"Error checking CUDA version: {e}"
+
+    @classmethod
+    def check_cuda_version_compatible(cls) -> Tuple[bool, str]:
+        """Check if driver supports the required CUDA version for Docker image.
+
+        Returns:
+            Tuple of (compatible, message)
+        """
+        cuda_version, msg = cls.get_driver_cuda_version()
+        if cuda_version is None:
+            return False, msg
+
+        required = cls.REQUIRED_CUDA_VERSION
+        if cuda_version >= required:
+            return True, f"Driver supports CUDA {cuda_version[0]}.{cuda_version[1]} (required: {required[0]}.{required[1]})"
+        else:
+            return False, (
+                f"Driver only supports CUDA {cuda_version[0]}.{cuda_version[1]}, "
+                f"but Docker image requires CUDA {required[0]}.{required[1]}. "
+                f"Please update your NVIDIA driver (nvidia-driver-550 or newer)."
+            )
+
     @staticmethod
     def check_nvidia_driver() -> Tuple[bool, str]:
         """Check if NVIDIA driver is installed.
@@ -394,6 +447,20 @@ class DockerWizard:
         has_gpu, gpu_msg = self.docker_manager.check_nvidia_driver()
         if has_gpu:
             print_success(f"NVIDIA driver: {gpu_msg}")
+
+            cuda_ok, cuda_msg = self.docker_manager.check_cuda_version_compatible()
+            if cuda_ok:
+                print_success(f"CUDA version: {cuda_msg}")
+            else:
+                print_error(f"CUDA version: {cuda_msg}")
+                print()
+                print("  Your NVIDIA driver is too old for the Docker image.")
+                print("  Update your driver with:")
+                print()
+                print("    sudo apt update && sudo apt install nvidia-driver-550")
+                print("    sudo reboot")
+                print()
+                all_checks_passed = False
         else:
             print_error(f"NVIDIA driver not found: {gpu_msg}")
             print_info("Install from: https://www.nvidia.com/Download/index.aspx")
