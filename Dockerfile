@@ -1,10 +1,61 @@
 # VFX Ingest Platform - Docker Image
 # Multi-stage build for optimized layer caching
 
-# Stage 1: Get COLMAP from official pre-built image (with CUDA + FreeImage support)
-# Using latest tag which has FreeImage initialization fixes (PR #1549, #2332)
-# See: https://github.com/colmap/colmap/issues/1548
-FROM colmap/colmap:latest AS colmap-source
+# Stage 1: Build COLMAP from source
+# The official colmap/colmap:latest image now uses Ubuntu 24.04 (PR #3363, June 2025)
+# which is incompatible with our Ubuntu 22.04 base due to glibc version mismatch.
+# Building from source ensures compatibility with Ubuntu 22.04 + CUDA 12.1.
+FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS colmap-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# CUDA architectures to build for (RTX 30xx = 8.6, RTX 40xx = 8.9, etc.)
+# Can be overridden at build time: docker build --build-arg COLMAP_CUDA_ARCHS="86"
+ARG COLMAP_CUDA_ARCHS="75;80;86;89"
+
+# Install GCC 10 (required for Ubuntu 22.04 + CUDA compilation)
+# and all COLMAP build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    cmake \
+    ninja-build \
+    build-essential \
+    gcc-10 \
+    g++-10 \
+    libboost-program-options-dev \
+    libboost-graph-dev \
+    libboost-system-dev \
+    libeigen3-dev \
+    libfreeimage-dev \
+    libmetis-dev \
+    libgoogle-glog-dev \
+    libgtest-dev \
+    libsqlite3-dev \
+    libglew-dev \
+    libcgal-dev \
+    libceres-dev \
+    qtbase5-dev \
+    libqt5opengl5-dev \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set GCC 10 as the compiler (required for Ubuntu 22.04 + CUDA builds)
+ENV CC=/usr/bin/gcc-10
+ENV CXX=/usr/bin/g++-10
+ENV CUDAHOSTCXX=/usr/bin/g++-10
+
+# Clone and build COLMAP 3.13.0 (latest stable release)
+RUN git clone --branch 3.13.0 --depth 1 https://github.com/colmap/colmap.git /colmap && \
+    cd /colmap && \
+    mkdir build && cd build && \
+    cmake .. -GNinja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CUDA_ARCHITECTURES="${COLMAP_CUDA_ARCHS}" \
+        -DCMAKE_INSTALL_PREFIX=/colmap-install \
+        -DTESTS_ENABLED=OFF && \
+    ninja && \
+    ninja install
 
 # Stage 2: Base image with system dependencies
 # Using devel image for nvcc (CUDA compiler) needed by SAM3 GPU NMS
@@ -35,19 +86,16 @@ RUN apt-get update && apt-get install -y \
     libmetis5 \
     libfreeimage3 \
     libsqlite3-0 \
-    libflann1.9 \
     libqt5core5a \
     libqt5widgets5 \
+    libcurl4 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy COLMAP from official image
-# The official image has proper FreeImage initialization built in
-COPY --from=colmap-source /usr/local/bin/colmap /usr/local/bin/colmap
-# Copy COLMAP's shared libraries (official image uses dynamic linking)
-COPY --from=colmap-source /usr/local/lib/libcolmap* /usr/local/lib/
-# Copy FreeImage library from official image to ensure compatibility
-# The apt version (libfreeimage3) may not have proper initialization
-COPY --from=colmap-source /usr/lib/x86_64-linux-gnu/libfreeimage* /usr/lib/x86_64-linux-gnu/
+# Copy COLMAP from the build stage
+COPY --from=colmap-builder /colmap-install/bin/colmap /usr/local/bin/colmap
+COPY --from=colmap-builder /colmap-install/lib/ /usr/local/lib/
+COPY --from=colmap-builder /colmap-install/share/ /usr/local/share/
+
 # Ensure COLMAP is executable and update library cache
 RUN chmod +x /usr/local/bin/colmap && ldconfig
 
