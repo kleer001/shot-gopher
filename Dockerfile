@@ -29,6 +29,8 @@ RUN apt-get update && apt-get install -y \
     libopenimageio-dev \
     openimageio-tools \
     libopenexr-dev \
+    libilmbase-dev \
+    libimath-dev \
     libmetis-dev \
     libgoogle-glog-dev \
     libgtest-dev \
