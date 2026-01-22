@@ -134,7 +134,7 @@ WORKDIR /app/.vfx_pipeline
 RUN git clone --recursive https://github.com/lzhnb/GS-IR.git GS-IR
 
 # Install GS-IR Python dependencies (not in environment.yml but required)
-RUN pip3 install --no-cache-dir --break-system-packages plyfile tqdm "imageio[ffmpeg]"
+RUN pip3 install --no-cache-dir --break-system-packages plyfile tqdm "imageio[ffmpeg]" tensorboard
 
 # Fix missing includes in GS-IR submodules (upstream bugs, GCC 13+ compatibility)
 # - cstdint: uint32_t/uint64_t/uintptr_t type definitions
