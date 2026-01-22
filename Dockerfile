@@ -45,10 +45,11 @@ ENV CUDAHOSTCXX=/usr/bin/g++-10
 
 # Clone and build COLMAP
 # CUDA architectures: 7.5 (RTX 20xx/T4), 8.0 (A100), 8.6 (RTX 30xx), 8.9 (RTX 40xx), 9.0 (H100)
-# Using main branch for FreeImage initialization fix (issue #1548, PR #1549)
+# Using 3.10 for FreeImage encapsulation fix (PR #2332) - fixes dynamic linking issues
+ARG COLMAP_VERSION=3.10
 ARG CUDA_ARCHITECTURES="75;80;86;89;90"
 
-RUN git clone --depth 1 https://github.com/colmap/colmap.git /colmap-src
+RUN git clone --branch ${COLMAP_VERSION} --depth 1 https://github.com/colmap/colmap.git /colmap-src
 
 WORKDIR /colmap-src/build
 RUN cmake .. -GNinja \
