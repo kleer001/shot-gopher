@@ -44,6 +44,8 @@ RUN apt-get update && apt-get install -y \
     libmkl-intel-lp64 \
     libmkl-intel-thread \
     libmkl-core \
+    libomp5 \
+    libfreeimage3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy COLMAP from official image
