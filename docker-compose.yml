@@ -27,6 +27,8 @@ services:
       - ./workflow_templates:/app/workflow_templates:ro
       - ./web:/app/web:ro
       - ./docker/entrypoint.sh:/app/entrypoint.sh:ro
+      # GS-IR patches (PyTorch 2.6 weights_only fix)
+      - ./.vfx_pipeline/gsir-patches/baking.py:/app/.vfx_pipeline/GS-IR/baking.py:ro
     ports:
       - "8188:8188"  # ComfyUI web interface
     stdin_open: true
