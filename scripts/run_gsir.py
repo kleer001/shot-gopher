@@ -477,14 +477,22 @@ def export_materials(
 
     # Find the output directory created by GS-IR
     # Format: {model_path}/train/ours_{iteration}/ (COLMAP uses train split only)
+    # Note: GS-IR may output to ours_None if loaded_iter isn't set
     iteration = int(checkpoint.stem.replace("chkpnt", ""))
-    render_output = model_path / "train" / f"ours_{iteration}"
+    candidate_dirs = [
+        model_path / "train" / f"ours_{iteration}",
+        model_path / "train" / "ours_None",
+        model_path / "test" / f"ours_{iteration}",
+        model_path / "test" / "ours_None",
+    ]
 
-    if not render_output.exists():
-        # Try test split as fallback
-        render_output = model_path / "test" / f"ours_{iteration}"
+    render_output = None
+    for candidate in candidate_dirs:
+        if candidate.exists():
+            render_output = candidate
+            break
 
-    if not render_output.exists():
+    if render_output is None:
         print(f"    Warning: Render output not found at expected location", file=sys.stderr)
         return False
 
