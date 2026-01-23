@@ -278,13 +278,12 @@ def run_gsir_command(
     iter_pattern = re.compile(r'[Ii]teration\s*[:\s]*(\d+)\s*[/|of]\s*(\d+)')
     # tqdm pattern: "50%|█████     | 15000/30000 [05:23<05:23, 46.37it/s]"
     tqdm_pattern = re.compile(r'(\d+)%\|.*\|\s*(\d+)/(\d+)')
-    # Alternative: "Training progress:  50%"
-    percent_pattern = re.compile(r'(\d+)%')
 
     last_reported = 0
     last_report_time = 0
-    report_interval = 1000  # Report every 1000 iterations
-    time_interval = 5.0  # Or at least every 5 seconds
+    report_interval = 2500  # Report every 2500 iterations
+    time_interval = 30.0  # Or at least every 30 seconds
+    min_total_for_progress = 100  # Only show progress for loops with 100+ iterations
     is_tty = sys.stdout.isatty()
 
     for line in iter(process.stdout.readline, ''):
@@ -310,7 +309,8 @@ def run_gsir_command(
                 current = int(match.group(2))
                 total = int(match.group(3))
 
-        if current and total:
+        # Only report progress for training loops (not camera loading etc)
+        if current and total and total >= min_total_for_progress:
             now = time.time()
             should_report = (
                 current - last_reported >= report_interval or
