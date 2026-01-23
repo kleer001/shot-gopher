@@ -229,8 +229,9 @@ def main():
     )
     parser.add_argument(
         "--separate-instances",
-        action="store_true",
-        help="Separate combined masks into individual instances (e.g., person_0/, person_1/)"
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Separate combined masks into individual instances (default: True)"
     )
     parser.add_argument(
         "--min-area",
