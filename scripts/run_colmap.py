@@ -448,7 +448,8 @@ def extract_features(
     max_features: int = 8192,
     single_camera: bool = True,
     mask_path: Optional[Path] = None,
-    use_gpu: bool = True
+    use_gpu: bool = True,
+    max_image_size: int = -1
 ) -> None:
     """Extract SIFT features from images.
 
@@ -460,6 +461,7 @@ def extract_features(
         single_camera: If True, assume all images from same camera
         mask_path: Optional path to mask directory (excludes masked regions from feature extraction)
         use_gpu: Whether to use GPU for SIFT extraction (falls back to CPU on failure)
+        max_image_size: Maximum image dimension (downscales if larger, -1 for no limit)
     """
     diag = diagnose_colmap_environment(verbose=False)
     gpu_sift_available = diag.get("gpu_sift_available", False)
@@ -473,6 +475,8 @@ def extract_features(
             "ImageReader.single_camera": 1 if single_camera else 0,
             "SiftExtraction.max_num_features": max_features,
         }
+        if max_image_size > 0:
+            args["ImageReader.max_image_size"] = max_image_size
         if gpu_sift_available:
             args["SiftExtraction.use_gpu"] = 1 if gpu else 0
             if gpu:
@@ -1360,6 +1364,7 @@ def run_colmap_pipeline(
     camera_model: str = "OPENCV",
     use_masks: bool = True,
     max_gap: int = 12,
+    max_image_size: int = -1,
 ) -> bool:
     """Run the complete COLMAP reconstruction pipeline.
 
@@ -1371,6 +1376,7 @@ def run_colmap_pipeline(
         camera_model: COLMAP camera model to use
         use_masks: If True, automatically use segmentation masks from roto/ (if available)
         max_gap: Maximum frame gap to interpolate if COLMAP misses frames (default: 12)
+        max_image_size: Maximum image dimension for feature extraction (-1 for no limit)
 
     Returns:
         True if reconstruction succeeded
@@ -1405,6 +1411,8 @@ def run_colmap_pipeline(
     print(f"Frames: {frame_count}")
     print(f"Quality: {quality}")
     print(f"Mode: GPU (with CPU fallback)")
+    if max_image_size > 0:
+        print(f"Max image size: {max_image_size}px (downscaling enabled)")
     if quality == "slow":
         print(f"  Warning: Slow-camera mode uses aggressive settings for minimal motion")
         print(f"           Results may be jittery due to low parallax")
@@ -1461,6 +1469,7 @@ def run_colmap_pipeline(
                 single_camera=True,
                 mask_path=mask_path,
                 use_gpu=True,
+                max_image_size=max_image_size,
             )
 
             # Verify features were extracted
@@ -1610,6 +1619,13 @@ def main():
         help="Maximum frame gap to interpolate if COLMAP misses frames (default: 12)"
     )
     parser.add_argument(
+        "--max-image-size",
+        type=int,
+        default=-1,
+        help="Maximum image dimension (downscales larger images, -1 for no limit). "
+             "Use 1000-2000 for faster processing."
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Check if COLMAP is available and exit"
@@ -1638,6 +1654,7 @@ def main():
         camera_model=args.camera_model,
         use_masks=not args.no_masks,
         max_gap=args.max_gap,
+        max_image_size=args.max_image_size,
     )
 
     sys.exit(0 if success else 1)

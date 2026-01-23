@@ -288,6 +288,7 @@ def run_pipeline(
     colmap_dense: bool = False,
     colmap_mesh: bool = False,
     colmap_use_masks: bool = True,
+    colmap_max_size: int = -1,
     gsir_iterations: int = 35000,
     gsir_path: Optional[str] = None,
     auto_start_comfyui: bool = True,
@@ -310,6 +311,7 @@ def run_pipeline(
         colmap_dense: Run COLMAP dense reconstruction
         colmap_mesh: Generate mesh from COLMAP dense reconstruction
         colmap_use_masks: Use segmentation masks for COLMAP (if available)
+        colmap_max_size: Max image dimension for COLMAP (-1 for no limit)
         gsir_iterations: Total GS-IR training iterations
         gsir_path: Path to GS-IR installation
         auto_start_comfyui: Auto-start ComfyUI if not running (default: True)
@@ -667,7 +669,8 @@ def run_pipeline(
                 quality=colmap_quality,
                 run_dense=colmap_dense,
                 run_mesh=colmap_mesh,
-                use_masks=colmap_use_masks
+                use_masks=colmap_use_masks,
+                max_image_size=colmap_max_size
             ):
                 print("  → COLMAP reconstruction failed", file=sys.stderr)
 
@@ -831,6 +834,12 @@ def main():
         action="store_true",
         help="Disable automatic use of segmentation masks for COLMAP (default: use masks if available)"
     )
+    parser.add_argument(
+        "--colmap-max-size",
+        type=int,
+        default=-1,
+        help="Max image dimension for COLMAP (downscales larger images). Use 1000-2000 for faster processing."
+    )
 
     parser.add_argument(
         "--gsir-iterations", "-i",
@@ -939,6 +948,7 @@ def main():
         colmap_dense=args.colmap_dense,
         colmap_mesh=args.colmap_mesh,
         colmap_use_masks=not args.colmap_no_masks,
+        colmap_max_size=args.colmap_max_size,
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
         auto_start_comfyui=not args.no_auto_comfyui,
