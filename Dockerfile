@@ -147,6 +147,13 @@ RUN cd GS-IR/gs-ir && \
     cd ../../simple-knn && \
     sed -i '1i#include <cfloat>' simple_knn.cu
 
+# Fix PyTorch 2.6+ weights_only=True default (GS-IR uses pickle in checkpoints)
+# Patch all torch.load calls to explicitly set weights_only=False
+RUN cd GS-IR && \
+    for f in $(find . -name "*.py" -exec grep -l "torch.load" {} \;); do \
+        sed -i 's/torch\.load(\(.*\))/torch.load(\1, weights_only=False)/g' "$f"; \
+    done
+
 # Install nvdiffrast (required for GS-IR rendering)
 # --no-build-isolation required so it can find PyTorch during build
 RUN --mount=type=cache,target=/root/.cache/pip \
