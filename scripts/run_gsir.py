@@ -104,6 +104,8 @@ def run_colmap_undistorter(
     Returns:
         True if undistortion succeeded
     """
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     args = [
@@ -125,6 +127,18 @@ def run_colmap_undistorter(
         if result.returncode != 0:
             print(f"    Error: image_undistorter failed: {result.stderr}", file=sys.stderr)
             return False
+
+        # COLMAP outputs to sparse/ directly, but GS-IR expects sparse/0/
+        # Move files to create the expected structure
+        sparse_dir = output_dir / "sparse"
+        sparse_0_dir = sparse_dir / "0"
+        if sparse_dir.exists() and not sparse_0_dir.exists():
+            temp_dir = output_dir / "sparse_temp"
+            sparse_dir.rename(temp_dir)
+            sparse_dir.mkdir()
+            temp_dir.rename(sparse_0_dir)
+            print(f"    Reorganized sparse model to sparse/0/ structure")
+
         return True
     except subprocess.TimeoutExpired:
         print(f"    Error: image_undistorter timed out", file=sys.stderr)
@@ -170,17 +184,26 @@ def setup_gsir_data_structure(
         print(f"    Error: Source frames not found: {source_frames}", file=sys.stderr)
         return False
 
-    use_undistorted = undistorted_dir / "sparse"
+    # GS-IR expects sparse/0/ structure
+    use_sparse_parent = undistorted_dir / "sparse"
+    use_sparse_model = use_sparse_parent / "0"
     use_images = undistorted_dir / "images"
 
-    if not use_undistorted.exists() or not use_images.exists():
+    # Check if undistorted data exists with correct structure
+    needs_undistort = (
+        not use_sparse_model.exists() or
+        not use_images.exists() or
+        not (use_sparse_model / "cameras.bin").exists()
+    )
+
+    if needs_undistort:
         print(f"    Undistorting images for GS-IR (PINHOLE camera required)...")
         if not run_colmap_undistorter(colmap_dir, undistorted_dir, source_frames):
             print(f"    Error: Failed to undistort images", file=sys.stderr)
             return False
 
-    if not use_undistorted.exists():
-        print(f"    Error: Undistorted sparse model not found: {use_undistorted}", file=sys.stderr)
+    if not use_sparse_model.exists():
+        print(f"    Error: Undistorted sparse model not found: {use_sparse_model}", file=sys.stderr)
         return False
 
     sparse_link = gsir_data_dir / "sparse"
@@ -194,12 +217,13 @@ def setup_gsir_data_structure(
                 shutil.rmtree(link)
 
     try:
-        sparse_link.symlink_to(use_undistorted.resolve())
+        # Link to sparse parent so sparse/0/ is accessible
+        sparse_link.symlink_to(use_sparse_parent.resolve())
         images_link.symlink_to(use_images.resolve())
         print(f"    Created symlinks for GS-IR data structure")
     except OSError as e:
         print(f"    Warning: Could not create symlinks ({e}), copying data...")
-        shutil.copytree(use_undistorted, sparse_link)
+        shutil.copytree(use_sparse_parent, sparse_link)
         shutil.copytree(use_images, images_link)
 
     return True
