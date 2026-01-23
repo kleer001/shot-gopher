@@ -459,13 +459,15 @@ def export_materials(
     """
     print("\n[GS-IR Export: Rendering Material Maps]")
 
-    # Run render with PBR and BRDF evaluation
+    # Run render with PBR enabled to export material maps
+    # Skip test cameras - COLMAP datasets typically only have training cameras
+    # Skip brdf_eval - requires synthetic data with ground truth albedo
     args = {
         "-m": str(model_path),
         "-s": str(source_path),
         "checkpoint": str(checkpoint),
         "pbr": True,
-        "brdf_eval": True,
+        "skip_test": True,
     }
 
     run_gsir_command(
@@ -474,13 +476,13 @@ def export_materials(
     )
 
     # Find the output directory created by GS-IR
-    # Format: {model_path}/test/ours_{iteration}/
+    # Format: {model_path}/train/ours_{iteration}/ (COLMAP uses train split only)
     iteration = int(checkpoint.stem.replace("chkpnt", ""))
-    render_output = model_path / "test" / f"ours_{iteration}"
+    render_output = model_path / "train" / f"ours_{iteration}"
 
     if not render_output.exists():
-        # Try train split
-        render_output = model_path / "train" / f"ours_{iteration}"
+        # Try test split as fallback
+        render_output = model_path / "test" / f"ours_{iteration}"
 
     if not render_output.exists():
         print(f"    Warning: Render output not found at expected location", file=sys.stderr)
