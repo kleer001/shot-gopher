@@ -20,6 +20,7 @@ Example:
 import argparse
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -498,33 +499,24 @@ def run_pipeline(
         if separate_instances:
             from separate_instances import separate_instances as do_separate
 
-            person_dirs = []
-            for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
-                if subdir.is_dir() and "person" in subdir.name.lower():
-                    if list(subdir.glob("*.png")):
-                        person_dirs.append(subdir)
-
-            if person_dirs:
-                print("\n  --- Separating instances ---")
-                for person_dir in person_dirs:
-                    print(f"  → Processing: {person_dir.name}")
+            print("\n  --- Separating instances ---")
+            for prompt in prompts:
+                prompt_name = prompt.replace(" ", "_")
+                prompt_dir = roto_dir / prompt_name
+                if prompt_dir.exists() and list(prompt_dir.glob("*.png")):
+                    print(f"  → Processing: {prompt_name} → {prompt_name}_00/, {prompt_name}_01/, ...")
                     result = do_separate(
-                        input_dir=person_dir,
+                        input_dir=prompt_dir,
                         output_dir=roto_dir,
                         min_area=500,
-                        prefix=person_dir.name,
+                        prefix=prompt_name,
                     )
 
-                    if result and len(result) > 1:
-                        print(f"    Found {len(result)} instances, removing combined directory")
-                        shutil.rmtree(person_dir)
-                    elif result and len(result) == 1:
-                        print(f"    Only 1 instance found, keeping original")
-                        for idx, out_dir in result.items():
-                            if out_dir.exists() and out_dir != person_dir:
-                                shutil.rmtree(out_dir)
-            else:
-                print("  → No person directories to separate")
+                    if result:
+                        print(f"    Created {len(result)} {prompt_name} directories")
+                        print(f"    Combined mask kept in: {prompt_name}/")
+                else:
+                    print(f"  → No {prompt_name} directory to separate")
 
         clear_gpu_memory(comfyui_url)
 
@@ -537,11 +529,13 @@ def run_pipeline(
 
         refresh_workflow_from_template(workflow_path, "04_matanyone.json")
 
+        person_pattern = re.compile(r"^person_\d{2}$")
         person_dirs = []
         for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
-            if subdir.is_dir() and "person" in subdir.name.lower():
-                if list(subdir.glob("*.png")):
-                    person_dirs.append(subdir)
+            if not subdir.is_dir():
+                continue
+            if person_pattern.match(subdir.name) and list(subdir.glob("*.png")):
+                person_dirs.append(subdir)
 
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
@@ -566,7 +560,7 @@ def run_pipeline(
                 if len(person_dirs) > 1:
                     print(f"\n  [{i+1}/{len(person_dirs)}] Refining: {person_dir.name}")
                 else:
-                    print(f"  → Refining person masks from: {person_dir.name}")
+                    print(f"  → Refining masks from: {person_dir.name}")
 
                 out_dir.mkdir(parents=True, exist_ok=True)
 

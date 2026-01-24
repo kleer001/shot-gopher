@@ -125,7 +125,7 @@
         {"name": "images", "type": "IMAGE", "link": 7}
       ],
       "properties": {},
-      "widgets_values": ["roto/mask"],
+      "widgets_values": ["roto/mask/mask"],
       "title": "💾 Save Masks"
     },
     {
