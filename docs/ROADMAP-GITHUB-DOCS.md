@@ -35,29 +35,35 @@ Essential files only:
 - [ ] `CLAUDE.md` - LLM guidance (keep for AI-assisted development)
 
 ### docs/ Directory Structure
-Recommended organization:
+
+**Flat structure for essentials** - Keep critical docs at top level for immediate visibility:
+
 ```
 docs/
-├── getting-started/
-│   ├── installation.md      # Merged from QUICKSTART + install_wizard
-│   ├── first-project.md     # Renamed from your_first_project.md
-│   └── docker.md            # Renamed from README-DOCKER.md
-├── user-guide/
-│   ├── pipeline-stages.md   # Renamed from stages.md
-│   ├── cli-reference.md     # Renamed from run_pipeline.md
-│   └── maintenance.md       # Renamed from janitor.md
+├── README.md              # Documentation hub / index
+│
+│   # ESSENTIAL - Before you can start
+├── installation.md        # Merged from QUICKSTART + install_wizard
+├── docker.md              # Docker setup (from README-DOCKER.md)
+├── windows-it-docker.md   # IT admin setup (Docker path)
+├── windows-it-native.md   # IT admin setup (native path)
+│
+│   # ESSENTIAL - Once you start
+├── first-project.md       # Your first project walkthrough
+├── troubleshooting.md     # When things go wrong
+│
+│   # REFERENCE - Subdirectories OK for deep dives
 ├── reference/
-│   ├── api.md               # Renamed from API-USAGE.md
-│   ├── scripts.md           # Renamed from component_scripts.md
-│   └── troubleshooting.md   # Keep as-is
-├── platforms/
-│   ├── windows.md           # General Windows users
-│   ├── windows-it-docker.md # IT admin setup (Docker/WSL2 path)
-│   └── windows-it-native.md # IT admin setup (native path)
-└── contributing/
-    ├── testing.md           # Moved from root TESTING.md
-    └── development.md       # New: development setup
+│   ├── stages.md          # Pipeline stage details
+│   ├── cli.md             # Command-line reference
+│   ├── api.md             # REST API documentation
+│   ├── scripts.md         # Component scripts
+│   └── maintenance.md     # Janitor / system maintenance
+└── platforms/
+    └── windows.md         # General Windows compatibility + troubleshooting
 ```
+
+**Rationale:** Users opening `docs/` immediately see what they need. No folder-diving for basics.
 
 ---
 
@@ -95,30 +101,30 @@ These files are internal planning documents that should NOT be in a public relea
 
 | Files to Merge | New File | Notes |
 |----------------|----------|-------|
-| `QUICKSTART.md` + `install_wizard.md` | `docs/getting-started/installation.md` | Single source of truth for installation |
-| `windows-compatibility.md` + `windows-troubleshooting.md` | `docs/platforms/windows.md` | General Windows user content |
-| `troubleshooting.md` (general) | Keep separate | Good standalone reference |
+| `QUICKSTART.md` + `install_wizard.md` | `docs/installation.md` | Single source of truth (top-level) |
+| `windows-compatibility.md` + `windows-troubleshooting.md` | `docs/platforms/windows.md` | General Windows content (subdirectory OK) |
+| `troubleshooting.md` (general) | `docs/troubleshooting.md` | Keep at top level - essential |
 
-**Keep Separate - IT Admin Docs:**
-- `windows_for_it_dept_docker.md` → `docs/platforms/windows-it-docker.md`
-- `windows_for_it_dept_native.md` → `docs/platforms/windows-it-native.md`
+**Keep at Top Level - IT Admin Docs:**
+- `windows_for_it_dept_docker.md` → `docs/windows-it-docker.md`
+- `windows_for_it_dept_native.md` → `docs/windows-it-native.md`
 
-These serve corporate users without admin access. They're "hand to IT" one-pagers that enable:
+These serve corporate users without admin access. Essential "hand to IT" one-pagers:
 - One-time admin setup (WSL2, Docker, CUDA, registry settings)
 - Users operate independently afterward without elevated privileges
 
 ### Phase 4: Rename for Clarity (Low Priority)
 
-| Current Name | New Name | Reason |
-|--------------|----------|--------|
-| `your_first_project.md` | `first-project.md` | Kebab-case consistency |
-| `README-DOCKER.md` | `docker.md` | Simpler, in getting-started/ |
-| `API-USAGE.md` | `api.md` | Simpler naming |
-| `stages.md` | `pipeline-stages.md` | More descriptive |
-| `run_pipeline.md` | `cli-reference.md` | Describes actual content |
-| `component_scripts.md` | `scripts.md` | Simpler |
-| `janitor.md` | `maintenance.md` | More intuitive |
-| `searching_for_COLMAP.md` | Consider deletion | Appears to be development notes |
+| Current Name | New Location | Reason |
+|--------------|--------------|--------|
+| `your_first_project.md` | `docs/first-project.md` | Top-level essential |
+| `README-DOCKER.md` | `docs/docker.md` | Top-level essential |
+| `API-USAGE.md` | `docs/reference/api.md` | Reference material |
+| `stages.md` | `docs/reference/stages.md` | Reference material |
+| `run_pipeline.md` | `docs/reference/cli.md` | Reference material |
+| `component_scripts.md` | `docs/reference/scripts.md` | Reference material |
+| `janitor.md` | `docs/reference/maintenance.md` | Reference material |
+| `searching_for_COLMAP.md` | Consider deletion | Development notes |
 
 ### Phase 5: Create Missing Standard Files (Low Priority)
 
@@ -169,9 +175,9 @@ One-paragraph description of what it does.
 |---------|-----------|------------|
 | Project overview | Full | - |
 | Quick install (1-liner) | Full | - |
-| Full installation | Link only | `docs/getting-started/installation.md` |
-| Feature list | Bullets | Detailed in stages.md |
-| Requirements | Brief | Full in installation.md |
+| Full installation | Link only | `docs/installation.md` |
+| Feature list | Bullets | Detailed in `docs/reference/stages.md` |
+| Requirements | Brief | Full in `docs/installation.md` |
 | Shot compatibility matrix | Link only | Move to user-guide |
 
 ---
@@ -194,10 +200,10 @@ These files are well-structured and user-facing:
 
 1. **Delete/archive internal roadmaps** (ATLAS, ROADMAP-*, UI-TEST-PLAN)
 2. **Delete alpha tester doc** (README_ALPHA_TESTERS.md)
-3. **Move TESTING.md** to docs/contributing/
+3. **Move TESTING.md** to docs/ (top-level or reference/)
 4. **Merge QUICKSTART.md** into README.md, then delete
-5. **Consolidate Windows user docs** (keep IT admin docs separate)
-6. **Create directory structure** (getting-started/, user-guide/, etc.)
+5. **Consolidate Windows user docs** into `platforms/windows.md`
+6. **Create reference/ and platforms/ subdirectories** (essentials stay flat)
 7. **Rename files** for consistency
 8. **Create CONTRIBUTING.md** if desired
 9. **Final review** of README.md content
@@ -224,26 +230,26 @@ shot-gopher/
 ├── CONTRIBUTING.md        # New
 ├── CLAUDE.md              # Keep for AI development
 └── docs/
-    ├── README.md          # Documentation hub
-    ├── getting-started/
-    │   ├── installation.md
-    │   ├── first-project.md
-    │   └── docker.md
-    ├── user-guide/
-    │   ├── pipeline-stages.md
-    │   ├── cli-reference.md
-    │   └── maintenance.md
+    ├── README.md          # Documentation hub / index
+    │
+    │   # Top-level essentials (no folder diving)
+    ├── installation.md    # Before you start
+    ├── docker.md          # Before you start (Docker path)
+    ├── first-project.md   # Once you start
+    ├── troubleshooting.md # When things go wrong
+    ├── windows-it-docker.md   # IT admin handoff
+    ├── windows-it-native.md   # IT admin handoff
+    │
+    │   # Subdirectories for deep reference
     ├── reference/
+    │   ├── stages.md
+    │   ├── cli.md
     │   ├── api.md
     │   ├── scripts.md
-    │   ├── troubleshooting.md
+    │   ├── maintenance.md
     │   └── interactive-segmentation.md
-    ├── platforms/
-    │   ├── windows.md
-    │   ├── windows-it-docker.md
-    │   └── windows-it-native.md
-    └── contributing/
-        └── testing.md
+    └── platforms/
+        └── windows.md     # General Windows info
 ```
 
 **Result:**
