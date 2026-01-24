@@ -116,7 +116,7 @@ MyFirstProject/
 └── colmap/             # COLMAP reconstruction data
 ```
 
-**See [Docker Guide](README-DOCKER.md) for complete documentation, troubleshooting, and advanced usage.**
+**See [Docker Guide](docker.md) for complete documentation, troubleshooting, and advanced usage.**
 
 ---
 
@@ -209,7 +209,7 @@ export VFX_MODELS_DIR=/path/to/models
 python scripts/run_pipeline.py video.mp4 -s depth
 ```
 
-**See [Pipeline Reference](run_pipeline.md) for complete command-line options.**
+**See [CLI Reference](reference/cli.md) for complete command-line options.**
 
 ---
 
@@ -348,7 +348,7 @@ After running your first project:
 2. **Import to VFX tools** (Nuke, Blender, Houdini, etc.)
 3. **Refine results** manually downstream as needed
 4. **Experiment** with different stages and options
-5. **Read component docs** for advanced usage: [Component Scripts](component_scripts.md)
+5. **Read component docs** for advanced usage: [Scripts Reference](reference/scripts.md)
 
 ### Recommended Learning Path
 

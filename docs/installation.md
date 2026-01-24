@@ -505,11 +505,11 @@ Then run `python scripts/install_wizard.py -v` to validate.
 
 ## Related Tools
 
-- **[Janitor](janitor.md)** - Maintenance and updates after installation
-- **[Pipeline](run_pipeline.md)** - Use the installed components
+- **[Maintenance](reference/maintenance.md)** - Maintenance and updates after installation
+- **[CLI Reference](reference/cli.md)** - Use the installed components
 
 ## See Also
 
 - Main documentation: [README.md](README.md)
-- Alpha testing guide: `README_ALPHA_TESTERS.md` (repository root)
-- Testing guide: `TESTING.md` (repository root)
+- Testing guide: [testing.md](testing.md)
+- Troubleshooting: [troubleshooting.md](troubleshooting.md)

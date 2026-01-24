@@ -785,7 +785,7 @@ ls ./projects/Test/colmap/sparse/0/
 
 ## See Also
 
-- **[Pipeline Orchestrator](run_pipeline.md)** - Run all components automatically
-- **[Installation Wizard](install_wizard.md)** - Install dependencies
-- **[Janitor](janitor.md)** - Maintain installations
-- **Main Documentation**: [README.md](README.md)
+- **[CLI Reference](cli.md)** - Run all components automatically
+- **[Installation](../installation.md)** - Install dependencies
+- **[Maintenance](maintenance.md)** - Maintain installations
+- **Main Documentation**: [README.md](../README.md)

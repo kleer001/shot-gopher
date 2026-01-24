@@ -2,7 +2,7 @@
 
 Detailed documentation for each processing stage.
 
-**Quick links**: [Pipeline Usage](run_pipeline.md) | [Troubleshooting](troubleshooting.md) | [Installation](install_wizard.md)
+**Quick links**: [CLI Reference](cli.md) | [Troubleshooting](../troubleshooting.md) | [Installation](../installation.md)
 
 ---
 
@@ -231,7 +231,7 @@ Human motion capture using WHAM + ECON.
 | **Workflow** | None (WHAM/ECON binaries) |
 
 **Requirements:**
-- WHAM and ECON installed ([Installation guide](install_wizard.md))
+- WHAM and ECON installed ([Installation guide](../installation.md))
 - Camera data from `colmap` or `depth` stage
 
 ```bash
@@ -304,6 +304,6 @@ python scripts/run_pipeline.py footage.mp4 -s depth,camera
 
 ## Related Documentation
 
-- [Pipeline Usage](run_pipeline.md) — Command reference and examples
-- [Troubleshooting](troubleshooting.md) — Common issues and solutions
-- [Installation](install_wizard.md) — Component setup
+- [CLI Reference](cli.md) — Command reference and examples
+- [Troubleshooting](../troubleshooting.md) — Common issues and solutions
+- [Installation](../installation.md) — Component setup

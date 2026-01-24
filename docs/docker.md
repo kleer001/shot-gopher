@@ -397,5 +397,5 @@ A: Yes - models are on host (`~/.vfx_pipeline/models`), not in container
 ## See Also
 
 - [Main README](../README.md) - General platform documentation
-- [ATLAS](ATLAS.md) - Roadmap and development progress
-- [Roadmap 1](ROADMAP-1-DOCKER.md) - Docker migration details
+- [Troubleshooting](troubleshooting.md) - Common issues and solutions
+- [Installation Guide](installation.md) - Detailed setup instructions

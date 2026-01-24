@@ -2,7 +2,7 @@
 
 Run the VFX pipeline from a single command.
 
-**Quick links**: [Stages](stages.md) | [Troubleshooting](troubleshooting.md) | [Installation](install_wizard.md)
+**Quick links**: [Stages](stages.md) | [Troubleshooting](../troubleshooting.md) | [Installation](../installation.md)
 
 ---
 
@@ -215,6 +215,6 @@ done
 ## Related Documentation
 
 - [Stages](stages.md) — Detailed stage documentation
-- [Troubleshooting](troubleshooting.md) — Common issues and performance tips
-- [Installation](install_wizard.md) — Setup guide
-- [Component Scripts](component_scripts.md) — Individual script docs
+- [Troubleshooting](../troubleshooting.md) — Common issues and performance tips
+- [Installation](../installation.md) — Setup guide
+- [Scripts](scripts.md) — Individual script docs

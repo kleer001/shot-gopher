@@ -128,18 +128,18 @@ bash scripts/run_docker.sh --name MyProject --stages all video.mp4
 python scripts/run_pipeline.py video.mp4 -s ingest,depth,roto,cleanplate,colmap,camera
 ```
 
-**See [Your First Project Guide](docs/your_first_project.md) for complete walkthrough, examples, and troubleshooting.**
+**See [Your First Project Guide](docs/first-project.md) for complete walkthrough, examples, and troubleshooting.**
 
 ## Documentation
 
 Complete documentation available in [docs/](docs/):
-- [Your First Project](docs/your_first_project.md) - Complete walkthrough for running your first pipeline
-- [Docker Guide](docs/README-DOCKER.md) - Complete Docker setup, usage, and troubleshooting
-- [Installation Guide](docs/install_wizard.md) - Detailed setup instructions
-- [Pipeline Reference](docs/run_pipeline.md) - Command-line usage and options
-- [Component Scripts](docs/component_scripts.md) - Individual tool documentation
-- [Maintenance](docs/janitor.md) - System health and updates
-- [Windows Compatibility](docs/windows-compatibility.md) - Roadmap for Windows support
+- [Your First Project](docs/first-project.md) - Complete walkthrough for running your first pipeline
+- [Docker Guide](docs/docker.md) - Docker setup, usage, and troubleshooting
+- [Installation Guide](docs/installation.md) - Detailed setup instructions
+- [CLI Reference](docs/reference/cli.md) - Command-line usage and options
+- [Pipeline Stages](docs/reference/stages.md) - Individual stage documentation
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+- [Windows Guide](docs/platforms/windows.md) - Windows support and troubleshooting
 
 <details>
 <summary><strong>Project Structure</strong></summary>
