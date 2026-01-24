@@ -19,7 +19,7 @@ def main():
 Examples:
     python scripts/install_wizard.py                  # Interactive conda install
     python scripts/install_wizard.py --docker         # Docker-based install
-    python scripts/install_wizard.py --component mocap # Install specific component
+    python scripts/install_wizard.py --component mocap_core # Install specific component
     python scripts/install_wizard.py --check-only     # Check status only
     python scripts/install_wizard.py --validate       # Run validation tests
     python scripts/install_wizard.py --docker --yolo  # Non-interactive Docker install

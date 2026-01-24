@@ -14,7 +14,7 @@ Usage:
     python -m scripts.install_wizard
     python scripts/install_wizard.py
     python scripts/install_wizard.py --docker          # Docker mode
-    python scripts/install_wizard.py --component mocap
+    python scripts/install_wizard.py --component mocap_core
     python scripts/install_wizard.py --check-only
 """
 
