@@ -189,15 +189,35 @@ def setup_gsir_data_structure(
     use_sparse_model = use_sparse_parent / "0"
     use_images = undistorted_dir / "images"
 
-    # Check if undistorted data exists with correct structure
+    # Count images in source COLMAP model
+    def count_colmap_images(sparse_model: Path) -> int:
+        """Count registered images in a COLMAP sparse model."""
+        images_bin = sparse_model / "images.bin"
+        if images_bin.exists():
+            try:
+                import struct
+                with open(images_bin, "rb") as f:
+                    return struct.unpack("<Q", f.read(8))[0]
+            except (IOError, struct.error):
+                pass
+        return 0
+
+    source_image_count = count_colmap_images(colmap_sparse_model)
+    undistorted_image_count = count_colmap_images(use_sparse_model)
+
+    # Check if undistorted data exists with correct structure AND matching image count
     needs_undistort = (
         not use_sparse_model.exists() or
         not use_images.exists() or
-        not (use_sparse_model / "cameras.bin").exists()
+        not (use_sparse_model / "cameras.bin").exists() or
+        undistorted_image_count != source_image_count
     )
 
     if needs_undistort:
-        print(f"    Undistorting images for GS-IR (PINHOLE camera required)...")
+        if undistorted_image_count > 0 and undistorted_image_count != source_image_count:
+            print(f"    Undistorted data is stale ({undistorted_image_count} vs {source_image_count} images), regenerating...")
+        else:
+            print(f"    Undistorting images for GS-IR (PINHOLE camera required)...")
         if not run_colmap_undistorter(colmap_dir, undistorted_dir, source_frames):
             print(f"    Error: Failed to undistort images", file=sys.stderr)
             return False
