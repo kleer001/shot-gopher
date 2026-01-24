@@ -12,7 +12,6 @@ services:
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-      - START_COMFYUI=true
       - VFX_MODELS_DIR=/models
       - VFX_PROJECTS_DIR=/workspace/projects
     volumes:
