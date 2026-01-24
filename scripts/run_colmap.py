@@ -618,55 +618,158 @@ def match_features(
         _run_matcher(gpu=False)
 
 
-def find_best_sparse_model(sparse_path: Path) -> Optional[Path]:
-    """Find the sparse model with the most registered images.
+def count_model_images(model_dir: Path) -> int:
+    """Count registered images in a COLMAP model directory."""
+    images_bin = model_dir / "images.bin"
+    images_txt = model_dir / "images.txt"
 
-    COLMAP may produce multiple sub-models if it can't connect all images.
-    This function finds the largest one (most registered images).
+    if images_bin.exists():
+        try:
+            with open(images_bin, "rb") as f:
+                return struct.unpack("<Q", f.read(8))[0]
+        except (IOError, struct.error):
+            pass
+    elif images_txt.exists():
+        try:
+            with open(images_txt, "r") as f:
+                lines = [l for l in f if l.strip() and not l.startswith("#")]
+                return len(lines) // 2
+        except IOError:
+            pass
+    return 0
+
+
+def get_sparse_models(sparse_path: Path) -> list[tuple[Path, int]]:
+    """Get all sparse models with their image counts, sorted by count descending."""
+    if not sparse_path.exists():
+        return []
+
+    models = []
+    for model_dir in sparse_path.iterdir():
+        if model_dir.is_dir() and not model_dir.name.startswith("merged"):
+            count = count_model_images(model_dir)
+            if count > 0:
+                models.append((model_dir, count))
+
+    return sorted(models, key=lambda x: x[1], reverse=True)
+
+
+def merge_sparse_models(
+    sparse_path: Path,
+    output_name: str = "merged"
+) -> Optional[Path]:
+    """Merge multiple sparse models into one using COLMAP model_merger.
 
     Args:
-        sparse_path: Path to sparse reconstruction directory containing model subdirs
+        sparse_path: Path containing model subdirectories (0/, 1/, etc.)
+        output_name: Name for merged output directory
+
+    Returns:
+        Path to merged model, or None if merge failed
+    """
+    models = get_sparse_models(sparse_path)
+    if len(models) < 2:
+        return None
+
+    print(f"    Found {len(models)} sub-models, attempting to merge...")
+    for model_path, count in models:
+        print(f"      Model {model_path.name}: {count} images")
+
+    merged_path = sparse_path / output_name
+    merged_path.mkdir(exist_ok=True)
+
+    # Start with the largest model
+    largest_model = models[0][0]
+    current_merged = merged_path / "current"
+    shutil.copytree(largest_model, current_merged)
+
+    total_merged = models[0][1]
+    merge_success = False
+
+    # Try to merge each smaller model into the growing merged model
+    for model_path, count in models[1:]:
+        temp_output = merged_path / "temp_merge"
+        if temp_output.exists():
+            shutil.rmtree(temp_output)
+        temp_output.mkdir()
+
+        try:
+            args = {
+                "input_path1": str(current_merged),
+                "input_path2": str(model_path),
+                "output_path": str(temp_output),
+            }
+            run_colmap_command("model_merger", args, f"Merging model {model_path.name}")
+
+            # Check if merge produced output with more images
+            merged_count = count_model_images(temp_output)
+            if merged_count > total_merged:
+                shutil.rmtree(current_merged)
+                temp_output.rename(current_merged)
+                total_merged = merged_count
+                merge_success = True
+                print(f"      Merged model {model_path.name}: now {total_merged} images")
+            else:
+                shutil.rmtree(temp_output)
+                print(f"      Could not merge model {model_path.name} (no improvement)")
+
+        except subprocess.CalledProcessError:
+            print(f"      Failed to merge model {model_path.name}")
+            if temp_output.exists():
+                shutil.rmtree(temp_output)
+
+    if not merge_success:
+        shutil.rmtree(merged_path)
+        return None
+
+    # Run bundle adjustment on merged model to refine
+    print("    Running bundle adjustment on merged model...")
+    try:
+        args = {
+            "input_path": str(current_merged),
+            "output_path": str(current_merged),
+            "BundleAdjustment.refine_focal_length": 1,
+            "BundleAdjustment.refine_principal_point": 0,
+            "BundleAdjustment.refine_extra_params": 1,
+        }
+        run_colmap_command("bundle_adjuster", args, "Bundle adjustment")
+    except subprocess.CalledProcessError:
+        print("    Warning: Bundle adjustment failed, using unrefined merge")
+
+    # Move to final location
+    final_path = merged_path / "final"
+    current_merged.rename(final_path)
+
+    print(f"    Merged model has {total_merged} registered images")
+    return final_path
+
+
+def find_best_sparse_model(sparse_path: Path) -> Optional[Path]:
+    """Find the best sparse model - merged if possible, otherwise largest.
+
+    Args:
+        sparse_path: Path to sparse reconstruction directory
 
     Returns:
         Path to the best model directory, or None if no valid models found
     """
-    if not sparse_path.exists():
+    models = get_sparse_models(sparse_path)
+    if not models:
         return None
 
-    best_model = None
-    best_count = 0
+    # If only one model, use it
+    if len(models) == 1:
+        print(f"    Single model with {models[0][1]} registered images")
+        return models[0][0]
 
-    for model_dir in sorted(sparse_path.iterdir()):
-        if not model_dir.is_dir():
-            continue
+    # Multiple models - try to merge them
+    merged = merge_sparse_models(sparse_path)
+    if merged:
+        return merged
 
-        images_bin = model_dir / "images.bin"
-        images_txt = model_dir / "images.txt"
-
-        if images_bin.exists():
-            try:
-                with open(images_bin, "rb") as f:
-                    import struct
-                    num_images = struct.unpack("<Q", f.read(8))[0]
-                    if num_images > best_count:
-                        best_count = num_images
-                        best_model = model_dir
-            except (IOError, struct.error):
-                pass
-        elif images_txt.exists():
-            try:
-                with open(images_txt, "r") as f:
-                    lines = [l for l in f if l.strip() and not l.startswith("#")]
-                    num_images = len(lines) // 2
-                    if num_images > best_count:
-                        best_count = num_images
-                        best_model = model_dir
-            except IOError:
-                pass
-
-    if best_model and best_count > 0:
-        print(f"    Selected model {best_model.name} with {best_count} registered images")
-
+    # Merging failed - fall back to largest model
+    best_model, best_count = models[0]
+    print(f"    Using largest model {best_model.name} with {best_count} registered images")
     return best_model
 
 
@@ -714,14 +817,21 @@ def run_sparse_reconstruction(
         print("    Warning: No reconstruction model produced", file=sys.stderr)
         return False
 
-    # If best model is not "0", reorganize so downstream code works consistently
+    # Reorganize so downstream code always finds the model at "0"
     model_0 = output_path / "0"
-    if best_model.name != "0":
-        print(f"    Reorganizing: best model is {best_model.name}, moving to 0")
+    if best_model != model_0:
+        # Backup existing model 0 if it exists and isn't the best
         if model_0.exists():
-            backup_path = output_path / f"0_backup_{best_model.name}"
+            backup_name = f"0_original"
+            backup_path = output_path / backup_name
+            if backup_path.exists():
+                shutil.rmtree(backup_path)
             model_0.rename(backup_path)
-        best_model.rename(model_0)
+            print(f"    Backed up original model 0 to {backup_name}")
+
+        # Copy best model to 0 (copy instead of move to preserve merged/ structure)
+        shutil.copytree(best_model, model_0)
+        print(f"    Installed best model as 0 ({count_model_images(model_0)} images)")
 
     return True
 
