@@ -21,7 +21,6 @@
 | Internal roadmaps exposed | Confuses users | High |
 | Overlapping content | Maintenance burden | Medium |
 | Alpha tester doc (temporary) | Outdated quickly | Medium |
-| IT dept docs duplicated | Redundancy | Low |
 
 ---
 
@@ -52,7 +51,9 @@ docs/
 │   ├── scripts.md           # Renamed from component_scripts.md
 │   └── troubleshooting.md   # Keep as-is
 ├── platforms/
-│   └── windows.md           # Consolidated Windows docs
+│   ├── windows.md           # General Windows users
+│   ├── windows-it-docker.md # IT admin setup (Docker/WSL2 path)
+│   └── windows-it-native.md # IT admin setup (native path)
 └── contributing/
     ├── testing.md           # Moved from root TESTING.md
     └── development.md       # New: development setup
@@ -95,8 +96,16 @@ These files are internal planning documents that should NOT be in a public relea
 | Files to Merge | New File | Notes |
 |----------------|----------|-------|
 | `QUICKSTART.md` + `install_wizard.md` | `docs/getting-started/installation.md` | Single source of truth for installation |
-| `windows-compatibility.md` + `windows-troubleshooting.md` + `windows_for_it_dept_*.md` | `docs/platforms/windows.md` | All Windows content in one place |
+| `windows-compatibility.md` + `windows-troubleshooting.md` | `docs/platforms/windows.md` | General Windows user content |
 | `troubleshooting.md` (general) | Keep separate | Good standalone reference |
+
+**Keep Separate - IT Admin Docs:**
+- `windows_for_it_dept_docker.md` → `docs/platforms/windows-it-docker.md`
+- `windows_for_it_dept_native.md` → `docs/platforms/windows-it-native.md`
+
+These serve corporate users without admin access. They're "hand to IT" one-pagers that enable:
+- One-time admin setup (WSL2, Docker, CUDA, registry settings)
+- Users operate independently afterward without elevated privileges
 
 ### Phase 4: Rename for Clarity (Low Priority)
 
@@ -187,7 +196,7 @@ These files are well-structured and user-facing:
 2. **Delete alpha tester doc** (README_ALPHA_TESTERS.md)
 3. **Move TESTING.md** to docs/contributing/
 4. **Merge QUICKSTART.md** into README.md, then delete
-5. **Consolidate Windows docs** into single file
+5. **Consolidate Windows user docs** (keep IT admin docs separate)
 6. **Create directory structure** (getting-started/, user-guide/, etc.)
 7. **Rename files** for consistency
 8. **Create CONTRIBUTING.md** if desired
@@ -230,16 +239,18 @@ shot-gopher/
     │   ├── troubleshooting.md
     │   └── interactive-segmentation.md
     ├── platforms/
-    │   └── windows.md
+    │   ├── windows.md
+    │   ├── windows-it-docker.md
+    │   └── windows-it-native.md
     └── contributing/
         └── testing.md
 ```
 
 **Result:**
 - Root: 4 files (down from 5)
-- docs/: ~15 files (down from 27)
-- Total: ~19 files (down from 34)
-- **45% reduction** in documentation files while preserving all user-facing content
+- docs/: ~17 files (down from 27)
+- Total: ~21 files (down from 34)
+- **38% reduction** in documentation files while preserving all user-facing content
 
 ---
 
