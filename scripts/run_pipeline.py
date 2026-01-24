@@ -866,8 +866,9 @@ def main():
     )
     parser.add_argument(
         "--separate-instances",
-        action="store_true",
-        help="Separate multi-person masks into individual instances (person_0/, person_1/, etc.)"
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Separate multi-person masks into individual instances (default: True)"
     )
     parser.add_argument(
         "--auto-movie",

@@ -229,23 +229,23 @@ Different components perform best under specific conditions:
 
 | Shot Type | Depth (DA3) | Roto (SAM3) | Clean Plate | Camera (COLMAP) | Material (GS-IR) | MoCap (WHAM/ECON) |
 |-----------|-------------|-------------|-------------|-----------------|------------------|-------------------|
-| **Static camera** | ✓ | ✓ | ✓ | ✗ | ✗ | ⚠ |
-| **Moving camera** | ✓ | ✓ | ⚠ | ✓ | ✓ | ✓ |
-| **Handheld/shaky** | ✓ | ⚠ | ⚠ | ⚠ | ⚠ | ⚠ |
-| **Fast motion** | ⚠ | ⚠ | ⚠ | ⚠ | ⚠ | ⚠ |
-| **Low texture** | ✓ | ✓ | ✓ | ✗ | ⚠ | ✓ |
-| **Full body person** | ✓ | ✓ | ✓ | ✓ | N/A | ✓ |
-| **Partial body/occluded** | ✓ | ⚠ | ⚠ | ✓ | N/A | ⚠ |
-| **Multiple people** | ✓ | ⚠ | ⚠ | ✓ | N/A | ✗ |
-| **In-focus background** | ✓ | ✓ | ✓ | ✓ | ✓ | N/A |
-| **Shallow DOF/bokeh** | ⚠ | ✓ | ⚠ | ⚠ | ⚠ | ✓ |
-| **High contrast lighting** | ✓ | ✓ | ✓ | ✓ | ⚠ | ✓ |
-| **150+ frames** | ✓ | ⚠ | ✓ | ✓ | ⚠ | ⚠ |
+| **Static camera** | ✅ | ✅ | ✅ | 🚫 | 🚫 | ⚠️ |
+| **Moving camera** | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ |
+| **Handheld/shaky** | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| **Fast motion** | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| **Low texture** | ✅ | ✅ | ✅ | 🚫 | ⚠️ | ✅ |
+| **Full body person** | ✅ | ✅ | ✅ | ✅ | N/A | ✅ |
+| **Partial body/occluded** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ⚠️ |
+| **Multiple people** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | 🚫 |
+| **In-focus background** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
+| **Shallow DOF/bokeh** | ⚠️ | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ |
+| **High contrast lighting** | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
+| **150+ frames** | ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ |
 
 **Legend:**
-- ✓ Works well
-- ⚠ Limited/challenging
-- ✗ Not suitable/fails
+- ✅ Works well
+- ⚠️ Limited/challenging
+- 🚫 Not suitable/fails
 - N/A Not applicable
 
 </details>
