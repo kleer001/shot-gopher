@@ -119,6 +119,11 @@ Creates segmentation masks using SAM3 (Segment Anything Model 3).
 - ComfyUI server running
 - SAM3 custom node (~3.2 GB model, auto-downloads from public repo)
 
+**⚠️ When to use automatic vs interactive segmentation:**
+- **Single person/object:** Automatic roto works well
+- **Multiple people:** Use [interactive](#interactive) segmentation instead—automatic detection may miss people or produce inconsistent tracking across frames
+- **Non-standard objects:** Use [interactive](#interactive) for objects that text prompts can't reliably identify (specific props, partial views, unusual angles)
+
 ### Basic Usage
 
 ```bash

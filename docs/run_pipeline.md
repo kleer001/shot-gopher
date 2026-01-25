@@ -95,13 +95,20 @@ python scripts/run_pipeline.py footage.mp4 -l
 
 ## Examples
 
-### Interactive Segmentation
+### Interactive Segmentation (Recommended for Multiple People)
 
 ```bash
 python scripts/run_pipeline.py footage.mp4 -s interactive
 ```
 
 Opens ComfyUI in browser for manual point/box selection of objects.
+
+**⚠️ Use interactive segmentation when:**
+- Shot has multiple people (automatic roto may miss people or track inconsistently)
+- Objects can't be reliably identified by text prompts
+- You need precise control over what gets segmented
+
+**Automatic roto works well for:** Single person or single easily-described object.
 
 ### Matchmove Only
 
@@ -128,6 +135,8 @@ python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person,bag,ball"
 python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person"
 # Creates: roto/mask/, roto/person_00/, roto/person_01/, etc.
 ```
+
+**⚠️ Note:** Automatic multi-person detection works best with clearly separated individuals. For crowded scenes, overlapping people, or when consistent tracking is critical, use [interactive segmentation](#interactive-segmentation-recommended-for-multiple-people) instead.
 
 ### High-Quality COLMAP
 
