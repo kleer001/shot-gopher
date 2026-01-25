@@ -1,14 +1,3 @@
-<!--
-CLAUDE.md - Engineering Standards Template v1.0
-This file provides coding standards and guidelines for AI assistants working on this project.
-
-CUSTOMIZATION INSTRUCTIONS:
-1. Review all sections and adjust for your project's language/framework
-2. Fill in the "Project-Specific Configuration" section at the bottom
-3. Adjust policies (inline comments, planning override) based on team preferences
-4. Remove this comment block after customization
--->
-
 # CLAUDE.md - Engineering Standards
 
 ## Role & Philosophy
@@ -404,7 +393,7 @@ Refs: #123
 - **Test Fixtures:** Located in `tests/fixtures/` (synthetic and real data)
 
 ### Special Conventions
-- **SOLID/DRY Enforcement:** Apply to all new code (see `docs/ROADMAP-1-DOCKER.md` for examples)
+- **SOLID/DRY Enforcement:** Apply to all new code
 - **No Hardcoded Paths:** Use environment variables (`VFX_MODELS_DIR`, `VFX_PROJECTS_DIR`, etc.)
 - **Backward Compatibility:** All changes must work in both local and container modes
 - **Error Messages:** Container-aware error messages (suggest volume mounts, etc.)
@@ -422,9 +411,8 @@ shot-gopher/
 ```
 
 ### Documentation Standards
-- **Roadmaps:** Temporary planning docs in `docs/` (remove before production release)
 - **Testing Guide:** Maintain `tests/README.md` with fixture documentation
-- **Architecture Docs:** Keep `docs/ATLAS.md` and roadmaps updated during development
+- **User Docs:** Keep `docs/` updated with accurate CLI arguments and paths
 
 ### Prohibited Patterns
 - **Inline comments in function bodies** (strictly forbidden - code must be self-documenting)
@@ -457,10 +445,5 @@ This ensures:
 ---
 
 **Version:** 1.0
-**Last Updated:** 2026-01-17
+**Last Updated:** 2026-01-25
 **Maintained By:** Project Team
-
-<!--
-REMINDER: This file should be reviewed and updated as the project evolves.
-Remove temporary roadmap references before production release.
--->

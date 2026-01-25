@@ -73,7 +73,7 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/b
 
 **Prerequisites:** NVIDIA GPU with driver, Docker with nvidia-container-toolkit
 
-**Run:** `bash scripts/run_docker.sh --name MyProject /workspace/projects/video.mp4`
+**Run:** `bash scripts/run_docker.sh --name MyProject video.mp4`
 
 ---
 
@@ -175,7 +175,7 @@ Output follows VFX production conventions:
 - NVIDIA GPU with CUDA support
 - Conda or Miniconda
 
-**Note:** macOS supports local Conda installation (CPU-only, no GPU acceleration). Native Windows is not supported—use WSL2 with Docker instead. See [Windows Compatibility](docs/windows-compatibility.md) for details.
+**Note:** macOS supports local Conda installation (CPU-only, no GPU acceleration). Native Windows is not supported—use WSL2 with Docker instead. See [Windows Guide](docs/platforms/windows.md) for details.
 
 ## Installation Requirements
 
@@ -252,4 +252,4 @@ Different components perform best under specific conditions:
 
 ## License
 
-See individual component licenses. This pipeline integrates multiple open-source projects with varying licenses.
+See [LICENSE](LICENSE) for details. This pipeline integrates multiple open-source projects with varying licenses - see [License Audit](docs/LICENSE_AUDIT_REPORT.md) for component details.
