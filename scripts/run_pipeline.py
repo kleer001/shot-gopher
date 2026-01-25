@@ -391,6 +391,16 @@ def run_pipeline(
     print(f"Stages: {', '.join(stages)}")
     print()
 
+    metadata_path = project_dir / "project.json"
+
+    if not fps and metadata_path.exists():
+        try:
+            with open(metadata_path) as f:
+                existing_meta = json.load(f)
+            fps = existing_meta.get("fps")
+        except (json.JSONDecodeError, IOError):
+            pass
+
     if input_path and not fps and input_path.suffix.lower() in {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"}:
         info = get_video_info(input_path)
         for stream in info.get("streams", []):
@@ -402,12 +412,11 @@ def run_pipeline(
                 else:
                     fps = float(fps_str)
                 break
+
     fps = fps or 24.0
     print(f"Frame rate: {fps} fps")
 
     project_dir.mkdir(parents=True, exist_ok=True)
-
-    metadata_path = project_dir / "project.json"
     project_metadata = {
         "name": project_name,
         "fps": fps,
@@ -957,6 +966,10 @@ def main():
         print(f"Auto-detected mode: {mode}")
 
     if mode == "docker":
+        if args.input is None:
+            print("Error: Docker mode requires an input file", file=sys.stderr)
+            print("Usage: run_pipeline.py <movie_file> --docker", file=sys.stderr)
+            sys.exit(1)
         models_dir = args.models_dir or find_default_models_dir()
         exit_code = run_docker_mode(
             input_path=args.input,

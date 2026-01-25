@@ -322,16 +322,17 @@ def run_pipeline(input_path: Path, stages: list, project_name: str = None):
     from env_config import DEFAULT_PROJECTS_DIR
 
     if input_path.is_file():
-        project_dir = DEFAULT_PROJECTS_DIR / project_name
         return do_run(
-            input_movie=input_path,
-            project_dir=project_dir,
+            input_path=input_path,
+            project_name=project_name,
+            projects_dir=DEFAULT_PROJECTS_DIR,
             stages=stages,
         )
     else:
         return do_run(
-            input_movie=None,
-            project_dir=input_path,
+            input_path=None,
+            project_name=input_path.name,
+            projects_dir=input_path.parent,
             stages=stages,
         )
 
