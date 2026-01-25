@@ -11,6 +11,7 @@ Detailed documentation for each processing stage.
 | Stage | Purpose | VRAM | Input → Output |
 |-------|---------|------|----------------|
 | [ingest](#ingest) | Extract frames | CPU | Video → PNGs |
+| [interactive](#interactive) | Interactive segmentation | 4 GB | Browser-based point/box selection |
 | [depth](#depth) | Depth maps | 7 GB | Frames → Depth + camera |
 | [roto](#roto) | Segmentation | 4 GB | Frames → Masks |
 | [matanyone](#matanyone) | Matte refinement | 9 GB | Person masks → Alpha mattes |
@@ -43,6 +44,38 @@ python scripts/run_pipeline.py footage.mp4 -s ingest -f 24
 **Notes:**
 - Frame numbering starts at 0001 (ComfyUI/WHAM requirement)
 - Zero-padded to 4 digits (supports up to 9999 frames)
+
+---
+
+## interactive
+
+Browser-based interactive segmentation using SAM3 with point/box prompts.
+
+| | |
+|---|---|
+| **VRAM** | ~4 GB |
+| **Input** | `source/frames/*.png` |
+| **Output** | `roto/<label>/*.png` |
+| **Workflow** | `05_interactive_segmentation.json` |
+
+**Requirements:**
+- ComfyUI server running
+- SAM3 custom node
+
+```bash
+python scripts/run_pipeline.py footage.mp4 -s interactive
+```
+
+**How it works:**
+1. Opens ComfyUI in browser with interactive segmentation workflow
+2. You manually select objects using point/box prompts
+3. Name each selection (e.g., "car", "building")
+4. Press Enter in terminal when done to continue pipeline
+
+**Use cases:**
+- Objects that text prompts can't identify reliably
+- Precise control over segmentation boundaries
+- One-off objects that don't need automation
 
 ---
 
@@ -110,19 +143,22 @@ roto/
 
 ### Instance Separation
 
-Split multiple people into individual masks:
+When multiple instances of the same object are detected, masks are automatically separated into individual directories:
 
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person" --separate-instances
+python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person"
 ```
 
 Creates:
 ```
 roto/
-├── person_0/     # First person
-├── person_1/     # Second person
-└── person_2/     # Third person
+├── mask/         # Combined mask (all instances)
+├── person_00/    # First person
+├── person_01/    # Second person
+└── person_02/    # Third person
 ```
+
+Use `--separate-instances` to explicitly enable this behavior (enabled by default when multiple instances detected).
 
 **Use cases:** Object removal, selective grading, COLMAP masking, per-person mocap
 
@@ -135,8 +171,8 @@ Refines person masks into production-quality alpha mattes.
 | | |
 |---|---|
 | **VRAM** | ~9 GB |
-| **Input** | `roto/person/*.png` (any directory with "person" in name) |
-| **Output** | `matte/<person_dir>/*.png` |
+| **Input** | `roto/person_00/*.png`, `roto/person_01/*.png`, etc. |
+| **Output** | `matte/person_00/*.png`, `matte/person_01/*.png`, etc. |
 | **Workflow** | `04_matanyone.json` |
 
 **Requirements:**

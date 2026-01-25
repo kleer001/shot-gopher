@@ -13,6 +13,7 @@ Run the VFX pipeline from a single command.
 | Stage | Purpose | VRAM |
 |-------|---------|------|
 | [ingest](stages.md#ingest) | Extract frames | CPU |
+| [interactive](stages.md#interactive) | Interactive segmentation | 4 GB |
 | [depth](stages.md#depth) | Depth maps | 7 GB |
 | [roto](stages.md#roto) | Segmentation masks | 4 GB |
 | [matanyone](stages.md#matanyone) | Matte refinement | 9 GB |
@@ -27,8 +28,14 @@ Run the VFX pipeline from a single command.
 ## Quick Start
 
 ```bash
+# User-friendly TUI (recommended for new users)
+./shot-gopher
+
 # Full pipeline
 python scripts/run_pipeline.py footage.mp4 -n "MyShot"
+
+# Re-run last project (auto-detects most recent)
+python scripts/run_pipeline.py -s roto,cleanplate
 
 # Specific stages
 python scripts/run_pipeline.py footage.mp4 -s depth,roto,cleanplate
@@ -88,6 +95,14 @@ python scripts/run_pipeline.py footage.mp4 -l
 
 ## Examples
 
+### Interactive Segmentation
+
+```bash
+python scripts/run_pipeline.py footage.mp4 -s interactive
+```
+
+Opens ComfyUI in browser for manual point/box selection of objects.
+
 ### Matchmove Only
 
 ```bash
@@ -109,7 +124,9 @@ python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person,bag,ball"
 ### Multi-Person Separation
 
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person" --separate-instances
+# Automatic: multiple instances are separated by default
+python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person"
+# Creates: roto/mask/, roto/person_00/, roto/person_01/, etc.
 ```
 
 ### High-Quality COLMAP
@@ -142,9 +159,13 @@ Pipeline creates this directory structure:
 ├── workflows/           # ComfyUI workflow copies
 ├── depth/               # Depth maps
 ├── roto/                # Segmentation masks
-│   ├── person/
+│   ├── mask/            # Combined mask (all prompts)
+│   ├── person_00/       # First person instance
+│   ├── person_01/       # Second person instance
 │   └── combined/        # Consolidated for cleanplate
 ├── matte/               # MatAnyone refined mattes
+│   ├── person_00/
+│   └── person_01/
 ├── cleanplate/          # Clean plates
 ├── colmap/
 │   ├── sparse/0/        # Sparse reconstruction

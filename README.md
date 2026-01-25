@@ -121,11 +121,18 @@ After installation, you're ready to process your first video. The pipeline suppo
 **Quick start examples:**
 
 ```bash
+# User-friendly TUI (recommended for new users)
+./shot-gopher                # Linux/macOS
+shot-gopher.bat              # Windows
+
 # Docker
 bash scripts/run_docker.sh --name MyProject --stages all video.mp4
 
 # Conda
 python scripts/run_pipeline.py video.mp4 -s ingest,depth,roto,cleanplate,colmap,camera
+
+# Re-run stages on last project (auto-detects most recent)
+python scripts/run_pipeline.py -s roto,cleanplate
 ```
 
 **See [Your First Project Guide](docs/your_first_project.md) for complete walkthrough, examples, and troubleshooting.**
@@ -150,7 +157,10 @@ Output follows VFX production conventions:
 ├── source/frames/      # Input frames (frame_0001.png, ...)
 ├── depth/              # Depth maps
 ├── roto/               # Segmentation masks
-├── matte/              # Refined alpha mattes
+│   ├── mask/           # Combined mask
+│   ├── person_00/      # First person instance
+│   └── person_01/      # Second person instance
+├── matte/              # Refined alpha mattes (person_00/, person_01/, etc.)
 ├── cleanplate/         # Inpainted backgrounds
 ├── camera/             # Camera data (Alembic, JSON, point clouds, meshes)
 └── colmap/             # COLMAP reconstruction data
