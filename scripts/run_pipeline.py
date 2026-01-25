@@ -430,6 +430,38 @@ def run_pipeline(
         with open(metadata_path, "w") as f:
             json.dump(project_metadata, f, indent=2)
 
+    if "interactive" in stages:
+        print("\n=== Stage: interactive ===")
+        workflow_path = project_dir / "workflows" / "05_interactive_segmentation.json"
+        roto_dir = project_dir / "roto"
+
+        refresh_workflow_from_template(workflow_path, "05_interactive_segmentation.json")
+
+        if not workflow_path.exists():
+            print("  → Skipping (workflow not found)")
+        else:
+            print("  → Opening interactive segmentation in ComfyUI")
+            print(f"    Workflow: {workflow_path}")
+            print(f"    ComfyUI: {comfyui_url}")
+            print()
+            print("  Instructions:")
+            print("    1. Open ComfyUI in your browser")
+            print("    2. Load the workflow from: workflows/05_interactive_segmentation.json")
+            print("    3. Click points on the first frame to define what to segment")
+            print("    4. Run the workflow (Queue Prompt)")
+            print("    5. Masks will be saved to: roto/")
+            print()
+
+            import webbrowser
+            webbrowser.open(comfyui_url)
+
+            input("  Press Enter when done with interactive segmentation...")
+
+            if list(roto_dir.glob("**/*.png")):
+                print(f"  ✓ Masks found in {roto_dir}")
+            else:
+                print(f"  → Warning: No masks found in {roto_dir}")
+
     if "depth" in stages:
         print("\n=== Stage: depth ===")
         workflow_path = project_dir / "workflows" / "01_analysis.json"
