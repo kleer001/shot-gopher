@@ -533,6 +533,9 @@ def run_pipeline(
         workflow_path = project_dir / "workflows" / "02_segmentation.json"
         roto_dir = project_dir / "roto"
 
+        prompts = [p.strip() for p in (roto_prompt or "person").split(",")]
+        prompts = [p for p in prompts if p]
+
         refresh_workflow_from_template(workflow_path, "02_segmentation.json")
 
         if not workflow_path.exists():
@@ -542,9 +545,6 @@ def run_pipeline(
         else:
             if overwrite:
                 clear_output_directory(roto_dir)
-
-            prompts = [p.strip() for p in (roto_prompt or "person").split(",")]
-            prompts = [p for p in prompts if p]
 
             print(f"  → Segmenting {len(prompts)} target(s): {', '.join(prompts)}")
 
