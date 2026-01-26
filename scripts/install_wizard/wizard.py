@@ -589,7 +589,7 @@ class InstallationWizard:
         elif yolo:
             # YOLO mode: auto-select full stack (option 3)
             print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture + GS-IR)")
-            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham', 'gsir']
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'wham', 'gsir']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -610,7 +610,7 @@ class InstallationWizard:
                     to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'wham', 'gsir']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'wham', 'gsir']
                     break
                 elif choice == '4':
                     to_install = []
@@ -659,10 +659,13 @@ class InstallationWizard:
             self.checkpoint_downloader.download_all_checkpoints(['matanyone'], self.state_manager)
 
         # Download checkpoints for motion capture components
-        mocap_components = [cid for cid in to_install if cid in ['wham']]
+        mocap_components = [cid for cid in to_install if cid in ['wham', 'gvhmr']]
         if mocap_components:
             print("\nDownloading checkpoints for motion capture components...")
             self.checkpoint_downloader.download_all_checkpoints(mocap_components, self.state_manager)
+            if 'gvhmr' in mocap_components:
+                print("\nDownloading YOLO model for GVHMR person detection...")
+                self.checkpoint_downloader.download_all_checkpoints(['yolo_gvhmr'], self.state_manager)
 
         # Download SMPL-X models if mocap_core was installed and credentials exist
         if 'mocap_core' in to_install:
@@ -721,13 +724,20 @@ class InstallationWizard:
                 print(f"    3. Place in {INSTALL_DIR}/smplx_models/")
 
         # Checkpoints status
-        if status.get('wham', False):
+        if status.get('gvhmr', False) or status.get('wham', False):
             print("\n📦 Motion Capture Checkpoints:")
-            if self.state_manager.is_checkpoint_downloaded('wham'):
-                print("  ✓ WHAM checkpoints downloaded")
-            else:
-                print("  ⚠ WHAM checkpoints not downloaded - run wizard again or visit:")
-                print("    https://github.com/yohanshin/WHAM")
+            if status.get('gvhmr', False):
+                if self.state_manager.is_checkpoint_downloaded('gvhmr'):
+                    print("  ✓ GVHMR checkpoints downloaded (preferred)")
+                else:
+                    print("  ⚠ GVHMR checkpoints not downloaded - run wizard again or visit:")
+                    print("    https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD")
+            if status.get('wham', False):
+                if self.state_manager.is_checkpoint_downloaded('wham'):
+                    print("  ✓ WHAM checkpoints downloaded (fallback)")
+                else:
+                    print("  ⚠ WHAM checkpoints not downloaded - run wizard again or visit:")
+                    print("    https://github.com/yohanshin/WHAM")
 
         # GS-IR status
         if status.get('gsir', False):
