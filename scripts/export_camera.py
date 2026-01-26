@@ -43,13 +43,19 @@ except ImportError:
     imath = None
 
 
-def load_camera_data(camera_dir: Path) -> tuple[list[np.ndarray], dict, str]:
+def load_camera_data(
+    camera_dir: Path,
+    convert_to_opengl: bool = True
+) -> tuple[list[np.ndarray], dict, str]:
     """Load extrinsics and intrinsics from camera data JSONs.
 
-    Supports both Depth Anything V3 and COLMAP output formats.
+    Supports COLMAP output format. Optionally converts from OpenCV to OpenGL
+    coordinate convention for DCC compatibility.
 
     Args:
         camera_dir: Path to camera/ directory containing extrinsics.json and intrinsics.json
+        convert_to_opengl: If True, convert from OpenCV (Y-down, Z-forward) to
+                           OpenGL (Y-up, Z-back) convention for DCC apps
 
     Returns:
         Tuple of (list of 4x4 extrinsic matrices, intrinsics dict, source name)
@@ -69,25 +75,26 @@ def load_camera_data(camera_dir: Path) -> tuple[list[np.ndarray], dict, str]:
     with open(intrinsics_path) as f:
         intrinsics_data = json.load(f)
 
-    # Detect source: COLMAP creates colmap_raw.json, DA3 does not
     if colmap_raw_path.exists():
         source = "colmap"
     else:
         source = "da3"
 
-    # Parse extrinsics - expected format: list of 4x4 matrices (one per frame)
-    # Both DA3 and COLMAP output as nested lists
     extrinsics = []
     if isinstance(extrinsics_data, list):
         for matrix_data in extrinsics_data:
             if isinstance(matrix_data, list):
                 matrix = np.array(matrix_data).reshape(4, 4)
             else:
-                matrix = np.eye(4)  # Fallback
+                matrix = np.eye(4)
+            if convert_to_opengl:
+                matrix = convert_opencv_to_opengl(matrix)
             extrinsics.append(matrix)
     elif isinstance(extrinsics_data, dict) and "matrices" in extrinsics_data:
         for matrix_data in extrinsics_data["matrices"]:
             matrix = np.array(matrix_data).reshape(4, 4)
+            if convert_to_opengl:
+                matrix = convert_opencv_to_opengl(matrix)
             extrinsics.append(matrix)
 
     return extrinsics, intrinsics_data, source
@@ -126,22 +133,80 @@ def decompose_matrix(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.nda
     return translation, rotation, scale
 
 
-def rotation_matrix_to_euler(rotation: np.ndarray) -> np.ndarray:
-    """Convert 3x3 rotation matrix to Euler angles (XYZ order, in degrees)."""
-    sy = np.sqrt(rotation[0, 0] ** 2 + rotation[1, 0] ** 2)
+def rotation_matrix_to_euler(
+    rotation: np.ndarray,
+    order: str = "xyz"
+) -> np.ndarray:
+    """Convert 3x3 rotation matrix to Euler angles.
 
-    singular = sy < 1e-6
+    Args:
+        rotation: 3x3 rotation matrix
+        order: Euler rotation order - "xyz" (Maya), "zxy" (Nuke), "zyx"
 
-    if not singular:
-        x = np.arctan2(rotation[2, 1], rotation[2, 2])
-        y = np.arctan2(-rotation[2, 0], sy)
-        z = np.arctan2(rotation[1, 0], rotation[0, 0])
+    Returns:
+        Euler angles in degrees as [rx, ry, rz]
+    """
+    order = order.lower()
+
+    if order == "xyz":
+        sy = np.sqrt(rotation[0, 0] ** 2 + rotation[1, 0] ** 2)
+        singular = sy < 1e-6
+        if not singular:
+            x = np.arctan2(rotation[2, 1], rotation[2, 2])
+            y = np.arctan2(-rotation[2, 0], sy)
+            z = np.arctan2(rotation[1, 0], rotation[0, 0])
+        else:
+            x = np.arctan2(-rotation[1, 2], rotation[1, 1])
+            y = np.arctan2(-rotation[2, 0], sy)
+            z = 0
+        return np.degrees(np.array([x, y, z]))
+
+    elif order == "zxy":
+        cy = np.sqrt(rotation[0, 0] ** 2 + rotation[2, 0] ** 2)
+        singular = cy < 1e-6
+        if not singular:
+            x = np.arctan2(-rotation[2, 1], rotation[1, 1])
+            y = np.arctan2(rotation[2, 0], rotation[2, 2])
+            z = np.arctan2(-rotation[0, 1], rotation[1, 1])
+        else:
+            x = np.arctan2(rotation[1, 2], rotation[1, 1])
+            y = 0
+            z = np.arctan2(-rotation[0, 1], rotation[0, 0])
+        return np.degrees(np.array([x, y, z]))
+
+    elif order == "zyx":
+        cy = np.sqrt(rotation[0, 0] ** 2 + rotation[0, 1] ** 2)
+        singular = cy < 1e-6
+        if not singular:
+            x = np.arctan2(rotation[1, 2], rotation[2, 2])
+            y = np.arctan2(-rotation[0, 2], cy)
+            z = np.arctan2(rotation[0, 1], rotation[0, 0])
+        else:
+            x = np.arctan2(-rotation[2, 1], rotation[1, 1])
+            y = np.arctan2(-rotation[0, 2], cy)
+            z = 0
+        return np.degrees(np.array([x, y, z]))
+
     else:
-        x = np.arctan2(-rotation[1, 2], rotation[1, 1])
-        y = np.arctan2(-rotation[2, 0], sy)
-        z = 0
+        raise ValueError(f"Unsupported rotation order: {order}. Use 'xyz', 'zxy', or 'zyx'")
 
-    return np.degrees(np.array([x, y, z]))
+
+def convert_opencv_to_opengl(matrix: np.ndarray) -> np.ndarray:
+    """Convert camera matrix from OpenCV/COLMAP convention to OpenGL/DCC convention.
+
+    OpenCV/COLMAP: X-right, Y-down, Z-forward (camera looks down +Z)
+    OpenGL/DCC:    X-right, Y-up,   Z-back    (camera looks down -Z)
+
+    This flips Y and Z axes to match Maya/Houdini/Blender/Nuke conventions.
+
+    Args:
+        matrix: 4x4 camera-to-world matrix in OpenCV convention
+
+    Returns:
+        4x4 camera-to-world matrix in OpenGL convention
+    """
+    flip = np.diag([1.0, -1.0, -1.0, 1.0])
+    return matrix @ flip
 
 
 def compute_fov_from_intrinsics(intrinsics: dict, image_width: int, image_height: int) -> tuple[float, float]:
@@ -301,13 +366,16 @@ def export_nuke_chan(
     intrinsics: dict,
     output_path: Path,
     start_frame: int = 1,
+    rotation_order: str = "zxy",
 ) -> None:
     """Export camera to Nuke .chan format.
 
     The .chan format is a simple text file with one line per frame:
     frame tx ty tz rx ry rz
 
-    Nuke expects rotation in degrees, XYZ order.
+    Nuke's default rotation order is ZXY. Set rotation order on Camera node
+    to match the exported data.
+
     Import in Nuke: Camera node -> File -> Import chan file
 
     Args:
@@ -315,9 +383,9 @@ def export_nuke_chan(
         intrinsics: Camera intrinsics (for focal length info in header)
         output_path: Output .chan file path
         start_frame: Starting frame number
+        rotation_order: Euler rotation order (default: "zxy" for Nuke)
     """
     with open(output_path, 'w') as f:
-        # Write header comment with intrinsics info
         fx = intrinsics.get("fx", intrinsics.get("focal_x", 1000))
         fy = intrinsics.get("fy", intrinsics.get("focal_y", 1000))
         width = intrinsics.get("width", 1920)
@@ -327,21 +395,22 @@ def export_nuke_chan(
         f.write(f"# Frames: {start_frame}-{start_frame + len(extrinsics) - 1}\n")
         f.write(f"# Focal length (pixels): fx={fx:.2f} fy={fy:.2f}\n")
         f.write(f"# Resolution: {width}x{height}\n")
+        f.write(f"# Rotation order: {rotation_order.upper()}\n")
         f.write(f"# Format: frame tx ty tz rx ry rz\n")
         f.write(f"#\n")
 
         for frame_idx, matrix in enumerate(extrinsics):
             frame = start_frame + frame_idx
             translation, rotation, _ = decompose_matrix(matrix)
-            euler = rotation_matrix_to_euler(rotation)
+            euler = rotation_matrix_to_euler(rotation, order=rotation_order)
 
-            # Write: frame tx ty tz rx ry rz
             f.write(f"{frame} {translation[0]:.6f} {translation[1]:.6f} {translation[2]:.6f} "
                     f"{euler[0]:.6f} {euler[1]:.6f} {euler[2]:.6f}\n")
 
     print(f"Exported {len(extrinsics)} frames to {output_path}")
     print(f"  Frame range: {start_frame}-{start_frame + len(extrinsics) - 1}")
-    print(f"  Import in Nuke: Camera node → File → Import chan file")
+    print(f"  Rotation order: {rotation_order.upper()}")
+    print(f"  Import in Nuke: Camera → File → Import chan file")
 
 
 def export_csv(
@@ -349,6 +418,7 @@ def export_csv(
     intrinsics: dict,
     output_path: Path,
     start_frame: int = 1,
+    rotation_order: str = "xyz",
 ) -> None:
     """Export camera to CSV format for spreadsheet/scripted import.
 
@@ -359,6 +429,7 @@ def export_csv(
         intrinsics: Camera intrinsics dict
         output_path: Output .csv file path
         start_frame: Starting frame number
+        rotation_order: Euler rotation order (default: "xyz")
     """
     fx = intrinsics.get("fx", intrinsics.get("focal_x", 1000))
     fy = intrinsics.get("fy", intrinsics.get("focal_y", 1000))
@@ -366,13 +437,13 @@ def export_csv(
     cy = intrinsics.get("cy", intrinsics.get("principal_y", 540))
 
     with open(output_path, 'w') as f:
-        # Header
+        f.write(f"# Rotation order: {rotation_order.upper()}\n")
         f.write("frame,tx,ty,tz,rx,ry,rz,fx,fy,cx,cy\n")
 
         for frame_idx, matrix in enumerate(extrinsics):
             frame = start_frame + frame_idx
             translation, rotation, _ = decompose_matrix(matrix)
-            euler = rotation_matrix_to_euler(rotation)
+            euler = rotation_matrix_to_euler(rotation, order=rotation_order)
 
             f.write(f"{frame},{translation[0]:.6f},{translation[1]:.6f},{translation[2]:.6f},"
                     f"{euler[0]:.6f},{euler[1]:.6f},{euler[2]:.6f},"
@@ -380,6 +451,7 @@ def export_csv(
 
     print(f"Exported {len(extrinsics)} frames to {output_path}")
     print(f"  Frame range: {start_frame}-{start_frame + len(extrinsics) - 1}")
+    print(f"  Rotation order: {rotation_order.upper()}")
 
 
 def export_houdini_cmd(
@@ -848,6 +920,13 @@ def main():
         default="all",
         help="Output format: chan (Nuke), csv, clip (Houdini), json, abc (Alembic), jsx (After Effects), all (default: all)"
     )
+    parser.add_argument(
+        "--rotation-order", "-r",
+        choices=["xyz", "zxy", "zyx"],
+        default=None,
+        help="Euler rotation order: xyz (Maya/Houdini default), zxy (Nuke default), zyx. "
+             "If not specified, uses format-appropriate default (zxy for Nuke, xyz for others)"
+    )
 
     args = parser.parse_args()
 
@@ -876,6 +955,7 @@ def main():
     source_name = "COLMAP (SfM)" if source == "colmap" else "Depth Anything V3"
     camera_name = "colmap_camera" if source == "colmap" else "da3_camera"
     print(f"Loaded {len(extrinsics)} camera frames from {source_name}")
+    print(f"  Coordinate system: OpenGL (Y-up, Z-back) for DCC compatibility")
 
     # Determine output path
     output_base = args.output or (camera_dir / "camera")
@@ -889,22 +969,26 @@ def main():
     # Nuke .chan format (always available)
     if fmt in ("chan", "all"):
         chan_path = output_base.with_suffix(".chan")
+        nuke_rot_order = args.rotation_order if args.rotation_order else "zxy"
         export_nuke_chan(
             extrinsics=extrinsics,
             intrinsics=intrinsics,
             output_path=chan_path,
             start_frame=args.start_frame,
+            rotation_order=nuke_rot_order,
         )
         exported.append(f".chan (Nuke)")
 
     # CSV format (always available)
     if fmt in ("csv", "all"):
         csv_path = output_base.with_suffix(".csv")
+        csv_rot_order = args.rotation_order if args.rotation_order else "xyz"
         export_csv(
             extrinsics=extrinsics,
             intrinsics=intrinsics,
             output_path=csv_path,
             start_frame=args.start_frame,
+            rotation_order=csv_rot_order,
         )
         exported.append(f".csv")
 

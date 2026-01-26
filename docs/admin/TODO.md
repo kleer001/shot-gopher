@@ -2,6 +2,14 @@
 
 Extracted from OS_SUPPORT_ANALYSIS.md
 
+## High Priority
+
+- [ ] **Add Depth Anything V3 camera pose estimation**
+  - Current depth workflow uses Video Depth Anything (VDA) which only outputs depth
+  - DA3 `DepthAnythingV3_MultiView` node outputs camera extrinsics + intrinsics
+  - Would enable lightweight matchmove without COLMAP for simple shots
+  - Requires: ComfyUI-DepthAnythingV3 custom nodes + updated workflow
+
 ## Medium Priority
 
 - [ ] **Add which_wizard.py decision helper script**

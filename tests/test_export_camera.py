@@ -52,17 +52,30 @@ class TestRotationToEuler:
         euler = rotation_matrix_to_euler(rotation)
         np.testing.assert_array_almost_equal(euler, [0, 0, 0])
 
-    def test_90_degree_z_rotation(self):
-        # 90 degrees around Z axis
+    def test_90_degree_z_rotation_xyz(self):
         angle = np.radians(90)
         rotation = np.array([
             [np.cos(angle), -np.sin(angle), 0],
             [np.sin(angle), np.cos(angle), 0],
             [0, 0, 1]
         ])
-        euler = rotation_matrix_to_euler(rotation)
-        # Z rotation should be ~90 degrees
+        euler = rotation_matrix_to_euler(rotation, order="xyz")
         assert abs(euler[2] - 90) < 0.1
+
+    def test_rotation_order_zxy(self):
+        rotation = np.eye(3)
+        euler = rotation_matrix_to_euler(rotation, order="zxy")
+        np.testing.assert_array_almost_equal(euler, [0, 0, 0])
+
+    def test_rotation_order_zyx(self):
+        rotation = np.eye(3)
+        euler = rotation_matrix_to_euler(rotation, order="zyx")
+        np.testing.assert_array_almost_equal(euler, [0, 0, 0])
+
+    def test_invalid_rotation_order(self):
+        rotation = np.eye(3)
+        with pytest.raises(ValueError, match="Unsupported rotation order"):
+            rotation_matrix_to_euler(rotation, order="invalid")
 
 
 class TestComputeFOV:
