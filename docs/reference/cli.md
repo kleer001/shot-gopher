@@ -2,7 +2,7 @@
 
 Run the VFX pipeline from a single command.
 
-**Quick links**: [Stages](stages.md) | [Troubleshooting](troubleshooting.md) | [Installation](install_wizard.md)
+**Quick links**: [Stages](stages.md) | [Troubleshooting](../troubleshooting.md) | [Installation](../installation.md)
 
 ---
 
@@ -41,7 +41,7 @@ python scripts/run_pipeline.py -s roto,cleanplate
 python scripts/run_pipeline.py footage.mp4 -s depth,roto,cleanplate
 
 # List stages
-python scripts/run_pipeline.py footage.mp4 -l
+python scripts/run_pipeline.py footage.mp4 --list-stages
 ```
 
 ---
@@ -57,15 +57,24 @@ python scripts/run_pipeline.py footage.mp4 -l
 | `-s` | `--stages` | Stages to run, comma-separated or `all` |
 | `-f` | `--fps` | Override frame rate (default: auto-detect) |
 | `-e` | `--skip-existing` | Skip stages with existing output |
-| `-l` | `--list-stages` | List available stages and exit |
+| | `--list-stages` | List available stages and exit |
 | `-c` | `--comfyui-url` | ComfyUI URL (default: `http://127.0.0.1:8188`) |
+
+### Mode Options
+
+| Short | Long | Description |
+|-------|------|-------------|
+| `-D` | `--docker` | Force Docker mode (auto-detected if not specified) |
+| `-L` | `--local` | Force local mode (auto-detected if not specified) |
+| | `--models-dir` | Path to models directory (Docker mode) |
 
 ### Segmentation Options
 
 | Long | Description |
 |------|-------------|
 | `--prompt` | Segmentation targets (default: `person`). Comma-separated: `person,bag,ball` |
-| `--separate-instances` | Split multi-person masks into `person_0/`, `person_1/`, etc. |
+| `--separate-instances` | Split multi-person masks into `person_0/`, `person_1/`, etc. (default: on) |
+| `--no-separate-instances` | Combine all instances into single mask |
 
 ### COLMAP Options
 
@@ -75,6 +84,7 @@ python scripts/run_pipeline.py footage.mp4 -l
 | `-d` | `--colmap-dense` | Run dense reconstruction |
 | `-m` | `--colmap-mesh` | Generate mesh (requires `-d`) |
 | `-M` | `--colmap-no-masks` | Don't use roto masks for tracking |
+| | `--colmap-max-size` | Max image dimension (downscales larger, use 1000-2000 for speed) |
 
 ### GS-IR Options
 
@@ -252,6 +262,6 @@ done
 ## Related Documentation
 
 - [Stages](stages.md) — Detailed stage documentation
-- [Troubleshooting](troubleshooting.md) — Common issues and performance tips
-- [Installation](install_wizard.md) — Setup guide
-- [Component Scripts](component_scripts.md) — Individual script docs
+- [Troubleshooting](../troubleshooting.md) — Common issues and performance tips
+- [Installation](../installation.md) — Setup guide
+- [Scripts](scripts.md) — Individual script docs

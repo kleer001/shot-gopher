@@ -21,6 +21,7 @@ import os
 import re
 import shutil
 import sqlite3
+import struct
 import subprocess
 import sys
 import time
@@ -341,15 +342,32 @@ def run_colmap_command(
 
     stdout_lines = []
     last_progress = ""
+    last_progress_time = 0
     is_tty = sys.stdout.isatty()
+    throttle_interval = 0 if is_tty else 2.0  # Only update every 2 seconds when not TTY
 
     # Progress patterns for different COLMAP stages
     # Feature extraction: "Processed file [1/521]"
     extract_pattern = re.compile(r'Processed file \[(\d+)/(\d+)\]')
     # Matching: "Matching block [1/52, 1/52]" or image pairs
     match_pattern = re.compile(r'Matching block \[(\d+)/(\d+)')
-    # Mapper: "Registering image #142 (150)"
+    # Mapper: "Registering image #142 (150)" or "Registered X/Y images"
     register_pattern = re.compile(r'Registering image #(\d+)\s*\((\d+)\)')
+    register_alt_pattern = re.compile(r'Registered\s+(\d+)/(\d+)\s+images')
+    # Bundle adjustment
+    bundle_pattern = re.compile(r'Bundle adjustment')
+
+    import time
+
+    def should_print_progress():
+        nonlocal last_progress_time
+        if is_tty:
+            return True
+        now = time.time()
+        if now - last_progress_time >= throttle_interval:
+            last_progress_time = now
+            return True
+        return False
 
     for line in iter(process.stdout.readline, ''):
         stdout_lines.append(line)
@@ -360,7 +378,7 @@ def run_colmap_command(
         if match:
             current, total = match.group(1), match.group(2)
             progress = f"Extracting features: {current}/{total}"
-            if progress != last_progress:
+            if progress != last_progress and should_print_progress():
                 if is_tty:
                     print(f"\r    {progress}    ", end="")
                 else:
@@ -374,7 +392,7 @@ def run_colmap_command(
         if match:
             current, total = match.group(1), match.group(2)
             progress = f"Matching: block {current}/{total}"
-            if progress != last_progress:
+            if progress != last_progress and should_print_progress():
                 if is_tty:
                     print(f"\r    {progress}    ", end="")
                 else:
@@ -383,19 +401,25 @@ def run_colmap_command(
                 last_progress = progress
             continue
 
-        # Check for registration progress (mapper)
+        # Check for registration progress (mapper) - try both patterns
         match = register_pattern.search(line_stripped)
+        if not match:
+            match = register_alt_pattern.search(line_stripped)
         if match:
             current = int(match.group(1))
             total = int(match.group(2))
             progress = f"Registered {current}/{total} images"
-            if progress != last_progress:
+            if progress != last_progress and should_print_progress():
                 if is_tty:
                     print(f"\r    {progress}    ", end="")
                 else:
                     print(f"    {progress}")
                 sys.stdout.flush()
                 last_progress = progress
+            continue
+
+        # Skip verbose bundle adjustment output
+        if bundle_pattern.search(line_stripped):
             continue
 
     # Clear the progress line and print newline (only needed for TTY mode)
@@ -425,7 +449,8 @@ def extract_features(
     max_features: int = 8192,
     single_camera: bool = True,
     mask_path: Optional[Path] = None,
-    use_gpu: bool = True
+    use_gpu: bool = True,
+    max_image_size: int = -1
 ) -> None:
     """Extract SIFT features from images.
 
@@ -437,7 +462,11 @@ def extract_features(
         single_camera: If True, assume all images from same camera
         mask_path: Optional path to mask directory (excludes masked regions from feature extraction)
         use_gpu: Whether to use GPU for SIFT extraction (falls back to CPU on failure)
+        max_image_size: Maximum image dimension (downscales if larger, -1 for no limit)
     """
+    diag = diagnose_colmap_environment(verbose=False)
+    gpu_sift_available = diag.get("gpu_sift_available", False)
+
     def _build_args(gpu: bool) -> dict:
         """Build argument dict with specified GPU setting."""
         args = {
@@ -446,10 +475,13 @@ def extract_features(
             "ImageReader.camera_model": camera_model,
             "ImageReader.single_camera": 1 if single_camera else 0,
             "SiftExtraction.max_num_features": max_features,
-            "SiftExtraction.use_gpu": 1 if gpu else 0,
         }
-        if gpu:
-            args["SiftExtraction.gpu_index"] = "0"
+        if max_image_size > 0:
+            args["ImageReader.max_image_size"] = max_image_size
+        if gpu_sift_available:
+            args["SiftExtraction.use_gpu"] = 1 if gpu else 0
+            if gpu:
+                args["SiftExtraction.gpu_index"] = "0"
         if mask_path and mask_path.exists():
             args["ImageReader.mask_path"] = str(mask_path)
         return args
@@ -535,30 +567,33 @@ def match_features(
         sequential_overlap: Number of overlapping frames for sequential matcher
         use_gpu: Whether to use GPU for SIFT matching (falls back to CPU on failure)
     """
+    diag = diagnose_colmap_environment(verbose=False)
+    gpu_sift_available = diag.get("gpu_sift_available", False)
+
     def _run_matcher(gpu: bool):
         """Run the matcher with specified GPU setting."""
         if matcher_type == "sequential":
             args = {
                 "database_path": str(database_path),
                 "SequentialMatching.overlap": sequential_overlap,
-                "SiftMatching.use_gpu": 1 if gpu else 0,
                 "SiftMatching.max_num_matches": 32768,
             }
-            # Explicitly set GPU index to avoid multi-GPU initialization issues (Issue #627)
-            if gpu:
-                args["SiftMatching.gpu_index"] = "0"
-            mode = "GPU" if gpu else "CPU"
+            if gpu_sift_available:
+                args["SiftMatching.use_gpu"] = 1 if gpu else 0
+                if gpu:
+                    args["SiftMatching.gpu_index"] = "0"
+            mode = "GPU" if gpu and gpu_sift_available else "CPU"
             run_colmap_command("sequential_matcher", args, f"Matching features (sequential, {mode})")
         elif matcher_type == "exhaustive":
             args = {
                 "database_path": str(database_path),
-                "SiftMatching.use_gpu": 1 if gpu else 0,
                 "SiftMatching.max_num_matches": 32768,
             }
-            # Explicitly set GPU index to avoid multi-GPU initialization issues (Issue #627)
-            if gpu:
-                args["SiftMatching.gpu_index"] = "0"
-            mode = "GPU" if gpu else "CPU"
+            if gpu_sift_available:
+                args["SiftMatching.use_gpu"] = 1 if gpu else 0
+                if gpu:
+                    args["SiftMatching.gpu_index"] = "0"
+            mode = "GPU" if gpu and gpu_sift_available else "CPU"
             run_colmap_command("exhaustive_matcher", args, f"Matching features (exhaustive, {mode})")
         else:
             raise ValueError(f"Unknown matcher type: {matcher_type}")
@@ -581,6 +616,161 @@ def match_features(
                 raise
     else:
         _run_matcher(gpu=False)
+
+
+def count_model_images(model_dir: Path) -> int:
+    """Count registered images in a COLMAP model directory."""
+    images_bin = model_dir / "images.bin"
+    images_txt = model_dir / "images.txt"
+
+    if images_bin.exists():
+        try:
+            with open(images_bin, "rb") as f:
+                return struct.unpack("<Q", f.read(8))[0]
+        except (IOError, struct.error):
+            pass
+    elif images_txt.exists():
+        try:
+            with open(images_txt, "r") as f:
+                lines = [l for l in f if l.strip() and not l.startswith("#")]
+                return len(lines) // 2
+        except IOError:
+            pass
+    return 0
+
+
+def get_sparse_models(sparse_path: Path) -> list[tuple[Path, int]]:
+    """Get all sparse models with their image counts, sorted by count descending."""
+    if not sparse_path.exists():
+        return []
+
+    models = []
+    for model_dir in sparse_path.iterdir():
+        if model_dir.is_dir() and not model_dir.name.startswith("merged"):
+            count = count_model_images(model_dir)
+            if count > 0:
+                models.append((model_dir, count))
+
+    return sorted(models, key=lambda x: x[1], reverse=True)
+
+
+def merge_sparse_models(
+    sparse_path: Path,
+    output_name: str = "merged"
+) -> Optional[Path]:
+    """Merge multiple sparse models into one using COLMAP model_merger.
+
+    Args:
+        sparse_path: Path containing model subdirectories (0/, 1/, etc.)
+        output_name: Name for merged output directory
+
+    Returns:
+        Path to merged model, or None if merge failed
+    """
+    models = get_sparse_models(sparse_path)
+    if len(models) < 2:
+        return None
+
+    print(f"    Found {len(models)} sub-models, attempting to merge...")
+    for model_path, count in models:
+        print(f"      Model {model_path.name}: {count} images")
+
+    merged_path = sparse_path / output_name
+    merged_path.mkdir(exist_ok=True)
+
+    # Start with the largest model
+    largest_model = models[0][0]
+    current_merged = merged_path / "current"
+    shutil.copytree(largest_model, current_merged)
+
+    total_merged = models[0][1]
+    merge_success = False
+
+    # Try to merge each smaller model into the growing merged model
+    for model_path, count in models[1:]:
+        temp_output = merged_path / "temp_merge"
+        if temp_output.exists():
+            shutil.rmtree(temp_output)
+        temp_output.mkdir()
+
+        try:
+            args = {
+                "input_path1": str(current_merged),
+                "input_path2": str(model_path),
+                "output_path": str(temp_output),
+            }
+            run_colmap_command("model_merger", args, f"Merging model {model_path.name}")
+
+            # Check if merge produced output with more images
+            merged_count = count_model_images(temp_output)
+            if merged_count > total_merged:
+                shutil.rmtree(current_merged)
+                temp_output.rename(current_merged)
+                total_merged = merged_count
+                merge_success = True
+                print(f"      Merged model {model_path.name}: now {total_merged} images")
+            else:
+                shutil.rmtree(temp_output)
+                print(f"      Could not merge model {model_path.name} (no improvement)")
+
+        except subprocess.CalledProcessError:
+            print(f"      Failed to merge model {model_path.name}")
+            if temp_output.exists():
+                shutil.rmtree(temp_output)
+
+    if not merge_success:
+        shutil.rmtree(merged_path)
+        return None
+
+    # Run bundle adjustment on merged model to refine
+    print("    Running bundle adjustment on merged model...")
+    try:
+        args = {
+            "input_path": str(current_merged),
+            "output_path": str(current_merged),
+            "BundleAdjustment.refine_focal_length": 1,
+            "BundleAdjustment.refine_principal_point": 0,
+            "BundleAdjustment.refine_extra_params": 1,
+        }
+        run_colmap_command("bundle_adjuster", args, "Bundle adjustment")
+    except subprocess.CalledProcessError:
+        print("    Warning: Bundle adjustment failed, using unrefined merge")
+
+    # Move to final location
+    final_path = merged_path / "final"
+    current_merged.rename(final_path)
+
+    print(f"    Merged model has {total_merged} registered images")
+    return final_path
+
+
+def find_best_sparse_model(sparse_path: Path) -> Optional[Path]:
+    """Find the best sparse model - merged if possible, otherwise largest.
+
+    Args:
+        sparse_path: Path to sparse reconstruction directory
+
+    Returns:
+        Path to the best model directory, or None if no valid models found
+    """
+    models = get_sparse_models(sparse_path)
+    if not models:
+        return None
+
+    # If only one model, use it
+    if len(models) == 1:
+        print(f"    Single model with {models[0][1]} registered images")
+        return models[0][0]
+
+    # Multiple models - try to merge them
+    merged = merge_sparse_models(sparse_path)
+    if merged:
+        return merged
+
+    # Merging failed - fall back to largest model
+    best_model, best_count = models[0]
+    print(f"    Using largest model {best_model.name} with {best_count} registered images")
+    return best_model
 
 
 def run_sparse_reconstruction(
@@ -619,11 +809,29 @@ def run_sparse_reconstruction(
 
     run_colmap_command("mapper", args, "Running sparse reconstruction")
 
-    # Check if reconstruction produced output
-    model_path = output_path / "0"
-    if not model_path.exists():
+    # Find the best model (most registered images)
+    # COLMAP may produce multiple sub-models if it can't connect all images
+    best_model = find_best_sparse_model(output_path)
+
+    if best_model is None:
         print("    Warning: No reconstruction model produced", file=sys.stderr)
         return False
+
+    # Reorganize so downstream code always finds the model at "0"
+    model_0 = output_path / "0"
+    if best_model != model_0:
+        # Backup existing model 0 if it exists and isn't the best
+        if model_0.exists():
+            backup_name = f"0_original"
+            backup_path = output_path / backup_name
+            if backup_path.exists():
+                shutil.rmtree(backup_path)
+            model_0.rename(backup_path)
+            print(f"    Backed up original model 0 to {backup_name}")
+
+        # Copy best model to 0 (copy instead of move to preserve merged/ structure)
+        shutil.copytree(best_model, model_0)
+        print(f"    Installed best model as 0 ({count_model_images(model_0)} images)")
 
     return True
 
@@ -1330,6 +1538,7 @@ def run_colmap_pipeline(
     camera_model: str = "OPENCV",
     use_masks: bool = True,
     max_gap: int = 12,
+    max_image_size: int = -1,
 ) -> bool:
     """Run the complete COLMAP reconstruction pipeline.
 
@@ -1341,6 +1550,7 @@ def run_colmap_pipeline(
         camera_model: COLMAP camera model to use
         use_masks: If True, automatically use segmentation masks from roto/ (if available)
         max_gap: Maximum frame gap to interpolate if COLMAP misses frames (default: 12)
+        max_image_size: Maximum image dimension for feature extraction (-1 for no limit)
 
     Returns:
         True if reconstruction succeeded
@@ -1350,6 +1560,9 @@ def run_colmap_pipeline(
         print("  Ubuntu: sudo apt install colmap", file=sys.stderr)
         print("  Conda: conda install -c conda-forge colmap", file=sys.stderr)
         return False
+
+    import time
+    pipeline_start = time.time()
 
     diag = diagnose_colmap_environment(verbose=True)
     preset = QUALITY_PRESETS.get(quality, QUALITY_PRESETS["medium"])
@@ -1372,6 +1585,8 @@ def run_colmap_pipeline(
     print(f"Frames: {frame_count}")
     print(f"Quality: {quality}")
     print(f"Mode: GPU (with CPU fallback)")
+    if max_image_size > 0:
+        print(f"Max image size: {max_image_size}px (downscaling enabled)")
     if quality == "slow":
         print(f"  Warning: Slow-camera mode uses aggressive settings for minimal motion")
         print(f"           Results may be jittery due to low parallax")
@@ -1428,6 +1643,7 @@ def run_colmap_pipeline(
                 single_camera=True,
                 mask_path=mask_path,
                 use_gpu=True,
+                max_image_size=max_image_size,
             )
 
             # Verify features were extracted
@@ -1502,6 +1718,12 @@ def run_colmap_pipeline(
                 else:
                     print("    Mesh generation failed (continuing)", file=sys.stderr)
 
+            # Calculate timing
+            pipeline_end = time.time()
+            total_seconds = pipeline_end - pipeline_start
+            total_minutes = total_seconds / 60
+            per_frame_seconds = total_seconds / frame_count if frame_count > 0 else 0
+
             print(f"\n{'='*60}")
             print(f"COLMAP Reconstruction Complete")
             print(f"{'='*60}")
@@ -1509,6 +1731,8 @@ def run_colmap_pipeline(
             print(f"Camera data: {camera_dir}")
             if run_dense:
                 print(f"Dense model: {dense_path}")
+            print()
+            print(f"TOTAL TIME: {total_minutes:.1f} minutes ({per_frame_seconds:.2f}s per frame)")
             print()
 
             return True
@@ -1569,6 +1793,13 @@ def main():
         help="Maximum frame gap to interpolate if COLMAP misses frames (default: 12)"
     )
     parser.add_argument(
+        "--max-image-size",
+        type=int,
+        default=-1,
+        help="Maximum image dimension (downscales larger images, -1 for no limit). "
+             "Use 1000-2000 for faster processing."
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Check if COLMAP is available and exit"
@@ -1597,6 +1828,7 @@ def main():
         camera_model=args.camera_model,
         use_masks=not args.no_masks,
         max_gap=args.max_gap,
+        max_image_size=args.max_image_size,
     )
 
     sys.exit(0 if success else 1)

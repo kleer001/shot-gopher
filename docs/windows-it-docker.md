@@ -2,7 +2,7 @@
 
 This document provides IT administrators with the minimal setup requirements to enable users to run the ComfyUI Ingest pipeline on Windows workstations **using Docker and WSL2**. This approach runs the pipeline in a Linux container.
 
-For native Windows installation (no Docker/WSL2), see [windows_for_it_dept_native.md](windows_for_it_dept_native.md).
+For native Windows installation (no Docker/WSL2), see [Windows IT Setup (Native)](windows-it-native.md).
 
 ## Prerequisites
 
@@ -136,6 +136,6 @@ If this fails, verify:
 ## Support
 
 For issues specific to this pipeline, see:
-- Troubleshooting guide: [windows-troubleshooting.md](windows-troubleshooting.md)
+- Troubleshooting guide: [Windows Guide](platforms/windows.md)
 - Repository: https://github.com/kleer001/shot-gopher
 - Issues: https://github.com/kleer001/shot-gopher/issues

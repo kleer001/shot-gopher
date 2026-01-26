@@ -40,7 +40,7 @@ def run_export_camera(project_dir: Path, fps: float = 24.0) -> bool:
         sys.executable, str(script_path),
         str(project_dir),
         "--fps", str(fps),
-        "--format", "both"
+        "--format", "all"
     ]
 
     try:
@@ -55,7 +55,8 @@ def run_colmap_reconstruction(
     quality: str = "medium",
     run_dense: bool = False,
     run_mesh: bool = False,
-    use_masks: bool = True
+    use_masks: bool = True,
+    max_image_size: int = -1
 ) -> bool:
     """Run COLMAP Structure-from-Motion reconstruction.
 
@@ -65,6 +66,7 @@ def run_colmap_reconstruction(
         run_dense: Whether to run dense reconstruction
         run_mesh: Whether to generate mesh
         use_masks: If True, use segmentation masks from roto/ (if available)
+        max_image_size: Maximum image dimension (-1 for no limit)
 
     Returns:
         True if reconstruction succeeded
@@ -87,6 +89,8 @@ def run_colmap_reconstruction(
         cmd.append("--mesh")
     if not use_masks:
         cmd.append("--no-masks")
+    if max_image_size > 0:
+        cmd.extend(["--max-image-size", str(max_image_size)])
 
     try:
         run_command(cmd, "Running COLMAP reconstruction")

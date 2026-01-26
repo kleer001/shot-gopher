@@ -228,9 +228,7 @@ python scripts/run_mocap.py <project_dir> [options]
 - `project_dir` - Project directory with frames and camera data
 
 **Options**:
-- `--skip-texture` - Skip texture projection (faster)
-- `--keyframe-interval` - ECON keyframe interval (default: 25)
-- `--test-stage` - Test specific stage: `motion`, `econ`, `texture`
+- `--skip-texture` - Skip texture projection (faster, kept for compatibility)
 - `--check` - Validate installation without processing
 
 ### Examples
@@ -243,11 +241,6 @@ python scripts/run_mocap.py ./projects/Actor01
 **Skip texture projection** (faster):
 ```bash
 python scripts/run_mocap.py ./projects/Actor01 --skip-texture
-```
-
-**Custom keyframe interval**:
-```bash
-python scripts/run_mocap.py ./projects/Actor01 --keyframe-interval 50
 ```
 
 **Check installation**:
@@ -305,16 +298,13 @@ python scripts/run_gsir.py <project_dir> [options]
 **Training**:
 - `--iterations-stage1` - Stage 1 iterations (default: 30000)
 - `--iterations-stage2` - Total iterations (default: 35000)
-- `--batch-size` - Batch size (default: 4)
-- `--learning-rate` - Learning rate (default: 0.001)
 
 **Paths**:
 - `--gsir-path` - Path to GS-IR installation (default: auto-detect)
-- `--output-dir` - Output directory (default: `project_dir/gsir`)
 
-**Debug**:
-- `--resume` - Resume from checkpoint
-- `--save-interval` - Save checkpoint every N iterations (default: 5000)
+**Options**:
+- `--skip-training` - Skip training if checkpoint exists
+- `--check` - Check if GS-IR is available and exit
 
 ### Examples
 
@@ -328,9 +318,9 @@ python scripts/run_gsir.py ./projects/Shot01
 python scripts/run_gsir.py ./projects/Shot01 --iterations-stage2 50000
 ```
 
-**Resume interrupted training**:
+**Skip training if checkpoint exists**:
 ```bash
-python scripts/run_gsir.py ./projects/Shot01 --resume
+python scripts/run_gsir.py ./projects/Shot01 --skip-training
 ```
 
 ### Input
@@ -785,7 +775,7 @@ ls ./projects/Test/colmap/sparse/0/
 
 ## See Also
 
-- **[Pipeline Orchestrator](run_pipeline.md)** - Run all components automatically
-- **[Installation Wizard](install_wizard.md)** - Install dependencies
-- **[Janitor](janitor.md)** - Maintain installations
-- **Main Documentation**: [README.md](README.md)
+- **[CLI Reference](cli.md)** - Run all components automatically
+- **[Installation](../installation.md)** - Install dependencies
+- **[Maintenance](maintenance.md)** - Maintain installations
+- **Main Documentation**: [README.md](../README.md)

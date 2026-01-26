@@ -12,7 +12,6 @@ services:
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-      - START_COMFYUI=true
       - VFX_MODELS_DIR=/models
       - VFX_PROJECTS_DIR=/workspace/projects
     volumes:
@@ -22,8 +21,14 @@ services:
       # Project workspace (read-write)
       # Default: <repo>/../vfx_projects (set by run_docker.sh)
       - ${VFX_PROJECTS_DIR:-../vfx_projects}:/workspace/projects
-      # Dev: mount scripts for live editing (no rebuild needed)
+      # Dev: mount code for live editing (no rebuild needed)
       - ./scripts:/app/scripts:ro
+      - ./workflow_templates:/app/workflow_templates:ro
+      - ./web:/app/web:ro
+      - ./docker/entrypoint.sh:/app/entrypoint.sh:ro
+      # GS-IR patches (PyTorch 2.6 weights_only fix)
+      - ./.vfx_pipeline/gsir-patches/baking.py:/app/.vfx_pipeline/GS-IR/baking.py:ro
+      - ./.vfx_pipeline/gsir-patches/render.py:/app/.vfx_pipeline/GS-IR/render.py:ro
     ports:
       - "8188:8188"  # ComfyUI web interface
     stdin_open: true

@@ -72,7 +72,7 @@
         {"name": "SAM3_VIDEO_STATE", "type": "SAM3_VIDEO_STATE", "links": null, "slot_index": 2}
       ],
       "properties": {"Node name for S&R": "SAM3Propagate"},
-      "widgets_values": [0],
+      "widgets_values": [0, -1, "forward", false],
       "title": "🔄 Propagate Through Video"
     },
     {
@@ -93,8 +93,8 @@
         {"name": "IMAGE", "type": "IMAGE", "links": null, "slot_index": 2}
       ],
       "properties": {"Node name for S&R": "SAM3VideoOutput"},
-      "widgets_values": [-1],
-      "title": "📤 Extract Masks"
+      "widgets_values": [-1, true],
+      "title": "📤 Extract Masks (all objects)"
     },
     {
       "id": 6,

@@ -88,8 +88,29 @@ if [ -d "$SMPLX_SRC" ]; then
     fi
 fi
 
-# Start ComfyUI in background if requested
-if [ "$START_COMFYUI" = "true" ]; then
+# Determine if ComfyUI is needed based on stages
+COMFYUI_STAGES="depth|roto|matanyone|cleanplate"
+NEED_COMFYUI=false
+
+# Parse command line for stages
+for arg in "$@"; do
+    if [[ "$arg" == "-s" || "$arg" == "--stages" ]]; then
+        CHECKING_STAGES=true
+    elif [[ "$CHECKING_STAGES" == "true" ]]; then
+        if [[ "$arg" == "all" ]] || echo "$arg" | grep -qE "$COMFYUI_STAGES"; then
+            NEED_COMFYUI=true
+        fi
+        CHECKING_STAGES=false
+    fi
+done
+
+# If no stages specified, assume all (needs ComfyUI)
+if [[ "$@" != *"-s"* && "$@" != *"--stages"* ]]; then
+    NEED_COMFYUI=true
+fi
+
+# Start ComfyUI in background only if needed
+if [ "$NEED_COMFYUI" = "true" ]; then
     echo -e "${GREEN}Starting ComfyUI...${NC}"
     cd /app/.vfx_pipeline/ComfyUI
     python3 main.py --listen 0.0.0.0 --port 8188 \
@@ -110,6 +131,8 @@ if [ "$START_COMFYUI" = "true" ]; then
             exit 1
         fi
     done
+else
+    echo -e "${YELLOW}Skipping ComfyUI (not needed for requested stages)${NC}"
 fi
 
 # Execute the main command

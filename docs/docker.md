@@ -39,7 +39,7 @@ This downloads:
 - Can be downloaded automatically with the install wizard
 - Register at https://smpl-x.is.tue.mpg.de/
 - Create `SMPL.login.dat` with credentials (email on line 1, password on line 2)
-- Run: `python3 scripts/install_wizard.py --component mocap`
+- Run: `python3 scripts/install_wizard.py --component mocap_core`
 - The wizard handles authentication and download automatically
 
 Verify models:
@@ -80,12 +80,12 @@ docker-compose run --rm vfx-ingest /workspace/video.mp4 --name MyProject
 The Docker container uses two volume mounts:
 
 1. **Models** (`/models`) - Read-only
-   - Host: `~/.vfx_pipeline/models`
+   - Host: `<repo>/.vfx_pipeline/models` (sandboxed in repository)
    - Container: `/models`
    - Contains ML models (SAM3, Depth, WHAM, etc.)
 
 2. **Projects** (`/workspace`) - Read-write
-   - Host: `~/VFX-Projects`
+   - Host: `<repo>/../vfx_projects` (sibling to repository)
    - Container: `/workspace`
    - Contains your projects and output
 
@@ -179,7 +179,7 @@ docker run --rm --gpus all nvidia/cuda:12.1.0-base nvidia-smi
 **Solution:**
 ```bash
 # Verify models on host
-ls -lh ~/.vfx_pipeline/models/
+ls -lh .vfx_pipeline/models/
 
 # Run download script
 ./scripts/download_models.sh
@@ -198,12 +198,12 @@ python3 scripts/verify_models.py
 docker-compose config
 
 # Verify directory exists
-mkdir -p ~/.vfx_pipeline/models
-mkdir -p ~/VFX-Projects
+mkdir -p .vfx_pipeline/models
+mkdir -p ../vfx_projects
 
 # Check permissions
-ls -ld ~/.vfx_pipeline/models
-ls -ld ~/VFX-Projects
+ls -ld .vfx_pipeline/models
+ls -ld ../vfx_projects
 ```
 
 ### Out of Memory
@@ -263,7 +263,7 @@ bash scripts/run_docker.sh \
 ./tests/fixtures/download_football.sh
 
 # Copy to projects directory (tests/ is not in container)
-cp tests/fixtures/football_short.mp4 ~/VFX-Projects/
+cp tests/fixtures/football_short.mp4 ../vfx_projects/
 
 # Test with Football CIF
 bash scripts/run_docker.sh \
@@ -378,7 +378,7 @@ A: Yes, rebuild after modifying scripts: `docker-compose build`
 A: Yes! Run `docker-compose up` and visit http://localhost:8188
 
 **Q: Where are my projects saved?**
-A: On host at `~/VFX-Projects` (configurable via `VFX_PROJECTS_DIR`)
+A: On host at `../vfx_projects` (configurable via `VFX_PROJECTS_DIR`)
 
 **Q: Can I use my own COLMAP installation?**
 A: No need - COLMAP is installed in the container
@@ -387,7 +387,7 @@ A: No need - COLMAP is installed in the container
 A: `git pull && docker-compose build`
 
 **Q: Do models stay downloaded?**
-A: Yes - models are on host (`~/.vfx_pipeline/models`), not in container
+A: Yes - models are on host (`.vfx_pipeline/models`), not in container
 
 ## Support
 
@@ -397,5 +397,5 @@ A: Yes - models are on host (`~/.vfx_pipeline/models`), not in container
 ## See Also
 
 - [Main README](../README.md) - General platform documentation
-- [ATLAS](ATLAS.md) - Roadmap and development progress
-- [Roadmap 1](ROADMAP-1-DOCKER.md) - Docker migration details
+- [Troubleshooting](troubleshooting.md) - Common issues and solutions
+- [Installation Guide](installation.md) - Detailed setup instructions

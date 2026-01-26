@@ -36,7 +36,7 @@ This will:
 6. Run COLMAP camera tracking
 7. Export camera data
 
-**Output location:** `~/VFX-Projects/MyFirstProject/`
+**Output location:** `../vfx_projects/MyFirstProject/`
 
 ### Specific Stages
 
@@ -67,7 +67,7 @@ bash scripts/run_docker.sh \
 **Camera tracking only** (for existing frame sequences):
 ```bash
 bash scripts/run_docker.sh \
-  ~/VFX-Projects/Shot001/source/frames/ \
+  ../vfx_projects/Shot001/source/frames/ \
   --name Shot001 \
   --stages colmap,camera
 ```
@@ -98,7 +98,7 @@ Your processed files are stored on your host machine (not inside the container):
 
 ```bash
 # Default location
-ls ~/VFX-Projects/MyFirstProject/
+ls ../vfx_projects/MyFirstProject/
 
 # Custom location (if you set VFX_PROJECTS_DIR)
 ls $VFX_PROJECTS_DIR/MyFirstProject/
@@ -116,7 +116,7 @@ MyFirstProject/
 └── colmap/             # COLMAP reconstruction data
 ```
 
-**See [Docker Guide](README-DOCKER.md) for complete documentation, troubleshooting, and advanced usage.**
+**See [Docker Guide](docker.md) for complete documentation, troubleshooting, and advanced usage.**
 
 ---
 
@@ -209,7 +209,7 @@ export VFX_MODELS_DIR=/path/to/models
 python scripts/run_pipeline.py video.mp4 -s depth
 ```
 
-**See [Pipeline Reference](run_pipeline.md) for complete command-line options.**
+**See [CLI Reference](reference/cli.md) for complete command-line options.**
 
 ---
 
@@ -252,7 +252,7 @@ Read {
 
 **DJV View** (free frame viewer):
 ```bash
-djv_view ~/VFX-Projects/MyProject/depth/
+djv_view ../vfx_projects/MyProject/depth/
 ```
 
 ---
@@ -273,7 +273,7 @@ docker run --rm --gpus all nvidia/cuda:12.1.0-base nvidia-smi
 **Models not found:**
 ```bash
 # Verify models on host
-ls ~/.vfx_pipeline/models/
+ls .vfx_pipeline/models/
 
 # Download missing models
 ./scripts/download_models.sh
@@ -283,12 +283,12 @@ python3 scripts/verify_models.py
 **Volume mount permissions:**
 ```bash
 # Ensure directories exist
-mkdir -p ~/.vfx_pipeline/models
-mkdir -p ~/VFX-Projects
+mkdir -p .vfx_pipeline/models
+mkdir -p ../vfx_projects
 
 # Check permissions
-ls -ld ~/.vfx_pipeline/models
-ls -ld ~/VFX-Projects
+ls -ld .vfx_pipeline/models
+ls -ld ../vfx_projects
 ```
 
 ### Conda Issues
@@ -312,7 +312,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 **ComfyUI not found:**
 ```bash
 # Verify ComfyUI installation
-ls ~/comfy/ComfyUI/
+ls .vfx_pipeline/ComfyUI/
 
 # Reinstall if missing
 python scripts/install_wizard.py
@@ -344,11 +344,11 @@ python scripts/install_wizard.py
 
 After running your first project:
 
-1. **Review output** in `~/VFX-Projects/ProjectName/` (Docker) or `../vfx_projects/ProjectName/` (Conda)
+1. **Review output** in `../vfx_projects/ProjectName/` (Docker) or `../vfx_projects/ProjectName/` (Conda)
 2. **Import to VFX tools** (Nuke, Blender, Houdini, etc.)
 3. **Refine results** manually downstream as needed
 4. **Experiment** with different stages and options
-5. **Read component docs** for advanced usage: [Component Scripts](component_scripts.md)
+5. **Read component docs** for advanced usage: [Scripts Reference](reference/scripts.md)
 
 ### Recommended Learning Path
 
@@ -391,13 +391,13 @@ bash scripts/run_docker.sh \
 
 ```bash
 # List generated assets
-ls -lh ~/VFX-Projects/MyShot/
+ls -lh ../vfx_projects/MyShot/
 
 # View frames
-djv_view ~/VFX-Projects/MyShot/depth/
+djv_view ../vfx_projects/MyShot/depth/
 
 # Check camera data
-ls ~/VFX-Projects/MyShot/camera/*.abc
+ls ../vfx_projects/MyShot/camera/*.abc
 ```
 
 ### Step 4: Import to Nuke/Blender
@@ -405,16 +405,16 @@ ls ~/VFX-Projects/MyShot/camera/*.abc
 **Nuke:**
 ```tcl
 Read {
-  file ~/VFX-Projects/MyShot/depth/frame_%04d.png
+  file ../vfx_projects/MyShot/depth/frame_%04d.png
 }
 ReadGeo {
-  file ~/VFX-Projects/MyShot/camera/camera.abc
+  file ../vfx_projects/MyShot/camera/camera.abc
 }
 ```
 
 **Blender:**
 - File → Import → Alembic
-- Select `~/VFX-Projects/MyShot/camera/camera.abc`
+- Select `../vfx_projects/MyShot/camera/camera.abc`
 - File → Import → Stanford (.ply) for point cloud
 
 ### Step 5: Iterate

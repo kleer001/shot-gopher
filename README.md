@@ -73,7 +73,7 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/b
 
 **Prerequisites:** NVIDIA GPU with driver, Docker with nvidia-container-toolkit
 
-**Run:** `bash scripts/run_docker.sh --name MyProject /workspace/projects/video.mp4`
+**Run:** `bash scripts/run_docker.sh --name MyProject video.mp4`
 
 ---
 
@@ -135,18 +135,18 @@ python scripts/run_pipeline.py video.mp4 -s ingest,depth,roto,cleanplate,colmap,
 python scripts/run_pipeline.py -s roto,cleanplate
 ```
 
-**See [Your First Project Guide](docs/your_first_project.md) for complete walkthrough, examples, and troubleshooting.**
+**See [Your First Project Guide](docs/first-project.md) for complete walkthrough, examples, and troubleshooting.**
 
 ## Documentation
 
 Complete documentation available in [docs/](docs/):
-- [Your First Project](docs/your_first_project.md) - Complete walkthrough for running your first pipeline
-- [Docker Guide](docs/README-DOCKER.md) - Complete Docker setup, usage, and troubleshooting
-- [Installation Guide](docs/install_wizard.md) - Detailed setup instructions
-- [Pipeline Reference](docs/run_pipeline.md) - Command-line usage and options
-- [Component Scripts](docs/component_scripts.md) - Individual tool documentation
-- [Maintenance](docs/janitor.md) - System health and updates
-- [Windows Compatibility](docs/windows-compatibility.md) - Roadmap for Windows support
+- [Your First Project](docs/first-project.md) - Complete walkthrough for running your first pipeline
+- [Docker Guide](docs/docker.md) - Docker setup, usage, and troubleshooting
+- [Installation Guide](docs/installation.md) - Detailed setup instructions
+- [CLI Reference](docs/reference/cli.md) - Command-line usage and options
+- [Pipeline Stages](docs/reference/stages.md) - Individual stage documentation
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+- [Windows Guide](docs/platforms/windows.md) - Windows support and troubleshooting
 
 <details>
 <summary><strong>Project Structure</strong></summary>
@@ -185,7 +185,7 @@ Output follows VFX production conventions:
 - NVIDIA GPU with CUDA support
 - Conda or Miniconda
 
-**Note:** macOS supports local Conda installation (CPU-only, no GPU acceleration). Native Windows is not supported—use WSL2 with Docker instead. See [Windows Compatibility](docs/windows-compatibility.md) for details.
+**Note:** macOS supports local Conda installation (CPU-only, no GPU acceleration). Native Windows is not supported—use WSL2 with Docker instead. See [Windows Guide](docs/platforms/windows.md) for details.
 
 ## Installation Requirements
 
@@ -262,4 +262,4 @@ Different components perform best under specific conditions:
 
 ## License
 
-See individual component licenses. This pipeline integrates multiple open-source projects with varying licenses.
+See [LICENSE](LICENSE) for details. This pipeline integrates multiple open-source projects with varying licenses - see [License Audit](docs/LICENSE_AUDIT_REPORT.md) for component details.

@@ -2,73 +2,54 @@
 # Multi-stage build for optimized layer caching
 
 # Stage 1: Build COLMAP from source with CUDA support
-# The apt package lacks CUDA, and official Docker image uses Ubuntu 24.04 (incompatible)
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS colmap-builder
+# The official colmap/colmap:latest image does NOT have GPU support
+# We must build from source with CUDA enabled
+FROM nvidia/cuda:12.6.1-cudnn-devel-ubuntu24.04 AS colmap-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install COLMAP build dependencies (complete list from official docs)
-# GCC 10 required: Ubuntu 22.04's CUDA toolkit doesn't support GCC 11 (the default)
-# Using OpenImageIO instead of FreeImage (more robust, used by official Docker image)
-# Reference: https://github.com/colmap/colmap/blob/main/docker/Dockerfile
+# Install COLMAP build dependencies
+# Reference: https://github.com/colmap/colmap/blob/main/cmake/FindDependencies.cmake
 RUN apt-get update && apt-get install -y \
     git \
     cmake \
     ninja-build \
     build-essential \
-    gcc-10 \
-    g++-10 \
     libboost-program-options-dev \
-    libboost-filesystem-dev \
     libboost-graph-dev \
     libboost-system-dev \
     libeigen3-dev \
-    libopenimageio-dev \
-    libmetis-dev \
+    libcgal-dev \
+    libceres-dev \
     libgoogle-glog-dev \
     libgflags-dev \
-    libsqlite3-dev \
     libglew-dev \
-    qtbase5-dev \
-    libqt5opengl5-dev \
-    libceres-dev \
+    libsqlite3-dev \
+    libfreeimage-dev \
     libflann-dev \
-    libcgal-dev \
-    libgmp-dev \
-    libmpfr-dev \
-    liblz4-dev \
+    libopenimageio-dev \
+    libsuitesparse-dev \
+    libmetis-dev \
+    libmkl-full-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set GCC 10 as the compiler for CUDA compatibility
-ENV CC=/usr/bin/gcc-10
-ENV CXX=/usr/bin/g++-10
-ENV CUDAHOSTCXX=/usr/bin/g++-10
+# Clone and build COLMAP with CUDA support
+ARG COLMAP_VERSION=3.11.1
+ARG CUDA_ARCHITECTURES="75;86;89"
 
-# Clone and build COLMAP
-# CUDA architectures: 7.5 (RTX 20xx/T4), 8.0 (A100), 8.6 (RTX 30xx), 8.9 (RTX 40xx), 9.0 (H100)
-# Using 3.10 for FreeImage encapsulation fix (PR #2332) - fixes dynamic linking issues
-ARG COLMAP_VERSION=3.10
-ARG CUDA_ARCHITECTURES="75;80;86;89;90"
-
-RUN git clone --branch ${COLMAP_VERSION} --depth 1 https://github.com/colmap/colmap.git /colmap-src
-
-WORKDIR /colmap-src/build
-RUN cmake .. -GNinja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=/colmap-install \
-    -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
-    -DCUDA_ENABLED=ON \
-    -DGUI_ENABLED=OFF \
-    -DCGAL_ENABLED=ON \
-    -DTESTS_ENABLED=OFF \
-    && ninja \
-    && ninja install
-
-# Verify COLMAP was built with CUDA
-RUN /colmap-install/bin/colmap -h | head -5
+RUN git clone --branch ${COLMAP_VERSION} --depth 1 https://github.com/colmap/colmap.git /colmap-src && \
+    mkdir -p /colmap-src/build && cd /colmap-src/build && \
+    cmake .. -GNinja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/colmap-install \
+        -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
+        -DGUI_ENABLED=OFF \
+        -DBLA_VENDOR=Intel10_64lp && \
+    ninja install && \
+    rm -rf /colmap-src
 
 # Stage 2: Base image with system dependencies
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS base
+FROM nvidia/cuda:12.6.1-cudnn-devel-ubuntu24.04 AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -76,41 +57,44 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
-    python3.10 \
+    python3 \
     python3-pip \
+    python3-venv \
     wget \
     curl \
     xvfb \
     ninja-build \
-    libgl1-mesa-glx \
+    libgl1 \
+    libglx-mesa0 \
     libglu1-mesa \
-    libboost-program-options1.74.0 \
-    libboost-filesystem1.74.0 \
-    libboost-graph1.74.0 \
-    libboost-system1.74.0 \
-    libopenimageio2.4 \
-    libmetis5 \
-    libgoogle-glog0v5 \
-    libgflags2.2 \
-    libsqlite3-0 \
     libglew2.2 \
-    libceres2 \
+    libgomp1 \
+    libboost-filesystem1.83.0 \
+    libboost-program-options1.83.0 \
+    libboost-graph1.83.0 \
+    libgoogle-glog0v6t64 \
+    libceres4 \
+    libmetis5 \
+    libfreeimage3 \
+    libsqlite3-0 \
+    libcurl4t64 \
+    libmkl-intel-lp64 \
+    libmkl-intel-thread \
+    libmkl-core \
+    libomp5 \
     libflann1.9 \
-    libqt5core5a \
-    libqt5widgets5 \
-    libqt5opengl5 \
-    libgmp10 \
-    libmpfr6 \
-    liblz4-1 \
+    libopenimageio2.4t64 \
+    libcholmod5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy COLMAP from builder stage (same Ubuntu version = compatible libraries)
-COPY --from=colmap-builder /colmap-install/bin/colmap /usr/local/bin/colmap
-COPY --from=colmap-builder /colmap-install/lib/ /usr/local/lib/
+# Copy COLMAP from builder stage (GPU-enabled build)
+COPY --from=colmap-builder /colmap-install/ /usr/local/
+
+# Update library cache
 RUN ldconfig
 
-# Verify COLMAP works
-RUN colmap -h | head -5
+# Ensure /usr/local/bin is in PATH (for shutil.which to find colmap)
+ENV PATH="/usr/local/bin:$PATH"
 
 # Create application directory
 WORKDIR /app
@@ -125,16 +109,16 @@ FROM base AS python-deps
 COPY requirements.txt /tmp/
 
 # Install Python packages
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
 
-# Install PyTorch with CUDA support
-RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# Install PyTorch with CUDA 12.4 support
+RUN pip3 install --no-cache-dir --break-system-packages torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # Install smplx (required for mocap)
-RUN pip3 install --no-cache-dir smplx
+RUN pip3 install --no-cache-dir --break-system-packages smplx
 
 # Install kornia (required for GS-IR)
-RUN pip3 install --no-cache-dir kornia
+RUN pip3 install --no-cache-dir --break-system-packages kornia
 
 # Stage 4: GS-IR (Gaussian Splatting Inverse Rendering)
 FROM python-deps AS gsir
@@ -149,29 +133,52 @@ WORKDIR /app/.vfx_pipeline
 # Clone GS-IR with submodules
 RUN git clone --recursive https://github.com/lzhnb/GS-IR.git GS-IR
 
-# Fix missing <cstdint> includes in GS-IR source (upstream bug)
-# Required for uint32_t type definition in CUDA compilation
+# Install GS-IR Python dependencies (not in environment.yml but required)
+# Install GS-IR Python dependencies (extracted from render.py, train.py, relight.py, baking.py)
+RUN pip3 install --no-cache-dir --break-system-packages \
+    plyfile \
+    tqdm \
+    "imageio[ffmpeg]" \
+    tensorboard \
+    lpips \
+    opencv-python-headless \
+    Pillow
+
+# Fix missing includes in GS-IR submodules (upstream bugs, GCC 13+ compatibility)
+# - cstdint: uint32_t/uint64_t/uintptr_t type definitions
+# - cfloat: FLT_MAX constant
 RUN cd GS-IR/gs-ir && \
     sed -i '1i#include <cstdint>' src/utils.h && \
-    sed -i '1i#include <cstdint>' src/pbr_utils.cuh
+    sed -i '1i#include <cstdint>' src/pbr_utils.cuh && \
+    cd ../submodules/diff-gaussian-rasterization/cuda_rasterizer && \
+    sed -i '1i#include <cstdint>' rasterizer_impl.h && \
+    cd ../../simple-knn && \
+    sed -i '1i#include <cfloat>' simple_knn.cu
+
+# Fix PyTorch 2.6+ weights_only=True default (GS-IR uses pickle in checkpoints)
+# Patch all torch.load calls to explicitly set weights_only=False
+RUN cd GS-IR && \
+    for f in $(find . -name "*.py" -exec grep -l "torch.load" {} \;); do \
+        sed -i 's/torch\.load(\(.*\))/torch.load(\1, weights_only=False)/g' "$f"; \
+    done
 
 # Install nvdiffrast (required for GS-IR rendering)
 # --no-build-isolation required so it can find PyTorch during build
 RUN --mount=type=cache,target=/root/.cache/pip \
     TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
-    pip3 install --no-build-isolation git+https://github.com/NVlabs/nvdiffrast.git
+    pip3 install --no-build-isolation --break-system-packages git+https://github.com/NVlabs/nvdiffrast.git
 
 # Build and install GS-IR submodules (CUDA extensions)
 WORKDIR /app/.vfx_pipeline/GS-IR
 RUN --mount=type=cache,target=/root/.cache/pip \
     TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
-    pip3 install --no-build-isolation ./submodules/diff-gaussian-rasterization && \
+    pip3 install --no-build-isolation --break-system-packages ./submodules/diff-gaussian-rasterization && \
     TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" \
-    pip3 install --no-build-isolation ./submodules/simple-knn
+    pip3 install --no-build-isolation --break-system-packages ./submodules/simple-knn
 
 # Install gs-ir module (has CUDA extensions, needs TORCH_CUDA_ARCH_LIST)
 RUN --mount=type=cache,target=/root/.cache/pip \
-    cd gs-ir && TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" pip3 install --no-build-isolation -e .
+    cd gs-ir && TORCH_CUDA_ARCH_LIST="${CUDA_ARCH}" pip3 install --no-build-isolation --break-system-packages -e .
 
 WORKDIR /app
 
@@ -183,7 +190,7 @@ RUN mkdir -p /app/.vfx_pipeline
 
 # Clone ComfyUI and install its requirements
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git /app/.vfx_pipeline/ComfyUI && \
-    pip3 install --no-cache-dir -r /app/.vfx_pipeline/ComfyUI/requirements.txt
+    pip3 install --no-cache-dir --break-system-packages -r /app/.vfx_pipeline/ComfyUI/requirements.txt
 
 # Clone custom nodes
 WORKDIR /app/.vfx_pipeline/ComfyUI/custom_nodes
@@ -196,7 +203,7 @@ RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
 # Install custom node dependencies
 RUN for dir in */; do \
         if [ -f "$dir/requirements.txt" ]; then \
-            pip3 install --no-cache-dir -r "$dir/requirements.txt"; \
+            pip3 install --no-cache-dir --break-system-packages -r "$dir/requirements.txt"; \
         fi; \
     done
 
@@ -207,7 +214,7 @@ RUN for dir in */; do \
 RUN cd ComfyUI-SAM3 && \
     if command -v nvcc >/dev/null 2>&1; then \
         echo "CUDA toolkit found, installing comfy-env and SAM3 GPU NMS..." && \
-        pip3 install --no-cache-dir comfy-env && \
+        pip3 install --no-cache-dir --break-system-packages comfy-env && \
         python3 -c "from comfy_env import install; install()" || \
         echo "WARNING: SAM3 GPU NMS installation failed. Will use CPU fallback at runtime."; \
     else \

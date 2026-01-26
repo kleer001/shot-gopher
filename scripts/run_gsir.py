@@ -47,20 +47,14 @@ def check_gsir_available() -> tuple[bool, Optional[Path]]:
 
     Returns:
         Tuple of (is_available, gsir_path or None)
+        The path returned is the GS-IR repo root containing train.py
     """
-    # Check if gsir module is importable
-    try:
-        result = subprocess.run(
-            [sys.executable, "-c", "import gs_ir; print(gs_ir.__file__)"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if result.returncode == 0:
-            module_path = Path(result.stdout.strip()).parent
-            return True, module_path
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
+    # Check GSIR_PATH environment variable first (most reliable)
+    gsir_env = os.environ.get("GSIR_PATH")
+    if gsir_env:
+        gsir_path = Path(gsir_env)
+        if (gsir_path / "train.py").exists():
+            return True, gsir_path
 
     # Check common installation locations
     common_paths = [
@@ -73,14 +67,85 @@ def check_gsir_available() -> tuple[bool, Optional[Path]]:
         if (path / "train.py").exists():
             return True, path
 
-    # Check if train.py is in PATH via gsir command
-    gsir_env = os.environ.get("GSIR_PATH")
-    if gsir_env:
-        gsir_path = Path(gsir_env)
-        if (gsir_path / "train.py").exists():
-            return True, gsir_path
+    # Check if gsir module is importable and find repo root from module path
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import gs_ir; print(gs_ir.__file__)"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            module_path = Path(result.stdout.strip()).parent
+            for parent in [module_path] + list(module_path.parents):
+                if (parent / "train.py").exists():
+                    return True, parent
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
 
     return False, None
+
+
+def run_colmap_undistorter(
+    colmap_dir: Path,
+    output_dir: Path,
+    image_path: Path
+) -> bool:
+    """Run COLMAP image_undistorter to convert to PINHOLE camera model.
+
+    GS-IR only supports undistorted datasets with PINHOLE or SIMPLE_PINHOLE
+    camera models. This function converts distorted COLMAP reconstructions.
+
+    Args:
+        colmap_dir: Path to COLMAP reconstruction (containing sparse/0/)
+        output_dir: Path for undistorted output
+        image_path: Path to original images
+
+    Returns:
+        True if undistortion succeeded
+    """
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    args = [
+        "colmap", "image_undistorter",
+        "--image_path", str(image_path),
+        "--input_path", str(colmap_dir / "sparse" / "0"),
+        "--output_path", str(output_dir),
+        "--output_type", "COLMAP",
+    ]
+
+    print(f"    Running COLMAP image_undistorter...")
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=1800
+        )
+        if result.returncode != 0:
+            print(f"    Error: image_undistorter failed: {result.stderr}", file=sys.stderr)
+            return False
+
+        # COLMAP outputs to sparse/ directly, but GS-IR expects sparse/0/
+        # Move files to create the expected structure
+        sparse_dir = output_dir / "sparse"
+        sparse_0_dir = sparse_dir / "0"
+        if sparse_dir.exists() and not sparse_0_dir.exists():
+            temp_dir = output_dir / "sparse_temp"
+            sparse_dir.rename(temp_dir)
+            sparse_dir.mkdir()
+            temp_dir.rename(sparse_0_dir)
+            print(f"    Reorganized sparse model to sparse/0/ structure")
+
+        return True
+    except subprocess.TimeoutExpired:
+        print(f"    Error: image_undistorter timed out", file=sys.stderr)
+        return False
+    except FileNotFoundError:
+        print(f"    Error: colmap command not found", file=sys.stderr)
+        return False
 
 
 def setup_gsir_data_structure(
@@ -90,8 +155,11 @@ def setup_gsir_data_structure(
     """Set up the data structure expected by GS-IR.
 
     GS-IR expects:
-      - source_path/sparse/ - COLMAP sparse reconstruction
-      - source_path/images/ - Input images
+      - source_path/sparse/0/ - COLMAP sparse reconstruction (PINHOLE cameras)
+      - source_path/images/ - Undistorted input images
+
+    If the COLMAP reconstruction uses distorted camera models, this function
+    will run image_undistorter to convert to PINHOLE format.
 
     Args:
         project_dir: Our project directory
@@ -102,12 +170,13 @@ def setup_gsir_data_structure(
     """
     gsir_data_dir.mkdir(parents=True, exist_ok=True)
 
-    # Source paths
-    colmap_sparse = project_dir / "colmap" / "sparse" / "0"
+    colmap_dir = project_dir / "colmap"
+    colmap_sparse_model = colmap_dir / "sparse" / "0"
     source_frames = project_dir / "source" / "frames"
+    undistorted_dir = colmap_dir / "undistorted"
 
-    if not colmap_sparse.exists():
-        print(f"    Error: COLMAP sparse model not found: {colmap_sparse}", file=sys.stderr)
+    if not colmap_sparse_model.exists():
+        print(f"    Error: COLMAP sparse model not found: {colmap_sparse_model}", file=sys.stderr)
         print(f"    Run the colmap stage first", file=sys.stderr)
         return False
 
@@ -115,34 +184,67 @@ def setup_gsir_data_structure(
         print(f"    Error: Source frames not found: {source_frames}", file=sys.stderr)
         return False
 
-    # Create symlinks (or copy if symlinks fail)
+    # GS-IR expects sparse/0/ structure
+    use_sparse_parent = undistorted_dir / "sparse"
+    use_sparse_model = use_sparse_parent / "0"
+    use_images = undistorted_dir / "images"
+
+    # Count images in source COLMAP model
+    def count_colmap_images(sparse_model: Path) -> int:
+        """Count registered images in a COLMAP sparse model."""
+        images_bin = sparse_model / "images.bin"
+        if images_bin.exists():
+            try:
+                import struct
+                with open(images_bin, "rb") as f:
+                    return struct.unpack("<Q", f.read(8))[0]
+            except (IOError, struct.error):
+                pass
+        return 0
+
+    source_image_count = count_colmap_images(colmap_sparse_model)
+    undistorted_image_count = count_colmap_images(use_sparse_model)
+
+    # Check if undistorted data exists with correct structure AND matching image count
+    needs_undistort = (
+        not use_sparse_model.exists() or
+        not use_images.exists() or
+        not (use_sparse_model / "cameras.bin").exists() or
+        undistorted_image_count != source_image_count
+    )
+
+    if needs_undistort:
+        if undistorted_image_count > 0 and undistorted_image_count != source_image_count:
+            print(f"    Undistorted data is stale ({undistorted_image_count} vs {source_image_count} images), regenerating...")
+        else:
+            print(f"    Undistorting images for GS-IR (PINHOLE camera required)...")
+        if not run_colmap_undistorter(colmap_dir, undistorted_dir, source_frames):
+            print(f"    Error: Failed to undistort images", file=sys.stderr)
+            return False
+
+    if not use_sparse_model.exists():
+        print(f"    Error: Undistorted sparse model not found: {use_sparse_model}", file=sys.stderr)
+        return False
+
     sparse_link = gsir_data_dir / "sparse"
     images_link = gsir_data_dir / "images"
 
-    # Remove existing links/dirs
-    if sparse_link.exists() or sparse_link.is_symlink():
-        if sparse_link.is_symlink():
-            sparse_link.unlink()
-        else:
-            shutil.rmtree(sparse_link)
-
-    if images_link.exists() or images_link.is_symlink():
-        if images_link.is_symlink():
-            images_link.unlink()
-        else:
-            shutil.rmtree(images_link)
+    for link in [sparse_link, images_link]:
+        if link.exists() or link.is_symlink():
+            if link.is_symlink():
+                link.unlink()
+            else:
+                shutil.rmtree(link)
 
     try:
-        # GS-IR expects sparse/ to contain the model directly (not sparse/0/)
-        # So we link to the "0" subdirectory
-        sparse_link.symlink_to(colmap_sparse.resolve())
-        images_link.symlink_to(source_frames.resolve())
+        # Link to sparse parent so sparse/0/ is accessible
+        sparse_link.symlink_to(use_sparse_parent.resolve())
+        images_link.symlink_to(use_images.resolve())
         print(f"    Created symlinks for GS-IR data structure")
     except OSError as e:
-        # Symlinks may fail on some systems, fall back to copy
         print(f"    Warning: Could not create symlinks ({e}), copying data...")
-        shutil.copytree(colmap_sparse, sparse_link)
-        shutil.copytree(source_frames, images_link)
+        shutil.copytree(use_sparse_parent, sparse_link)
+        shutil.copytree(use_images, images_link)
 
     return True
 
@@ -190,25 +292,63 @@ def run_gsir_command(
     )
 
     stdout_lines = []
-    # Pattern: iteration progress (various formats)
-    iter_pattern = re.compile(r'[Ii]teration\s*[:\s]*(\d+)\s*[/|of]\s*(\d+)')
-    last_reported = 0
-    report_interval = 500  # Report every 500 iterations
+    import time
 
-    # Use iter(readline, '') to avoid Python's internal buffering
+    # Patterns for progress detection
+    iter_pattern = re.compile(r'[Ii]teration\s*[:\s]*(\d+)\s*[/|of]\s*(\d+)')
+    # tqdm pattern: "50%|█████     | 15000/30000 [05:23<05:23, 46.37it/s]"
+    tqdm_pattern = re.compile(r'(\d+)%\|.*\|\s*(\d+)/(\d+)')
+
+    last_reported = 0
+    last_report_time = 0
+    report_interval = 2500  # Report every 2500 iterations
+    time_interval = 30.0  # Or at least every 30 seconds
+    min_total_for_progress = 100  # Only show progress for loops with 100+ iterations
+    is_tty = sys.stdout.isatty()
+
     for line in iter(process.stdout.readline, ''):
         stdout_lines.append(line)
-        line = line.strip()
+        line_stripped = line.strip()
 
-        # Check for iteration progress
-        match = iter_pattern.search(line)
+        # Skip empty lines and repetitive tqdm updates
+        if not line_stripped or '\r' in line:
+            continue
+
+        current = total = None
+
+        # Try iteration pattern first
+        match = iter_pattern.search(line_stripped)
         if match:
             current = int(match.group(1))
             total = int(match.group(2))
-            if current - last_reported >= report_interval or current == total:
-                print(f"    Iteration {current}/{total}")
+
+        # Try tqdm pattern
+        if not current:
+            match = tqdm_pattern.search(line_stripped)
+            if match:
+                current = int(match.group(2))
+                total = int(match.group(3))
+
+        # Only report progress for training loops (not camera loading etc)
+        if current and total and total >= min_total_for_progress:
+            now = time.time()
+            should_report = (
+                current - last_reported >= report_interval or
+                now - last_report_time >= time_interval or
+                current == total
+            )
+            if should_report:
+                pct = int(100 * current / total) if total > 0 else 0
+                if is_tty:
+                    print(f"\r    Training: {current}/{total} ({pct}%)    ", end="")
+                else:
+                    print(f"    Training: {current}/{total} ({pct}%)")
                 sys.stdout.flush()
                 last_reported = current
+                last_report_time = now
+
+    if is_tty and last_reported > 0:
+        print()  # Newline after progress
 
     process.wait()
 
@@ -339,13 +479,15 @@ def export_materials(
     """
     print("\n[GS-IR Export: Rendering Material Maps]")
 
-    # Run render with PBR and BRDF evaluation
+    # Run render with PBR enabled to export material maps
+    # Skip test cameras - COLMAP datasets typically only have training cameras
+    # Skip brdf_eval - requires synthetic data with ground truth albedo
     args = {
         "-m": str(model_path),
         "-s": str(source_path),
         "checkpoint": str(checkpoint),
         "pbr": True,
-        "brdf_eval": True,
+        "skip_test": True,
     }
 
     run_gsir_command(
@@ -354,15 +496,23 @@ def export_materials(
     )
 
     # Find the output directory created by GS-IR
-    # Format: {model_path}/test/ours_{iteration}/
+    # Format: {model_path}/train/ours_{iteration}/ (COLMAP uses train split only)
+    # Note: GS-IR may output to ours_None if loaded_iter isn't set
     iteration = int(checkpoint.stem.replace("chkpnt", ""))
-    render_output = model_path / "test" / f"ours_{iteration}"
+    candidate_dirs = [
+        model_path / "train" / f"ours_{iteration}",
+        model_path / "train" / "ours_None",
+        model_path / "test" / f"ours_{iteration}",
+        model_path / "test" / "ours_None",
+    ]
 
-    if not render_output.exists():
-        # Try train split
-        render_output = model_path / "train" / f"ours_{iteration}"
+    render_output = None
+    for candidate in candidate_dirs:
+        if candidate.exists():
+            render_output = candidate
+            break
 
-    if not render_output.exists():
+    if render_output is None:
         print(f"    Warning: Render output not found at expected location", file=sys.stderr)
         return False
 
@@ -455,6 +605,9 @@ def run_gsir_pipeline(
         print("Or set GSIR_PATH environment variable to installation directory", file=sys.stderr)
         return False
 
+    import time
+    pipeline_start = time.time()
+
     print(f"\n{'='*60}")
     print(f"GS-IR Material Decomposition")
     print(f"{'='*60}")
@@ -508,11 +661,18 @@ def run_gsir_pipeline(
         print(f"\nGS-IR command timed out", file=sys.stderr)
         return False
 
+    # Calculate timing
+    pipeline_end = time.time()
+    total_seconds = pipeline_end - pipeline_start
+    total_minutes = total_seconds / 60
+
     print(f"\n{'='*60}")
     print(f"GS-IR Material Decomposition Complete")
     print(f"{'='*60}")
     print(f"Model: {gsir_model_dir}")
     print(f"Materials: {materials_output}")
+    print()
+    print(f"TOTAL TIME: {total_minutes:.1f} minutes")
     print()
 
     return True

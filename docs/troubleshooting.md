@@ -2,7 +2,7 @@
 
 Common issues, solutions, and performance tips.
 
-**Quick links**: [Pipeline Usage](run_pipeline.md) | [Stages](stages.md) | [Installation](install_wizard.md)
+**Quick links**: [CLI Reference](reference/cli.md) | [Stages](reference/stages.md) | [Installation](installation.md)
 
 ---
 
@@ -263,7 +263,7 @@ nvidia-smi                     # GPU info
 
 ## Related Documentation
 
-- [Pipeline Usage](run_pipeline.md) — Command reference
-- [Stages](stages.md) — Stage details and VRAM requirements
-- [Installation](install_wizard.md) — Setup guide
-- [Janitor](janitor.md) — Maintenance tools
+- [CLI Reference](reference/cli.md) — Command reference
+- [Stages](reference/stages.md) — Stage details and VRAM requirements
+- [Installation](installation.md) — Setup guide
+- [Maintenance](reference/maintenance.md) — Maintenance tools

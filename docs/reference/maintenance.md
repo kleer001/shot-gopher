@@ -790,10 +790,10 @@ chmod +x .git/hooks/pre-commit
 
 ## Related Tools
 
-- **[Installation Wizard](install_wizard.md)** - Initial setup and component installation
-- **[Pipeline](run_pipeline.md)** - Use the maintained installation for VFX work
+- **[Installation](../installation.md)** - Initial setup and component installation
+- **[CLI Reference](cli.md)** - Use the maintained installation for VFX work
 
 ## See Also
 
-- Main documentation: [README.md](README.md)
-- Testing guide: `TESTING.md` (repository root)
+- Main documentation: [README.md](../README.md)
+- Testing guide: [testing.md](../testing.md)
