@@ -23,6 +23,7 @@ SUPPORTED_FORMATS = {
 
 STAGES = {
     "ingest": "Extract frames from movie",
+    "interactive": "Interactive segmentation (05_interactive_segmentation.json)",
     "depth": "Run depth analysis (01_analysis.json)",
     "roto": "Run segmentation (02_segmentation.json)",
     "matanyone": "Refine person mattes (04_matanyone.json)",
@@ -34,12 +35,12 @@ STAGES = {
 }
 
 STAGE_ORDER = [
-    "ingest", "depth", "roto", "matanyone", "cleanplate",
+    "ingest", "interactive", "depth", "roto", "matanyone", "cleanplate",
     "colmap", "mocap", "gsir", "camera"
 ]
 
 STAGES_REQUIRING_FRAMES = {
-    "depth", "roto", "matanyone", "cleanplate",
+    "interactive", "depth", "roto", "matanyone", "cleanplate",
     "colmap", "mocap", "gsir", "camera"
 }
 

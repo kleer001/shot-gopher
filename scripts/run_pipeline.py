@@ -20,6 +20,7 @@ Example:
 import argparse
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -68,6 +69,26 @@ from log_manager import LogCapture
 CONTAINER_NAME = "vfx-pipeline-run"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 COMFYUI_DIR = INSTALL_DIR / "ComfyUI"
+LAST_PROJECT_FILE = INSTALL_DIR / ".last_project"
+
+
+def save_last_project(project_dir: Path) -> None:
+    """Save the last used project directory."""
+    INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+    LAST_PROJECT_FILE.write_text(str(project_dir.resolve()))
+
+
+def get_last_project() -> Optional[Path]:
+    """Get the last used project directory, if it exists."""
+    if not LAST_PROJECT_FILE.exists():
+        return None
+    try:
+        path = Path(LAST_PROJECT_FILE.read_text().strip())
+        if path.exists() and path.is_dir():
+            return path
+    except Exception:
+        pass
+    return None
 
 
 def check_docker_available() -> bool:
@@ -277,7 +298,7 @@ def sanitize_stages(stages: list[str]) -> list[str]:
 
 
 def run_pipeline(
-    input_path: Path,
+    input_path: Optional[Path],
     project_name: Optional[str] = None,
     projects_dir: Path = DEFAULT_PROJECTS_DIR,
     stages: list[str] = None,
@@ -343,9 +364,15 @@ def run_pipeline(
         comfyui_was_started = True
 
     if not project_name:
-        project_name = input_path.stem.replace(" ", "_")
+        if input_path:
+            project_name = input_path.stem.replace(" ", "_")
+        else:
+            print("Error: project_name required when input_path is None", file=sys.stderr)
+            return False
 
     project_dir = projects_dir / project_name
+
+    save_last_project(project_dir)
 
     if is_in_container():
         if not str(project_dir).startswith("/workspace"):
@@ -360,12 +387,23 @@ def run_pipeline(
     print(f"\n{'='*60}")
     print(f"VFX Pipeline: {project_name}")
     print(f"{'='*60}")
-    print(f"Input: {input_path}")
+    if input_path:
+        print(f"Input: {input_path}")
     print(f"Project: {project_dir}")
     print(f"Stages: {', '.join(stages)}")
     print()
 
-    if not fps and input_path.suffix.lower() in {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"}:
+    metadata_path = project_dir / "project.json"
+
+    if not fps and metadata_path.exists():
+        try:
+            with open(metadata_path) as f:
+                existing_meta = json.load(f)
+            fps = existing_meta.get("fps")
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    if input_path and not fps and input_path.suffix.lower() in {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"}:
         info = get_video_info(input_path)
         for stream in info.get("streams", []):
             if stream.get("codec_type") == "video":
@@ -376,18 +414,18 @@ def run_pipeline(
                 else:
                     fps = float(fps_str)
                 break
+
     fps = fps or 24.0
     print(f"Frame rate: {fps} fps")
 
     project_dir.mkdir(parents=True, exist_ok=True)
-
-    metadata_path = project_dir / "project.json"
     project_metadata = {
         "name": project_name,
         "fps": fps,
-        "source": str(input_path),
         "start_frame": 1,
     }
+    if input_path:
+        project_metadata["source"] = str(input_path)
     if metadata_path.exists():
         try:
             with open(metadata_path) as f:
@@ -406,7 +444,9 @@ def run_pipeline(
 
     if "ingest" in stages:
         print("\n=== Stage: ingest ===")
-        if skip_existing and list(source_frames.glob("frame_*.png")):
+        if not input_path:
+            print("  → Skipping (no input file, existing project)")
+        elif skip_existing and list(source_frames.glob("frame_*.png")):
             print("  → Skipping (frames exist)")
         else:
             frame_count = extract_frames(input_path, source_frames, START_FRAME, fps)
@@ -414,10 +454,11 @@ def run_pipeline(
 
         preview_dir = project_dir / "preview"
         preview_dir.mkdir(exist_ok=True)
-        source_preview = preview_dir / f"source{input_path.suffix}"
-        if not source_preview.exists():
-            shutil.copy2(input_path, source_preview)
-            print(f"  → Copied source to {source_preview.name}")
+        if input_path:
+            source_preview = preview_dir / f"source{input_path.suffix}"
+            if not source_preview.exists():
+                shutil.copy2(input_path, source_preview)
+                print(f"  → Copied source to {source_preview.name}")
 
     total_frames = len(list(source_frames.glob("frame_*.png")))
 
@@ -430,6 +471,38 @@ def run_pipeline(
             project_metadata["height"] = img.height
         with open(metadata_path, "w") as f:
             json.dump(project_metadata, f, indent=2)
+
+    if "interactive" in stages:
+        print("\n=== Stage: interactive ===")
+        workflow_path = project_dir / "workflows" / "05_interactive_segmentation.json"
+        roto_dir = project_dir / "roto"
+
+        refresh_workflow_from_template(workflow_path, "05_interactive_segmentation.json")
+
+        if not workflow_path.exists():
+            print("  → Skipping (workflow not found)")
+        else:
+            print("  → Opening interactive segmentation in ComfyUI")
+            print(f"    Workflow: {workflow_path}")
+            print(f"    ComfyUI: {comfyui_url}")
+            print()
+            print("  Instructions:")
+            print("    1. Open ComfyUI in your browser")
+            print("    2. Load the workflow from: workflows/05_interactive_segmentation.json")
+            print("    3. Click points on the first frame to define what to segment")
+            print("    4. Run the workflow (Queue Prompt)")
+            print("    5. Masks will be saved to: roto/")
+            print()
+
+            import webbrowser
+            webbrowser.open(comfyui_url)
+
+            input("  Press Enter when done with interactive segmentation...")
+
+            if list(roto_dir.glob("**/*.png")):
+                print(f"  ✓ Masks found in {roto_dir}")
+            else:
+                print(f"  → Warning: No masks found in {roto_dir}")
 
     if "depth" in stages:
         print("\n=== Stage: depth ===")
@@ -460,6 +533,9 @@ def run_pipeline(
         workflow_path = project_dir / "workflows" / "02_segmentation.json"
         roto_dir = project_dir / "roto"
 
+        prompts = [p.strip() for p in (roto_prompt or "person").split(",")]
+        prompts = [p for p in prompts if p]
+
         refresh_workflow_from_template(workflow_path, "02_segmentation.json")
 
         if not workflow_path.exists():
@@ -469,9 +545,6 @@ def run_pipeline(
         else:
             if overwrite:
                 clear_output_directory(roto_dir)
-
-            prompts = [p.strip() for p in (roto_prompt or "person").split(",")]
-            prompts = [p for p in prompts if p]
 
             print(f"  → Segmenting {len(prompts)} target(s): {', '.join(prompts)}")
 
@@ -500,33 +573,24 @@ def run_pipeline(
         if separate_instances:
             from separate_instances import separate_instances as do_separate
 
-            person_dirs = []
-            for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
-                if subdir.is_dir() and "person" in subdir.name.lower():
-                    if list(subdir.glob("*.png")):
-                        person_dirs.append(subdir)
-
-            if person_dirs:
-                print("\n  --- Separating instances ---")
-                for person_dir in person_dirs:
-                    print(f"  → Processing: {person_dir.name}")
+            print("\n  --- Separating instances ---")
+            for prompt in prompts:
+                prompt_name = prompt.replace(" ", "_")
+                prompt_dir = roto_dir / prompt_name
+                if prompt_dir.exists() and list(prompt_dir.glob("*.png")):
+                    print(f"  → Processing: {prompt_name} → {prompt_name}_00/, {prompt_name}_01/, ...")
                     result = do_separate(
-                        input_dir=person_dir,
+                        input_dir=prompt_dir,
                         output_dir=roto_dir,
                         min_area=500,
-                        prefix=person_dir.name,
+                        prefix=prompt_name,
                     )
 
-                    if result and len(result) > 1:
-                        print(f"    Found {len(result)} instances, removing combined directory")
-                        shutil.rmtree(person_dir)
-                    elif result and len(result) == 1:
-                        print(f"    Only 1 instance found, keeping original")
-                        for idx, out_dir in result.items():
-                            if out_dir.exists() and out_dir != person_dir:
-                                shutil.rmtree(out_dir)
-            else:
-                print("  → No person directories to separate")
+                    if result:
+                        print(f"    Created {len(result)} {prompt_name} directories")
+                        print(f"    Combined mask kept in: {prompt_name}/")
+                else:
+                    print(f"  → No {prompt_name} directory to separate")
 
         clear_gpu_memory(comfyui_url)
 
@@ -539,11 +603,13 @@ def run_pipeline(
 
         refresh_workflow_from_template(workflow_path, "04_matanyone.json")
 
+        person_pattern = re.compile(r"^person_\d{2}$")
         person_dirs = []
         for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
-            if subdir.is_dir() and "person" in subdir.name.lower():
-                if list(subdir.glob("*.png")):
-                    person_dirs.append(subdir)
+            if not subdir.is_dir():
+                continue
+            if person_pattern.match(subdir.name) and list(subdir.glob("*.png")):
+                person_dirs.append(subdir)
 
         if not workflow_path.exists():
             print("  → Skipping (workflow not found)")
@@ -568,7 +634,7 @@ def run_pipeline(
                 if len(person_dirs) > 1:
                     print(f"\n  [{i+1}/{len(person_dirs)}] Refining: {person_dir.name}")
                 else:
-                    print(f"  → Refining person masks from: {person_dir.name}")
+                    print(f"  → Refining masks from: {person_dir.name}")
 
                 out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -752,7 +818,9 @@ def main():
     parser.add_argument(
         "input",
         type=Path,
-        help="Input movie file or image sequence"
+        nargs="?",
+        default=None,
+        help="Input movie file, image sequence, or existing project dir (default: last used project)"
     )
     parser.add_argument(
         "--name", "-n",
@@ -907,6 +975,10 @@ def main():
         print(f"Auto-detected mode: {mode}")
 
     if mode == "docker":
+        if args.input is None:
+            print("Error: Docker mode requires an input file", file=sys.stderr)
+            print("Usage: run_pipeline.py <movie_file> --docker", file=sys.stderr)
+            sys.exit(1)
         models_dir = args.models_dir or find_default_models_dir()
         exit_code = run_docker_mode(
             input_path=args.input,
@@ -919,10 +991,27 @@ def main():
 
     check_conda_env_or_warn()
 
-    input_path = args.input.resolve()
-    if not input_path.exists():
-        print(f"Error: Input not found: {input_path}", file=sys.stderr)
-        sys.exit(1)
+    input_path = None
+    project_dir = None
+
+    if args.input is None:
+        last_project = get_last_project()
+        if last_project:
+            project_dir = last_project
+            print(f"Using last project: {project_dir.name}")
+        else:
+            print("Error: No input specified and no previous project found", file=sys.stderr)
+            print("Usage: run_pipeline.py <movie_file_or_project_dir>", file=sys.stderr)
+            sys.exit(1)
+    else:
+        input_path = args.input.resolve()
+        if not input_path.exists():
+            print(f"Error: Input not found: {input_path}", file=sys.stderr)
+            sys.exit(1)
+
+        if input_path.is_dir() and (input_path / "source").exists():
+            project_dir = input_path
+            print(f"Using existing project: {project_dir.name}")
 
     if args.stages.lower() == "all":
         stages = STAGE_ORDER.copy()
@@ -937,27 +1026,51 @@ def main():
 
     print(f"Stages to run: {', '.join(stages)}")
 
-    success = run_pipeline(
-        input_path=input_path,
-        project_name=args.name,
-        projects_dir=args.projects_dir,
-        stages=stages,
-        comfyui_url=args.comfyui_url,
-        fps=args.fps,
-        skip_existing=args.skip_existing,
-        colmap_quality=args.colmap_quality,
-        colmap_dense=args.colmap_dense,
-        colmap_mesh=args.colmap_mesh,
-        colmap_use_masks=not args.colmap_no_masks,
-        colmap_max_size=args.colmap_max_size,
-        gsir_iterations=args.gsir_iterations,
-        gsir_path=args.gsir_path,
-        auto_start_comfyui=not args.no_auto_comfyui,
-        roto_prompt=args.prompt,
-        separate_instances=args.separate_instances,
-        auto_movie=args.auto_movie,
-        overwrite=not args.no_overwrite,
-    )
+    if project_dir:
+        save_last_project(project_dir)
+        success = run_pipeline(
+            input_path=None,
+            project_name=project_dir.name,
+            projects_dir=project_dir.parent,
+            stages=stages,
+            comfyui_url=args.comfyui_url,
+            fps=args.fps,
+            skip_existing=args.skip_existing,
+            colmap_quality=args.colmap_quality,
+            colmap_dense=args.colmap_dense,
+            colmap_mesh=args.colmap_mesh,
+            colmap_use_masks=not args.colmap_no_masks,
+            colmap_max_size=args.colmap_max_size,
+            gsir_iterations=args.gsir_iterations,
+            gsir_path=args.gsir_path,
+            auto_start_comfyui=not args.no_auto_comfyui,
+            roto_prompt=args.prompt,
+            separate_instances=args.separate_instances,
+            auto_movie=args.auto_movie,
+            overwrite=not args.no_overwrite,
+        )
+    else:
+        success = run_pipeline(
+            input_path=input_path,
+            project_name=args.name,
+            projects_dir=args.projects_dir,
+            stages=stages,
+            comfyui_url=args.comfyui_url,
+            fps=args.fps,
+            skip_existing=args.skip_existing,
+            colmap_quality=args.colmap_quality,
+            colmap_dense=args.colmap_dense,
+            colmap_mesh=args.colmap_mesh,
+            colmap_use_masks=not args.colmap_no_masks,
+            colmap_max_size=args.colmap_max_size,
+            gsir_iterations=args.gsir_iterations,
+            gsir_path=args.gsir_path,
+            auto_start_comfyui=not args.no_auto_comfyui,
+            roto_prompt=args.prompt,
+            separate_instances=args.separate_instances,
+            auto_movie=args.auto_movie,
+            overwrite=not args.no_overwrite,
+        )
 
     sys.exit(0 if success else 1)
 

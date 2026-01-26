@@ -176,7 +176,7 @@ def run_segmentation(
     # Check output
     roto_dir = project_dir / "roto"
     if roto_dir.exists():
-        mask_count = len(list(roto_dir.glob("*.png"))) + len(list(roto_dir.glob("*.jpg")))
+        mask_count = len(list(roto_dir.glob("**/*.png"))) + len(list(roto_dir.glob("**/*.jpg")))
         print(f"\n{'='*60}")
         print(f"Segmentation Complete")
         print(f"{'='*60}")
@@ -269,35 +269,33 @@ def main():
 
         roto_dir = project_dir / "roto"
 
-        # Find person-related directories to separate
-        person_dirs = []
-        if roto_dir.exists():
-            for subdir in sorted(roto_dir.iterdir()):
-                if subdir.is_dir() and "person" in subdir.name.lower():
-                    if list(subdir.glob("*.png")):
-                        person_dirs.append(subdir)
+        # Derive prefix from prompt (use first prompt, default to "instance")
+        if args.prompts:
+            prefix = args.prompts.split(",")[0].strip()
+        elif args.prompt:
+            prefix = args.prompt.strip()
+        else:
+            prefix = "instance"
 
-        if person_dirs:
+        mask_dir = roto_dir / "mask"
+        if mask_dir.exists() and list(mask_dir.glob("*.png")):
             print(f"\n{'='*60}")
             print(f"Separating Instances")
             print(f"{'='*60}")
 
-            for person_dir in person_dirs:
-                print(f"\nProcessing: {person_dir.name}")
-                result = do_separate(
-                    input_dir=person_dir,
-                    output_dir=roto_dir,
-                    min_area=args.min_area,
-                    prefix=person_dir.name,  # e.g., "person" -> "person_0", "person_1"
-                )
+            print(f"\nProcessing: {mask_dir.name} → {prefix}_00/, {prefix}_01/, ...")
+            result = do_separate(
+                input_dir=mask_dir,
+                output_dir=roto_dir,
+                min_area=args.min_area,
+                prefix=prefix,
+            )
 
-                if result:
-                    # Remove the original combined directory after successful separation
-                    print(f"  Removing original combined directory: {person_dir.name}")
-                    import shutil
-                    shutil.rmtree(person_dir)
+            if result:
+                print(f"  Created {len(result)} {prefix} directories")
+                print(f"  Combined mask kept in: {mask_dir.name}/")
         else:
-            print("No person directories found to separate")
+            print("No mask directory found to separate")
 
     sys.exit(0)
 
