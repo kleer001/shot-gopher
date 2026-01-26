@@ -7,7 +7,7 @@
     {
       "id": 1,
       "type": "VHS_LoadImagesPath",
-      "pos": [100, 300],
+      "pos": [100, 350],
       "size": [320, 200],
       "flags": {},
       "order": 0,
@@ -24,7 +24,7 @@
     {
       "id": 2,
       "type": "LoadSAM3Model",
-      "pos": [100, 560],
+      "pos": [100, 620],
       "size": [320, 80],
       "flags": {},
       "order": 1,
@@ -39,8 +39,8 @@
     {
       "id": 14,
       "type": "VHS_SelectEveryNthFrame",
-      "pos": [500, 300],
-      "size": [280, 120],
+      "pos": [550, 350],
+      "size": [300, 120],
       "flags": {},
       "order": 2,
       "mode": 0,
@@ -59,8 +59,8 @@
     {
       "id": 10,
       "type": "SAM3PointCollector",
-      "pos": [500, 480],
-      "size": [400, 350],
+      "pos": [550, 540],
+      "size": [450, 400],
       "flags": {},
       "order": 3,
       "mode": 0,
@@ -78,8 +78,8 @@
     {
       "id": 3,
       "type": "SAM3VideoSegmentation",
-      "pos": [500, 880],
-      "size": [350, 180],
+      "pos": [550, 1010],
+      "size": [380, 180],
       "flags": {},
       "order": 4,
       "mode": 0,
@@ -98,8 +98,8 @@
     {
       "id": 4,
       "type": "SAM3Propagate",
-      "pos": [920, 680],
-      "size": [320, 150],
+      "pos": [1100, 600],
+      "size": [350, 150],
       "flags": {},
       "order": 5,
       "mode": 0,
@@ -119,8 +119,8 @@
     {
       "id": 5,
       "type": "SAM3VideoOutput",
-      "pos": [1320, 580],
-      "size": [320, 150],
+      "pos": [1600, 500],
+      "size": [350, 150],
       "flags": {},
       "order": 6,
       "mode": 0,
@@ -140,8 +140,8 @@
     {
       "id": 6,
       "type": "MaskToImage",
-      "pos": [1320, 780],
-      "size": [200, 50],
+      "pos": [1600, 720],
+      "size": [220, 60],
       "flags": {},
       "order": 7,
       "mode": 0,
@@ -157,8 +157,8 @@
     {
       "id": 7,
       "type": "SaveImage",
-      "pos": [1700, 480],
-      "size": [320, 280],
+      "pos": [2100, 350],
+      "size": [350, 300],
       "flags": {},
       "order": 8,
       "mode": 0,
@@ -172,8 +172,8 @@
     {
       "id": 8,
       "type": "PreviewImage",
-      "pos": [1700, 800],
-      "size": [320, 280],
+      "pos": [2100, 720],
+      "size": [350, 300],
       "flags": {},
       "order": 9,
       "mode": 0,
@@ -186,8 +186,8 @@
     {
       "id": 9,
       "type": "PreviewImage",
-      "pos": [1320, 880],
-      "size": [250, 200],
+      "pos": [1600, 850],
+      "size": [280, 220],
       "flags": {},
       "order": 10,
       "mode": 0,
@@ -201,12 +201,12 @@
       "id": 12,
       "type": "Note",
       "pos": [100, 50],
-      "size": [380, 200],
+      "size": [400, 240],
       "flags": {},
       "order": 11,
       "mode": 0,
       "properties": {"text": ""},
-      "widgets_values": ["📋 INTERACTIVE SEGMENTATION\n\nFor complex shots requiring manual selection:\n\n1. Set the start frame in 'Select Start Frame' node\n2. IMPORTANT: Set the same frame number in 'Video Segmentation' node (frame_idx)\n3. Click points in the 'Interactive Selector' node\n   - Left click = positive (include)\n   - Shift+Left or Right click = negative (exclude)\n4. Click 'Queue Prompt' to run\n5. Masks save to roto/custom/\n\nRequires: ComfyUI-SAM3, ComfyUI-VideoHelperSuite"],
+      "widgets_values": ["📋 INTERACTIVE SEGMENTATION\n\nFor complex shots requiring manual selection:\n\n1. Set the start frame in 'Select Start Frame' node\n2. IMPORTANT: Set the same frame number in\n   'Video Segmentation' node (frame_idx)\n3. Click points in the 'Interactive Selector' node\n   - Left click = positive (include)\n   - Shift+Left or Right click = negative (exclude)\n4. Click 'Queue Prompt' to run\n5. Masks save to roto/custom/\n\nRequires: ComfyUI-SAM3, ComfyUI-VideoHelperSuite"],
       "title": "📋 Instructions",
       "color": "#332",
       "bgcolor": "#553"
@@ -214,13 +214,13 @@
     {
       "id": 13,
       "type": "Note",
-      "pos": [920, 480],
-      "size": [320, 150],
+      "pos": [1100, 350],
+      "size": [350, 180],
       "flags": {},
       "order": 12,
       "mode": 0,
       "properties": {"text": ""},
-      "widgets_values": ["💡 TIPS\n\n• Frame numbers are 0-indexed (first frame = 0)\n• Use bidirectional propagation to go forwards and backwards\n• Click once on each object you want\n• Use negative points to exclude nearby objects"],
+      "widgets_values": ["💡 TIPS\n\n• Frame numbers are 0-indexed (first frame = 0)\n• Use bidirectional propagation to go\n  forwards and backwards from your frame\n• Click once on each object you want\n• Use negative points to exclude nearby objects"],
       "title": "💡 Tips",
       "color": "#234",
       "bgcolor": "#456"
@@ -245,28 +245,33 @@
   "groups": [
     {
       "title": "📥 INPUT",
-      "bounding": [80, 280, 380, 400],
+      "bounding": [80, 320, 400, 420],
       "color": "#3f789e"
     },
     {
       "title": "🎯 SELECT (Interactive)",
-      "bounding": [480, 280, 440, 700],
+      "bounding": [530, 320, 480, 920],
       "color": "#9e8f3e"
     },
     {
       "title": "🔄 PROPAGATE",
-      "bounding": [900, 460, 380, 400],
+      "bounding": [1080, 320, 400, 480],
       "color": "#8f3e9e"
     },
     {
       "title": "💾 OUTPUT",
-      "bounding": [1300, 460, 760, 660],
+      "bounding": [1580, 320, 500, 800],
       "color": "#3e9e5f"
+    },
+    {
+      "title": "💾 SAVE",
+      "bounding": [2080, 320, 400, 740],
+      "color": "#5e9e3f"
     }
   ],
   "config": {},
   "extra": {
-    "ds": {"scale": 0.5, "offset": [0, 0]},
+    "ds": {"scale": 0.6, "offset": [0, 0]},
     "info": {
       "name": "VFX Pipeline - Interactive Segmentation",
       "author": "VFX Pipeline",
