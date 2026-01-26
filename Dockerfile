@@ -64,6 +64,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     xvfb \
     ninja-build \
+    gosu \
     libgl1 \
     libglx-mesa0 \
     libglu1-mesa \
@@ -241,13 +242,16 @@ COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Mark as container environment
+# HOST_UID/HOST_GID: Set at runtime to match host user for correct file ownership
 ENV CONTAINER=true \
     VFX_INSTALL_DIR=/app/.vfx_pipeline \
     VFX_MODELS_DIR=/models \
     VFX_PROJECTS_DIR=/workspace/projects \
     COMFYUI_OUTPUT_DIR=/workspace \
     GSIR_PATH=/app/.vfx_pipeline/GS-IR \
-    QT_QPA_PLATFORM=offscreen
+    QT_QPA_PLATFORM=offscreen \
+    HOST_UID=0 \
+    HOST_GID=0
 
 # Expose ports
 EXPOSE 8188

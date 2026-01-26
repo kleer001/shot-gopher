@@ -71,6 +71,11 @@ fi
 export VFX_MODELS_DIR="$MODELS_DIR"
 export VFX_PROJECTS_DIR="$PROJECTS_DIR"
 
+# Export host user UID/GID for correct file ownership in container
+export HOST_UID="$(id -u)"
+export HOST_GID="$(id -g)"
+echo -e "${GREEN}File ownership: UID=${HOST_UID} GID=${HOST_GID}${NC}"
+
 # Check if image exists
 if ! docker image inspect vfx-ingest:latest > /dev/null 2>&1; then
     echo -e "${YELLOW}Docker image not found. Building...${NC}"

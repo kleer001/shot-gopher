@@ -9,6 +9,42 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}=== VFX Ingest Platform (Container) ===${NC}"
 
+# Handle user switching for correct file ownership
+# If HOST_UID/HOST_GID are set and non-zero, create a matching user and run as them
+VFX_USER="vfxuser"
+VFX_HOME="/home/${VFX_USER}"
+
+setup_user() {
+    local uid="${HOST_UID:-0}"
+    local gid="${HOST_GID:-0}"
+
+    if [ "$uid" = "0" ] || [ "$gid" = "0" ]; then
+        echo -e "${YELLOW}Running as root (HOST_UID/HOST_GID not set)${NC}"
+        echo -e "${YELLOW}Files will be owned by root. Set HOST_UID and HOST_GID for correct ownership.${NC}"
+        return 1
+    fi
+
+    echo -e "${GREEN}Setting up user with UID:${uid} GID:${gid}${NC}"
+
+    if ! getent group "$gid" > /dev/null 2>&1; then
+        groupadd -g "$gid" vfxgroup
+    fi
+
+    if ! id -u "$VFX_USER" > /dev/null 2>&1; then
+        useradd -u "$uid" -g "$gid" -m -d "$VFX_HOME" -s /bin/bash "$VFX_USER"
+    fi
+
+    chown -R "$uid:$gid" "$VFX_HOME" 2>/dev/null || true
+    chown -R "$uid:$gid" /workspace 2>/dev/null || true
+
+    return 0
+}
+
+RUN_AS_USER=false
+if setup_user; then
+    RUN_AS_USER=true
+fi
+
 # Validate mounted volumes
 if [ ! -d "/models" ]; then
     echo -e "${RED}ERROR: /models volume not mounted${NC}"
@@ -113,8 +149,13 @@ fi
 if [ "$NEED_COMFYUI" = "true" ]; then
     echo -e "${GREEN}Starting ComfyUI...${NC}"
     cd /app/.vfx_pipeline/ComfyUI
-    python3 main.py --listen 0.0.0.0 --port 8188 \
-        --output-directory /workspace > /tmp/comfyui.log 2>&1 &
+    if [ "$RUN_AS_USER" = "true" ]; then
+        gosu "$VFX_USER" python3 main.py --listen 0.0.0.0 --port 8188 \
+            --output-directory /workspace > /tmp/comfyui.log 2>&1 &
+    else
+        python3 main.py --listen 0.0.0.0 --port 8188 \
+            --output-directory /workspace > /tmp/comfyui.log 2>&1 &
+    fi
     COMFYUI_PID=$!
 
     # Wait for ComfyUI to be ready
@@ -138,4 +179,9 @@ fi
 # Execute the main command
 echo -e "${GREEN}Running pipeline...${NC}"
 cd /app
-exec python3 /app/scripts/run_pipeline.py "$@"
+
+if [ "$RUN_AS_USER" = "true" ]; then
+    exec gosu "$VFX_USER" python3 /app/scripts/run_pipeline.py "$@"
+else
+    exec python3 /app/scripts/run_pipeline.py "$@"
+fi

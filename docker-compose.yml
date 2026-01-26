@@ -14,6 +14,9 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - VFX_MODELS_DIR=/models
       - VFX_PROJECTS_DIR=/workspace/projects
+      # Pass host UID/GID for correct file ownership
+      - HOST_UID=${HOST_UID:-0}
+      - HOST_GID=${HOST_GID:-0}
     volumes:
       # Model storage (read-only for safety)
       # Default: <repo>/.vfx_pipeline/models (set by run_docker.sh)
