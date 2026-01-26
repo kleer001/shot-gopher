@@ -187,11 +187,12 @@ def wait_for_comfyui(url: str, timeout: int = 120) -> bool:
     return False
 
 
-def copy_workflow_to_comfyui_input(project_name: str) -> bool:
-    """Copy the prepared workflow to ComfyUI's input directory for auto-loading.
+def copy_workflow_to_comfyui_output(project_name: str) -> bool:
+    """Copy the prepared workflow to ComfyUI's output directory for auto-loading.
 
     The workflow is copied as 'auto_load_workflow.json' which is automatically
-    loaded by the vfx_autoload extension when ComfyUI starts.
+    loaded by the vfx_autoload extension when ComfyUI starts. We use the output
+    directory because ComfyUI serves it via HTTP at /view?filename=...&type=output.
 
     Args:
         project_name: Name of the project directory
@@ -200,12 +201,12 @@ def copy_workflow_to_comfyui_input(project_name: str) -> bool:
         True if successful
     """
     container_workflow = f"/workspace/projects/{project_name}/workflows/{TEMPLATE_NAME}"
-    comfyui_input = "/app/.vfx_pipeline/ComfyUI/input"
+    comfyui_output = "/workspace"
 
     cmd = [
         "docker", "exec", CONTAINER_NAME,
         "bash", "-c",
-        f"mkdir -p {comfyui_input} && cp {container_workflow} {comfyui_input}/auto_load_workflow.json"
+        f"cp {container_workflow} {comfyui_output}/auto_load_workflow.json"
     ]
 
     try:
@@ -216,8 +217,9 @@ def copy_workflow_to_comfyui_input(project_name: str) -> bool:
             timeout=10
         )
         if result.returncode == 0:
-            print(f"Workflow will auto-load from: {comfyui_input}/auto_load_workflow.json")
+            print(f"Workflow copied to: {comfyui_output}/auto_load_workflow.json")
             return True
+        print(f"Failed to copy workflow: {result.stderr}", file=sys.stderr)
         return False
     except subprocess.TimeoutExpired:
         return False
@@ -377,8 +379,8 @@ def run_docker_mode(
             stop_docker_container()
             return 1
 
-        if not copy_workflow_to_comfyui_input(project_name):
-            print("Warning: Could not copy workflow to ComfyUI input dir", file=sys.stderr)
+        if not copy_workflow_to_comfyui_output(project_name):
+            print("Warning: Could not copy workflow to ComfyUI output dir", file=sys.stderr)
 
         print(f"\n{'='*60}")
         print("Ready for Interactive Segmentation")
@@ -397,7 +399,7 @@ USAGE:
 4. Masks will be saved to: {project_dir}/roto/custom/
 
 If the workflow doesn't load automatically:
-  Menu > Load > input/auto_load_workflow.json
+  Menu > Load > Look in output folder for auto_load_workflow.json
 """)
         webbrowser.open(url)
 
