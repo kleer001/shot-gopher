@@ -188,11 +188,11 @@ def wait_for_comfyui(url: str, timeout: int = 120) -> bool:
 
 
 def copy_workflow_to_comfyui_output(project_name: str) -> bool:
-    """Copy the prepared workflow to ComfyUI's output directory for auto-loading.
+    """Copy the prepared workflow to the auto-load extension directory.
 
-    The workflow is copied as 'auto_load_workflow.json' which is automatically
-    loaded by the vfx_autoload extension when ComfyUI starts. We use the output
-    directory because ComfyUI serves it via HTTP at /view?filename=...&type=output.
+    The workflow is copied as 'workflow.json' to the vfx_autoload extension
+    directory, where it can be served as a static file and fetched by the
+    auto-load JavaScript extension.
 
     Args:
         project_name: Name of the project directory
@@ -201,10 +201,12 @@ def copy_workflow_to_comfyui_output(project_name: str) -> bool:
         True if successful
     """
     container_workflow = f"/workspace/projects/{project_name}/workflows/{TEMPLATE_NAME}"
-    comfyui_output = "/workspace"
-    dest_file = f"{comfyui_output}/auto_load_workflow.json"
+    extension_dir = "/app/.vfx_pipeline/ComfyUI/web/extensions/vfx_autoload"
+    dest_file = f"{extension_dir}/workflow.json"
 
-    print(f"Copying workflow: {container_workflow} -> {dest_file}")
+    print(f"Copying workflow for auto-load:")
+    print(f"  From: {container_workflow}")
+    print(f"  To:   {dest_file}")
 
     check_source_cmd = [
         "docker", "exec", CONTAINER_NAME,
@@ -216,7 +218,7 @@ def copy_workflow_to_comfyui_output(project_name: str) -> bool:
         text=True,
         timeout=10
     )
-    print(f"  Source file path: {check_result.stdout.strip() or '(not found)'}")
+    print(f"  Source file contains path: {check_result.stdout.strip() or '(not found)'}")
 
     copy_cmd = [
         "docker", "exec", CONTAINER_NAME,
@@ -247,7 +249,7 @@ def copy_workflow_to_comfyui_output(project_name: str) -> bool:
             timeout=10
         )
         if verify_result.stdout.strip():
-            print(f"  Verified path in copied file: {verify_result.stdout.strip()}")
+            print(f"  Verified path in dest file: {verify_result.stdout.strip()}")
         else:
             print("  WARNING: Path not found in copied file!", file=sys.stderr)
 

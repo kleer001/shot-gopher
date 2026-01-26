@@ -29,8 +29,8 @@ services:
       # GS-IR patches (PyTorch 2.6 weights_only fix)
       - ./.vfx_pipeline/gsir-patches/baking.py:/app/.vfx_pipeline/GS-IR/baking.py:ro
       - ./.vfx_pipeline/gsir-patches/render.py:/app/.vfx_pipeline/GS-IR/render.py:ro
-      # Auto-load extension for interactive segmentation
-      - ./docker/vfx_autoload:/app/.vfx_pipeline/ComfyUI/web/extensions/vfx_autoload:ro
+      # Auto-load extension for interactive segmentation (rw so we can write workflow.json)
+      - ./docker/vfx_autoload:/app/.vfx_pipeline/ComfyUI/web/extensions/vfx_autoload
     ports:
       - "8188:8188"  # ComfyUI web interface
     stdin_open: true

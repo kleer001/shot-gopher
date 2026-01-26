@@ -5,7 +5,7 @@ A simple ComfyUI frontend extension that automatically loads a workflow when the
 ## Features
 
 - **URL parameter support**: Load any workflow via `?workflow=my_workflow.json`
-- **Default location fallback**: Automatically loads `auto_load_workflow.json` from output directory
+- **Default location fallback**: Automatically loads `workflow.json` from extension directory
 - **No browser caching**: Works reliably with Docker, tunnels, and changing URLs
 - **Minimal footprint**: Single file, ~70 lines, no dependencies
 
@@ -21,7 +21,7 @@ Or with Docker, mount it as a volume:
 
 ```yaml
 volumes:
-  - ./vfx_autoload:/path/to/ComfyUI/web/extensions/vfx_autoload:ro
+  - ./vfx_autoload:/path/to/ComfyUI/web/extensions/vfx_autoload
 ```
 
 ## Usage
@@ -34,14 +34,14 @@ Open ComfyUI with a workflow filename in the URL:
 http://localhost:8188/?workflow=my_workflow.json
 ```
 
-The workflow file must be in ComfyUI's **output directory** (it's fetched via ComfyUI's `/view` endpoint).
+The workflow file must be in the extension's directory (served as a static file).
 
 ### Method 2: Default Location
 
-Place your workflow in ComfyUI's output directory with the default name:
+Place your workflow in the extension directory with the default name:
 
 ```bash
-cp my_workflow.json /path/to/ComfyUI/output/auto_load_workflow.json
+cp my_workflow.json /path/to/ComfyUI/web/extensions/vfx_autoload/workflow.json
 ```
 
 The URL parameter takes precedence if both are present.
@@ -57,30 +57,30 @@ Existing solutions like ComfyUI-Custom-Scripts use browser localStorage, which:
 
 This extension solves these issues by:
 - Using URL parameters (stateless, shareable)
-- Fetching from ComfyUI's output directory via `/view` endpoint
+- Fetching from extension's static directory (served by ComfyUI)
 - Requiring zero browser-side configuration
 
 ## How It Works
 
-The extension uses ComfyUI's built-in `/view` endpoint which serves files from the output directory:
+The extension fetches the workflow from its own static directory:
 
 ```
-/view?filename=auto_load_workflow.json&type=output&format=json
+/extensions/vfx_autoload/workflow.json
 ```
 
-This is the same endpoint used to view generated images, so it's guaranteed to work.
+ComfyUI serves the `web/extensions/` directory as static files, so any JSON file placed there is accessible via HTTP.
 
 ## Integration Example
 
-Launch ComfyUI and open a specific workflow:
+Launch ComfyUI and auto-load a specific workflow:
 
 ```python
 import shutil
 import webbrowser
 import subprocess
 
-# Copy workflow to output directory
-shutil.copy("my_workflow.json", "/path/to/ComfyUI/output/auto_load_workflow.json")
+# Copy workflow to extension directory
+shutil.copy("my_workflow.json", "/path/to/ComfyUI/web/extensions/vfx_autoload/workflow.json")
 
 # Start ComfyUI
 subprocess.Popen(["python", "main.py", "--listen", "0.0.0.0"])
@@ -89,10 +89,16 @@ subprocess.Popen(["python", "main.py", "--listen", "0.0.0.0"])
 webbrowser.open("http://localhost:8188/")
 ```
 
-Or with URL parameter:
+## Browser Console
 
-```python
-webbrowser.open("http://localhost:8188/?workflow=my_workflow.json")
+When loading, you should see these messages in the browser console (F12):
+
+```
+[AutoLoad] Extension initializing, waiting 1500ms...
+[AutoLoad] Attempting to load workflow from default location: workflow.json
+[AutoLoad] Fetching from: /extensions/vfx_autoload/workflow.json
+[AutoLoad] Workflow fetched, loading into graph...
+[AutoLoad] Workflow loaded successfully from default location
 ```
 
 ## License

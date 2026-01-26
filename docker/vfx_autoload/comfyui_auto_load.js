@@ -4,11 +4,11 @@
  * Automatically loads a workflow when ComfyUI starts.
  *
  * Usage:
- *   1. URL parameter: http://localhost:8188/?workflow=auto_load_workflow.json
- *   2. Default: looks for auto_load_workflow.json in output directory
+ *   1. URL parameter: http://localhost:8188/?workflow=workflow.json
+ *   2. Default: looks for workflow.json in this extension's directory
  *
  * The URL parameter takes precedence over the default location.
- * Workflow files must be in ComfyUI's output directory to be fetchable.
+ * Workflow files are fetched from the extension's static directory.
  *
  * Installation:
  *   Copy this folder to: ComfyUI/web/extensions/comfyui_autoload/
@@ -20,7 +20,8 @@
 import { app } from "../../scripts/app.js";
 
 const EXTENSION_NAME = "comfyui.autoload";
-const DEFAULT_WORKFLOW_FILE = "auto_load_workflow.json";
+const EXTENSION_PATH = "/extensions/vfx_autoload";
+const DEFAULT_WORKFLOW_FILE = "workflow.json";
 const STARTUP_DELAY_MS = 1500;
 
 function getWorkflowPathFromURL() {
@@ -29,7 +30,8 @@ function getWorkflowPathFromURL() {
 }
 
 async function fetchWorkflow(filename) {
-    const url = `/view?filename=${encodeURIComponent(filename)}&type=output&format=json`;
+    const url = `${EXTENSION_PATH}/${filename}`;
+    console.log(`[AutoLoad] Fetching from: ${url}`);
     const response = await fetch(url);
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -41,6 +43,7 @@ async function loadWorkflowFromFile(filename, source) {
     try {
         console.log(`[AutoLoad] Attempting to load workflow from ${source}: ${filename}`);
         const workflow = await fetchWorkflow(filename);
+        console.log(`[AutoLoad] Workflow fetched, loading into graph...`);
         await app.loadGraphData(workflow);
         console.log(`[AutoLoad] Workflow loaded successfully from ${source}`);
         return true;
@@ -54,6 +57,7 @@ app.registerExtension({
     name: EXTENSION_NAME,
 
     async setup() {
+        console.log(`[AutoLoad] Extension initializing, waiting ${STARTUP_DELAY_MS}ms...`);
         await new Promise(resolve => setTimeout(resolve, STARTUP_DELAY_MS));
 
         const urlPath = getWorkflowPathFromURL();
