@@ -202,25 +202,56 @@ def copy_workflow_to_comfyui_output(project_name: str) -> bool:
     """
     container_workflow = f"/workspace/projects/{project_name}/workflows/{TEMPLATE_NAME}"
     comfyui_output = "/workspace"
+    dest_file = f"{comfyui_output}/auto_load_workflow.json"
 
-    cmd = [
+    print(f"Copying workflow: {container_workflow} -> {dest_file}")
+
+    check_source_cmd = [
         "docker", "exec", CONTAINER_NAME,
-        "bash", "-c",
-        f"cp {container_workflow} {comfyui_output}/auto_load_workflow.json"
+        "grep", "-o", "source/frames[^\"]*", container_workflow
+    ]
+    check_result = subprocess.run(
+        check_source_cmd,
+        capture_output=True,
+        text=True,
+        timeout=10
+    )
+    print(f"  Source file path: {check_result.stdout.strip() or '(not found)'}")
+
+    copy_cmd = [
+        "docker", "exec", CONTAINER_NAME,
+        "cp", container_workflow, dest_file
     ]
 
     try:
         result = subprocess.run(
-            cmd,
+            copy_cmd,
             capture_output=True,
             text=True,
             timeout=10
         )
-        if result.returncode == 0:
-            print(f"Workflow copied to: {comfyui_output}/auto_load_workflow.json")
-            return True
-        print(f"Failed to copy workflow: {result.stderr}", file=sys.stderr)
-        return False
+        if result.returncode != 0:
+            print(f"Failed to copy workflow: {result.stderr}", file=sys.stderr)
+            return False
+
+        print(f"  Copy successful")
+
+        verify_cmd = [
+            "docker", "exec", CONTAINER_NAME,
+            "grep", "-o", "source/frames[^\"]*", dest_file
+        ]
+        verify_result = subprocess.run(
+            verify_cmd,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if verify_result.stdout.strip():
+            print(f"  Verified path in copied file: {verify_result.stdout.strip()}")
+        else:
+            print("  WARNING: Path not found in copied file!", file=sys.stderr)
+
+        return True
     except subprocess.TimeoutExpired:
         return False
 
