@@ -161,6 +161,19 @@ fi
 if [ "$NEED_COMFYUI" = "true" ]; then
     echo -e "${GREEN}Starting ComfyUI...${NC}"
     cd /app/.vfx_pipeline/ComfyUI
+
+    # In interactive mode, run ComfyUI in foreground (never returns)
+    if [ "$INTERACTIVE_MODE" = "true" ]; then
+        echo -e "${GREEN}ComfyUI starting on port 8188 (interactive mode)${NC}"
+        echo -e "${YELLOW}Press Ctrl+C to stop${NC}"
+        if [ "$RUN_AS_USER" = "true" ]; then
+            exec gosu "$VFX_USER" python3 main.py --listen 0.0.0.0 --port 8188 --output-directory /workspace
+        else
+            exec python3 main.py --listen 0.0.0.0 --port 8188 --output-directory /workspace
+        fi
+    fi
+
+    # For pipeline mode, run ComfyUI in background
     if [ "$RUN_AS_USER" = "true" ]; then
         gosu "$VFX_USER" python3 main.py --listen 0.0.0.0 --port 8188 \
             --output-directory /workspace > /tmp/comfyui.log 2>&1 &
@@ -168,17 +181,6 @@ if [ "$NEED_COMFYUI" = "true" ]; then
         python3 main.py --listen 0.0.0.0 --port 8188 \
             --output-directory /workspace > /tmp/comfyui.log 2>&1 &
     fi
-
-    # In interactive mode, run ComfyUI in foreground
-    if [ "$INTERACTIVE_MODE" = "true" ]; then
-        echo -e "${GREEN}ComfyUI starting on port 8188 (interactive mode)${NC}"
-        echo -e "${YELLOW}Press Ctrl+C to stop${NC}"
-        exec python3 main.py --listen 0.0.0.0 --port 8188 --output-directory /workspace
-    fi
-
-    # For pipeline mode, run ComfyUI in background
-    python3 main.py --listen 0.0.0.0 --port 8188 \
-        --output-directory /workspace > /tmp/comfyui.log 2>&1 &
     COMFYUI_PID=$!
 
     # Wait for ComfyUI to be ready
@@ -199,16 +201,15 @@ else
     echo -e "${YELLOW}Skipping ComfyUI (not needed for requested stages)${NC}"
 fi
 
-# Execute the main command
+# Execute the main command (pipeline mode only - interactive mode already exec'd above)
 echo -e "${GREEN}Running pipeline...${NC}"
 cd /app
 
 if [ "$RUN_AS_USER" = "true" ]; then
-    exec gosu "$VFX_USER" python3 /app/scripts/run_pipeline.py "$@"
+    gosu "$VFX_USER" python3 /app/scripts/run_pipeline.py "$@"
 else
-    exec python3 /app/scripts/run_pipeline.py "$@"
+    python3 /app/scripts/run_pipeline.py "$@"
 fi
-python3 /app/scripts/run_pipeline.py "$@"
 EXIT_CODE=$?
 
 # Fix ownership of output files if HOST_UID/HOST_GID are set
