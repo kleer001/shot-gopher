@@ -49,7 +49,7 @@
       "inputs": [{"name": "image", "type": "IMAGE", "link": 1}],
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5]}],
       "properties": {"Node name for S&R": "ImageScale"},
-      "widgets_values": ["lanczos", 1280, 720, "disabled"],
+      "widgets_values": ["lanczos", 1280, 720, "disabled", "disabled"],
       "title": "📐 Downscale to 720p"
     },
     {
@@ -63,7 +63,7 @@
       "inputs": [{"name": "image", "type": "IMAGE", "link": 2}],
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [6]}],
       "properties": {"Node name for S&R": "ImageScale"},
-      "widgets_values": ["lanczos", 1280, 720, "disabled"],
+      "widgets_values": ["lanczos", 1280, 720, "disabled", "disabled"],
       "title": "📐 Downscale Mask to 720p"
     },
     {
@@ -112,7 +112,7 @@
       "inputs": [{"name": "image", "type": "IMAGE", "link": 4}],
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [8]}],
       "properties": {"Node name for S&R": "ImageScale"},
-      "widgets_values": ["lanczos", 1920, 1080, "disabled"],
+      "widgets_values": ["lanczos", 1920, 1080, "disabled", "disabled"],
       "title": "📐 Upscale to 1080p"
     },
     {
