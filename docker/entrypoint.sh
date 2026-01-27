@@ -159,4 +159,13 @@ fi
 # Execute the main command
 echo -e "${GREEN}Running pipeline...${NC}"
 cd /app
-exec python3 /app/scripts/run_pipeline.py "$@"
+python3 /app/scripts/run_pipeline.py "$@"
+EXIT_CODE=$?
+
+# Fix ownership of output files if HOST_UID/HOST_GID are set
+if [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
+    echo -e "${YELLOW}Fixing file permissions for host user...${NC}"
+    chown -R "$HOST_UID:$HOST_GID" /workspace/projects 2>/dev/null || true
+fi
+
+exit $EXIT_CODE
