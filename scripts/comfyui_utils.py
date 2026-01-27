@@ -161,7 +161,7 @@ def convert_workflow_to_api_format(
             "ImageScale": ["upscale_method", "width", "height", "crop"],
             "SaveImage": ["filename_prefix"],
             "PreviewImage": [],
-            "VHS_LoadImagesPath": ["directory", "image_load_cap", "skip_first_images", "select_every_nth", "meta_batch"],
+            "VHS_LoadImagesPath": ["directory", "image_load_cap", "skip_first_images", "select_every_nth"],
             "LoadVideoDepthAnythingModel": ["model"],
             "VideoDepthAnythingProcess": ["input_size", "max_res", "precision"],
             "VideoDepthAnythingOutput": ["colormap"],
@@ -217,17 +217,25 @@ def convert_workflow_to_api_format(
             # Only map to widgets that don't have connections
             non_connected_widgets = [n for n in widget_names if n not in connected_input_names]
 
+            # Inputs that are optional connections (not widgets) - skip "Disabled" for these
+            connection_type_inputs = {"meta_batch", "model", "vae", "clip", "control_net"}
+
             for i, value in enumerate(widget_values):
                 if i >= len(non_connected_widgets):
                     break
 
-                # Skip None/null values - these consume a widget slot but shouldn't be passed
-                # Note: "disabled" is a valid value for some widgets (e.g., ImageScale crop)
-                # so we only skip explicit None values
+                # Skip None/null values
                 if value is None:
                     continue
 
-                inputs[non_connected_widgets[i]] = value
+                widget_name = non_connected_widgets[i]
+
+                # Skip "Disabled" placeholder for connection-type inputs
+                # These are optional connections that show "Disabled" when unconnected
+                if widget_name in connection_type_inputs and value == "Disabled":
+                    continue
+
+                inputs[widget_name] = value
 
         api_workflow[node_id] = {
             "class_type": node_type,
