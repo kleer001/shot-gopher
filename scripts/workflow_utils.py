@@ -188,7 +188,11 @@ def update_cleanplate_resolution(
     if max_processing_height is None:
         max_processing_height = int(os.environ.get("CLEANPLATE_MAX_HEIGHT", "540"))
 
-    frames = sorted(source_frames_dir.glob("frame_*.png"))
+    frames = sorted(source_frames_dir.glob("*.png"))
+    if not frames:
+        frames = sorted(source_frames_dir.glob("*.jpg"))
+    if not frames:
+        frames = sorted(source_frames_dir.glob("*.exr"))
     if not frames:
         print("  → Warning: No source frames found, using default resolution")
         return

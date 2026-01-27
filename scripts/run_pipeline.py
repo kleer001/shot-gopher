@@ -452,7 +452,7 @@ def run_pipeline(
         print("\n=== Stage: ingest ===")
         if not input_path:
             print("  → Skipping (no input file, existing project)")
-        elif skip_existing and list(source_frames.glob("frame_*.png")):
+        elif skip_existing and list(source_frames.glob("*.png")):
             print("  → Skipping (frames exist)")
         else:
             frame_count = extract_frames(input_path, source_frames, START_FRAME, fps)
@@ -466,11 +466,11 @@ def run_pipeline(
                 shutil.copy2(input_path, source_preview)
                 print(f"  → Copied source to {source_preview.name}")
 
-    total_frames = len(list(source_frames.glob("frame_*.png")))
+    total_frames = len(list(source_frames.glob("*.png")))
 
     if total_frames > 0:
         project_metadata["frame_count"] = total_frames
-        first_frame = sorted(source_frames.glob("frame_*.png"))[0]
+        first_frame = sorted(source_frames.glob("*.png"))[0]
         from PIL import Image
         with Image.open(first_frame) as img:
             project_metadata["width"] = img.width

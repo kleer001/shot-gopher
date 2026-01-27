@@ -269,7 +269,7 @@ def extract_frames(
         print(f"    Error during extraction: {stderr_output}", file=sys.stderr)
         raise subprocess.CalledProcessError(process.returncode, cmd)
 
-    frames = list(output_dir.glob("frame_*.png"))
+    frames = list(output_dir.glob("*.png"))
     return len(frames)
 
 
