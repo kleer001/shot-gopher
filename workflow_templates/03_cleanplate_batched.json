@@ -67,10 +67,16 @@
       "flags": {},
       "order": 3,
       "mode": 0,
-      "inputs": [{"name": "image", "type": "IMAGE", "link": 1}],
+      "inputs": [
+        {"name": "image", "type": "IMAGE", "link": 1},
+        {"name": "upscale_method", "type": "COMBO", "link": null, "widget": {"name": "upscale_method"}},
+        {"name": "width", "type": "INT", "link": null, "widget": {"name": "width"}},
+        {"name": "height", "type": "INT", "link": null, "widget": {"name": "height"}},
+        {"name": "crop", "type": "COMBO", "link": null, "widget": {"name": "crop"}}
+      ],
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5]}],
       "properties": {"Node name for S&R": "ImageScale"},
-      "widgets_values": ["lanczos", 1920, 1080, "disabled", "disabled"],
+      "widgets_values": ["lanczos", 1920, 1080, "disabled"],
       "title": "📐 Scale Source to 1080p"
     },
     {
@@ -81,10 +87,16 @@
       "flags": {},
       "order": 4,
       "mode": 0,
-      "inputs": [{"name": "image", "type": "IMAGE", "link": 2}],
+      "inputs": [
+        {"name": "image", "type": "IMAGE", "link": 2},
+        {"name": "upscale_method", "type": "COMBO", "link": null, "widget": {"name": "upscale_method"}},
+        {"name": "width", "type": "INT", "link": null, "widget": {"name": "width"}},
+        {"name": "height", "type": "INT", "link": null, "widget": {"name": "height"}},
+        {"name": "crop", "type": "COMBO", "link": null, "widget": {"name": "crop"}}
+      ],
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [6]}],
       "properties": {"Node name for S&R": "ImageScale"},
-      "widgets_values": ["lanczos", 1920, 1080, "disabled", "disabled"],
+      "widgets_values": ["lanczos", 1920, 1080, "disabled"],
       "title": "📐 Scale Mask to 1080p"
     },
     {
@@ -130,11 +142,17 @@
       "flags": {},
       "order": 7,
       "mode": 0,
-      "inputs": [{"name": "image", "type": "IMAGE", "link": 4}],
+      "inputs": [
+        {"name": "image", "type": "IMAGE", "link": 4},
+        {"name": "upscale_method", "type": "COMBO", "link": null, "widget": {"name": "upscale_method"}},
+        {"name": "width", "type": "INT", "link": null, "widget": {"name": "width"}},
+        {"name": "height", "type": "INT", "link": null, "widget": {"name": "height"}},
+        {"name": "crop", "type": "COMBO", "link": null, "widget": {"name": "crop"}}
+      ],
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [8]}],
       "properties": {"Node name for S&R": "ImageScale"},
-      "widgets_values": ["lanczos", 1920, 1080, "disabled", "disabled"],
-      "title": "📐 Upscale to 1080p"
+      "widgets_values": ["lanczos", 1920, 1080, "disabled"],
+      "title": "📐 Output to 1080p"
     },
     {
       "id": 5,
@@ -176,9 +194,9 @@
   "groups": [
     {"title": "⚡ BATCH CONTROL", "bounding": [80, 180, 320, 120], "color": "#9e9e3e"},
     {"title": "📥 INPUT (batched)", "bounding": [80, 320, 380, 560], "color": "#3f789e"},
-    {"title": "📐 SCALE DOWN", "bounding": [480, 320, 320, 450], "color": "#5e8f9e"},
+    {"title": "📐 SCALE", "bounding": [480, 320, 320, 450], "color": "#5e8f9e"},
     {"title": "🎨 INPAINT", "bounding": [830, 320, 420, 420], "color": "#9e3e5f"},
-    {"title": "📐 SCALE UP", "bounding": [1280, 320, 320, 200], "color": "#5e9e8f"},
+    {"title": "📐 OUTPUT SCALE", "bounding": [1280, 320, 320, 200], "color": "#5e9e8f"},
     {"title": "💾 OUTPUT", "bounding": [1630, 320, 360, 340], "color": "#3e9e5f"}
   ],
   "config": {},
