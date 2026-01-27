@@ -84,8 +84,8 @@
       "inputs": [{"name": "image", "type": "IMAGE", "link": 4}],
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5]}],
       "properties": {"Node name for S&R": "ImageScale"},
-      "widgets_values": ["lanczos", 3840, 2160, "disabled"],
-      "title": "📐 Scale to 4K (adjust if needed)"
+      "widgets_values": ["lanczos", 1920, 1080, "disabled"],
+      "title": "📐 Scale to 1080p"
     },
     {
       "id": 5,
@@ -109,7 +109,7 @@
       "order": 6,
       "mode": 0,
       "properties": {"text": ""},
-      "widgets_values": ["📋 CLEANPLATE WORKFLOW\n\nInput: source/frames + roto masks → Output: cleanplate/\nProPainter processes at 1080p internally, then ImageScale upscales to output resolution.\n⚠️ Adjust 'Scale to 4K' node dimensions to match your source resolution!"],
+      "widgets_values": ["📋 CLEANPLATE WORKFLOW\n\nInput: source/frames + roto masks → Output: cleanplate/\nProPainter processes at 1080p internally, ImageScale outputs at 1080p."],
       "title": "📋 Instructions"
     }
   ],
