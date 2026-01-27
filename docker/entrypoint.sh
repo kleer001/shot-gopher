@@ -202,6 +202,12 @@ else
 fi
 
 # Execute the main command (pipeline mode only - interactive mode already exec'd above)
+if [ "$INTERACTIVE_MODE" = "true" ]; then
+    echo -e "${RED}ERROR: Interactive mode should have exec'd into ComfyUI${NC}"
+    echo "This indicates ComfyUI failed to start. Check the logs above."
+    exit 1
+fi
+
 echo -e "${GREEN}Running pipeline...${NC}"
 cd /app
 

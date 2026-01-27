@@ -136,8 +136,14 @@ def start_docker_container(
             timeout=60
         )
         if result.returncode != 0:
-            print(f"Error starting container: {result.stderr}", file=sys.stderr)
+            print(f"Error starting container:", file=sys.stderr)
+            if result.stdout:
+                print(f"  stdout: {result.stdout}", file=sys.stderr)
+            if result.stderr:
+                print(f"  stderr: {result.stderr}", file=sys.stderr)
             return False
+        if result.stdout:
+            print(f"  Container ID: {result.stdout.strip()[:12]}")
         return True
     except subprocess.TimeoutExpired:
         print("Timeout starting container", file=sys.stderr)
