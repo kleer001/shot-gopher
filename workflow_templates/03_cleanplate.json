@@ -112,8 +112,8 @@
         {"name": "MASK_DILATE", "type": "MASK", "links": null}
       ],
       "properties": {"Node name for S&R": "ProPainterInpaint"},
-      "widgets_values": [1280, 720, 5, 8, 10, 10, 80, 20, "enable"],
-      "title": "🎨 ProPainter Inpaint (720p internal)"
+      "widgets_values": [1280, 720, 5, 8, 10, 2, 80, 5, "enable"],
+      "title": "🎨 ProPainter Inpaint (720p, low VRAM)"
     },
     {
       "id": 10,
