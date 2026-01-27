@@ -43,6 +43,8 @@ setup_user() {
 RUN_AS_USER=false
 if setup_user; then
     RUN_AS_USER=true
+fi
+
 # Check for interactive mode (just run ComfyUI, no pipeline)
 INTERACTIVE_MODE=false
 if [[ "$1" == "interactive" || "$1" == "comfyui" ]]; then
