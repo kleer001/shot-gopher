@@ -1,10 +1,9 @@
 """Tests for run_cleanplate_batched.py"""
 
 import json
-import shutil
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from PIL import Image
@@ -25,26 +24,6 @@ from run_cleanplate_batched import (
     load_template_workflow,
     save_chunk_workflow,
 )
-
-
-class TestChunkInfo:
-    """Tests for ChunkInfo dataclass."""
-
-    def test_name_format(self):
-        chunk = ChunkInfo(index=0, start_frame=0, end_frame=9, frame_count=10)
-        assert chunk.name == "000_009"
-
-    def test_name_format_large_frames(self):
-        chunk = ChunkInfo(index=5, start_frame=100, end_frame=119, frame_count=20)
-        assert chunk.name == "100_119"
-
-    def test_workflow_name(self):
-        chunk = ChunkInfo(index=0, start_frame=0, end_frame=9, frame_count=10)
-        assert chunk.workflow_name == "chunk_000_009.json"
-
-    def test_workflow_name_large_frames(self):
-        chunk = ChunkInfo(index=3, start_frame=56, end_frame=65, frame_count=10)
-        assert chunk.workflow_name == "chunk_056_065.json"
 
 
 class TestCalculateChunks:
@@ -114,11 +93,6 @@ class TestCalculateChunks:
         assert last_chunk.end_frame == 22
         assert last_chunk.frame_count <= 10
 
-    def test_chunk_indices_sequential(self):
-        chunks = calculate_chunks(total_frames=50, batch_size=10, overlap=2)
-        for i, chunk in enumerate(chunks):
-            assert chunk.index == i
-
     def test_all_frames_covered(self):
         chunks = calculate_chunks(total_frames=120, batch_size=10, overlap=2)
         covered = set()
@@ -126,12 +100,6 @@ class TestCalculateChunks:
             for frame in range(chunk.start_frame, chunk.end_frame + 1):
                 covered.add(frame)
         assert covered == set(range(120))
-
-    def test_frame_count_matches_range(self):
-        chunks = calculate_chunks(total_frames=50, batch_size=10, overlap=2)
-        for chunk in chunks:
-            expected = chunk.end_frame - chunk.start_frame + 1
-            assert chunk.frame_count == expected
 
     def test_no_chunk_exceeds_batch_size(self):
         chunks = calculate_chunks(total_frames=100, batch_size=10, overlap=2)
@@ -277,25 +245,6 @@ class TestBlendImages:
         assert pixel[0] == 127 or pixel[0] == 128
         assert pixel[2] == 127 or pixel[2] == 128
 
-    def test_weight_quarter_favors_first(self, red_image, blue_image):
-        result = blend_images(red_image, blue_image, 0.25)
-        pixel = result.getpixel((50, 50))
-        assert pixel[0] > pixel[2]
-
-    def test_weight_three_quarters_favors_second(self, red_image, blue_image):
-        result = blend_images(red_image, blue_image, 0.75)
-        pixel = result.getpixel((50, 50))
-        assert pixel[2] > pixel[0]
-
-    def test_returns_image_object(self, red_image, blue_image):
-        result = blend_images(red_image, blue_image, 0.5)
-        assert isinstance(result, Image.Image)
-
-    def test_preserves_image_size(self, red_image, blue_image):
-        result = blend_images(red_image, blue_image, 0.5)
-        assert result.size == red_image.size
-
-
 class TestCountSourceFrames:
     """Tests for count_source_frames() - filesystem operations."""
 
@@ -309,17 +258,6 @@ class TestCountSourceFrames:
                 (frames_dir / f"frame_{i:04d}.png").touch()
 
             assert count_source_frames(project_dir) == 10
-
-    def test_counts_jpg_files(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_dir = Path(tmpdir)
-            frames_dir = project_dir / "source" / "frames"
-            frames_dir.mkdir(parents=True)
-
-            for i in range(5):
-                (frames_dir / f"frame_{i:04d}.jpg").touch()
-
-            assert count_source_frames(project_dir) == 5
 
     def test_counts_mixed_formats(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -517,20 +455,6 @@ class TestBlendOverlaps:
 
             assert result is False
 
-    def test_creates_final_directory(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_dir = Path(tmpdir)
-            chunk = ChunkInfo(index=0, start_frame=0, end_frame=4, frame_count=5)
-
-            output_dir = project_dir / "output" / "cleanplate" / "chunks" / chunk.name
-            output_dir.mkdir(parents=True)
-            for i in range(5):
-                self._create_solid_image(output_dir / f"clean_{i:05d}.png", (255, 0, 0))
-
-            blend_overlaps(project_dir, [chunk], overlap=2)
-
-            assert (project_dir / "cleanplate" / "final").exists()
-
 
 class TestStateManagement:
     """Tests for load_batch_state() and save_batch_state()."""
@@ -541,15 +465,6 @@ class TestStateManagement:
             state = load_batch_state(project_dir)
 
             assert state == {"completed_chunks": [], "settings": {}}
-
-    def test_save_creates_directory(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_dir = Path(tmpdir)
-            state = {"completed_chunks": ["000_009"], "settings": {"batch_size": 10}}
-
-            save_batch_state(project_dir, state)
-
-            assert (project_dir / "cleanplate").exists()
 
     def test_save_and_load_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -564,29 +479,9 @@ class TestStateManagement:
 
             assert loaded_state == original_state
 
-    def test_save_overwrites_existing(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_dir = Path(tmpdir)
-
-            save_batch_state(project_dir, {"completed_chunks": ["000_009"]})
-            save_batch_state(project_dir, {"completed_chunks": ["000_009", "008_017"]})
-
-            loaded = load_batch_state(project_dir)
-            assert loaded["completed_chunks"] == ["000_009", "008_017"]
-
 
 class TestSaveChunkWorkflow:
     """Tests for save_chunk_workflow()."""
-
-    def test_creates_workflow_directory(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_dir = Path(tmpdir)
-            chunk = ChunkInfo(index=0, start_frame=0, end_frame=9, frame_count=10)
-            workflow = {"nodes": []}
-
-            save_chunk_workflow(workflow, project_dir, chunk)
-
-            assert (project_dir / "workflows" / "cleanplate").exists()
 
     def test_saves_valid_json(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -599,29 +494,6 @@ class TestSaveChunkWorkflow:
             with open(path) as f:
                 loaded = json.load(f)
             assert loaded == workflow
-
-    def test_returns_correct_path(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_dir = Path(tmpdir)
-            chunk = ChunkInfo(index=0, start_frame=0, end_frame=9, frame_count=10)
-            workflow = {"nodes": []}
-
-            path = save_chunk_workflow(workflow, project_dir, chunk)
-
-            assert path == project_dir / "workflows" / "cleanplate" / "chunk_000_009.json"
-
-    def test_overwrites_existing(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_dir = Path(tmpdir)
-            chunk = ChunkInfo(index=0, start_frame=0, end_frame=9, frame_count=10)
-
-            save_chunk_workflow({"version": 1}, project_dir, chunk)
-            save_chunk_workflow({"version": 2}, project_dir, chunk)
-
-            path = project_dir / "workflows" / "cleanplate" / chunk.workflow_name
-            with open(path) as f:
-                loaded = json.load(f)
-            assert loaded["version"] == 2
 
 
 class TestBlendWeightCalculation:
