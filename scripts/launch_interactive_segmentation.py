@@ -329,9 +329,14 @@ def get_container_logs(tail: int = 50) -> str:
         return ""
 
 
-def stop_docker_container() -> None:
-    """Stop and remove the Docker container."""
-    print("\nStopping Docker container...")
+def stop_docker_container(quiet: bool = False) -> None:
+    """Stop and remove the Docker container.
+
+    Args:
+        quiet: If True, don't print status messages
+    """
+    if not quiet:
+        print("\nStopping Docker container...")
     try:
         subprocess.run(
             ["docker", "stop", CONTAINER_NAME],
@@ -343,7 +348,8 @@ def stop_docker_container() -> None:
             capture_output=True,
             timeout=10
         )
-        print("Container stopped.")
+        if not quiet:
+            print("Container stopped.")
     except subprocess.TimeoutExpired:
         subprocess.run(["docker", "kill", CONTAINER_NAME], capture_output=True)
         subprocess.run(["docker", "rm", "-f", CONTAINER_NAME], capture_output=True)
@@ -409,6 +415,9 @@ def run_docker_mode(
     signal.signal(signal.SIGTERM, signal_handler)
 
     try:
+        # Clean up any existing container first (handles port conflicts)
+        stop_docker_container(quiet=True)
+
         if not start_docker_container(project_dir, models_dir):
             return 1
 
