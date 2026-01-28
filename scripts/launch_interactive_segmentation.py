@@ -537,21 +537,14 @@ def populate_workflow(workflow_data: dict, project_dir: Path) -> dict:
         if node_type == "VHS_LoadImagesPath":
             old_path = widgets[0]
             if isinstance(old_path, str) and "source/frames" in old_path:
-                # Use path relative to ComfyUI input dir (symlinked in entrypoint)
-                # This allows VHS to browse/preview files
-                new_path = f"projects/{project_dir.name}/source/frames"
+                new_path = f"/workspace/projects/{project_dir.name}/source/frames"
                 widgets[0] = new_path
                 print(f"    VHS_LoadImagesPath: '{old_path}' -> '{new_path}'")
 
         elif node_type == "SaveImage":
             old_prefix = widgets[0]
             if isinstance(old_prefix, str) and "roto/custom" in old_prefix:
-                full_path = project_dir / "roto" / "custom"
-                try:
-                    relative_path = full_path.relative_to(comfyui_output)
-                    new_prefix = str(relative_path / "mask")
-                except ValueError:
-                    new_prefix = str(full_path / "mask")
+                new_prefix = f"projects/{project_dir.name}/roto/custom/mask"
                 widgets[0] = new_prefix
                 print(f"    SaveImage: '{old_prefix}' -> '{new_prefix}'")
 
