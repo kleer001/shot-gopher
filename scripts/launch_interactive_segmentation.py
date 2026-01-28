@@ -367,6 +367,33 @@ def stop_docker_container(quiet: bool = False) -> None:
         subprocess.run(["docker", "rm", "-f", CONTAINER_NAME], capture_output=True)
 
 
+def cleanup_all_vfx_containers(quiet: bool = False) -> None:
+    """Stop and remove ALL vfx-ingest containers to free port 8188.
+
+    This handles cases where a batch processing container or other
+    vfx-ingest container is still running and blocking the port.
+
+    Args:
+        quiet: If True, don't print status messages
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "-aq", "--filter", "ancestor=vfx-ingest:latest"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        container_ids = result.stdout.strip().split()
+
+        if container_ids and container_ids[0]:
+            if not quiet:
+                print(f"  Cleaning up {len(container_ids)} existing vfx-ingest container(s)...")
+            for cid in container_ids:
+                subprocess.run(["docker", "rm", "-f", cid], capture_output=True, timeout=10)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+
 def run_docker_mode(
     project_dir: Path,
     models_dir: Path,
@@ -427,7 +454,8 @@ def run_docker_mode(
     signal.signal(signal.SIGTERM, signal_handler)
 
     try:
-        # Clean up any existing container first (handles port conflicts)
+        # Clean up any existing containers first (handles port conflicts)
+        cleanup_all_vfx_containers(quiet=True)
         stop_docker_container(quiet=True)
 
         if not start_docker_container(project_dir, models_dir):
