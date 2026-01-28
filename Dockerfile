@@ -240,6 +240,13 @@ WORKDIR /app
 # Stage 6: Pipeline scripts
 FROM comfyui AS pipeline
 
+# Create non-root user with UID/GID 1000 (common default on Linux)
+# This optimizes startup: if HOST_UID=1000, no runtime chown needed
+ARG VFX_UID=1000
+ARG VFX_GID=1000
+RUN groupadd -g ${VFX_GID} vfxgroup 2>/dev/null || true && \
+    useradd -m -u ${VFX_UID} -g ${VFX_GID} -s /bin/bash vfxuser 2>/dev/null || true
+
 # Copy pipeline scripts
 COPY scripts/ /app/scripts/
 COPY workflow_templates/ /app/workflow_templates/
@@ -253,6 +260,12 @@ ENV PYTHONPATH=/app/scripts:$PYTHONPATH
 # Copy entrypoint
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
+# Set ownership of application directories to UID 1000 at build time
+# This eliminates runtime chown when HOST_UID=1000 (common case)
+# Use numeric UID:GID for robustness (works even if user/group names differ)
+RUN chown -R ${VFX_UID}:${VFX_GID} /app/.vfx_pipeline && \
+    mkdir -p /home/vfxuser && chown -R ${VFX_UID}:${VFX_GID} /home/vfxuser
 
 # Mark as container environment
 # HOST_UID/HOST_GID: Set at runtime to match host user for correct file ownership

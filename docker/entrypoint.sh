@@ -13,6 +13,11 @@ echo -e "${GREEN}=== VFX Ingest Platform (Container) ===${NC}"
 VFX_PIPELINE_DIR="/app/.vfx_pipeline"
 COMFYUI_DIR="${VFX_PIPELINE_DIR}/ComfyUI"
 
+# Build-time UID/GID (set in Dockerfile, files already owned by this user)
+# If HOST_UID matches this, we skip the runtime chown (instant startup)
+BUILD_UID=1000
+BUILD_GID=1000
+
 # Handle user switching for correct file ownership
 # If HOST_UID/HOST_GID are set and non-zero, create a matching user and run as them
 VFX_USER="vfxuser"
@@ -30,21 +35,30 @@ setup_user() {
 
     echo -e "${GREEN}Setting up user with UID:${uid} GID:${gid}${NC}"
 
-    # Create group if it doesn't exist
-    if ! getent group "$gid" > /dev/null 2>&1; then
-        groupadd -g "$gid" vfxgroup 2>/dev/null || true
+    # Fast path: if UID matches build-time user, use it directly
+    if [ "$uid" = "$BUILD_UID" ] && [ "$gid" = "$BUILD_GID" ]; then
+        echo -e "${GREEN}Using build-time user vfxuser (UID matches)${NC}"
+        VFX_USER="vfxuser"
+        VFX_HOME="/home/vfxuser"
+        chown -R "$uid:$gid" /workspace 2>/dev/null || true
+        return 0
     fi
 
-    # Check if user already exists with this UID
+    # Slow path: need to create or find a user with matching UID
+    if ! getent group "$gid" > /dev/null 2>&1; then
+        groupadd -g "$gid" hostgroup 2>/dev/null || true
+    fi
+
     local existing_user=$(getent passwd "$uid" | cut -d: -f1)
     if [ -n "$existing_user" ]; then
-        # Use existing user
         VFX_USER="$existing_user"
         VFX_HOME=$(getent passwd "$uid" | cut -d: -f6)
         echo -e "${GREEN}Using existing user: ${VFX_USER}${NC}"
-    elif ! id -u "$VFX_USER" > /dev/null 2>&1; then
-        # Create new user with -o to allow non-unique UID if needed
+    else
+        VFX_USER="hostuser"
+        VFX_HOME="/home/hostuser"
         useradd -o -u "$uid" -g "$gid" -m -d "$VFX_HOME" -s /bin/bash "$VFX_USER" 2>/dev/null || true
+        echo -e "${GREEN}Created user: ${VFX_USER}${NC}"
     fi
 
     chown -R "$uid:$gid" "$VFX_HOME" 2>/dev/null || true
@@ -100,6 +114,17 @@ done
 if [ $MISSING_MODELS -eq 1 ]; then
     echo -e "${YELLOW}Some models are missing. Pipeline may fail on certain stages.${NC}"
     echo "Run model download script on host: ./scripts/download_models.sh"
+fi
+
+# Set permissions on VFX pipeline directory for non-root user
+# Do this BEFORE creating symlinks/directories so they inherit correct ownership
+if [ "$RUN_AS_USER" = "true" ] && [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
+    if [ "$HOST_UID" = "$BUILD_UID" ] && [ "$HOST_GID" = "$BUILD_GID" ]; then
+        echo -e "${GREEN}UID/GID matches build-time user (${BUILD_UID}:${BUILD_GID}) - skipping chown${NC}"
+    else
+        echo -e "${YELLOW}Adjusting permissions for UID:${HOST_UID} GID:${HOST_GID} (one-time operation)...${NC}"
+        chown -R "$HOST_UID:$HOST_GID" "$VFX_PIPELINE_DIR" 2>/dev/null || true
+    fi
 fi
 
 # Symlink models to locations expected by custom nodes
@@ -174,13 +199,6 @@ fi
 if [ "$NEED_COMFYUI" = "true" ]; then
     echo -e "${GREEN}Starting ComfyUI...${NC}"
     cd "$COMFYUI_DIR"
-
-    # Make entire VFX pipeline tree writable for the user (comprehensive fix)
-    # This eliminates permission issues from any node, tool, or operation
-    if [ "$RUN_AS_USER" = "true" ] && [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
-        echo -e "${YELLOW}Setting application directory permissions (one-time operation)...${NC}"
-        chown -R "$HOST_UID:$HOST_GID" "$VFX_PIPELINE_DIR" 2>/dev/null || true
-    fi
 
     # In interactive mode, run ComfyUI in foreground (never returns)
     if [ "$INTERACTIVE_MODE" = "true" ]; then
