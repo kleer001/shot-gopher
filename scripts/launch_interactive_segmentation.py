@@ -146,6 +146,10 @@ def start_docker_container(
         return True
     except subprocess.TimeoutExpired:
         print("Timeout starting container", file=sys.stderr)
+        logs = get_container_logs()
+        if logs:
+            print("Container logs:", file=sys.stderr)
+            print(logs, file=sys.stderr)
         return False
 
 

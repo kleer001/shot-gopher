@@ -163,6 +163,7 @@ if [ "$NEED_COMFYUI" = "true" ]; then
         echo -e "${GREEN}ComfyUI starting on port 8188 (interactive mode)${NC}"
         echo -e "${YELLOW}Press Ctrl+C to stop${NC}"
         if [ "$RUN_AS_USER" = "true" ]; then
+            export HOME=/tmp
             exec gosu "${HOST_UID}:${HOST_GID}" python3 main.py --listen 0.0.0.0 --port 8188 --output-directory /workspace
         else
             exec python3 main.py --listen 0.0.0.0 --port 8188 --output-directory /workspace
@@ -171,7 +172,7 @@ if [ "$NEED_COMFYUI" = "true" ]; then
 
     # For pipeline mode, run ComfyUI in background
     if [ "$RUN_AS_USER" = "true" ]; then
-        gosu "${HOST_UID}:${HOST_GID}" python3 main.py --listen 0.0.0.0 --port 8188 \
+        HOME=/tmp gosu "${HOST_UID}:${HOST_GID}" python3 main.py --listen 0.0.0.0 --port 8188 \
             --output-directory /workspace > /tmp/comfyui.log 2>&1 &
     else
         python3 main.py --listen 0.0.0.0 --port 8188 \
@@ -208,7 +209,7 @@ echo -e "${GREEN}Running pipeline...${NC}"
 cd /app
 
 if [ "$RUN_AS_USER" = "true" ]; then
-    gosu "${HOST_UID}:${HOST_GID}" python3 /app/scripts/run_pipeline.py "$@"
+    HOME=/tmp gosu "${HOST_UID}:${HOST_GID}" python3 /app/scripts/run_pipeline.py "$@"
 else
     python3 /app/scripts/run_pipeline.py "$@"
 fi
