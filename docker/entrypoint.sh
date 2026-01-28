@@ -171,6 +171,19 @@ if [ "$NEED_COMFYUI" = "true" ]; then
     echo -e "${GREEN}Starting ComfyUI...${NC}"
     cd /app/.vfx_pipeline/ComfyUI
 
+    # Make ComfyUI directories writable for the user
+    if [ "$RUN_AS_USER" = "true" ] && [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
+        echo -e "${YELLOW}Setting ComfyUI directory permissions...${NC}"
+        mkdir -p /app/.vfx_pipeline/ComfyUI/input \
+                 /app/.vfx_pipeline/ComfyUI/user \
+                 /app/.vfx_pipeline/ComfyUI/output \
+                 /app/.vfx_pipeline/ComfyUI/temp 2>/dev/null || true
+        chown -R "$HOST_UID:$HOST_GID" /app/.vfx_pipeline/ComfyUI/input \
+                                       /app/.vfx_pipeline/ComfyUI/user \
+                                       /app/.vfx_pipeline/ComfyUI/output \
+                                       /app/.vfx_pipeline/ComfyUI/temp 2>/dev/null || true
+    fi
+
     # In interactive mode, run ComfyUI in foreground (never returns)
     if [ "$INTERACTIVE_MODE" = "true" ]; then
         echo -e "${GREEN}ComfyUI starting on port 8188 (interactive mode)${NC}"
