@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Diagnostic script for VHS_LoadImagesPath issues.
 
-Run from host or inside container to diagnose why source frames aren't visible.
+Run from host or inside container to diagnose why source frames are not visible.
 
 Usage:
     python scripts/diagnose_vhs_paths.py <project_dir>
