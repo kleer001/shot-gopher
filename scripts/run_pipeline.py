@@ -621,7 +621,7 @@ def run_pipeline(
 
         refresh_workflow_from_template(workflow_path, "04_matanyone.json")
 
-        person_pattern = re.compile(r"^person_\d{2}$")
+        person_pattern = re.compile(r"^person(_\d{2})?$")
         person_dirs = []
         for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
             if not subdir.is_dir():
