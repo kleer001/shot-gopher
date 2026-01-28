@@ -402,7 +402,7 @@ def process_chunk(
     Returns:
         True if successful
     """
-    output_prefix = f"cleanplate/chunks/{chunk.name}/clean"
+    output_prefix = f"projects/{project_dir.name}/cleanplate/chunks/{chunk.name}/clean"
 
     workflow = generate_chunk_workflow(template, chunk, project_dir, output_prefix)
 
