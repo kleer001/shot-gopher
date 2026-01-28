@@ -18,58 +18,16 @@ COMFYUI_DIR="${VFX_PIPELINE_DIR}/ComfyUI"
 BUILD_UID=1000
 BUILD_GID=1000
 
-# Handle user switching for correct file ownership
-# If HOST_UID/HOST_GID are set and non-zero, create a matching user and run as them
-VFX_USER="vfxuser"
-VFX_HOME="/home/${VFX_USER}"
-
-setup_user() {
-    local uid="${HOST_UID:-0}"
-    local gid="${HOST_GID:-0}"
-
-    if [ "$uid" = "0" ] || [ "$gid" = "0" ]; then
-        echo -e "${YELLOW}Running as root (HOST_UID/HOST_GID not set)${NC}"
-        echo -e "${YELLOW}Files will be owned by root. Set HOST_UID and HOST_GID for correct ownership.${NC}"
-        return 1
-    fi
-
-    echo -e "${GREEN}Setting up user with UID:${uid} GID:${gid}${NC}"
-
-    # Fast path: if UID matches build-time user, use it directly
-    if [ "$uid" = "$BUILD_UID" ] && [ "$gid" = "$BUILD_GID" ]; then
-        echo -e "${GREEN}Using build-time user vfxuser (UID matches)${NC}"
-        VFX_USER="vfxuser"
-        VFX_HOME="/home/vfxuser"
-        chown -R "$uid:$gid" /workspace 2>/dev/null || true
-        return 0
-    fi
-
-    # Slow path: need to create or find a user with matching UID
-    if ! getent group "$gid" > /dev/null 2>&1; then
-        groupadd -g "$gid" hostgroup 2>/dev/null || true
-    fi
-
-    local existing_user=$(getent passwd "$uid" | cut -d: -f1)
-    if [ -n "$existing_user" ]; then
-        VFX_USER="$existing_user"
-        VFX_HOME=$(getent passwd "$uid" | cut -d: -f6)
-        echo -e "${GREEN}Using existing user: ${VFX_USER}${NC}"
-    else
-        VFX_USER="hostuser"
-        VFX_HOME="/home/hostuser"
-        useradd -o -u "$uid" -g "$gid" -m -d "$VFX_HOME" -s /bin/bash "$VFX_USER" 2>/dev/null || true
-        echo -e "${GREEN}Created user: ${VFX_USER}${NC}"
-    fi
-
-    chown -R "$uid:$gid" "$VFX_HOME" 2>/dev/null || true
-    chown -R "$uid:$gid" /workspace 2>/dev/null || true
-
-    return 0
-}
-
+# Determine if we should run as non-root user
+# gosu can run with just UID:GID - no named user needed
 RUN_AS_USER=false
-if setup_user; then
+if [ "${HOST_UID:-0}" != "0" ] && [ "${HOST_GID:-0}" != "0" ]; then
     RUN_AS_USER=true
+    echo -e "${GREEN}Will run as UID:${HOST_UID} GID:${HOST_GID}${NC}"
+    chown -R "$HOST_UID:$HOST_GID" /workspace 2>/dev/null || true
+else
+    echo -e "${YELLOW}Running as root (HOST_UID/HOST_GID not set)${NC}"
+    echo -e "${YELLOW}Files will be owned by root. Set HOST_UID and HOST_GID for correct ownership.${NC}"
 fi
 
 # Check for interactive mode (just run ComfyUI, no pipeline)
@@ -205,7 +163,7 @@ if [ "$NEED_COMFYUI" = "true" ]; then
         echo -e "${GREEN}ComfyUI starting on port 8188 (interactive mode)${NC}"
         echo -e "${YELLOW}Press Ctrl+C to stop${NC}"
         if [ "$RUN_AS_USER" = "true" ]; then
-            exec gosu "$VFX_USER" python3 main.py --listen 0.0.0.0 --port 8188 --output-directory /workspace
+            exec gosu "${HOST_UID}:${HOST_GID}" python3 main.py --listen 0.0.0.0 --port 8188 --output-directory /workspace
         else
             exec python3 main.py --listen 0.0.0.0 --port 8188 --output-directory /workspace
         fi
@@ -213,7 +171,7 @@ if [ "$NEED_COMFYUI" = "true" ]; then
 
     # For pipeline mode, run ComfyUI in background
     if [ "$RUN_AS_USER" = "true" ]; then
-        gosu "$VFX_USER" python3 main.py --listen 0.0.0.0 --port 8188 \
+        gosu "${HOST_UID}:${HOST_GID}" python3 main.py --listen 0.0.0.0 --port 8188 \
             --output-directory /workspace > /tmp/comfyui.log 2>&1 &
     else
         python3 main.py --listen 0.0.0.0 --port 8188 \
@@ -250,7 +208,7 @@ echo -e "${GREEN}Running pipeline...${NC}"
 cd /app
 
 if [ "$RUN_AS_USER" = "true" ]; then
-    gosu "$VFX_USER" python3 /app/scripts/run_pipeline.py "$@"
+    gosu "${HOST_UID}:${HOST_GID}" python3 /app/scripts/run_pipeline.py "$@"
 else
     python3 /app/scripts/run_pipeline.py "$@"
 fi
