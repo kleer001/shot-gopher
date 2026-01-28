@@ -30,11 +30,17 @@ else
     echo -e "${YELLOW}Files will be owned by root. Set HOST_UID and HOST_GID for correct ownership.${NC}"
 fi
 
-# Check for interactive mode (just run ComfyUI, no pipeline)
+# Check for special modes
 INTERACTIVE_MODE=false
+CLEANPLATE_BATCHED_MODE=false
+
 if [[ "$1" == "interactive" || "$1" == "comfyui" ]]; then
     INTERACTIVE_MODE=true
     echo -e "${YELLOW}Running in interactive mode (ComfyUI only)${NC}"
+elif [[ "$1" == "cleanplate-batched" ]]; then
+    CLEANPLATE_BATCHED_MODE=true
+    shift  # Remove mode argument, rest are script args
+    echo -e "${YELLOW}Running in cleanplate-batched mode${NC}"
 fi
 
 # Validate mounted volumes
@@ -137,8 +143,8 @@ fi
 COMFYUI_STAGES="depth|roto|matanyone|cleanplate"
 NEED_COMFYUI=false
 
-# Interactive mode always needs ComfyUI
-if [ "$INTERACTIVE_MODE" = "true" ]; then
+# Interactive and cleanplate-batched modes always need ComfyUI
+if [ "$INTERACTIVE_MODE" = "true" ] || [ "$CLEANPLATE_BATCHED_MODE" = "true" ]; then
     NEED_COMFYUI=true
 else
     # Parse command line for stages
@@ -211,13 +217,22 @@ if [ "$INTERACTIVE_MODE" = "true" ]; then
     exit 1
 fi
 
-echo -e "${GREEN}Running pipeline...${NC}"
 cd /app
 
-if [ "$RUN_AS_USER" = "true" ]; then
-    HOME=/tmp gosu "${HOST_UID}:${HOST_GID}" python3 /app/scripts/run_pipeline.py "$@"
+if [ "$CLEANPLATE_BATCHED_MODE" = "true" ]; then
+    echo -e "${GREEN}Running batched cleanplate...${NC}"
+    if [ "$RUN_AS_USER" = "true" ]; then
+        HOME=/tmp gosu "${HOST_UID}:${HOST_GID}" python3 /app/scripts/run_cleanplate_batched.py "$@"
+    else
+        python3 /app/scripts/run_cleanplate_batched.py "$@"
+    fi
 else
-    python3 /app/scripts/run_pipeline.py "$@"
+    echo -e "${GREEN}Running pipeline...${NC}"
+    if [ "$RUN_AS_USER" = "true" ]; then
+        HOME=/tmp gosu "${HOST_UID}:${HOST_GID}" python3 /app/scripts/run_pipeline.py "$@"
+    else
+        python3 /app/scripts/run_pipeline.py "$@"
+    fi
 fi
 EXIT_CODE=$?
 
