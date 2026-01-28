@@ -441,10 +441,10 @@ def prepare_comfyui_for_processing(
     Returns:
         True if ComfyUI is ready for processing
     """
-    print("\n[GPU Cleanup]")
-    kill_all_comfyui_processes()
-
     if auto_start:
+        print("\n[GPU Cleanup]")
+        kill_all_comfyui_processes()
+
         print("\n[ComfyUI] Starting ComfyUI...")
         if not ensure_comfyui(url=url):
             print("Error: Failed to start ComfyUI", file=sys.stderr)
