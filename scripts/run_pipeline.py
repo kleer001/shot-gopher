@@ -658,7 +658,7 @@ def run_pipeline(
                 out_dir.mkdir(parents=True, exist_ok=True)
 
                 update_matanyone_input(workflow_path, person_dir, out_dir, project_dir)
-                update_matanyone_resolution(workflow_path, source_frames_dir)
+                update_matanyone_resolution(workflow_path, source_frames)
                 if not run_comfyui_workflow(
                     workflow_path, comfyui_url,
                     output_dir=out_dir,
