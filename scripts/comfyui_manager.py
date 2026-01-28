@@ -101,6 +101,110 @@ def get_comfyui_path() -> Optional[Path]:
     return None
 
 
+def _get_docker_compose_cmd() -> Optional[list]:
+    """Get the docker compose command (plugin or standalone)."""
+    import shutil
+    try:
+        result = subprocess.run(
+            ["docker", "compose", "version"],
+            capture_output=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            return ["docker", "compose"]
+    except Exception:
+        pass
+
+    if shutil.which("docker-compose"):
+        return ["docker-compose"]
+
+    return None
+
+
+def _check_docker_available() -> bool:
+    """Check if Docker is available and vfx-ingest image exists."""
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", "vfx-ingest:latest"],
+            capture_output=True,
+            timeout=10
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _get_repo_root() -> Path:
+    """Get the repository root directory."""
+    return Path(__file__).parent.parent
+
+
+def start_comfyui_docker(url: str = DEFAULT_COMFYUI_URL, timeout: int = 90) -> bool:
+    """Start ComfyUI via Docker container.
+
+    Args:
+        url: Expected ComfyUI URL
+        timeout: Maximum seconds to wait for startup
+
+    Returns:
+        True if ComfyUI is running
+    """
+    if is_comfyui_running(url):
+        print("ComfyUI already running")
+        return True
+
+    compose_cmd = _get_docker_compose_cmd()
+    if not compose_cmd:
+        print("Docker Compose not available", file=sys.stderr)
+        return False
+
+    if not _check_docker_available():
+        print("Docker image vfx-ingest:latest not found", file=sys.stderr)
+        print("Build it first: docker compose build", file=sys.stderr)
+        return False
+
+    repo_root = _get_repo_root()
+    models_dir = repo_root / ".vfx_pipeline" / "models"
+    projects_dir = repo_root.parent / "vfx_projects"
+
+    env = os.environ.copy()
+    env["VFX_MODELS_DIR"] = str(models_dir)
+    env["VFX_PROJECTS_DIR"] = str(projects_dir)
+    env["HOST_UID"] = str(os.getuid()) if hasattr(os, 'getuid') else "0"
+    env["HOST_GID"] = str(os.getgid()) if hasattr(os, 'getgid') else "0"
+
+    print(f"Starting ComfyUI via Docker...")
+
+    try:
+        cmd = compose_cmd + ["run", "-d", "--rm", "--service-ports", "vfx-ingest", "interactive"]
+        subprocess.run(
+            cmd,
+            cwd=str(repo_root),
+            env=env,
+            check=True,
+            capture_output=True
+        )
+
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if is_comfyui_running(url):
+                print(f"ComfyUI (Docker) ready on {url}")
+                return True
+            time.sleep(2)
+
+        print(f"Timeout waiting for Docker ComfyUI ({timeout}s)", file=sys.stderr)
+        return False
+
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to start Docker ComfyUI: {e}", file=sys.stderr)
+        if e.stderr:
+            print(e.stderr.decode(), file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"Error starting Docker ComfyUI: {e}", file=sys.stderr)
+        return False
+
+
 def is_comfyui_running(url: str = DEFAULT_COMFYUI_URL) -> bool:
     """Check if ComfyUI is already running."""
     return check_comfyui_running(url)
@@ -241,10 +345,24 @@ def get_comfyui_status() -> dict:
 def ensure_comfyui(url: str = DEFAULT_COMFYUI_URL, timeout: int = 60) -> bool:
     """Ensure ComfyUI is running, starting it if necessary.
 
-    This is a convenience function for scripts that need ComfyUI.
+    Tries local installation first, falls back to Docker if local unavailable.
     Returns True if ComfyUI is available, False otherwise.
     """
-    return start_comfyui(url=url, timeout=timeout)
+    if is_comfyui_running(url):
+        print("ComfyUI already running")
+        return True
+
+    if get_comfyui_path():
+        return start_comfyui(url=url, timeout=timeout)
+
+    if _check_docker_available():
+        print("Local ComfyUI not found, trying Docker...")
+        return start_comfyui_docker(url=url, timeout=timeout)
+
+    print("No ComfyUI installation found (local or Docker)", file=sys.stderr)
+    print("Install via: python scripts/install_wizard.py", file=sys.stderr)
+    print("Or Docker:   python scripts/install_wizard.py --docker", file=sys.stderr)
+    return False
 
 
 def _find_comfyui_pids_unix() -> list:
