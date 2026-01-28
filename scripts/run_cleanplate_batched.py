@@ -147,6 +147,7 @@ def run_docker_mode(
 
     forward_args = []
     skip_next = False
+    project_arg_replaced = False
     for i, arg in enumerate(original_args[1:]):
         if skip_next:
             skip_next = False
@@ -158,12 +159,18 @@ def run_docker_mode(
             continue
         if arg.startswith("--models-dir="):
             continue
-        if arg == str(project_dir) or arg == str(project_dir.resolve()):
-            forward_args.append(container_project)
-        else:
-            forward_args.append(arg)
+        if not arg.startswith("-") and not project_arg_replaced:
+            try:
+                arg_resolved = Path(arg).resolve()
+                if arg_resolved == project_dir:
+                    forward_args.append(container_project)
+                    project_arg_replaced = True
+                    continue
+            except Exception:
+                pass
+        forward_args.append(arg)
 
-    if container_project not in forward_args:
+    if not project_arg_replaced:
         forward_args.insert(0, container_project)
 
     env = os.environ.copy()
