@@ -9,6 +9,10 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}=== VFX Ingest Platform (Container) ===${NC}"
 
+# Key paths (avoid hardcoding throughout script)
+VFX_PIPELINE_DIR="/app/.vfx_pipeline"
+COMFYUI_DIR="${VFX_PIPELINE_DIR}/ComfyUI"
+
 # Handle user switching for correct file ownership
 # If HOST_UID/HOST_GID are set and non-zero, create a matching user and run as them
 VFX_USER="vfxuser"
@@ -103,7 +107,7 @@ echo -e "${YELLOW}Linking models to custom node paths...${NC}"
 
 # MatAnyone expects checkpoint in its own directory
 MATANYONE_SRC="/models/matanyone/matanyone.pth"
-MATANYONE_DST="/app/.vfx_pipeline/ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint"
+MATANYONE_DST="${COMFYUI_DIR}/custom_nodes/ComfyUI-MatAnyone/checkpoint"
 if [ -f "$MATANYONE_SRC" ]; then
     mkdir -p "$MATANYONE_DST"
     if [ ! -e "$MATANYONE_DST/matanyone.pth" ]; then
@@ -118,7 +122,7 @@ fi
 
 # SAM3 expects model at ComfyUI root (downloads automatically if missing, but symlink avoids re-download)
 SAM3_SRC="/models/sam3/sam3.pt"
-SAM3_DST="/app/.vfx_pipeline/ComfyUI/sam3.pt"
+SAM3_DST="${COMFYUI_DIR}/sam3.pt"
 if [ -f "$SAM3_SRC" ]; then
     if [ ! -e "$SAM3_DST" ]; then
         ln -sf "$SAM3_SRC" "$SAM3_DST"
@@ -130,7 +134,7 @@ fi
 
 # SMPL-X models for mocap stage (manual download required)
 SMPLX_SRC="/models/smplx"
-SMPLX_DST="/app/.vfx_pipeline/smplx_models"
+SMPLX_DST="${VFX_PIPELINE_DIR}/smplx_models"
 if [ -d "$SMPLX_SRC" ]; then
     if [ ! -e "$SMPLX_DST" ]; then
         ln -sf "$SMPLX_SRC" "$SMPLX_DST"
@@ -169,19 +173,13 @@ fi
 # Start ComfyUI in background only if needed
 if [ "$NEED_COMFYUI" = "true" ]; then
     echo -e "${GREEN}Starting ComfyUI...${NC}"
-    cd /app/.vfx_pipeline/ComfyUI
+    cd "$COMFYUI_DIR"
 
-    # Make ComfyUI directories writable for the user
+    # Make entire VFX pipeline tree writable for the user (comprehensive fix)
+    # This eliminates permission issues from any node, tool, or operation
     if [ "$RUN_AS_USER" = "true" ] && [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
-        echo -e "${YELLOW}Setting ComfyUI directory permissions...${NC}"
-        mkdir -p /app/.vfx_pipeline/ComfyUI/input \
-                 /app/.vfx_pipeline/ComfyUI/user \
-                 /app/.vfx_pipeline/ComfyUI/output \
-                 /app/.vfx_pipeline/ComfyUI/temp 2>/dev/null || true
-        chown -R "$HOST_UID:$HOST_GID" /app/.vfx_pipeline/ComfyUI/input \
-                                       /app/.vfx_pipeline/ComfyUI/user \
-                                       /app/.vfx_pipeline/ComfyUI/output \
-                                       /app/.vfx_pipeline/ComfyUI/temp 2>/dev/null || true
+        echo -e "${YELLOW}Setting application directory permissions (one-time operation)...${NC}"
+        chown -R "$HOST_UID:$HOST_GID" "$VFX_PIPELINE_DIR" 2>/dev/null || true
     fi
 
     # In interactive mode, run ComfyUI in foreground (never returns)
