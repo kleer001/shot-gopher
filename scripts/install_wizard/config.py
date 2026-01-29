@@ -63,7 +63,7 @@ class ConfigurationGenerator:
 
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(config_file, 'w') as f:
+        with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(config, indent=2, fp=f)
 
         print_success(f"Configuration saved to {config_file}")
@@ -213,19 +213,19 @@ echo   python scripts\\run_mocap.py --help
 
         bash_script = self.generate_activation_script()
         bash_file = self.base_dir / "activate.sh"
-        with open(bash_file, 'w', newline='\n') as f:
+        with open(bash_file, 'w', newline='\n', encoding='utf-8') as f:
             f.write(bash_script)
         if not _is_windows():
             bash_file.chmod(0o755)
 
         ps1_script = self.generate_activation_script_powershell()
         ps1_file = self.base_dir / "activate.ps1"
-        with open(ps1_file, 'w', newline='\r\n') as f:
+        with open(ps1_file, 'w', newline='\r\n', encoding='utf-8') as f:
             f.write(ps1_script)
 
         bat_script = self.generate_activation_script_batch()
         bat_file = self.base_dir / "activate.bat"
-        with open(bat_file, 'w', newline='\r\n') as f:
+        with open(bat_file, 'w', newline='\r\n', encoding='utf-8') as f:
             f.write(bat_script)
 
         if _is_windows():
