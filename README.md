@@ -4,7 +4,7 @@
 
 ![License](https://img.shields.io/github/license/kleer001/shot-gopher)
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
-![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20WSL2-lightgrey)
+![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-lightgrey)
 ![GPU](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900?logo=nvidia)
 ![Tests](https://img.shields.io/github/actions/workflow/status/kleer001/shot-gopher/test.yml?label=tests)
 
