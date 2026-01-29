@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Export camera data to various formats for VFX applications.
 
-Converts camera data (from Depth Anything V3 or COLMAP) to formats
+Converts camera data (from Video Depth Anything or COLMAP) to formats
 importable by Houdini, Nuke, Maya, and Blender.
 
 Supported output formats:
@@ -12,7 +12,7 @@ Supported output formats:
   - After Effects .jsx (JavaScript script for camera import)
 
 Supports camera data from:
-  - Depth Anything V3 (monocular depth estimation with camera)
+  - Video Depth Anything (monocular depth estimation with camera)
   - COLMAP (Structure-from-Motion reconstruction)
 
 Usage:
@@ -829,8 +829,8 @@ def main():
         print("Error: No camera extrinsics found", file=sys.stderr)
         sys.exit(1)
 
-    source_name = "COLMAP (SfM)" if source == "colmap" else "Depth Anything V3"
-    camera_name = "colmap_camera" if source == "colmap" else "da3_camera"
+    source_name = "COLMAP (SfM)" if source == "colmap" else "Video Depth Anything"
+    camera_name = "colmap_camera" if source == "colmap" else "vda_camera"
     print(f"Loaded {len(extrinsics)} camera frames from {source_name}")
     print(f"  Coordinate system: OpenGL (Y-up, Z-back) for DCC compatibility")
 
