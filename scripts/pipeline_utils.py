@@ -44,7 +44,40 @@ __all__ = [
     "get_image_dimensions",
     "clear_gpu_memory",
     "clear_output_directory",
+    "get_gpu_vram_gb",
 ]
+
+
+def get_gpu_vram_gb() -> float | None:
+    """Detect GPU VRAM in gigabytes.
+
+    Tries PyTorch first, falls back to nvidia-smi.
+
+    Returns:
+        VRAM in GB, or None if no GPU detected.
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            vram_bytes = torch.cuda.get_device_properties(0).total_memory
+            return vram_bytes / (1024 ** 3)
+    except ImportError:
+        pass
+
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            vram_mb = int(result.stdout.strip().split("\n")[0])
+            return vram_mb / 1024
+    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+        pass
+
+    return None
 
 
 def clear_output_directory(output_dir: Path) -> int:

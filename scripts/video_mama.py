@@ -27,6 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from env_config import INSTALL_DIR
+from pipeline_utils import get_gpu_vram_gb
 
 VIDEOMAMA_ENV_NAME = "videomama"
 VIDEOMAMA_TOOLS_DIR = INSTALL_DIR / "tools" / "VideoMaMa"
@@ -87,6 +88,33 @@ def check_installation() -> bool:
         return False
 
     return True
+
+
+def get_optimal_chunk_size(vram_gb: float | None) -> int:
+    """Get optimal chunk size based on GPU VRAM.
+
+    VideoMaMa uses Stable Video Diffusion which has significant VRAM requirements.
+    These are conservative estimates based on 1024x576 processing resolution.
+
+    Args:
+        vram_gb: GPU VRAM in gigabytes, or None if unknown
+
+    Returns:
+        Recommended chunk size (number of frames per batch)
+    """
+    if vram_gb is None:
+        return 16
+
+    if vram_gb >= 24:
+        return 25
+    elif vram_gb >= 16:
+        return 16
+    elif vram_gb >= 12:
+        return 12
+    elif vram_gb >= 8:
+        return 8
+    else:
+        return 4
 
 
 def prepare_chunk_structure(
@@ -176,7 +204,7 @@ def collect_chunk_results(work_dir: Path) -> list[Path]:
 
 def process_project(
     project_dir: Path,
-    chunk_size: int = 16,
+    chunk_size: int | None = None,
     overlap: int = 2,
     width: int = 1024,
     height: int = 576,
@@ -185,7 +213,7 @@ def process_project(
 
     Args:
         project_dir: Project directory containing source/frames and roto/person
-        chunk_size: Number of frames per chunk for VideoMaMa
+        chunk_size: Number of frames per chunk (None = auto-detect from VRAM)
         overlap: Frame overlap between chunks for smoother transitions
         width: Processing width
         height: Processing height
@@ -195,6 +223,14 @@ def process_project(
     """
     print(f"\n=== VideoMaMa Processing ===")
     print(f"  Project: {project_dir}")
+
+    vram_gb = get_gpu_vram_gb()
+    if chunk_size is None:
+        chunk_size = get_optimal_chunk_size(vram_gb)
+        if vram_gb:
+            print_info(f"Detected GPU VRAM: {vram_gb:.1f}GB → chunk size: {chunk_size}")
+        else:
+            print_info(f"Could not detect VRAM, using default chunk size: {chunk_size}")
 
     source_frames = project_dir / "source" / "frames"
     mask_dir = project_dir / "roto" / "person"
@@ -316,8 +352,8 @@ def main() -> int:
     parser.add_argument(
         "--chunk-size",
         type=int,
-        default=16,
-        help="Frames per chunk (default: 16, limited by VRAM)"
+        default=None,
+        help="Frames per chunk (default: auto-detect from GPU VRAM)"
     )
     parser.add_argument(
         "--overlap",
