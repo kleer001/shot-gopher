@@ -1,8 +1,8 @@
 {
   "id": "00000000-0000-0000-0000-000000000004",
   "revision": 0,
-  "last_node_id": 6,
-  "last_link_id": 4,
+  "last_node_id": 9,
+  "last_link_id": 8,
   "nodes": [
     {
       "id": 1,
@@ -41,34 +41,82 @@
       "title": "Load Person Mask (First Frame)"
     },
     {
-      "id": 3,
-      "type": "MatAnyone",
-      "pos": [500, 300],
-      "size": [280, 140],
+      "id": 7,
+      "type": "ImageScale",
+      "pos": [480, 200],
+      "size": [280, 130],
       "flags": {},
       "order": 2,
       "mode": 0,
       "inputs": [
-        {"name": "src_video", "type": "IMAGE", "link": 1},
-        {"name": "foreground_mask", "type": "IMAGE", "link": 2},
+        {"name": "image", "type": "IMAGE", "link": 1}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5], "slot_index": 0}],
+      "properties": {"Node name for S&R": "ImageScale"},
+      "widgets_values": ["lanczos", 1280, 720, "disabled"],
+      "title": "Scale Source to 720p"
+    },
+    {
+      "id": 8,
+      "type": "ImageScale",
+      "pos": [480, 460],
+      "size": [280, 130],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "IMAGE", "link": 2}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [6], "slot_index": 0}],
+      "properties": {"Node name for S&R": "ImageScale"},
+      "widgets_values": ["lanczos", 1280, 720, "disabled"],
+      "title": "Scale Mask to 720p"
+    },
+    {
+      "id": 3,
+      "type": "MatAnyone",
+      "pos": [820, 300],
+      "size": [280, 140],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {"name": "src_video", "type": "IMAGE", "link": 5},
+        {"name": "foreground_mask", "type": "IMAGE", "link": 6},
         {"name": "foreground_MASK", "type": "MASK", "link": null},
         {"name": "solid_color", "type": "IMAGE", "link": null}
       ],
       "outputs": [
-        {"name": "matte", "type": "IMAGE", "links": [3, 4], "slot_index": 0},
+        {"name": "matte", "type": "IMAGE", "links": [7, 4], "slot_index": 0},
         {"name": "green_screen", "type": "IMAGE", "links": null, "slot_index": 1}
       ],
       "properties": {"Node name for S&R": "MatAnyone"},
       "widgets_values": [0, 10],
-      "title": "MatAnyone Video Matting"
+      "title": "MatAnyone Video Matting (720p)"
+    },
+    {
+      "id": 9,
+      "type": "ImageScale",
+      "pos": [1160, 200],
+      "size": [280, 130],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "IMAGE", "link": 7}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [3], "slot_index": 0}],
+      "properties": {"Node name for S&R": "ImageScale"},
+      "widgets_values": ["lanczos", 1920, 1080, "disabled"],
+      "title": "Scale Output to 1080p"
     },
     {
       "id": 4,
       "type": "SaveImage",
-      "pos": [880, 200],
+      "pos": [1500, 200],
       "size": [320, 280],
       "flags": {},
-      "order": 3,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {"name": "images", "type": "IMAGE", "link": 3}
@@ -81,40 +129,43 @@
     {
       "id": 5,
       "type": "PreviewImage",
-      "pos": [880, 520],
+      "pos": [1160, 520],
       "size": [320, 280],
       "flags": {},
-      "order": 4,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {"name": "images", "type": "IMAGE", "link": 4}
       ],
       "outputs": [],
       "properties": {},
-      "title": "Preview Matte"
+      "title": "Preview Matte (720p)"
     },
     {
       "id": 6,
       "type": "Note",
       "pos": [100, 50],
-      "size": [400, 100],
+      "size": [500, 100],
       "flags": {},
-      "order": 5,
+      "order": 8,
       "mode": 0,
       "inputs": [],
       "outputs": [],
       "properties": {"text": ""},
-      "widgets_values": ["MATANYONE VIDEO MATTING\n\nInput: source/frames + FIRST FRAME of person mask\nOutput: matte/ (refined alpha)\n\nMatAnyone only needs the first frame mask - it propagates throughout the video automatically."],
+      "widgets_values": ["MATANYONE VIDEO MATTING (Low VRAM Mode)\n\nProcesses at 720p to reduce VRAM usage (~56% less), outputs at 1080p.\nInput: source/frames + FIRST FRAME of person mask\nOutput: matte/ (refined alpha)"],
       "title": "Instructions",
       "color": "#233",
       "bgcolor": "#355"
     }
   ],
   "links": [
-    [1, 1, 0, 3, 0, "IMAGE"],
-    [2, 2, 0, 3, 1, "IMAGE"],
-    [3, 3, 0, 4, 0, "IMAGE"],
-    [4, 3, 0, 5, 0, "IMAGE"]
+    [1, 1, 0, 7, 0, "IMAGE"],
+    [2, 2, 0, 8, 0, "IMAGE"],
+    [3, 9, 0, 4, 0, "IMAGE"],
+    [4, 3, 0, 5, 0, "IMAGE"],
+    [5, 7, 0, 3, 0, "IMAGE"],
+    [6, 8, 0, 3, 1, "IMAGE"],
+    [7, 3, 0, 9, 0, "IMAGE"]
   ],
   "groups": [
     {
@@ -123,26 +174,31 @@
       "color": "#3f789e"
     },
     {
+      "title": "SCALE DOWN",
+      "bounding": [460, 180, 320, 440],
+      "color": "#7e5f9e"
+    },
+    {
       "title": "MATANYONE",
-      "bounding": [480, 280, 320, 180],
+      "bounding": [800, 280, 320, 180],
       "color": "#9e5f3e"
     },
     {
       "title": "OUTPUT",
-      "bounding": [860, 180, 380, 660],
+      "bounding": [1140, 180, 720, 660],
       "color": "#3e9e5f"
     }
   ],
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.8,
+      "scale": 0.6,
       "offset": [0, 0]
     },
     "info": {
       "name": "VFX Pipeline - MatAnyone Video Matting",
       "author": "VFX Pipeline",
-      "description": "Refines SAM3 person masks into clean alpha mattes with temporal consistency"
+      "description": "Refines SAM3 person masks into clean alpha mattes with temporal consistency (720p processing for low VRAM)"
     }
   },
   "version": 0.4

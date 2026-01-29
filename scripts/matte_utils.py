@@ -8,6 +8,7 @@ from pathlib import Path
 __all__ = [
     "combine_mattes",
     "combine_mask_sequences",
+    "prepare_roto_for_cleanplate",
 ]
 
 
@@ -121,3 +122,50 @@ def combine_mask_sequences(
             count += 1
 
     return count
+
+
+def prepare_roto_for_cleanplate(roto_dir: Path) -> tuple[bool, str]:
+    """Prepare roto masks for cleanplate processing.
+
+    Finds roto sequences and copies the appropriate one to roto root as mask_*.png.
+
+    Logic:
+    - If one sequence in roto/ → use it (regardless of name)
+    - If multiple sequences → prefer combined/ if exists, else OR them together
+
+    Args:
+        roto_dir: Path to roto directory
+
+    Returns:
+        Tuple of (success, message describing what was done)
+    """
+    import shutil
+
+    all_roto_dirs = []
+    if roto_dir.exists():
+        for subdir in sorted(roto_dir.iterdir()):
+            if subdir.is_dir() and list(subdir.glob("*.png")):
+                all_roto_dirs.append(subdir)
+
+    if not all_roto_dirs:
+        return False, "No roto sequences found"
+
+    for old_file in roto_dir.glob("*.png"):
+        old_file.unlink()
+
+    if len(all_roto_dirs) == 1:
+        source_dir = all_roto_dirs[0]
+        for i, mask_file in enumerate(sorted(source_dir.glob("*.png"))):
+            out_name = f"mask_{i+1:05d}.png"
+            shutil.copy2(mask_file, roto_dir / out_name)
+        return True, f"Using masks from {source_dir.name}/"
+
+    combined_dir = roto_dir / "combined"
+    if combined_dir in all_roto_dirs:
+        for i, mask_file in enumerate(sorted(combined_dir.glob("*.png"))):
+            out_name = f"mask_{i+1:05d}.png"
+            shutil.copy2(mask_file, roto_dir / out_name)
+        return True, "Using combined mattes from roto/combined/"
+
+    count = combine_mask_sequences(all_roto_dirs, roto_dir, prefix="mask")
+    return True, f"Consolidated {count} frames from {len(all_roto_dirs)} mask sources"

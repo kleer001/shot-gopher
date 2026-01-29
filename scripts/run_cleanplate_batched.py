@@ -10,37 +10,196 @@ Usage:
     python run_cleanplate_batched.py /path/to/project --batch-size 10 --overlap 2
     python run_cleanplate_batched.py /path/to/project --dry-run
     python run_cleanplate_batched.py /path/to/project --resume
+    python run_cleanplate_batched.py /path/to/project --docker  # Force Docker mode
 
 Requirements:
-    - ComfyUI running (via Docker or local)
+    - ComfyUI (via Docker container or local installation)
     - Source frames in project/source/frames/
     - Roto masks in project/roto/
 """
 
 import argparse
 import json
+import os
 import shutil
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from env_config import is_in_container
 from comfyui_utils import (
     DEFAULT_COMFYUI_URL,
-    check_comfyui_running,
     free_comfyui_memory,
     queue_workflow,
     wait_for_completion,
 )
+from comfyui_manager import prepare_comfyui_for_processing
 from workflow_utils import WORKFLOW_TEMPLATES_DIR
+from matte_utils import prepare_roto_for_cleanplate
 
 
+REPO_ROOT = Path(__file__).parent.parent
 TEMPLATE_FILE = "03_cleanplate_chunk_template.json"
+
+
+def check_docker_available() -> bool:
+    """Check if Docker is available and running."""
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=10
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def check_docker_image_exists() -> bool:
+    """Check if the vfx-ingest Docker image exists."""
+    try:
+        result = subprocess.run(
+            ["docker", "images", "-q", "vfx-ingest:latest"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        return bool(result.stdout.strip())
+    except Exception:
+        return False
+
+
+def detect_execution_mode() -> str:
+    """Detect whether to run in local or Docker mode.
+
+    Returns:
+        'container' if already in container
+        'docker' if Docker is available with the vfx-ingest image
+        'local' if local ComfyUI exists
+        'none' if no execution environment available
+    """
+    if is_in_container():
+        return "container"
+
+    if check_docker_available() and check_docker_image_exists():
+        return "docker"
+
+    comfyui_path = REPO_ROOT / ".vfx_pipeline" / "ComfyUI"
+    if comfyui_path.exists() and (comfyui_path / "main.py").exists():
+        return "local"
+
+    return "none"
+
+
+def run_docker_mode(
+    project_dir: Path,
+    projects_dir: Path,
+    models_dir: Path,
+    original_args: list[str],
+) -> int:
+    """Run batched cleanplate in Docker mode.
+
+    Args:
+        project_dir: Path to project directory
+        projects_dir: Directory containing projects
+        models_dir: Path to models directory
+        original_args: Original command line arguments
+
+    Returns:
+        Exit code
+    """
+    project_dir = project_dir.resolve()
+    projects_dir = projects_dir.resolve()
+    models_dir = models_dir.resolve()
+
+    print(f"\n{'='*60}")
+    print("Batched Cleanplate (Docker Mode)")
+    print(f"{'='*60}")
+    print(f"Project: {project_dir}")
+    print(f"Projects dir: {projects_dir}")
+    print(f"Models: {models_dir}")
+
+    if not project_dir.exists():
+        print(f"Error: Project directory not found: {project_dir}", file=sys.stderr)
+        return 1
+
+    if not models_dir.exists():
+        print(f"Error: Models directory not found: {models_dir}", file=sys.stderr)
+        return 1
+
+    if not check_docker_available():
+        print("Error: Docker is not available or not running", file=sys.stderr)
+        return 1
+
+    if not check_docker_image_exists():
+        print("Error: Docker image 'vfx-ingest:latest' not found", file=sys.stderr)
+        print("Build it first: docker compose build", file=sys.stderr)
+        return 1
+
+    container_project = f"/workspace/projects/{project_dir.name}"
+
+    forward_args = []
+    skip_next = False
+    project_arg_replaced = False
+    for i, arg in enumerate(original_args[1:]):
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in ("--docker", "-D", "--local", "-L"):
+            continue
+        if arg in ("--models-dir",) and i + 1 < len(original_args) - 1:
+            skip_next = True
+            continue
+        if arg.startswith("--models-dir="):
+            continue
+        if not arg.startswith("-") and not project_arg_replaced:
+            try:
+                arg_resolved = Path(arg).resolve()
+                if arg_resolved == project_dir:
+                    forward_args.append(container_project)
+                    project_arg_replaced = True
+                    continue
+            except Exception:
+                pass
+        forward_args.append(arg)
+
+    if not project_arg_replaced:
+        forward_args.insert(0, container_project)
+
+    env = os.environ.copy()
+    env["VFX_MODELS_DIR"] = str(models_dir)
+    env["VFX_PROJECTS_DIR"] = str(projects_dir)
+    env["HOST_UID"] = str(os.getuid()) if hasattr(os, 'getuid') else "0"
+    env["HOST_GID"] = str(os.getgid()) if hasattr(os, 'getgid') else "0"
+
+    docker_cmd = [
+        "docker", "compose", "run", "--rm",
+        "vfx-ingest",
+        "cleanplate-batched",
+    ] + forward_args
+
+    print(f"\nStarting Docker container...")
+    print(f"Running: docker compose run ... cleanplate-batched {' '.join(forward_args)}")
+
+    try:
+        result = subprocess.run(
+            docker_cmd,
+            cwd=str(REPO_ROOT),
+            env=env,
+        )
+        return result.returncode
+    except subprocess.CalledProcessError as e:
+        print(f"Error running Docker container: {e}", file=sys.stderr)
+        return 1
+
+
 STATE_FILENAME = "cleanplate_batch_state.json"
 
 
@@ -132,6 +291,7 @@ def load_template_workflow() -> dict:
 def generate_chunk_workflow(
     template: dict,
     chunk: ChunkInfo,
+    project_dir: Path,
     output_prefix: str
 ) -> dict:
     """Generate a workflow for a specific chunk.
@@ -139,6 +299,7 @@ def generate_chunk_workflow(
     Args:
         template: Base workflow template
         chunk: Chunk information
+        project_dir: Absolute path to project directory
         output_prefix: Output path prefix for SaveImage
 
     Returns:
@@ -146,11 +307,19 @@ def generate_chunk_workflow(
     """
     workflow = json.loads(json.dumps(template))
 
+    source_frames_dir = str(project_dir / "source" / "frames")
+    roto_dir = str(project_dir / "roto")
+
     for node in workflow.get("nodes", []):
         node_type = node.get("type", "")
         widgets = node.get("widgets_values", [])
+        title = node.get("title", "")
 
         if node_type == "VHS_LoadImagesPath" and widgets and len(widgets) >= 3:
+            if "Source" in title or widgets[0] == "source/frames":
+                widgets[0] = source_frames_dir
+            elif "Roto" in title or widgets[0] == "roto":
+                widgets[0] = roto_dir
             widgets[1] = chunk.frame_count
             widgets[2] = chunk.start_frame
 
@@ -233,9 +402,9 @@ def process_chunk(
     Returns:
         True if successful
     """
-    output_prefix = f"cleanplate/chunks/{chunk.name}/clean"
+    output_prefix = f"projects/{project_dir.name}/cleanplate/chunks/{chunk.name}/clean"
 
-    workflow = generate_chunk_workflow(template, chunk, output_prefix)
+    workflow = generate_chunk_workflow(template, chunk, project_dir, output_prefix)
 
     workflow_path = save_chunk_workflow(workflow, project_dir, chunk)
 
@@ -403,6 +572,7 @@ def run_batched_cleanplate(
     resume: bool = False,
     no_blend: bool = False,
     timeout: int = 1800,
+    auto_start_comfyui: bool = True,
 ) -> bool:
     """Run batched cleanplate processing.
 
@@ -415,10 +585,13 @@ def run_batched_cleanplate(
         resume: If True, skip completed chunks
         no_blend: If True, skip blending step
         timeout: Timeout per chunk in seconds
+        auto_start_comfyui: Auto-start ComfyUI if not running (default: True)
 
     Returns:
         True if successful
     """
+    start_time = time.time()
+
     print(f"\n{'='*60}")
     print("Batched Cleanplate Processing")
     print(f"{'='*60}")
@@ -437,6 +610,14 @@ def run_batched_cleanplate(
     print(f"Batch size: {batch_size}")
     print(f"Overlap: {overlap}")
 
+    roto_dir = project_dir / "roto"
+    roto_ready, roto_message = prepare_roto_for_cleanplate(roto_dir)
+    if not roto_ready:
+        print(f"\nError: {roto_message}", file=sys.stderr)
+        print("Run the 'roto' stage first to generate masks.", file=sys.stderr)
+        return False
+    print(f"Roto: {roto_message}")
+
     chunks = calculate_chunks(total_frames, batch_size, overlap)
     print(f"Chunks: {len(chunks)}")
 
@@ -448,9 +629,7 @@ def run_batched_cleanplate(
         print("\n[DRY RUN] Would process the above chunks")
         return True
 
-    if not check_comfyui_running(comfyui_url):
-        print(f"\nError: ComfyUI not running at {comfyui_url}", file=sys.stderr)
-        print("Start ComfyUI first (Docker or local)", file=sys.stderr)
+    if not prepare_comfyui_for_processing(url=comfyui_url, auto_start=auto_start_comfyui):
         return False
 
     template = load_template_workflow()
@@ -507,10 +686,15 @@ def run_batched_cleanplate(
         print("\nError: Blending failed", file=sys.stderr)
         return False
 
+    elapsed_seconds = int(time.time() - start_time)
+    elapsed_hours = elapsed_seconds // 3600
+    elapsed_minutes = (elapsed_seconds % 3600) // 60
+
     print(f"\n{'='*60}")
     print("✓ Batched cleanplate complete!")
     print(f"{'='*60}")
     print(f"\nOutput: {project_dir}/cleanplate/final/")
+    print(f"\nClean Plate Batch Time : {elapsed_hours:02d}:{elapsed_minutes:02d}")
 
     return True
 
@@ -563,11 +747,63 @@ def main():
         default=1800,
         help="Timeout per chunk in seconds (default: 1800)"
     )
+    parser.add_argument(
+        "--no-auto-comfyui",
+        action="store_true",
+        help="Don't auto-start ComfyUI (requires manual start)"
+    )
+    parser.add_argument(
+        "--docker", "-D",
+        action="store_true",
+        help="Force Docker mode"
+    )
+    parser.add_argument(
+        "--local", "-L",
+        action="store_true",
+        help="Force local mode (skip Docker)"
+    )
+    parser.add_argument(
+        "--models-dir",
+        type=Path,
+        default=None,
+        help="Models directory (Docker mode only)"
+    )
 
     args = parser.parse_args()
 
     if args.overlap >= args.batch_size:
         print(f"Error: Overlap ({args.overlap}) must be less than batch size ({args.batch_size})")
+        sys.exit(1)
+
+    if args.docker and args.local:
+        print("Error: Cannot specify both --docker and --local", file=sys.stderr)
+        sys.exit(1)
+
+    execution_mode = detect_execution_mode()
+
+    if args.docker:
+        execution_mode = "docker"
+    elif args.local:
+        execution_mode = "local"
+
+    if execution_mode == "docker":
+        project_dir = args.project_dir.resolve()
+        projects_dir = project_dir.parent
+        models_dir = args.models_dir or REPO_ROOT / ".vfx_pipeline" / "models"
+
+        exit_code = run_docker_mode(
+            project_dir=project_dir,
+            projects_dir=projects_dir,
+            models_dir=models_dir,
+            original_args=sys.argv,
+        )
+        sys.exit(exit_code)
+
+    if execution_mode == "none":
+        print("Error: No execution environment available", file=sys.stderr)
+        print("Options:", file=sys.stderr)
+        print("  1. Build Docker image: docker compose build", file=sys.stderr)
+        print("  2. Install local ComfyUI: ./scripts/install_comfyui.sh", file=sys.stderr)
         sys.exit(1)
 
     success = run_batched_cleanplate(
@@ -579,6 +815,7 @@ def main():
         resume=args.resume,
         no_blend=args.no_blend,
         timeout=args.timeout,
+        auto_start_comfyui=not args.no_auto_comfyui,
     )
 
     sys.exit(0 if success else 1)

@@ -31,7 +31,7 @@ from typing import Optional
 
 from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR, is_in_container, INSTALL_DIR
 from comfyui_utils import DEFAULT_COMFYUI_URL, run_comfyui_workflow
-from comfyui_manager import ensure_comfyui, stop_comfyui, kill_all_comfyui_processes
+from comfyui_manager import stop_comfyui, prepare_comfyui_for_processing
 
 from pipeline_constants import (
     START_FRAME,
@@ -46,11 +46,12 @@ from pipeline_utils import (
     get_video_info,
     generate_preview_movie,
 )
-from matte_utils import combine_mattes, combine_mask_sequences
+from matte_utils import combine_mattes, prepare_roto_for_cleanplate
 from workflow_utils import (
     refresh_workflow_from_template,
     update_segmentation_prompt,
     update_matanyone_input,
+    update_matanyone_resolution,
     update_cleanplate_resolution,
 )
 from stage_runners import (
@@ -334,6 +335,7 @@ def run_pipeline(
     mocap_method: str = "auto",
     auto_start_comfyui: bool = True,
     roto_prompt: Optional[str] = None,
+    roto_start_frame: Optional[int] = None,
     separate_instances: bool = False,
     auto_movie: bool = False,
     overwrite: bool = True,
@@ -358,6 +360,7 @@ def run_pipeline(
         mocap_method: Motion capture method - "auto", "gvhmr", or "wham"
         auto_start_comfyui: Auto-start ComfyUI if not running (default: True)
         roto_prompt: Segmentation prompt (default: 'person')
+        roto_start_frame: Frame to start segmentation from (enables bidirectional)
         separate_instances: Separate multi-person masks into individual instances
         auto_movie: Generate preview MP4s from completed image sequences
         overwrite: Clear existing output before running stages (default: True)
@@ -370,19 +373,11 @@ def run_pipeline(
     comfyui_stages = {"depth", "roto", "matanyone", "cleanplate"}
     needs_comfyui = bool(comfyui_stages & set(stages))
 
-    if needs_comfyui:
-        print("\n[GPU Cleanup]")
-        kill_all_comfyui_processes()
-        clear_gpu_memory(comfyui_url)
-
     comfyui_was_started = False
-    if needs_comfyui and auto_start_comfyui:
-        print("\n[ComfyUI] Starting ComfyUI...")
-        if not ensure_comfyui(url=comfyui_url):
-            print("Error: Failed to start ComfyUI", file=sys.stderr)
-            print("Install ComfyUI with the install wizard or start it manually", file=sys.stderr)
+    if needs_comfyui:
+        if not prepare_comfyui_for_processing(url=comfyui_url, auto_start=auto_start_comfyui):
             return False
-        comfyui_was_started = True
+        comfyui_was_started = auto_start_comfyui
 
     if not project_name:
         if input_path:
@@ -576,7 +571,10 @@ def run_pipeline(
 
                 if len(prompts) > 1:
                     print(f"\n  [{i+1}/{len(prompts)}] Segmenting: {prompt}")
-                update_segmentation_prompt(workflow_path, prompt, output_subdir, project_dir)
+                update_segmentation_prompt(
+                    workflow_path, prompt, output_subdir, project_dir,
+                    start_frame=roto_start_frame
+                )
                 if not run_comfyui_workflow(
                     workflow_path, comfyui_url,
                     output_dir=output_subdir,
@@ -624,7 +622,7 @@ def run_pipeline(
 
         refresh_workflow_from_template(workflow_path, "04_matanyone.json")
 
-        person_pattern = re.compile(r"^person_\d{2}$")
+        person_pattern = re.compile(r"^person(_\d{2})?$")
         person_dirs = []
         for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
             if not subdir.is_dir():
@@ -660,6 +658,7 @@ def run_pipeline(
                 out_dir.mkdir(parents=True, exist_ok=True)
 
                 update_matanyone_input(workflow_path, person_dir, out_dir, project_dir)
+                update_matanyone_resolution(workflow_path, source_frames)
                 if not run_comfyui_workflow(
                     workflow_path, comfyui_url,
                     output_dir=out_dir,
@@ -687,16 +686,10 @@ def run_pipeline(
         workflow_path = project_dir / "workflows" / "03_cleanplate.json"
         cleanplate_dir = project_dir / "cleanplate"
         roto_dir = project_dir / "roto"
-        combined_dir = roto_dir / "combined"
 
-        has_combined_mattes = combined_dir.exists() and list(combined_dir.glob("*.png"))
-        mask_dirs = []
-        for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
-            if subdir.is_dir() and subdir.name != "combined" and list(subdir.glob("*.png")):
-                mask_dirs.append(subdir)
-        has_any_roto = has_combined_mattes or mask_dirs
+        roto_ready, roto_message = prepare_roto_for_cleanplate(roto_dir)
 
-        if not has_any_roto:
+        if not roto_ready:
             print("")
             print("  " + "=" * 50)
             print("  !!!  NO ROTO DATA FOUND - SKIPPING CLEANPLATE  !!!")
@@ -714,23 +707,7 @@ def run_pipeline(
                 if overwrite:
                     clear_output_directory(cleanplate_dir)
 
-                for old_file in roto_dir.glob("*.png"):
-                    old_file.unlink()
-
-                if has_combined_mattes:
-                    print(f"  → Using combined MatAnyone mattes from roto/combined/")
-                    for i, mask_file in enumerate(sorted(combined_dir.glob("*.png"))):
-                        out_name = f"mask_{i+1:05d}.png"
-                        shutil.copy2(mask_file, roto_dir / out_name)
-                elif len(mask_dirs) > 1:
-                    count = combine_mask_sequences(mask_dirs, roto_dir, prefix="combined")
-                    print(f"  → Consolidated {count} frames from {len(mask_dirs)} mask sources")
-                elif len(mask_dirs) == 1:
-                    source_dir = mask_dirs[0]
-                    for i, mask_file in enumerate(sorted(source_dir.glob("*.png"))):
-                        out_name = f"mask_{i+1:05d}.png"
-                        shutil.copy2(mask_file, roto_dir / out_name)
-                    print(f"  → Using masks from {source_dir.name}/")
+                print(f"  → {roto_message}")
 
                 update_cleanplate_resolution(workflow_path, source_frames)
                 if not run_comfyui_workflow(
@@ -967,6 +944,12 @@ def main():
         help="Segmentation prompt for roto stage (default: 'person'). Example: 'person, ball, backpack'"
     )
     parser.add_argument(
+        "--start-frame",
+        type=int,
+        default=None,
+        help="Frame to start segmentation from (enables bidirectional propagation). Use when subject isn't visible on first frame."
+    )
+    parser.add_argument(
         "--separate-instances",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -1086,6 +1069,7 @@ def main():
             mocap_method=args.mocap_method,
             auto_start_comfyui=not args.no_auto_comfyui,
             roto_prompt=args.prompt,
+            roto_start_frame=args.start_frame,
             separate_instances=args.separate_instances,
             auto_movie=args.auto_movie,
             overwrite=not args.no_overwrite,
@@ -1109,6 +1093,7 @@ def main():
             mocap_method=args.mocap_method,
             auto_start_comfyui=not args.no_auto_comfyui,
             roto_prompt=args.prompt,
+            roto_start_frame=args.start_frame,
             separate_instances=args.separate_instances,
             auto_movie=args.auto_movie,
             overwrite=not args.no_overwrite,

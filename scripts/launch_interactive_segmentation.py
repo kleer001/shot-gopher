@@ -367,6 +367,33 @@ def stop_docker_container(quiet: bool = False) -> None:
         subprocess.run(["docker", "rm", "-f", CONTAINER_NAME], capture_output=True)
 
 
+def cleanup_all_vfx_containers(quiet: bool = False) -> None:
+    """Stop and remove ALL vfx-ingest containers to free port 8188.
+
+    This handles cases where a batch processing container or other
+    vfx-ingest container is still running and blocking the port.
+
+    Args:
+        quiet: If True, don't print status messages
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "-aq", "--filter", "ancestor=vfx-ingest:latest"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        container_ids = result.stdout.strip().split()
+
+        if container_ids and container_ids[0]:
+            if not quiet:
+                print(f"  Cleaning up {len(container_ids)} existing vfx-ingest container(s)...")
+            for cid in container_ids:
+                subprocess.run(["docker", "rm", "-f", cid], capture_output=True, timeout=10)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+
 def run_docker_mode(
     project_dir: Path,
     models_dir: Path,
@@ -427,7 +454,8 @@ def run_docker_mode(
     signal.signal(signal.SIGTERM, signal_handler)
 
     try:
-        # Clean up any existing container first (handles port conflicts)
+        # Clean up any existing containers first (handles port conflicts)
+        cleanup_all_vfx_containers(quiet=True)
         stop_docker_container(quiet=True)
 
         if not start_docker_container(project_dir, models_dir):
@@ -509,21 +537,14 @@ def populate_workflow(workflow_data: dict, project_dir: Path) -> dict:
         if node_type == "VHS_LoadImagesPath":
             old_path = widgets[0]
             if isinstance(old_path, str) and "source/frames" in old_path:
-                # Use path relative to ComfyUI input dir (symlinked in entrypoint)
-                # This allows VHS to browse/preview files
-                new_path = f"projects/{project_dir.name}/source/frames"
+                new_path = f"/workspace/projects/{project_dir.name}/source/frames"
                 widgets[0] = new_path
                 print(f"    VHS_LoadImagesPath: '{old_path}' -> '{new_path}'")
 
         elif node_type == "SaveImage":
             old_prefix = widgets[0]
             if isinstance(old_prefix, str) and "roto/custom" in old_prefix:
-                full_path = project_dir / "roto" / "custom"
-                try:
-                    relative_path = full_path.relative_to(comfyui_output)
-                    new_prefix = str(relative_path / "mask")
-                except ValueError:
-                    new_prefix = str(full_path / "mask")
+                new_prefix = f"projects/{project_dir.name}/roto/custom/mask"
                 widgets[0] = new_prefix
                 print(f"    SaveImage: '{old_prefix}' -> '{new_prefix}'")
 
