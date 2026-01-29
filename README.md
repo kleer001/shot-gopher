@@ -130,6 +130,8 @@ python scripts/install_wizard.py --docker  # Docker
 python scripts/install_wizard.py           # Conda
 ```
 
+For step-by-step installation without the wizard, see the [Manual Installation Guide](docs/manual-install.md).
+
 ## Running Your First Project
 
 After installation, you're ready to process your first video. The pipeline supports both Docker and Conda environments with similar workflows.
