@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -346,6 +347,8 @@ def main() -> int:
         print_status(status)
         return 0 if status["ready"] else 1
 
+    start_time = time.time()
+
     print_header("VideoMaMa Installation")
     print_info("This will install VideoMaMa for high-quality video matting")
     print_info(f"Installation directory: {INSTALL_DIR}")
@@ -373,8 +376,14 @@ def main() -> int:
     if not download_videomama_checkpoint(conda_exe):
         return 1
 
+    elapsed = time.time() - start_time
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
+
     print_header("Installation Complete")
     print_success("VideoMaMa is ready to use!")
+    print()
+    print_info(f"Total installation time: {minutes}m {seconds}s")
     print()
     print_info("Usage:")
     print("  python scripts/video_mama.py <project_dir>")
