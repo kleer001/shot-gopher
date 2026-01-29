@@ -209,15 +209,25 @@ def run_videomama_chunk(
     ]
 
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             cmd,
             cwd=VIDEOMAMA_TOOLS_DIR,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
+            bufsize=1,
         )
-        output = result.stdout + result.stderr
+
+        output_lines: list[str] = []
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            output_lines.append(line)
+
+        process.wait()
+        output = "".join(output_lines)
         was_oom = "CUDA out of memory" in output or "OutOfMemoryError" in output
-        if result.returncode != 0:
+
+        if process.returncode != 0:
             if was_oom:
                 print_warning("CUDA out of memory detected")
             return False, was_oom
