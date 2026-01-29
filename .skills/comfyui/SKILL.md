@@ -100,10 +100,10 @@ Parameters: `[path, skip_first, select_every_nth, batch_size, ...]`
 ```json
 {
   "type": "SAM3VideoSegmentation",
-  "widgets_values": ["text", "person", -1, 0.3]
+  "widgets_values": ["text", "person", 0, 0.3]
 }
 ```
-Parameters: `[mode, prompt, frame_idx, threshold]`
+Parameters: `[mode, prompt, frame_idx, threshold]` (frame_idx must be >= 0)
 
 ### Point-Prompt Segmentation
 ```json

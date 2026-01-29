@@ -119,7 +119,7 @@ Initialize video segmentation state.
 |--------|------|-------------|
 | mode | STRING | `"text"` or `"point"` |
 | text_prompt | STRING | Object description (text mode) |
-| frame_idx | INT | Reference frame (-1 = auto) |
+| frame_idx | INT | Reference frame (0 = first frame) |
 | threshold | FLOAT | Detection confidence (0.0-1.0, default: 0.3) |
 
 | Output | Type |
@@ -128,7 +128,7 @@ Initialize video segmentation state.
 
 **Text mode example:**
 ```json
-["text", "person", -1, 0.3]
+["text", "person", 0, 0.3]
 ```
 
 **Point mode example:**
