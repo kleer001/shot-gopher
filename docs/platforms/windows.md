@@ -83,6 +83,22 @@ ls .vfx_pipeline\tools\ -ErrorAction SilentlyContinue
 
 ### Common Issues
 
+#### "irm is not recognized" Error
+
+**Symptom:** Running the bootstrap command shows `'irm' is not recognized as an internal or external command`.
+
+**Cause:** You're running the command in Command Prompt (cmd.exe) instead of PowerShell. The `irm` (Invoke-RestMethod) and `iex` (Invoke-Expression) commands are PowerShell-only.
+
+**Solution:** Open PowerShell instead:
+- Press `Win+X` → select "Windows PowerShell" or "Terminal"
+- Or press `Win+R`, type `powershell`, press Enter
+- Then run the bootstrap command
+
+**Alternative for Command Prompt users:**
+```batch
+powershell -Command "irm https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.ps1 | iex"
+```
+
 #### Running from the Wrong Terminal
 
 **Symptom:** Scripts behave unexpectedly or console input doesn't work.
@@ -113,6 +129,7 @@ ls .vfx_pipeline\tools\ -ErrorAction SilentlyContinue
 
 | Error | Fix |
 |-------|-----|
+| "irm is not recognized" | Use PowerShell, not Command Prompt (see above) |
 | "running scripts is disabled" | `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
 | "system cannot find the path" (long paths) | Ask IT to enable long paths |
 | "CUDA out of memory" | Close other GPU apps, reduce batch size |
