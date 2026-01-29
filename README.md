@@ -87,8 +87,16 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/b
 
 ### Windows
 
-Native Windows unsupported. Use WSL2 + Docker:
+Native Windows and WSL2 both supported:
 
+**Option 1: Native Windows (Conda)**
+```powershell
+git clone https://github.com/kleer001/shot-gopher.git
+cd shot-gopher
+python scripts/install_wizard.py
+```
+
+**Option 2: WSL2 + Docker**
 1. Install WSL2: `wsl --install` or visit https://aka.ms/wsl
 2. Install Docker Desktop with WSL2 backend enabled
 3. Run from WSL2 terminal:
@@ -114,9 +122,9 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/b
 
 ---
 
-### After Cloning
+### Manual Clone
 
-If you've already cloned the repo, run the wizard directly:
+If you cloned manually instead of using the bootstrap scripts above:
 ```bash
 python scripts/install_wizard.py --docker  # Docker
 python scripts/install_wizard.py           # Conda
@@ -183,7 +191,7 @@ Output follows VFX production conventions:
 
 ## System Requirements
 
-**Platform:** Linux (tested on Ubuntu 20.04+), WSL2 on Windows
+**Platform:** Linux, macOS, Windows (native or WSL2)
 **Python:** 3.10 or newer (local install only)
 
 **For Docker installation:**
@@ -196,7 +204,7 @@ Output follows VFX production conventions:
 - NVIDIA GPU with CUDA support
 - Conda or Miniconda
 
-**Note:** macOS supports local Conda installation (CPU-only, no GPU acceleration). Native Windows is not supported—use WSL2 with Docker instead. See [Windows Guide](docs/platforms/windows.md) for details.
+**Note:** macOS supports local Conda installation (CPU-only, no GPU acceleration). Windows supports both native Conda installation and WSL2 with Docker. See [Windows Guide](docs/platforms/windows.md) for details.
 
 ## Installation Requirements
 
