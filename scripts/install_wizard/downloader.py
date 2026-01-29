@@ -303,8 +303,9 @@ Auto-downloads from Ultralytics releases.'''
                 return False
 
         except ImportError:
-            print_error("huggingface_hub not installed")
-            print_info("Install with: pip install huggingface_hub")
+            print_warning("huggingface_hub not installed, attempting to install...")
+            if self._install_huggingface_hub():
+                return self.download_from_huggingface(repo_id, dest_dir, target_filename, token)
             return False
         except Exception as e:
             print_error(f"Download failed: {e}")
@@ -483,6 +484,49 @@ Auto-downloads from Ultralytics releases.'''
         print("  2. Using pip with user flag: pip install --user gdown")
         print("  3. In a virtual environment: python -m venv venv && source venv/bin/activate && pip install gdown")
         return None
+
+    def _install_huggingface_hub(self) -> bool:
+        """Install huggingface_hub handling PEP 668 externally-managed environments.
+
+        Tries multiple installation methods in order:
+        1. pip with --user flag
+        2. pip with --break-system-packages (last resort)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        install_methods = [
+            {
+                'name': 'pip --user',
+                'cmd': [sys.executable, '-m', 'pip', 'install', '--user', 'huggingface_hub'],
+            },
+            {
+                'name': 'pip --break-system-packages',
+                'cmd': [sys.executable, '-m', 'pip', 'install', '--break-system-packages', 'huggingface_hub'],
+            },
+        ]
+
+        for method in install_methods:
+            print_info(f"Trying to install huggingface_hub via {method['name']}...")
+            result = subprocess.run(
+                method['cmd'],
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0:
+                print_success(f"Installed huggingface_hub via {method['name']}")
+                return True
+            else:
+                if 'externally-managed-environment' in result.stderr:
+                    continue
+                print_warning(f"Failed with {method['name']}: {result.stderr[:100]}")
+
+        print_error("Could not install huggingface_hub automatically.")
+        print_info("To install manually, try one of these options:")
+        print("  1. pip install --user huggingface_hub")
+        print("  2. In a virtual environment: python -m venv venv && source venv/bin/activate && pip install huggingface_hub")
+        return False
 
     def _create_gdown_cli_wrapper(self):
         """Create a wrapper object that mimics gdown module using CLI."""
