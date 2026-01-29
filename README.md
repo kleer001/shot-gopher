@@ -87,10 +87,13 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/b
 
 Native Windows and WSL2 both supported:
 
-**Option 1: Native Windows (Conda)** - One-liner bootstrap:
+**Option 1: Native Windows (Conda)** - One-liner bootstrap in **PowerShell** (not Command Prompt):
 ```powershell
 irm https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.ps1 | iex
 ```
+
+> **Getting "irm is not recognized"?** You're in Command Prompt. Open **PowerShell** instead:
+> Press `Win+X` → select "Windows PowerShell" or "Terminal", then run the command above.
 
 **Option 2: WSL2 + Docker**
 1. Install WSL2: `wsl --install` or visit https://aka.ms/wsl
