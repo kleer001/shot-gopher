@@ -208,29 +208,39 @@ def download_svd_model(conda_exe: str) -> bool:
     print()
 
     download_script = f"""
+import os
 import sys
+import time
+
+# Disable XET storage backend (causes CAS service errors)
+os.environ['HF_HUB_DISABLE_XET'] = '1'
+
 from huggingface_hub import snapshot_download
-from huggingface_hub.utils import tqdm as hf_tqdm
-
-class ProgressCallback:
-    def __init__(self):
-        self.current_file = None
-
-    def __call__(self, progress):
-        pass
 
 print("Starting download from HuggingFace...", flush=True)
-print("Files will appear as they complete:", flush=True)
+print("(XET disabled to avoid CAS service errors)", flush=True)
 print("-" * 50, flush=True)
 
-snapshot_download(
-    repo_id='{SVD_HF_REPO}',
-    local_dir='{SVD_MODEL_DIR}',
-    local_dir_use_symlinks=False,
-)
-
-print("-" * 50, flush=True)
-print("Download complete!", flush=True)
+max_retries = 3
+for attempt in range(max_retries):
+    try:
+        snapshot_download(
+            repo_id='{SVD_HF_REPO}',
+            local_dir='{SVD_MODEL_DIR}',
+            resume_download=True,
+        )
+        print("-" * 50, flush=True)
+        print("Download complete!", flush=True)
+        sys.exit(0)
+    except Exception as e:
+        print(f"Attempt {{attempt + 1}}/{{max_retries}} failed: {{e}}", flush=True)
+        if attempt < max_retries - 1:
+            wait_time = (attempt + 1) * 30
+            print(f"Retrying in {{wait_time}} seconds...", flush=True)
+            time.sleep(wait_time)
+        else:
+            print("All retry attempts failed.", flush=True)
+            sys.exit(1)
 """
 
     script_path = VIDEOMAMA_MODELS_DIR / "_download_svd.py"
@@ -265,20 +275,39 @@ def download_videomama_checkpoint(conda_exe: str) -> bool:
     print()
 
     download_script = f"""
+import os
 import sys
+import time
+
+# Disable XET storage backend (causes CAS service errors)
+os.environ['HF_HUB_DISABLE_XET'] = '1'
+
 from huggingface_hub import snapshot_download
 
 print("Starting download from HuggingFace...", flush=True)
+print("(XET disabled to avoid CAS service errors)", flush=True)
 print("-" * 50, flush=True)
 
-snapshot_download(
-    repo_id='{VIDEOMAMA_HF_REPO}',
-    local_dir='{checkpoint_path}',
-    local_dir_use_symlinks=False,
-)
-
-print("-" * 50, flush=True)
-print("Download complete!", flush=True)
+max_retries = 3
+for attempt in range(max_retries):
+    try:
+        snapshot_download(
+            repo_id='{VIDEOMAMA_HF_REPO}',
+            local_dir='{checkpoint_path}',
+            resume_download=True,
+        )
+        print("-" * 50, flush=True)
+        print("Download complete!", flush=True)
+        sys.exit(0)
+    except Exception as e:
+        print(f"Attempt {{attempt + 1}}/{{max_retries}} failed: {{e}}", flush=True)
+        if attempt < max_retries - 1:
+            wait_time = (attempt + 1) * 30
+            print(f"Retrying in {{wait_time}} seconds...", flush=True)
+            time.sleep(wait_time)
+        else:
+            print("All retry attempts failed.", flush=True)
+            sys.exit(1)
 """
 
     script_path = VIDEOMAMA_MODELS_DIR / "_download_checkpoint.py"
