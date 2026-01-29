@@ -1,5 +1,3 @@
-# ShotGopher
-
 ![ShotGopher Banner](https://i.imgur.com/VP9rmor.png)
 
 ![License](https://img.shields.io/github/license/kleer001/shot-gopher)
@@ -120,13 +118,7 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/b
 
 ---
 
-### Manual Clone
-
-If you cloned manually instead of using the bootstrap scripts above:
-```bash
-python scripts/install_wizard.py --docker  # Docker
-python scripts/install_wizard.py           # Conda
-```
+### Manual Installation
 
 For step-by-step installation without the wizard, see the [Manual Installation Guide](docs/manual-install.md).
 
