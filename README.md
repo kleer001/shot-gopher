@@ -1,5 +1,7 @@
 # ShotGopher
 
+![ShotGopher Banner](https://i.imgur.com/VP9rmor.png)
+
 ![License](https://img.shields.io/github/license/kleer001/shot-gopher)
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20WSL2-lightgrey)
