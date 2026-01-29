@@ -205,17 +205,32 @@ def download_svd_model(conda_exe: str) -> bool:
 
     print_info(f"Downloading Stable Video Diffusion model (~10GB)...")
     print_info("This may take a while depending on your connection...")
+    print()
 
     download_script = f"""
-import os
-os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '0'
+import sys
 from huggingface_hub import snapshot_download
+from huggingface_hub.utils import tqdm as hf_tqdm
+
+class ProgressCallback:
+    def __init__(self):
+        self.current_file = None
+
+    def __call__(self, progress):
+        pass
+
+print("Starting download from HuggingFace...", flush=True)
+print("Files will appear as they complete:", flush=True)
+print("-" * 50, flush=True)
+
 snapshot_download(
     repo_id='{SVD_HF_REPO}',
     local_dir='{SVD_MODEL_DIR}',
     local_dir_use_symlinks=False,
 )
-print('Download complete')
+
+print("-" * 50, flush=True)
+print("Download complete!", flush=True)
 """
 
     script_path = VIDEOMAMA_MODELS_DIR / "_download_svd.py"
@@ -223,8 +238,11 @@ print('Download complete')
     script_path.write_text(download_script)
 
     try:
-        success = run_in_env(conda_exe, ["python", str(script_path)])
+        full_cmd = [conda_exe, "run", "-n", VIDEOMAMA_ENV_NAME, "python", "-u", str(script_path)]
+        result = subprocess.run(full_cmd, check=False)
+        success = result.returncode == 0
         if success:
+            print()
             print_success("Downloaded SVD base model")
         else:
             print_error("Failed to download SVD base model")
@@ -244,25 +262,34 @@ def download_videomama_checkpoint(conda_exe: str) -> bool:
     VIDEOMAMA_CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 
     print_info("Downloading VideoMaMa checkpoint (~1.5GB)...")
+    print()
 
     download_script = f"""
-import os
-os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '0'
+import sys
 from huggingface_hub import snapshot_download
+
+print("Starting download from HuggingFace...", flush=True)
+print("-" * 50, flush=True)
+
 snapshot_download(
     repo_id='{VIDEOMAMA_HF_REPO}',
     local_dir='{checkpoint_path}',
     local_dir_use_symlinks=False,
 )
-print('Download complete')
+
+print("-" * 50, flush=True)
+print("Download complete!", flush=True)
 """
 
     script_path = VIDEOMAMA_MODELS_DIR / "_download_checkpoint.py"
     script_path.write_text(download_script)
 
     try:
-        success = run_in_env(conda_exe, ["python", str(script_path)])
+        full_cmd = [conda_exe, "run", "-n", VIDEOMAMA_ENV_NAME, "python", "-u", str(script_path)]
+        result = subprocess.run(full_cmd, check=False)
+        success = result.returncode == 0
         if success:
+            print()
             print_success("Downloaded VideoMaMa checkpoint")
         else:
             print_error("Failed to download VideoMaMa checkpoint")
