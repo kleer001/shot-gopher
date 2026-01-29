@@ -31,6 +31,14 @@ from pathlib import Path
 
 import numpy as np
 
+from transforms import (
+    compute_fov_from_intrinsics,
+    convert_opencv_to_opengl,
+    decompose_matrix,
+    matrix_to_alembic_xform,
+    rotation_matrix_to_euler,
+)
+
 try:
     import alembic.Abc as Abc
     import alembic.AbcGeom as AbcGeom
@@ -98,137 +106,6 @@ def load_camera_data(
             extrinsics.append(matrix)
 
     return extrinsics, intrinsics_data, source
-
-
-def matrix_to_alembic_xform(matrix: np.ndarray) -> list[float]:
-    """Convert 4x4 numpy matrix to Alembic's column-major 16-element list.
-
-    Alembic uses column-major order, numpy is row-major by default.
-    """
-    return matrix.T.flatten().tolist()
-
-
-def decompose_matrix(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Decompose 4x4 transformation matrix into translation, rotation, scale.
-
-    Returns:
-        Tuple of (translation vec3, rotation matrix 3x3, scale vec3)
-    """
-    translation = matrix[:3, 3]
-
-    # Extract rotation and scale from upper-left 3x3
-    m = matrix[:3, :3]
-    scale = np.array([
-        np.linalg.norm(m[:, 0]),
-        np.linalg.norm(m[:, 1]),
-        np.linalg.norm(m[:, 2])
-    ])
-
-    # Normalize to get rotation
-    rotation = m.copy()
-    for i in range(3):
-        if scale[i] != 0:
-            rotation[:, i] /= scale[i]
-
-    return translation, rotation, scale
-
-
-def rotation_matrix_to_euler(
-    rotation: np.ndarray,
-    order: str = "xyz"
-) -> np.ndarray:
-    """Convert 3x3 rotation matrix to Euler angles.
-
-    Args:
-        rotation: 3x3 rotation matrix
-        order: Euler rotation order - "xyz" (Maya), "zxy" (Nuke), "zyx"
-
-    Returns:
-        Euler angles in degrees as [rx, ry, rz]
-    """
-    order = order.lower()
-
-    if order == "xyz":
-        sy = np.sqrt(rotation[0, 0] ** 2 + rotation[1, 0] ** 2)
-        singular = sy < 1e-6
-        if not singular:
-            x = np.arctan2(rotation[2, 1], rotation[2, 2])
-            y = np.arctan2(-rotation[2, 0], sy)
-            z = np.arctan2(rotation[1, 0], rotation[0, 0])
-        else:
-            x = np.arctan2(-rotation[1, 2], rotation[1, 1])
-            y = np.arctan2(-rotation[2, 0], sy)
-            z = 0
-        return np.degrees(np.array([x, y, z]))
-
-    elif order == "zxy":
-        cy = np.sqrt(rotation[0, 0] ** 2 + rotation[2, 0] ** 2)
-        singular = cy < 1e-6
-        if not singular:
-            x = np.arctan2(-rotation[2, 1], rotation[1, 1])
-            y = np.arctan2(rotation[2, 0], rotation[2, 2])
-            z = np.arctan2(-rotation[0, 1], rotation[1, 1])
-        else:
-            x = np.arctan2(rotation[1, 2], rotation[1, 1])
-            y = 0
-            z = np.arctan2(-rotation[0, 1], rotation[0, 0])
-        return np.degrees(np.array([x, y, z]))
-
-    elif order == "zyx":
-        cy = np.sqrt(rotation[0, 0] ** 2 + rotation[0, 1] ** 2)
-        singular = cy < 1e-6
-        if not singular:
-            x = np.arctan2(rotation[1, 2], rotation[2, 2])
-            y = np.arctan2(-rotation[0, 2], cy)
-            z = np.arctan2(rotation[0, 1], rotation[0, 0])
-        else:
-            x = np.arctan2(-rotation[2, 1], rotation[1, 1])
-            y = np.arctan2(-rotation[0, 2], cy)
-            z = 0
-        return np.degrees(np.array([x, y, z]))
-
-    else:
-        raise ValueError(f"Unsupported rotation order: {order}. Use 'xyz', 'zxy', or 'zyx'")
-
-
-def convert_opencv_to_opengl(matrix: np.ndarray) -> np.ndarray:
-    """Convert camera matrix from OpenCV/COLMAP convention to OpenGL/DCC convention.
-
-    OpenCV/COLMAP: X-right, Y-down, Z-forward (camera looks down +Z)
-    OpenGL/DCC:    X-right, Y-up,   Z-back    (camera looks down -Z)
-
-    This flips Y and Z axes to match Maya/Houdini/Blender/Nuke conventions.
-
-    Args:
-        matrix: 4x4 camera-to-world matrix in OpenCV convention
-
-    Returns:
-        4x4 camera-to-world matrix in OpenGL convention
-    """
-    flip = np.diag([1.0, -1.0, -1.0, 1.0])
-    return matrix @ flip
-
-
-def compute_fov_from_intrinsics(intrinsics: dict, image_width: int, image_height: int) -> tuple[float, float]:
-    """Compute horizontal and vertical FOV from camera intrinsics.
-
-    Args:
-        intrinsics: Dict with fx, fy, cx, cy values
-        image_width: Image width in pixels
-        image_height: Image height in pixels
-
-    Returns:
-        Tuple of (horizontal_fov, vertical_fov) in degrees
-    """
-    fx = intrinsics.get("fx", intrinsics.get("focal_x", 1000))
-    fy = intrinsics.get("fy", intrinsics.get("focal_y", 1000))
-
-    # FOV = 2 * atan(sensor_size / (2 * focal_length))
-    # In pixel units: FOV = 2 * atan(image_dimension / (2 * focal_pixel))
-    h_fov = 2 * np.degrees(np.arctan(image_width / (2 * fx)))
-    v_fov = 2 * np.degrees(np.arctan(image_height / (2 * fy)))
-
-    return h_fov, v_fov
 
 
 def export_alembic_camera(
