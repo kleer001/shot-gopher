@@ -1,14 +1,37 @@
 """Stage runner functions.
 
-Thin wrappers that invoke external pipeline scripts for specific stages.
+Contains handlers for all pipeline stages. Each handler takes a StageContext
+and PipelineConfig, returning True on success.
 """
 
+import re
+import shutil
 import subprocess
 import sys
+import webbrowser
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable, TYPE_CHECKING
 
-from pipeline_utils import run_command
+from comfyui_utils import run_comfyui_workflow
+from matte_utils import combine_mattes, prepare_roto_for_cleanplate
+from pipeline_constants import START_FRAME
+from pipeline_utils import (
+    clear_gpu_memory,
+    clear_output_directory,
+    extract_frames,
+    generate_preview_movie,
+    run_command,
+)
+from workflow_utils import (
+    refresh_workflow_from_template,
+    update_segmentation_prompt,
+    update_matanyone_input,
+    update_matanyone_resolution,
+    update_cleanplate_resolution,
+)
+
+if TYPE_CHECKING:
+    from pipeline_config import StageContext, PipelineConfig
 
 __all__ = [
     "run_export_camera",
@@ -17,6 +40,17 @@ __all__ = [
     "run_mocap",
     "run_gsir_materials",
     "setup_project",
+    "run_stage_ingest",
+    "run_stage_interactive",
+    "run_stage_depth",
+    "run_stage_roto",
+    "run_stage_matanyone",
+    "run_stage_cleanplate",
+    "run_stage_colmap",
+    "run_stage_mocap",
+    "run_stage_gsir",
+    "run_stage_camera",
+    "STAGE_HANDLERS",
 ]
 
 
@@ -254,3 +288,540 @@ def setup_project(
         return True
     except subprocess.CalledProcessError:
         return False
+
+
+def run_stage_ingest(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run the ingest stage: extract frames from source video.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: ingest ===")
+
+    if not config.input_path:
+        print("  → Skipping (no input file, existing project)")
+        _copy_source_preview(ctx, config)
+        return True
+
+    if ctx.skip_existing and list(ctx.source_frames.glob("*.png")):
+        print("  → Skipping (frames exist)")
+        _copy_source_preview(ctx, config)
+        return True
+
+    frame_count = extract_frames(config.input_path, ctx.source_frames, START_FRAME, ctx.fps)
+    print(f"  → Extracted {frame_count} frames")
+
+    _copy_source_preview(ctx, config)
+    return True
+
+
+def _copy_source_preview(ctx: "StageContext", config: "PipelineConfig") -> None:
+    """Copy source file to preview directory."""
+    preview_dir = ctx.project_dir / "preview"
+    preview_dir.mkdir(exist_ok=True)
+
+    if config.input_path:
+        source_preview = preview_dir / f"source{config.input_path.suffix}"
+        if not source_preview.exists():
+            shutil.copy2(config.input_path, source_preview)
+            print(f"  → Copied source to {source_preview.name}")
+
+
+def run_stage_interactive(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run interactive segmentation stage.
+
+    Opens ComfyUI for manual point-based segmentation.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: interactive ===")
+    workflow_path = ctx.project_dir / "workflows" / "05_interactive_segmentation.json"
+    roto_dir = ctx.project_dir / "roto"
+
+    refresh_workflow_from_template(workflow_path, "05_interactive_segmentation.json")
+
+    if not workflow_path.exists():
+        print("  → Skipping (workflow not found)")
+        return True
+
+    print("  → Opening interactive segmentation in ComfyUI")
+    print(f"    Workflow: {workflow_path}")
+    print(f"    ComfyUI: {ctx.comfyui_url}")
+    print()
+    print("  Instructions:")
+    print("    1. Open ComfyUI in your browser")
+    print("    2. Load the workflow from: workflows/05_interactive_segmentation.json")
+    print("    3. Click points on the first frame to define what to segment")
+    print("    4. Run the workflow (Queue Prompt)")
+    print("    5. Masks will be saved to: roto/")
+    print()
+
+    webbrowser.open(ctx.comfyui_url)
+    input("  Press Enter when done with interactive segmentation...")
+
+    if list(roto_dir.glob("**/*.png")):
+        print(f"  ✓ Masks found in {roto_dir}")
+    else:
+        print(f"  → Warning: No masks found in {roto_dir}")
+
+    return True
+
+
+def run_stage_depth(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run depth analysis stage.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: depth ===")
+    workflow_path = ctx.project_dir / "workflows" / "01_analysis.json"
+    depth_dir = ctx.project_dir / "depth"
+
+    if not workflow_path.exists():
+        print("  → Skipping (workflow not found)")
+        return True
+
+    if ctx.skip_existing and list(depth_dir.glob("*.png")):
+        print("  → Skipping (depth maps exist)")
+        return True
+
+    if ctx.overwrite:
+        clear_output_directory(depth_dir)
+
+    if not run_comfyui_workflow(
+        workflow_path, ctx.comfyui_url,
+        output_dir=depth_dir,
+        total_frames=ctx.total_frames,
+        stage_name="depth",
+    ):
+        print("  → Depth stage failed", file=sys.stderr)
+        return False
+
+    if ctx.auto_movie and list(depth_dir.glob("*.png")):
+        generate_preview_movie(depth_dir, ctx.project_dir / "preview" / "depth.mp4", ctx.fps)
+
+    clear_gpu_memory(ctx.comfyui_url)
+    return True
+
+
+def run_stage_roto(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run segmentation/roto stage.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: roto ===")
+    workflow_path = ctx.project_dir / "workflows" / "02_segmentation.json"
+    roto_dir = ctx.project_dir / "roto"
+
+    prompts = [p.strip() for p in (config.roto_prompt or "person").split(",")]
+    prompts = [p for p in prompts if p]
+
+    refresh_workflow_from_template(workflow_path, "02_segmentation.json")
+
+    if not workflow_path.exists():
+        print("  → Skipping (workflow not found)")
+        return True
+
+    if ctx.skip_existing and (list(roto_dir.glob("*.png")) or list(roto_dir.glob("*/*.png"))):
+        print("  → Skipping (masks exist)")
+        return True
+
+    if ctx.overwrite:
+        clear_output_directory(roto_dir)
+
+    print(f"  → Segmenting {len(prompts)} target(s): {', '.join(prompts)}")
+
+    for i, prompt in enumerate(prompts):
+        prompt_name = prompt.replace(" ", "_")
+        output_subdir = roto_dir / prompt_name
+        output_subdir.mkdir(parents=True, exist_ok=True)
+
+        if len(prompts) > 1:
+            print(f"\n  [{i+1}/{len(prompts)}] Segmenting: {prompt}")
+
+        update_segmentation_prompt(
+            workflow_path, prompt, output_subdir, ctx.project_dir,
+            start_frame=config.roto_start_frame
+        )
+
+        if not run_comfyui_workflow(
+            workflow_path, ctx.comfyui_url,
+            output_dir=output_subdir,
+            total_frames=ctx.total_frames,
+            stage_name=f"roto ({prompt})" if len(prompts) > 1 else "roto",
+        ):
+            print(f"  → Segmentation failed for '{prompt}'", file=sys.stderr)
+
+    if ctx.auto_movie:
+        for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
+            if subdir.is_dir() and list(subdir.glob("*.png")):
+                generate_preview_movie(subdir, ctx.project_dir / "preview" / "roto.mp4", ctx.fps)
+                break
+
+    if config.separate_instances:
+        _separate_roto_instances(roto_dir, prompts)
+
+    clear_gpu_memory(ctx.comfyui_url)
+    return True
+
+
+def _separate_roto_instances(roto_dir: Path, prompts: list[str]) -> None:
+    """Separate multi-person masks into individual instances."""
+    from separate_instances import separate_instances as do_separate
+
+    print("\n  --- Separating instances ---")
+    for prompt in prompts:
+        prompt_name = prompt.replace(" ", "_")
+        prompt_dir = roto_dir / prompt_name
+        if prompt_dir.exists() and list(prompt_dir.glob("*.png")):
+            print(f"  → Processing: {prompt_name} → {prompt_name}_00/, {prompt_name}_01/, ...")
+            result = do_separate(
+                input_dir=prompt_dir,
+                output_dir=roto_dir,
+                min_area=500,
+                prefix=prompt_name,
+            )
+
+            if result:
+                print(f"    Created {len(result)} {prompt_name} directories")
+                print(f"    Combined mask kept in: {prompt_name}/")
+        else:
+            print(f"  → No {prompt_name} directory to separate")
+
+
+def run_stage_matanyone(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run MatAnyone matte refinement stage.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: matanyone ===")
+    workflow_path = ctx.project_dir / "workflows" / "04_matanyone.json"
+    roto_dir = ctx.project_dir / "roto"
+    combined_dir = roto_dir / "combined"
+    matte_dir = ctx.project_dir / "matte"
+
+    refresh_workflow_from_template(workflow_path, "04_matanyone.json")
+
+    person_pattern = re.compile(r"^person(_\d{2})?$")
+    person_dirs = []
+    for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
+        if not subdir.is_dir():
+            continue
+        if person_pattern.match(subdir.name) and list(subdir.glob("*.png")):
+            person_dirs.append(subdir)
+
+    if not workflow_path.exists():
+        print("  → Skipping (workflow not found)")
+        return True
+
+    if not person_dirs:
+        print("  → Skipping (no person masks found in roto/)")
+        return True
+
+    if ctx.overwrite:
+        clear_output_directory(matte_dir)
+        if combined_dir.exists():
+            clear_output_directory(combined_dir)
+
+    output_dirs = []
+
+    for i, person_dir in enumerate(person_dirs):
+        out_dir = matte_dir / person_dir.name
+        output_dirs.append(out_dir)
+
+        if ctx.skip_existing and list(out_dir.glob("*.png")):
+            print(f"  → Skipping {person_dir.name} (mattes exist)")
+            continue
+
+        if len(person_dirs) > 1:
+            print(f"\n  [{i+1}/{len(person_dirs)}] Refining: {person_dir.name}")
+        else:
+            print(f"  → Refining masks from: {person_dir.name}")
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        update_matanyone_input(workflow_path, person_dir, out_dir, ctx.project_dir)
+        update_matanyone_resolution(workflow_path, ctx.source_frames)
+
+        if not run_comfyui_workflow(
+            workflow_path, ctx.comfyui_url,
+            output_dir=out_dir,
+            total_frames=ctx.total_frames,
+            stage_name=f"matanyone ({person_dir.name})" if len(person_dirs) > 1 else "matanyone",
+        ):
+            print(f"  → MatAnyone stage failed for {person_dir.name}", file=sys.stderr)
+            print(f"    (cleanplate will use raw roto masks instead)", file=sys.stderr)
+
+    valid_output_dirs = [d for d in output_dirs if d.exists() and list(d.glob("*.png"))]
+    if valid_output_dirs:
+        if ctx.skip_existing and list(combined_dir.glob("*.png")):
+            print(f"  → Skipping combine (roto/combined/ exists)")
+        else:
+            print("\n  --- Combining mattes ---")
+            combine_mattes(valid_output_dirs, combined_dir, "combined")
+
+    if ctx.auto_movie and list(combined_dir.glob("*.png")):
+        generate_preview_movie(combined_dir, ctx.project_dir / "preview" / "matte.mp4", ctx.fps)
+
+    clear_gpu_memory(ctx.comfyui_url)
+    return True
+
+
+def run_stage_cleanplate(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run cleanplate generation stage.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: cleanplate ===")
+    workflow_path = ctx.project_dir / "workflows" / "03_cleanplate.json"
+    cleanplate_dir = ctx.project_dir / "cleanplate"
+    roto_dir = ctx.project_dir / "roto"
+
+    roto_ready, roto_message = prepare_roto_for_cleanplate(roto_dir)
+
+    if not roto_ready:
+        print("")
+        print("  " + "=" * 50)
+        print("  !!!  NO ROTO DATA FOUND - SKIPPING CLEANPLATE  !!!")
+        print("  " + "=" * 50)
+        print("  Run the 'roto' stage first to generate masks.")
+        print("")
+        return True
+
+    refresh_workflow_from_template(workflow_path, "03_cleanplate.json")
+
+    if not workflow_path.exists():
+        print("  → Skipping (workflow not found)")
+        return True
+
+    if ctx.skip_existing and list(cleanplate_dir.glob("*.png")):
+        print("  → Skipping (cleanplates exist)")
+        return True
+
+    if ctx.overwrite:
+        clear_output_directory(cleanplate_dir)
+
+    print(f"  → {roto_message}")
+
+    update_cleanplate_resolution(workflow_path, ctx.source_frames)
+
+    if not run_comfyui_workflow(
+        workflow_path, ctx.comfyui_url,
+        output_dir=cleanplate_dir,
+        total_frames=ctx.total_frames,
+        stage_name="cleanplate",
+    ):
+        print("  → Cleanplate stage failed", file=sys.stderr)
+
+    if ctx.auto_movie and list(cleanplate_dir.glob("*.png")):
+        generate_preview_movie(cleanplate_dir, ctx.project_dir / "preview" / "cleanplate.mp4", ctx.fps)
+
+    clear_gpu_memory(ctx.comfyui_url)
+    return True
+
+
+def run_stage_colmap(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run COLMAP reconstruction stage.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: colmap ===")
+    colmap_sparse = ctx.project_dir / "colmap" / "sparse" / "0"
+
+    if ctx.skip_existing and colmap_sparse.exists():
+        print("  → Skipping (COLMAP sparse model exists)")
+    else:
+        if not run_colmap_reconstruction(
+            ctx.project_dir,
+            quality=config.colmap_quality,
+            run_dense=config.colmap_dense,
+            run_mesh=config.colmap_mesh,
+            use_masks=config.colmap_use_masks,
+            max_image_size=config.colmap_max_size
+        ):
+            print("  → COLMAP reconstruction failed", file=sys.stderr)
+
+    camera_dir = ctx.project_dir / "camera"
+    if (camera_dir / "extrinsics.json").exists():
+        print("\n  → Exporting camera to VFX formats...")
+        export_camera_to_vfx_formats(
+            ctx.project_dir,
+            start_frame=1,
+            fps=ctx.fps,
+        )
+
+    clear_gpu_memory(ctx.comfyui_url)
+    return True
+
+
+def run_stage_mocap(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run motion capture stage.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: mocap ===")
+    mocap_output = ctx.project_dir / "mocap" / "wham"
+    camera_dir = ctx.project_dir / "camera"
+    has_camera = camera_dir.exists() and (camera_dir / "extrinsics.json").exists()
+
+    if ctx.skip_existing and mocap_output.exists():
+        print("  → Skipping (mocap data exists)")
+    else:
+        if not has_camera and config.mocap_method == "wham":
+            print("  → Skipping WHAM (camera data required - run colmap stage first)")
+        else:
+            if has_camera:
+                print(f"  → Using COLMAP camera data for improved accuracy")
+            if not run_mocap(
+                ctx.project_dir,
+                method=config.mocap_method,
+                use_colmap_intrinsics=has_camera,
+                skip_texture=False,
+            ):
+                print("  → Motion capture failed", file=sys.stderr)
+
+    clear_gpu_memory(ctx.comfyui_url)
+    return True
+
+
+def run_stage_gsir(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run GS-IR material decomposition stage.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: gsir ===")
+    colmap_sparse = ctx.project_dir / "colmap" / "sparse" / "0"
+    gsir_checkpoint = ctx.project_dir / "gsir" / "model" / f"chkpnt{config.gsir_iterations}.pth"
+
+    if not colmap_sparse.exists():
+        print("  → Skipping (COLMAP reconstruction required first)")
+        return True
+
+    if ctx.skip_existing and gsir_checkpoint.exists():
+        print("  → Skipping (GS-IR checkpoint exists)")
+        return True
+
+    if not run_gsir_materials(
+        ctx.project_dir,
+        iterations_stage1=30000,
+        iterations_stage2=config.gsir_iterations,
+        gsir_path=config.gsir_path
+    ):
+        print("  → GS-IR material decomposition failed", file=sys.stderr)
+
+    clear_gpu_memory(ctx.comfyui_url)
+    return True
+
+
+def run_stage_camera(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run camera export stage.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: camera ===")
+    camera_dir = ctx.project_dir / "camera"
+
+    if not (camera_dir / "extrinsics.json").exists():
+        print("  → Skipping (no camera data - run depth or colmap stage first)")
+        return True
+
+    if ctx.skip_existing and (camera_dir / "camera.abc").exists():
+        print("  → Skipping (camera.abc exists)")
+        return True
+
+    if not run_export_camera(ctx.project_dir, ctx.fps):
+        print("  → Camera export failed", file=sys.stderr)
+
+    return True
+
+
+STAGE_HANDLERS: dict[str, Callable[["StageContext", "PipelineConfig"], bool]] = {
+    "ingest": run_stage_ingest,
+    "interactive": run_stage_interactive,
+    "depth": run_stage_depth,
+    "roto": run_stage_roto,
+    "matanyone": run_stage_matanyone,
+    "cleanplate": run_stage_cleanplate,
+    "colmap": run_stage_colmap,
+    "mocap": run_stage_mocap,
+    "gsir": run_stage_gsir,
+    "camera": run_stage_camera,
+}

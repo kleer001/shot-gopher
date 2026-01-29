@@ -1,10 +1,18 @@
-# ShotGopher v0.01
+# ShotGopher
+
+![ShotGopher Banner](https://i.imgur.com/VP9rmor.png)
+
+![License](https://img.shields.io/github/license/kleer001/shot-gopher)
+![Python](https://img.shields.io/badge/python-3.10+-blue)
+![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20WSL2-lightgrey)
+![GPU](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900?logo=nvidia)
+![Tests](https://img.shields.io/github/actions/workflow/status/kleer001/shot-gopher/test.yml?label=tests)
 
 An automated VFX pipeline built on ComfyUI for production-ready outputs from raw footage. Combines modern ML models with traditional computer vision to generate depth maps, segmentation masks, clean plates, camera solves, and 3D reconstructions with minimal manual intervention.
 
 ## Overview
 
-This pipeline automates first-pass VFX prep work that traditionally requires manual labor. Ingest a movie file, get production-ready outputs following industry conventions (PNG sequences, etc.). Manual refinement happens downstream in Nuke/Fusion/Houdini—not here.
+This pipeline automates first-pass VFX prep work. Ingest a movie file, get production-ready outputs following industry conventions (PNG sequences, etc.). Manual refinement happens downstream in Nuke/Fusion/Houdini—not here.
 
 **Target workflow:** Run the pipeline overnight, come back to usable first-pass outputs ready for VFX compositing and matchmove.
 
@@ -12,7 +20,7 @@ This pipeline automates first-pass VFX prep work that traditionally requires man
 <summary><strong>Capabilities</strong></summary>
 
 - **Frame extraction** - Convert video files to PNG frame sequences
-- **Depth estimation** - Monocular depth maps with temporal consistency (Depth Anything V3)
+- **Depth estimation** - Monocular depth maps with temporal consistency (Video Depth Anything)
 - **Segmentation/Rotoscoping** - Text-prompted video segmentation for dynamic object masking (SAM3)
 - **Matte refinement** - Alpha matte generation for human subjects (MatAnyone)
 - **Clean plate generation** - Automated inpainting to remove objects from footage (ProPainter)
@@ -36,7 +44,7 @@ This pipeline automates first-pass VFX prep work that traditionally requires man
 
 ### Core Pipeline
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) - Node-based workflow engine for ML inference
-- [Depth Anything V3](https://github.com/DepthAnything/Depth-Anything-V3) - Monocular depth estimation
+- [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything) - Temporally consistent depth estimation
 - [Segment Anything Model 2/3](https://github.com/facebookresearch/segment-anything-2) - Text-prompted video segmentation
 - [MatAnyone](https://github.com/Shine-Light-Tech/MatAnyone) - Video matting for human alpha mattes
 - [ProPainter](https://github.com/sczhou/ProPainter) - Video inpainting for clean plates
@@ -102,7 +110,7 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/b
 
 **Prerequisites:** macOS 11+, Apple Silicon recommended (Intel Macs slower)
 
-**Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,depth,roto,cleanplate,colmap,camera`
+**Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,matanyone,cleanplate,colmap,camera`
 
 ---
 
@@ -128,8 +136,11 @@ shot-gopher.bat              # Windows
 # Docker
 bash scripts/run_docker.sh --name MyProject --stages all video.mp4
 
-# Conda
-python scripts/run_pipeline.py video.mp4 -s ingest,depth,roto,cleanplate,colmap,camera
+# Conda (all stages)
+python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,matanyone,cleanplate,colmap,mocap,gsir,camera
+
+# Conda (8GB VRAM - skip high-memory stages)
+python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,cleanplate,colmap,camera
 
 # Re-run stages on last project (auto-detects most recent)
 python scripts/run_pipeline.py -s roto,cleanplate
@@ -166,7 +177,7 @@ Output follows VFX production conventions:
 └── colmap/             # COLMAP reconstruction data
 ```
 
-**Note on frame numbering:** Frame sequences start at 0001 rather than the VFX industry standard of 1001. Unfortunately, ComfyUI's SaveImage node and WHAM's output constraints make custom start frame numbering infeasible. We apologize for this deviation from convention.
+**Note on frame numbering:** Frame sequences start at 0001 rather than the VFX industry standard of 1001. ComfyUI's SaveImage node and WHAM's output constraints make custom start frame numbering infeasible.
 
 </details>
 
@@ -195,7 +206,7 @@ Output follows VFX production conventions:
 - ComfyUI: 2.0 GB
 - PyTorch (with CUDA): 6.0 GB
 - Custom nodes (VideoHelperSuite, SAM3, ProPainter, etc.): 5.3 GB
-- Model checkpoints (Depth Anything V3, SAM3): 1.0 GB
+- Model checkpoints (Video Depth Anything, SAM3): 1.0 GB
 
 **Core Total: ~14 GB**
 
@@ -218,7 +229,7 @@ Output follows VFX production conventions:
 ### GPU Memory (VRAM) Requirements
 
 **Per-Component VRAM Usage:**
-- Depth Anything V3: ~7 GB (Small model)
+- Video Depth Anything: ~7 GB (Small model)
 - SAM3 (segmentation): ~4 GB
 - ProPainter (clean plates): ~6 GB
 - MatAnyone (matte refinement): 9+ GB
@@ -237,7 +248,7 @@ Note: NVIDIA GPU with CUDA support required for all ML models.
 
 Different components perform best under specific conditions:
 
-| Shot Type | Depth (DA3) | Roto (SAM3) | Clean Plate | Camera (COLMAP) | Material (GS-IR) | MoCap (WHAM/ECON) |
+| Shot Type | Depth (VDA) | Roto (SAM3) | Clean Plate | Camera (COLMAP) | Material (GS-IR) | MoCap (WHAM/ECON) |
 |-----------|-------------|-------------|-------------|-----------------|------------------|-------------------|
 | **Static camera** | ✅ | ✅ | ✅ | 🚫 | 🚫 | ⚠️ |
 | **Moving camera** | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ |

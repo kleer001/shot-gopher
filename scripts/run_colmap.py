@@ -30,14 +30,21 @@ from typing import Optional
 
 import numpy as np
 
-# Environment check - ensure correct conda environment is active
 from env_config import check_conda_env_or_warn, is_in_container
-
-# Log capture for debugging
 from log_manager import LogCapture
-
-# Cross-platform tool detection
 from install_wizard.platform import PlatformManager
+from subprocess_utils import (
+    ProcessResult,
+    ProcessRunner,
+    ProgressTracker,
+    create_colmap_patterns,
+)
+from transforms import (
+    quaternion_to_rotation_matrix,
+    rotation_matrix_to_quaternion,
+    slerp,
+    cubic_bezier,
+)
 
 # Cache for COLMAP executable path
 _colmap_path: Optional[str] = None
@@ -305,9 +312,9 @@ def run_colmap_command(
     command: str,
     args: dict,
     description: str,
-    timeout: int = None,  # No timeout by default
-) -> subprocess.CompletedProcess:
-    """Run a COLMAP command with streaming output.
+    timeout: int = None,
+) -> ProcessResult:
+    """Run a COLMAP command with streaming output and progress tracking.
 
     Args:
         command: COLMAP subcommand (e.g., 'feature_extractor')
@@ -316,7 +323,7 @@ def run_colmap_command(
         timeout: Timeout in seconds (None = no timeout)
 
     Returns:
-        CompletedProcess result
+        ProcessResult with captured output
     """
     colmap_exe = get_colmap_executable()
     cmd = [colmap_exe, command]
@@ -326,120 +333,14 @@ def run_colmap_command(
         elif value is not False and value is not None:
             cmd.extend([f"--{key}", str(value)])
 
-    print(f"  → {description}")
-    print(f"    $ {' '.join(cmd)}")
-    sys.stdout.flush()
-
     is_bat = colmap_exe.lower().endswith('.bat')
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
+    tracker = ProgressTracker(patterns=create_colmap_patterns())
+    runner = ProcessRunner(
+        progress_tracker=tracker,
         shell=is_bat,
     )
 
-    stdout_lines = []
-    last_progress = ""
-    last_progress_time = 0
-    is_tty = sys.stdout.isatty()
-    throttle_interval = 0 if is_tty else 2.0  # Only update every 2 seconds when not TTY
-
-    # Progress patterns for different COLMAP stages
-    # Feature extraction: "Processed file [1/521]"
-    extract_pattern = re.compile(r'Processed file \[(\d+)/(\d+)\]')
-    # Matching: "Matching block [1/52, 1/52]" or image pairs
-    match_pattern = re.compile(r'Matching block \[(\d+)/(\d+)')
-    # Mapper: "Registering image #142 (150)" or "Registered X/Y images"
-    register_pattern = re.compile(r'Registering image #(\d+)\s*\((\d+)\)')
-    register_alt_pattern = re.compile(r'Registered\s+(\d+)/(\d+)\s+images')
-    # Bundle adjustment
-    bundle_pattern = re.compile(r'Bundle adjustment')
-
-    import time
-
-    def should_print_progress():
-        nonlocal last_progress_time
-        if is_tty:
-            return True
-        now = time.time()
-        if now - last_progress_time >= throttle_interval:
-            last_progress_time = now
-            return True
-        return False
-
-    for line in iter(process.stdout.readline, ''):
-        stdout_lines.append(line)
-        line_stripped = line.strip()
-
-        # Check for feature extraction progress
-        match = extract_pattern.search(line_stripped)
-        if match:
-            current, total = match.group(1), match.group(2)
-            progress = f"Extracting features: {current}/{total}"
-            if progress != last_progress and should_print_progress():
-                if is_tty:
-                    print(f"\r    {progress}    ", end="")
-                else:
-                    print(f"    {progress}")
-                sys.stdout.flush()
-                last_progress = progress
-            continue
-
-        # Check for matching progress
-        match = match_pattern.search(line_stripped)
-        if match:
-            current, total = match.group(1), match.group(2)
-            progress = f"Matching: block {current}/{total}"
-            if progress != last_progress and should_print_progress():
-                if is_tty:
-                    print(f"\r    {progress}    ", end="")
-                else:
-                    print(f"    {progress}")
-                sys.stdout.flush()
-                last_progress = progress
-            continue
-
-        # Check for registration progress (mapper) - try both patterns
-        match = register_pattern.search(line_stripped)
-        if not match:
-            match = register_alt_pattern.search(line_stripped)
-        if match:
-            current = int(match.group(1))
-            total = int(match.group(2))
-            progress = f"Registered {current}/{total} images"
-            if progress != last_progress and should_print_progress():
-                if is_tty:
-                    print(f"\r    {progress}    ", end="")
-                else:
-                    print(f"    {progress}")
-                sys.stdout.flush()
-                last_progress = progress
-            continue
-
-        # Skip verbose bundle adjustment output
-        if bundle_pattern.search(line_stripped):
-            continue
-
-    # Clear the progress line and print newline (only needed for TTY mode)
-    if last_progress and is_tty:
-        print()  # newline after progress
-
-    process.wait()
-
-    stdout = ''.join(stdout_lines)
-    if process.returncode != 0:
-        print(f"    Error output:\n{stdout[-2000:]}", file=sys.stderr)  # Last 2000 chars
-        raise subprocess.CalledProcessError(process.returncode, cmd, stdout, "")
-
-    # Create a CompletedProcess-like result
-    class Result:
-        def __init__(self):
-            self.returncode = process.returncode
-            self.stdout = stdout
-            self.stderr = ""
-    return Result()
+    return runner.run(cmd, description=description, timeout=timeout)
 
 
 def extract_features(
@@ -1129,110 +1030,6 @@ def read_colmap_images(images_path: Path, debug: bool = False) -> dict:
     return images
 
 
-def quaternion_to_rotation_matrix(quat: list) -> np.ndarray:
-    """Convert quaternion [w, x, y, z] to 3x3 rotation matrix."""
-    w, x, y, z = quat
-
-    # Normalize
-    n = np.sqrt(w*w + x*x + y*y + z*z)
-    w, x, y, z = w/n, x/n, y/n, z/n
-
-    return np.array([
-        [1 - 2*y*y - 2*z*z, 2*x*y - 2*z*w, 2*x*z + 2*y*w],
-        [2*x*y + 2*z*w, 1 - 2*x*x - 2*z*z, 2*y*z - 2*x*w],
-        [2*x*z - 2*y*w, 2*y*z + 2*x*w, 1 - 2*x*x - 2*y*y]
-    ])
-
-
-def rotation_matrix_to_quaternion(R: np.ndarray) -> np.ndarray:
-    """Convert 3x3 rotation matrix to quaternion [w, x, y, z]."""
-    trace = np.trace(R)
-    if trace > 0:
-        s = 0.5 / np.sqrt(trace + 1.0)
-        w = 0.25 / s
-        x = (R[2, 1] - R[1, 2]) * s
-        y = (R[0, 2] - R[2, 0]) * s
-        z = (R[1, 0] - R[0, 1]) * s
-    elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
-        s = 2.0 * np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2])
-        w = (R[2, 1] - R[1, 2]) / s
-        x = 0.25 * s
-        y = (R[0, 1] + R[1, 0]) / s
-        z = (R[0, 2] + R[2, 0]) / s
-    elif R[1, 1] > R[2, 2]:
-        s = 2.0 * np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2])
-        w = (R[0, 2] - R[2, 0]) / s
-        x = (R[0, 1] + R[1, 0]) / s
-        y = 0.25 * s
-        z = (R[1, 2] + R[2, 1]) / s
-    else:
-        s = 2.0 * np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1])
-        w = (R[1, 0] - R[0, 1]) / s
-        x = (R[0, 2] + R[2, 0]) / s
-        y = (R[1, 2] + R[2, 1]) / s
-        z = 0.25 * s
-    q = np.array([w, x, y, z])
-    return q / np.linalg.norm(q)
-
-
-def slerp(q1: np.ndarray, q2: np.ndarray, t: float) -> np.ndarray:
-    """Spherical linear interpolation between quaternions.
-
-    Args:
-        q1: Start quaternion [w, x, y, z]
-        q2: End quaternion [w, x, y, z]
-        t: Interpolation factor (0 = q1, 1 = q2)
-
-    Returns:
-        Interpolated quaternion
-    """
-    # Normalize
-    q1 = q1 / np.linalg.norm(q1)
-    q2 = q2 / np.linalg.norm(q2)
-
-    # Compute dot product
-    dot = np.dot(q1, q2)
-
-    # If negative dot, negate one quaternion (shortest path)
-    if dot < 0:
-        q2 = -q2
-        dot = -dot
-
-    # If very close, use linear interpolation
-    if dot > 0.9995:
-        result = q1 + t * (q2 - q1)
-        return result / np.linalg.norm(result)
-
-    # Compute SLERP
-    theta_0 = np.arccos(dot)
-    theta = theta_0 * t
-    sin_theta = np.sin(theta)
-    sin_theta_0 = np.sin(theta_0)
-
-    s1 = np.cos(theta) - dot * sin_theta / sin_theta_0
-    s2 = sin_theta / sin_theta_0
-
-    return s1 * q1 + s2 * q2
-
-
-def cubic_bezier(p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray, t: float) -> np.ndarray:
-    """Cubic Bezier interpolation.
-
-    Args:
-        p0, p1, p2, p3: Control points
-        t: Parameter (0 to 1)
-
-    Returns:
-        Interpolated point
-    """
-    t2 = t * t
-    t3 = t2 * t
-    mt = 1 - t
-    mt2 = mt * mt
-    mt3 = mt2 * mt
-    return mt3 * p0 + 3 * mt2 * t * p1 + 3 * mt * t2 * p2 + t3 * p3
-
-
 def extract_frame_number(filename: str) -> int:
     """Extract frame number from filename like 'frame_0001.png' or 'depth_00001.png'."""
     match = re.search(r'(\d+)', filename)
@@ -1561,7 +1358,6 @@ def run_colmap_pipeline(
         print("  Conda: conda install -c conda-forge colmap", file=sys.stderr)
         return False
 
-    import time
     pipeline_start = time.time()
 
     diag = diagnose_colmap_environment(verbose=True)

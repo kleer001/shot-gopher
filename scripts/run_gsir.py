@@ -26,14 +26,18 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
-# Environment check and configuration
 from env_config import require_conda_env, INSTALL_DIR
-
-# Log capture for debugging
 from log_manager import LogCapture
+from subprocess_utils import (
+    ProcessResult,
+    ProcessRunner,
+    ProgressTracker,
+    create_training_patterns,
+)
 
 
 # Default training parameters
@@ -254,8 +258,8 @@ def run_gsir_command(
     script: str,
     args: dict,
     description: str,
-    timeout: int = 7200  # 2 hours default
-) -> subprocess.CompletedProcess:
+    timeout: int = 7200,
+) -> ProcessResult:
     """Run a GS-IR script with the given arguments.
 
     Args:
@@ -266,7 +270,7 @@ def run_gsir_command(
         timeout: Timeout in seconds
 
     Returns:
-        CompletedProcess result
+        ProcessResult with captured output
     """
     script_path = gsir_path / script
     cmd = [sys.executable, str(script_path)]
@@ -277,93 +281,15 @@ def run_gsir_command(
         elif value is not False and value is not None:
             cmd.extend([f"--{key}" if not key.startswith("-") else key, str(value)])
 
-    import re
-    print(f"  → {description}")
-    print(f"    $ {' '.join(cmd)}")
-
-    # Stream output to show training progress
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        cwd=str(gsir_path)  # Run from GS-IR directory
+    tracker = ProgressTracker(
+        patterns=create_training_patterns(),
+        throttle_interval=2.0,
+        min_total=100,
+        report_interval=2500,
     )
+    runner = ProcessRunner(progress_tracker=tracker)
 
-    stdout_lines = []
-    import time
-
-    # Patterns for progress detection
-    iter_pattern = re.compile(r'[Ii]teration\s*[:\s]*(\d+)\s*[/|of]\s*(\d+)')
-    # tqdm pattern: "50%|█████     | 15000/30000 [05:23<05:23, 46.37it/s]"
-    tqdm_pattern = re.compile(r'(\d+)%\|.*\|\s*(\d+)/(\d+)')
-
-    last_reported = 0
-    last_report_time = 0
-    report_interval = 2500  # Report every 2500 iterations
-    time_interval = 30.0  # Or at least every 30 seconds
-    min_total_for_progress = 100  # Only show progress for loops with 100+ iterations
-    is_tty = sys.stdout.isatty()
-
-    for line in iter(process.stdout.readline, ''):
-        stdout_lines.append(line)
-        line_stripped = line.strip()
-
-        # Skip empty lines and repetitive tqdm updates
-        if not line_stripped or '\r' in line:
-            continue
-
-        current = total = None
-
-        # Try iteration pattern first
-        match = iter_pattern.search(line_stripped)
-        if match:
-            current = int(match.group(1))
-            total = int(match.group(2))
-
-        # Try tqdm pattern
-        if not current:
-            match = tqdm_pattern.search(line_stripped)
-            if match:
-                current = int(match.group(2))
-                total = int(match.group(3))
-
-        # Only report progress for training loops (not camera loading etc)
-        if current and total and total >= min_total_for_progress:
-            now = time.time()
-            should_report = (
-                current - last_reported >= report_interval or
-                now - last_report_time >= time_interval or
-                current == total
-            )
-            if should_report:
-                pct = int(100 * current / total) if total > 0 else 0
-                if is_tty:
-                    print(f"\r    Training: {current}/{total} ({pct}%)    ", end="")
-                else:
-                    print(f"    Training: {current}/{total} ({pct}%)")
-                sys.stdout.flush()
-                last_reported = current
-                last_report_time = now
-
-    if is_tty and last_reported > 0:
-        print()  # Newline after progress
-
-    process.wait()
-
-    stdout = ''.join(stdout_lines)
-    if process.returncode != 0:
-        print(f"    Error: {stdout[:500]}", file=sys.stderr)
-        raise subprocess.CalledProcessError(process.returncode, cmd, stdout, "")
-
-    # Return a result-like object
-    class Result:
-        def __init__(self):
-            self.returncode = process.returncode
-            self.stdout = stdout
-            self.stderr = ""
-    return Result()
+    return runner.run(cmd, description=description, cwd=gsir_path, timeout=timeout)
 
 
 def run_gsir_training(
@@ -605,7 +531,6 @@ def run_gsir_pipeline(
         print("Or set GSIR_PATH environment variable to installation directory", file=sys.stderr)
         return False
 
-    import time
     pipeline_start = time.time()
 
     print(f"\n{'='*60}")
