@@ -9,7 +9,7 @@ Output: roto/person_mama/*.png (refined alpha mattes)
 
 Usage:
     python scripts/video_mama.py <project_dir>
-    python scripts/video_mama.py <project_dir> --num-frames 25
+    python scripts/video_mama.py <project_dir> --chunk-size 25
 
 Requirements:
     - VideoMaMa installed via: python scripts/video_mama_install.py
@@ -89,20 +89,13 @@ def check_installation() -> bool:
     return True
 
 
-def prepare_input_structure(
-    source_frames_dir: Path,
-    mask_dir: Path,
+def prepare_chunk_structure(
+    source_files: list[Path],
+    mask_files: list[Path],
     work_dir: Path,
+    chunk_idx: int,
 ) -> tuple[Path, Path]:
-    """Prepare input structure for VideoMaMa.
-
-    VideoMaMa expects:
-    - image_root_path/video_name/*.png (source frames)
-    - mask_root_path/video_name/*.png (masks)
-
-    Returns:
-        Tuple of (image_root, mask_root) paths
-    """
+    """Prepare input structure for a single chunk."""
     video_name = "video"
     image_root = work_dir / "images"
     mask_root = work_dir / "masks"
@@ -110,78 +103,33 @@ def prepare_input_structure(
     image_video_dir = image_root / video_name
     mask_video_dir = mask_root / video_name
 
+    if image_video_dir.exists():
+        shutil.rmtree(image_video_dir)
+    if mask_video_dir.exists():
+        shutil.rmtree(mask_video_dir)
+
     image_video_dir.mkdir(parents=True, exist_ok=True)
     mask_video_dir.mkdir(parents=True, exist_ok=True)
 
-    source_files = sorted(source_frames_dir.glob("*.png"))
-    if not source_files:
-        source_files = sorted(source_frames_dir.glob("*.jpg"))
-
-    mask_files = sorted(mask_dir.glob("*.png"))
-
-    if not source_files:
-        raise ValueError(f"No source frames found in {source_frames_dir}")
-    if not mask_files:
-        raise ValueError(f"No mask files found in {mask_dir}")
-
-    frame_count = min(len(source_files), len(mask_files))
-    print_info(f"Processing {frame_count} frames")
-
-    for i, (src, msk) in enumerate(zip(source_files[:frame_count], mask_files[:frame_count])):
+    for i, (src, msk) in enumerate(zip(source_files, mask_files)):
         dst_img = image_video_dir / f"{i:05d}.png"
         dst_msk = mask_video_dir / f"{i:05d}.png"
-
-        if not dst_img.exists():
-            os.symlink(src.resolve(), dst_img)
-        if not dst_msk.exists():
-            os.symlink(msk.resolve(), dst_msk)
+        os.symlink(src.resolve(), dst_img)
+        os.symlink(msk.resolve(), dst_msk)
 
     return image_root, mask_root
 
 
-def copy_results(work_dir: Path, output_dir: Path) -> int:
-    """Copy VideoMaMa results to output directory.
-
-    Returns:
-        Number of frames copied
-    """
-    results_dir = work_dir / "results" / "video"
-
-    if not results_dir.exists():
-        results_dir = work_dir / "results"
-        video_dirs = [d for d in results_dir.iterdir() if d.is_dir()] if results_dir.exists() else []
-        if video_dirs:
-            results_dir = video_dirs[0]
-
-    if not results_dir.exists():
-        print_error(f"Results directory not found: {results_dir}")
-        return 0
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    result_files = sorted(results_dir.glob("*.png"))
-    if not result_files:
-        result_files = sorted(results_dir.glob("*/*.png"))
-
-    count = 0
-    for i, src in enumerate(result_files):
-        dst = output_dir / f"matte_{i+1:05d}.png"
-        shutil.copy2(src, dst)
-        count += 1
-
-    return count
-
-
-def run_videomama(
+def run_videomama_chunk(
     conda_exe: str,
     image_root: Path,
     mask_root: Path,
     output_dir: Path,
-    num_frames: int = 16,
-    width: int = 1024,
-    height: int = 576,
+    num_frames: int,
+    width: int,
+    height: int,
 ) -> bool:
-    """Run VideoMaMa inference."""
+    """Run VideoMaMa inference on a single chunk."""
     inference_script = VIDEOMAMA_TOOLS_DIR / "inference_onestep_folder.py"
 
     if not inference_script.exists():
@@ -202,26 +150,34 @@ def run_videomama(
         "--height", str(height),
     ]
 
-    print_info(f"Running VideoMaMa inference...")
-    print_info(f"  Images: {image_root}")
-    print_info(f"  Masks: {mask_root}")
-    print_info(f"  Output: {output_dir}")
-
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=VIDEOMAMA_TOOLS_DIR,
-            check=True,
-        )
+        result = subprocess.run(cmd, cwd=VIDEOMAMA_TOOLS_DIR, check=True)
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         print_error(f"VideoMaMa inference failed with code {e.returncode}")
         return False
 
 
+def collect_chunk_results(work_dir: Path) -> list[Path]:
+    """Collect result files from a chunk."""
+    results_dir = work_dir / "results" / "video"
+
+    if not results_dir.exists():
+        results_dir = work_dir / "results"
+        video_dirs = [d for d in results_dir.iterdir() if d.is_dir()] if results_dir.exists() else []
+        if video_dirs:
+            results_dir = video_dirs[0]
+
+    if not results_dir.exists():
+        return []
+
+    return sorted(results_dir.glob("*.png"))
+
+
 def process_project(
     project_dir: Path,
-    num_frames: int = 16,
+    chunk_size: int = 16,
+    overlap: int = 2,
     width: int = 1024,
     height: int = 576,
 ) -> bool:
@@ -229,7 +185,8 @@ def process_project(
 
     Args:
         project_dir: Project directory containing source/frames and roto/person
-        num_frames: Number of frames per batch for VideoMaMa
+        chunk_size: Number of frames per chunk for VideoMaMa
+        overlap: Frame overlap between chunks for smoother transitions
         width: Processing width
         height: Processing height
 
@@ -252,12 +209,23 @@ def process_project(
         print_info("Run the roto stage first: python run_pipeline.py <video> -s roto")
         return False
 
-    mask_files = list(mask_dir.glob("*.png"))
+    source_files = sorted(source_frames.glob("*.png"))
+    if not source_files:
+        source_files = sorted(source_frames.glob("*.jpg"))
+
+    mask_files = sorted(mask_dir.glob("*.png"))
+
+    if not source_files:
+        print_error(f"No source frames in {source_frames}")
+        return False
+
     if not mask_files:
         print_error(f"No mask PNG files in {mask_dir}")
         return False
 
-    print_info(f"Found {len(mask_files)} mask frames")
+    total_frames = min(len(source_files), len(mask_files))
+    print_info(f"Found {total_frames} frames to process")
+    print_info(f"Chunk size: {chunk_size}, overlap: {overlap}")
 
     if not check_installation():
         return False
@@ -267,38 +235,71 @@ def process_project(
         print_error("Conda not found")
         return False
 
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    all_results: list[Path] = []
+    chunk_idx = 0
+    frame_idx = 0
+    step = chunk_size - overlap
+
     with tempfile.TemporaryDirectory(prefix="videomama_") as work_dir:
         work_path = Path(work_dir)
 
-        print_info("Preparing input structure...")
-        try:
-            image_root, mask_root = prepare_input_structure(
-                source_frames, mask_dir, work_path
+        while frame_idx < total_frames:
+            end_idx = min(frame_idx + chunk_size, total_frames)
+            chunk_sources = source_files[frame_idx:end_idx]
+            chunk_masks = mask_files[frame_idx:end_idx]
+
+            actual_chunk_size = len(chunk_sources)
+            print_info(f"Processing chunk {chunk_idx + 1}: frames {frame_idx + 1}-{end_idx} ({actual_chunk_size} frames)")
+
+            image_root, mask_root = prepare_chunk_structure(
+                chunk_sources, chunk_masks, work_path, chunk_idx
             )
-        except ValueError as e:
-            print_error(str(e))
-            return False
 
-        if not run_videomama(
-            conda_exe,
-            image_root,
-            mask_root,
-            work_path,
-            num_frames=num_frames,
-            width=width,
-            height=height,
-        ):
-            return False
+            if not run_videomama_chunk(
+                conda_exe,
+                image_root,
+                mask_root,
+                work_path,
+                num_frames=actual_chunk_size,
+                width=width,
+                height=height,
+            ):
+                print_warning(f"Chunk {chunk_idx + 1} failed, continuing...")
+                frame_idx += step
+                chunk_idx += 1
+                continue
 
-        print_info("Copying results...")
-        count = copy_results(work_path, output_dir)
+            chunk_results = collect_chunk_results(work_path)
 
-        if count == 0:
-            print_error("No output frames generated")
-            return False
+            if chunk_idx == 0:
+                results_to_copy = chunk_results
+            else:
+                results_to_copy = chunk_results[overlap:] if overlap > 0 else chunk_results
 
-        print_success(f"Generated {count} refined matte frames")
-        print_info(f"Output: {output_dir}")
+            for i, src in enumerate(results_to_copy):
+                global_frame_idx = len(all_results)
+                dst = output_dir / f"matte_{global_frame_idx + 1:05d}.png"
+                shutil.copy2(src, dst)
+                all_results.append(dst)
+
+            results_subdir = work_path / "results"
+            if results_subdir.exists():
+                shutil.rmtree(results_subdir)
+
+            frame_idx += step
+            chunk_idx += 1
+
+            if frame_idx >= total_frames:
+                break
+
+    if not all_results:
+        print_error("No output frames generated")
+        return False
+
+    print_success(f"Generated {len(all_results)} refined matte frames")
+    print_info(f"Output: {output_dir}")
 
     return True
 
@@ -313,10 +314,16 @@ def main() -> int:
         help="Project directory containing source/frames and roto/person"
     )
     parser.add_argument(
-        "--num-frames",
+        "--chunk-size",
         type=int,
         default=16,
-        help="Frames per batch (default: 16)"
+        help="Frames per chunk (default: 16, limited by VRAM)"
+    )
+    parser.add_argument(
+        "--overlap",
+        type=int,
+        default=2,
+        help="Frame overlap between chunks (default: 2)"
     )
     parser.add_argument(
         "--width",
@@ -339,7 +346,8 @@ def main() -> int:
 
     success = process_project(
         args.project_dir.resolve(),
-        num_frames=args.num_frames,
+        chunk_size=args.chunk_size,
+        overlap=args.overlap,
         width=args.width,
         height=args.height,
     )
