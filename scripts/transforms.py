@@ -74,13 +74,14 @@ def quaternion_to_rotation_matrix(quat: Union[list, np.ndarray]) -> np.ndarray:
         quat: Quaternion as [w, x, y, z] (scalar-first convention)
 
     Returns:
-        3x3 rotation matrix
+        3x3 rotation matrix (identity if input is zero quaternion)
     """
     w, x, y, z = quat
 
     n = np.sqrt(w*w + x*x + y*y + z*z)
-    if n > 0:
-        w, x, y, z = w/n, x/n, y/n, z/n
+    if n < 1e-10:
+        return np.eye(3)
+    w, x, y, z = w/n, x/n, y/n, z/n
 
     return np.array([
         [1 - 2*y*y - 2*z*z, 2*x*y - 2*z*w, 2*x*z + 2*y*w],
@@ -234,8 +235,11 @@ def slerp(q1: np.ndarray, q2: np.ndarray, t: float) -> np.ndarray:
     Returns:
         Interpolated quaternion [w, x, y, z]
     """
-    q1 = q1 / np.linalg.norm(q1)
-    q2 = q2 / np.linalg.norm(q2)
+    n1, n2 = np.linalg.norm(q1), np.linalg.norm(q2)
+    if n1 < 1e-10 or n2 < 1e-10:
+        return np.array([1.0, 0.0, 0.0, 0.0])
+    q1 = q1 / n1
+    q2 = q2 / n2
 
     dot = np.dot(q1, q2)
 

@@ -252,6 +252,7 @@ class ProcessRunner:
 
                 if timeout and (time.time() - start_time) > timeout:
                     process.kill()
+                    process.wait()
                     raise subprocess.TimeoutExpired(cmd, timeout)
 
         if self.progress_tracker:
