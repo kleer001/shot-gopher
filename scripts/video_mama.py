@@ -94,7 +94,8 @@ def get_optimal_chunk_size(vram_gb: float | None) -> int:
     """Get optimal chunk size based on GPU VRAM.
 
     VideoMaMa uses Stable Video Diffusion which has significant VRAM requirements.
-    These are conservative estimates based on 1024x576 processing resolution.
+    These are conservative estimates - the diffusion model needs substantial headroom.
+    Assumes ~10% VRAM is used by system/drivers.
 
     Args:
         vram_gb: GPU VRAM in gigabytes, or None if unknown
@@ -103,16 +104,20 @@ def get_optimal_chunk_size(vram_gb: float | None) -> int:
         Recommended chunk size (number of frames per batch)
     """
     if vram_gb is None:
-        return 16
-
-    if vram_gb >= 24:
-        return 25
-    elif vram_gb >= 16:
-        return 16
-    elif vram_gb >= 12:
-        return 12
-    elif vram_gb >= 8:
         return 8
+
+    available_vram = vram_gb * 0.9
+
+    if available_vram >= 43:
+        return 20
+    elif available_vram >= 21:
+        return 14
+    elif available_vram >= 14:
+        return 10
+    elif available_vram >= 10:
+        return 8
+    elif available_vram >= 7:
+        return 6
     else:
         return 4
 
@@ -148,6 +153,26 @@ def prepare_chunk_structure(
     return image_root, mask_root
 
 
+def clear_cuda_memory(conda_exe: str) -> None:
+    """Clear CUDA memory cache between chunks."""
+    clear_script = """
+import torch
+import gc
+gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
+"""
+    try:
+        subprocess.run(
+            [conda_exe, "run", "-n", VIDEOMAMA_ENV_NAME, "python", "-c", clear_script],
+            capture_output=True,
+            timeout=30,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        pass
+
+
 def run_videomama_chunk(
     conda_exe: str,
     image_root: Path,
@@ -156,13 +181,18 @@ def run_videomama_chunk(
     num_frames: int,
     width: int,
     height: int,
-) -> bool:
-    """Run VideoMaMa inference on a single chunk."""
+) -> tuple[bool, bool]:
+    """Run VideoMaMa inference on a single chunk.
+
+    Returns:
+        Tuple of (success, was_oom) - success indicates if inference worked,
+        was_oom indicates if failure was due to CUDA OOM.
+    """
     inference_script = VIDEOMAMA_TOOLS_DIR / "inference_onestep_folder.py"
 
     if not inference_script.exists():
         print_error(f"Inference script not found: {inference_script}")
-        return False
+        return False, False
 
     cmd = [
         conda_exe, "run", "-n", VIDEOMAMA_ENV_NAME,
@@ -179,11 +209,22 @@ def run_videomama_chunk(
     ]
 
     try:
-        result = subprocess.run(cmd, cwd=VIDEOMAMA_TOOLS_DIR, check=True)
-        return result.returncode == 0
+        result = subprocess.run(
+            cmd,
+            cwd=VIDEOMAMA_TOOLS_DIR,
+            capture_output=True,
+            text=True,
+        )
+        output = result.stdout + result.stderr
+        was_oom = "CUDA out of memory" in output or "OutOfMemoryError" in output
+        if result.returncode != 0:
+            if was_oom:
+                print_warning("CUDA out of memory detected")
+            return False, was_oom
+        return True, False
     except subprocess.CalledProcessError as e:
         print_error(f"VideoMaMa inference failed with code {e.returncode}")
-        return False
+        return False, False
 
 
 def collect_chunk_results(work_dir: Path) -> list[Path]:
@@ -276,13 +317,15 @@ def process_project(
     all_results: list[Path] = []
     chunk_idx = 0
     frame_idx = 0
-    step = chunk_size - overlap
+    current_chunk_size = chunk_size
+    min_chunk_size = 4
 
     with tempfile.TemporaryDirectory(prefix="videomama_") as work_dir:
         work_path = Path(work_dir)
 
         while frame_idx < total_frames:
-            end_idx = min(frame_idx + chunk_size, total_frames)
+            step = current_chunk_size - overlap
+            end_idx = min(frame_idx + current_chunk_size, total_frames)
             chunk_sources = source_files[frame_idx:end_idx]
             chunk_masks = mask_files[frame_idx:end_idx]
 
@@ -293,7 +336,7 @@ def process_project(
                 chunk_sources, chunk_masks, work_path, chunk_idx
             )
 
-            if not run_videomama_chunk(
+            success, was_oom = run_videomama_chunk(
                 conda_exe,
                 image_root,
                 mask_root,
@@ -301,11 +344,22 @@ def process_project(
                 num_frames=actual_chunk_size,
                 width=width,
                 height=height,
-            ):
-                print_warning(f"Chunk {chunk_idx + 1} failed, continuing...")
-                frame_idx += step
-                chunk_idx += 1
-                continue
+            )
+
+            if not success:
+                if was_oom and current_chunk_size > min_chunk_size:
+                    new_chunk_size = max(min_chunk_size, current_chunk_size - 2)
+                    print_info(f"Reducing chunk size: {current_chunk_size} → {new_chunk_size}")
+                    current_chunk_size = new_chunk_size
+                    print_info("Clearing CUDA memory before retry...")
+                    clear_cuda_memory(conda_exe)
+                    continue
+                else:
+                    print_warning(f"Chunk {chunk_idx + 1} failed, skipping...")
+                    frame_idx += step
+                    chunk_idx += 1
+                    clear_cuda_memory(conda_exe)
+                    continue
 
             chunk_results = collect_chunk_results(work_path)
 
@@ -326,6 +380,9 @@ def process_project(
 
             frame_idx += step
             chunk_idx += 1
+
+            print_info("Clearing CUDA memory...")
+            clear_cuda_memory(conda_exe)
 
             if frame_idx >= total_frames:
                 break
