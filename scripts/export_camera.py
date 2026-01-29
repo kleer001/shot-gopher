@@ -231,7 +231,7 @@ def export_json_camera(
         }
         camera_data["frames"].append(frame_data)
 
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(camera_data, f, indent=2)
 
     print(f"Exported {len(extrinsics)} frames to {output_path}")
@@ -262,7 +262,7 @@ def export_nuke_chan(
         start_frame: Starting frame number
         rotation_order: Euler rotation order (default: "zxy" for Nuke)
     """
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         fx = intrinsics.get("fx", intrinsics.get("focal_x", 1000))
         fy = intrinsics.get("fy", intrinsics.get("focal_y", 1000))
         width = intrinsics.get("width", 1920)
@@ -313,7 +313,7 @@ def export_csv(
     cx = intrinsics.get("cx", intrinsics.get("principal_x", 960))
     cy = intrinsics.get("cy", intrinsics.get("principal_y", 540))
 
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         f.write(f"# Rotation order: {rotation_order.upper()}\n")
         f.write("frame,tx,ty,tz,rx,ry,rz,fx,fy,cx,cy\n")
 
@@ -488,7 +488,7 @@ print("=" * 60)
 '''
 
     # Write the Python script
-    with open(py_script_path, 'w') as f:
+    with open(py_script_path, 'w', encoding='utf-8') as f:
         f.write(py_content)
 
     # Write the .cmd file that runs the .py file
@@ -503,7 +503,7 @@ print("=" * 60)
 python -c "exec(open(r'{py_path_escaped}').read())"
 '''
 
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         f.write(cmd_content)
 
     print(f"Exported Houdini scripts:")
@@ -532,7 +532,7 @@ def export_houdini_clip(
     """
     num_frames = len(extrinsics)
 
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         # Clip header
         f.write("{\n")
         f.write(f'  rate = {fps}\n')
@@ -741,7 +741,7 @@ def export_after_effects_jsx(
 '''
 
     # Write the JSX file
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         f.write(jsx_content)
 
     print(f"Exported {num_frames} frames to {output_path}")

@@ -1300,11 +1300,11 @@ def export_colmap_to_pipeline_format(
 
     # Save extrinsics (list of 4x4 matrices)
     extrinsics_data = [m.tolist() if isinstance(m, np.ndarray) else m for m in extrinsics]
-    with open(output_dir / "extrinsics.json", "w") as f:
+    with open(output_dir / "extrinsics.json", "w", encoding='utf-8') as f:
         json.dump(extrinsics_data, f, indent=2)
 
     # Save intrinsics
-    with open(output_dir / "intrinsics.json", "w") as f:
+    with open(output_dir / "intrinsics.json", "w", encoding='utf-8') as f:
         json.dump(intrinsics, f, indent=2)
 
     # Also save the raw COLMAP data for reference
@@ -1320,7 +1320,7 @@ def export_colmap_to_pipeline_format(
         "total_frames": total_frames if total_frames > 0 else registered_count,
         "interpolated": total_frames > 0 and registered_count < total_frames,
     }
-    with open(output_dir / "colmap_raw.json", "w") as f:
+    with open(output_dir / "colmap_raw.json", "w", encoding='utf-8') as f:
         json.dump(colmap_data, f, indent=2)
 
     print(f"    Exported {len(extrinsics)} camera frames to {output_dir}")

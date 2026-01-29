@@ -88,7 +88,7 @@ class DockerStateManager:
 
         temp_file = self.state_file.with_suffix('.json.tmp')
         try:
-            with open(temp_file, 'w') as f:
+            with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump(self.state, indent=2, fp=f)
             temp_file.replace(self.state_file)
         except IOError as e:
@@ -670,7 +670,7 @@ class DockerWizard:
             print_info("Password required - SMPL-X models will not be downloaded")
             return
 
-        with open(smpl_creds_file, 'w') as f:
+        with open(smpl_creds_file, 'w', encoding='utf-8') as f:
             f.write(email + '\n')
             f.write(password + '\n')
         smpl_creds_file.chmod(0o600)
