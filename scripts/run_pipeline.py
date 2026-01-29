@@ -18,120 +18,24 @@ Example:
 """
 
 import argparse
-import json
 import os
-import re
 import shutil
-import signal
-import subprocess
 import sys
-import time
 from pathlib import Path
-from typing import Optional
 
-from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR, is_in_container, INSTALL_DIR
-from comfyui_utils import DEFAULT_COMFYUI_URL, run_comfyui_workflow
 from comfyui_manager import stop_comfyui, prepare_comfyui_for_processing
-
-from pipeline_constants import (
-    START_FRAME,
-    STAGES,
-    STAGE_ORDER,
-    STAGES_REQUIRING_FRAMES,
-)
-from pipeline_utils import (
-    clear_gpu_memory,
-    clear_output_directory,
-    extract_frames,
-    get_video_info,
-    generate_preview_movie,
-)
-from matte_utils import combine_mattes, prepare_roto_for_cleanplate
-from workflow_utils import (
-    refresh_workflow_from_template,
-    update_segmentation_prompt,
-    update_matanyone_input,
-    update_matanyone_resolution,
-    update_cleanplate_resolution,
-)
-from stage_runners import (
-    run_export_camera,
-    run_colmap_reconstruction,
-    export_camera_to_vfx_formats,
-    run_mocap,
-    run_gsir_materials,
-    setup_project,
-)
-
-# Log capture for debugging
+from comfyui_utils import DEFAULT_COMFYUI_URL
+from docker_utils import check_docker_available, check_docker_image_exists, run_docker_mode
+from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR, is_in_container, INSTALL_DIR
 from log_manager import LogCapture
+from pipeline_config import PipelineConfig, StageContext
+from pipeline_constants import STAGES, STAGE_ORDER, STAGES_REQUIRING_FRAMES
+from pipeline_utils import get_image_dimensions, get_video_info
+from project_utils import ProjectMetadata, save_last_project, get_last_project
+from stage_runners import setup_project, STAGE_HANDLERS
 
-# Docker configuration
-CONTAINER_NAME = "vfx-pipeline-run"
-REPO_ROOT = Path(__file__).resolve().parent.parent
+
 COMFYUI_DIR = INSTALL_DIR / "ComfyUI"
-LAST_PROJECT_FILE = INSTALL_DIR / ".last_project"
-
-
-def save_last_project(project_dir: Path) -> None:
-    """Save the last used project directory."""
-    # In containers, /app is read-only - use projects dir instead
-    if is_in_container():
-        last_project_file = project_dir.parent / ".last_project"
-    else:
-        last_project_file = LAST_PROJECT_FILE
-        INSTALL_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        last_project_file.write_text(str(project_dir.resolve()))
-    except PermissionError:
-        pass  # Skip if we can't write (not critical)
-
-
-def get_last_project() -> Optional[Path]:
-    """Get the last used project directory, if it exists."""
-    # Check both possible locations
-    possible_files = [LAST_PROJECT_FILE]
-    if is_in_container():
-        # In container, also check the projects directory
-        projects_dir = Path(os.environ.get("VFX_PROJECTS_DIR", "/workspace/projects"))
-        possible_files.insert(0, projects_dir / ".last_project")
-
-    for last_project_file in possible_files:
-        if last_project_file.exists():
-            try:
-                path = Path(last_project_file.read_text().strip())
-                if path.exists() and path.is_dir():
-                    return path
-            except Exception:
-                pass
-    return None
-
-
-def check_docker_available() -> bool:
-    """Check if Docker is available and running."""
-    try:
-        result = subprocess.run(
-            ["docker", "info"],
-            capture_output=True,
-            timeout=10
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
-def check_docker_image_exists() -> bool:
-    """Check if the vfx-ingest Docker image exists."""
-    try:
-        result = subprocess.run(
-            ["docker", "images", "-q", "vfx-ingest:latest"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        return bool(result.stdout.strip())
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
 
 
 def check_local_comfyui_installed() -> bool:
@@ -164,137 +68,7 @@ def find_default_models_dir() -> Path:
     default_path = INSTALL_DIR / "models"
     if default_path.exists():
         return default_path
-    return REPO_ROOT / ".vfx_pipeline" / "models"
-
-
-def run_docker_mode(
-    input_path: Path,
-    project_name: Optional[str],
-    projects_dir: Path,
-    models_dir: Path,
-    original_args: list[str],
-) -> int:
-    """Run the pipeline in Docker mode.
-
-    Args:
-        input_path: Path to input movie file
-        project_name: Project name (or None to derive from input)
-        projects_dir: Directory for projects
-        models_dir: Path to models directory
-        original_args: Original command line arguments (to forward to container)
-
-    Returns:
-        Exit code
-    """
-    input_path = input_path.resolve()
-    projects_dir = projects_dir.resolve()
-    models_dir = models_dir.resolve()
-
-    if not project_name:
-        project_name = input_path.stem.replace(" ", "_")
-
-    print(f"\n{'='*60}")
-    print("VFX Pipeline (Docker Mode)")
-    print(f"{'='*60}")
-    print(f"Input: {input_path}")
-    print(f"Project: {project_name}")
-    print(f"Projects dir: {projects_dir}")
-    print(f"Models: {models_dir}")
-
-    if not input_path.exists():
-        print(f"Error: Input file not found: {input_path}", file=sys.stderr)
-        return 1
-
-    if not models_dir.exists():
-        print(f"Error: Models directory not found: {models_dir}", file=sys.stderr)
-        print("Run model download or specify --models-dir", file=sys.stderr)
-        return 1
-
-    if not check_docker_available():
-        print("Error: Docker is not available or not running", file=sys.stderr)
-        return 1
-
-    if not check_docker_image_exists():
-        print("Error: Docker image 'vfx-ingest:latest' not found", file=sys.stderr)
-        print("Build it first: docker compose build", file=sys.stderr)
-        return 1
-
-    projects_dir.mkdir(parents=True, exist_ok=True)
-
-    container_input = f"/workspace/input/{input_path.name}"
-    container_projects = "/workspace/projects"
-
-    forward_args = []
-    skip_next = False
-    for i, arg in enumerate(original_args[1:]):
-        if skip_next:
-            skip_next = False
-            continue
-        if arg in ("--docker", "-D"):
-            continue
-        if arg in ("--local", "-L"):
-            continue
-        if arg in ("--models-dir",) and i + 1 < len(original_args) - 1:
-            skip_next = True
-            continue
-        if arg.startswith("--models-dir="):
-            continue
-        if arg in ("--projects-dir", "-p") and i + 1 < len(original_args) - 1:
-            skip_next = True
-            continue
-        if arg.startswith("--projects-dir="):
-            continue
-        if i == 0:
-            forward_args.append(container_input)
-        else:
-            forward_args.append(arg)
-
-    forward_args.extend(["--projects-dir", container_projects])
-    forward_args.append("--local")
-
-    print(f"\nStarting Docker container...")
-
-    def signal_handler(sig, frame):
-        print("\n\nInterrupted! Cleaning up...")
-        subprocess.run(["docker", "stop", CONTAINER_NAME], capture_output=True)
-        subprocess.run(["docker", "rm", "-f", CONTAINER_NAME], capture_output=True)
-        sys.exit(130)
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    try:
-        uid = os.getuid()
-        gid = os.getgid()
-        cmd = [
-            "docker", "run",
-            "--rm",
-            "--name", CONTAINER_NAME,
-            "--gpus", "all",
-            "-e", "NVIDIA_VISIBLE_DEVICES=all",
-            "-e", "START_COMFYUI=false",
-            "-e", f"HOST_UID={uid}",
-            "-e", f"HOST_GID={gid}",
-            "-v", f"{input_path.parent}:/workspace/input:ro",
-            "-v", f"{projects_dir}:/workspace/projects",
-            "-v", f"{models_dir}:/models:ro",
-            "-v", f"{REPO_ROOT / 'scripts'}:/app/scripts:ro",
-            "-v", f"{REPO_ROOT / 'workflow_templates'}:/app/workflow_templates:ro",
-            "vfx-ingest:latest",
-        ] + forward_args
-
-        print(f"Running: docker run ... {' '.join(forward_args)}")
-        print()
-
-        result = subprocess.run(cmd, cwd=REPO_ROOT)
-        return result.returncode
-
-    except Exception as e:
-        print(f"Error running Docker container: {e}", file=sys.stderr)
-        return 1
-
-    finally:
-        subprocess.run(["docker", "rm", "-f", CONTAINER_NAME], capture_output=True)
+    return Path(__file__).parent.parent / ".vfx_pipeline" / "models"
 
 
 def sanitize_stages(stages: list[str]) -> list[str]:
@@ -317,77 +91,33 @@ def sanitize_stages(stages: list[str]) -> list[str]:
     return [s for s in STAGE_ORDER if s in requested]
 
 
-def run_pipeline(
-    input_path: Optional[Path],
-    project_name: Optional[str] = None,
-    projects_dir: Path = DEFAULT_PROJECTS_DIR,
-    stages: list[str] = None,
-    comfyui_url: str = DEFAULT_COMFYUI_URL,
-    fps: Optional[float] = None,
-    skip_existing: bool = False,
-    colmap_quality: str = "medium",
-    colmap_dense: bool = False,
-    colmap_mesh: bool = False,
-    colmap_use_masks: bool = True,
-    colmap_max_size: int = -1,
-    gsir_iterations: int = 35000,
-    gsir_path: Optional[str] = None,
-    mocap_method: str = "auto",
-    auto_start_comfyui: bool = True,
-    roto_prompt: Optional[str] = None,
-    roto_start_frame: Optional[int] = None,
-    separate_instances: bool = False,
-    auto_movie: bool = False,
-    overwrite: bool = True,
-) -> bool:
+def run_pipeline(config: PipelineConfig) -> bool:
     """Run the full VFX pipeline.
 
     Args:
-        input_path: Input movie file
-        project_name: Project name (default: derived from filename)
-        projects_dir: Parent directory for projects
-        stages: Which stages to run (default: all)
-        comfyui_url: ComfyUI API URL
-        fps: Override frame rate
-        skip_existing: Skip stages with existing output
-        colmap_quality: COLMAP quality preset ('low', 'medium', 'high')
-        colmap_dense: Run COLMAP dense reconstruction
-        colmap_mesh: Generate mesh from COLMAP dense reconstruction
-        colmap_use_masks: Use segmentation masks for COLMAP (if available)
-        colmap_max_size: Max image dimension for COLMAP (-1 for no limit)
-        gsir_iterations: Total GS-IR training iterations
-        gsir_path: Path to GS-IR installation
-        mocap_method: Motion capture method - "auto", "gvhmr", or "wham"
-        auto_start_comfyui: Auto-start ComfyUI if not running (default: True)
-        roto_prompt: Segmentation prompt (default: 'person')
-        roto_start_frame: Frame to start segmentation from (enables bidirectional)
-        separate_instances: Separate multi-person masks into individual instances
-        auto_movie: Generate preview MP4s from completed image sequences
-        overwrite: Clear existing output before running stages (default: True)
+        config: Pipeline configuration
 
     Returns:
         True if all stages successful
     """
-    stages = stages or list(STAGES.keys())
-
     comfyui_stages = {"depth", "roto", "matanyone", "cleanplate"}
-    needs_comfyui = bool(comfyui_stages & set(stages))
+    needs_comfyui = bool(comfyui_stages & set(config.stages))
 
     comfyui_was_started = False
     if needs_comfyui:
-        if not prepare_comfyui_for_processing(url=comfyui_url, auto_start=auto_start_comfyui):
+        if not prepare_comfyui_for_processing(url=config.comfyui_url, auto_start=config.auto_start_comfyui):
             return False
-        comfyui_was_started = auto_start_comfyui
+        comfyui_was_started = config.auto_start_comfyui
 
+    project_name = config.project_name
     if not project_name:
-        if input_path:
-            project_name = input_path.stem.replace(" ", "_")
+        if config.input_path:
+            project_name = config.input_path.stem.replace(" ", "_")
         else:
             print("Error: project_name required when input_path is None", file=sys.stderr)
             return False
 
-    project_dir = projects_dir / project_name
-
+    project_dir = config.projects_dir / project_name
     save_last_project(project_dir)
 
     if is_in_container():
@@ -403,24 +133,17 @@ def run_pipeline(
     print(f"\n{'='*60}")
     print(f"VFX Pipeline: {project_name}")
     print(f"{'='*60}")
-    if input_path:
-        print(f"Input: {input_path}")
+    if config.input_path:
+        print(f"Input: {config.input_path}")
     print(f"Project: {project_dir}")
-    print(f"Stages: {', '.join(stages)}")
+    print(f"Stages: {', '.join(config.stages)}")
     print()
 
-    metadata_path = project_dir / "project.json"
+    metadata = ProjectMetadata(project_dir)
+    fps = config.fps or metadata.get_fps()
 
-    if not fps and metadata_path.exists():
-        try:
-            with open(metadata_path) as f:
-                existing_meta = json.load(f)
-            fps = existing_meta.get("fps")
-        except (json.JSONDecodeError, IOError):
-            pass
-
-    if input_path and not fps and input_path.suffix.lower() in {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"}:
-        info = get_video_info(input_path)
+    if config.input_path and not fps and config.input_path.suffix.lower() in {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"}:
+        info = get_video_info(config.input_path)
         for stream in info.get("streams", []):
             if stream.get("codec_type") == "video":
                 fps_str = stream.get("r_frame_rate", "24/1")
@@ -435,373 +158,38 @@ def run_pipeline(
     print(f"Frame rate: {fps} fps")
 
     project_dir.mkdir(parents=True, exist_ok=True)
-    project_metadata = {
-        "name": project_name,
-        "fps": fps,
-        "start_frame": 1,
-    }
-    if input_path:
-        project_metadata["source"] = str(input_path)
-    if metadata_path.exists():
-        try:
-            with open(metadata_path) as f:
-                existing = json.load(f)
-            existing.update(project_metadata)
-            project_metadata = existing
-        except json.JSONDecodeError:
-            pass
-    with open(metadata_path, "w") as f:
-        json.dump(project_metadata, f, indent=2)
+    metadata.initialize(project_name, fps, config.input_path)
 
     print("\n[Setup]")
     if not setup_project(project_dir, workflows_dir):
         print("Failed to set up project", file=sys.stderr)
         return False
 
-    if "ingest" in stages:
-        print("\n=== Stage: ingest ===")
-        if not input_path:
-            print("  → Skipping (no input file, existing project)")
-        elif skip_existing and list(source_frames.glob("*.png")):
-            print("  → Skipping (frames exist)")
-        else:
-            frame_count = extract_frames(input_path, source_frames, START_FRAME, fps)
-            print(f"  → Extracted {frame_count} frames")
-
-        preview_dir = project_dir / "preview"
-        preview_dir.mkdir(exist_ok=True)
-        if input_path:
-            source_preview = preview_dir / f"source{input_path.suffix}"
-            if not source_preview.exists():
-                shutil.copy2(input_path, source_preview)
-                print(f"  → Copied source to {source_preview.name}")
-
     total_frames = len(list(source_frames.glob("*.png")))
 
+    if "ingest" in config.stages:
+        ctx = StageContext.from_config(config, project_dir, total_frames, fps)
+        handler = STAGE_HANDLERS["ingest"]
+        if not handler(ctx, config):
+            return False
+        total_frames = len(list(source_frames.glob("*.png")))
+
     if total_frames > 0:
-        project_metadata["frame_count"] = total_frames
         first_frame = sorted(source_frames.glob("*.png"))[0]
-        from PIL import Image
-        with Image.open(first_frame) as img:
-            project_metadata["width"] = img.width
-            project_metadata["height"] = img.height
-        with open(metadata_path, "w") as f:
-            json.dump(project_metadata, f, indent=2)
+        width, height = get_image_dimensions(first_frame)
+        metadata.set_frame_info(total_frames, width, height)
 
-    if "interactive" in stages:
-        print("\n=== Stage: interactive ===")
-        workflow_path = project_dir / "workflows" / "05_interactive_segmentation.json"
-        roto_dir = project_dir / "roto"
+    ctx = StageContext.from_config(config, project_dir, total_frames, fps)
 
-        refresh_workflow_from_template(workflow_path, "05_interactive_segmentation.json")
+    for stage in config.stages:
+        if stage == "ingest":
+            continue
 
-        if not workflow_path.exists():
-            print("  → Skipping (workflow not found)")
-        else:
-            print("  → Opening interactive segmentation in ComfyUI")
-            print(f"    Workflow: {workflow_path}")
-            print(f"    ComfyUI: {comfyui_url}")
-            print()
-            print("  Instructions:")
-            print("    1. Open ComfyUI in your browser")
-            print("    2. Load the workflow from: workflows/05_interactive_segmentation.json")
-            print("    3. Click points on the first frame to define what to segment")
-            print("    4. Run the workflow (Queue Prompt)")
-            print("    5. Masks will be saved to: roto/")
-            print()
-
-            import webbrowser
-            webbrowser.open(comfyui_url)
-
-            input("  Press Enter when done with interactive segmentation...")
-
-            if list(roto_dir.glob("**/*.png")):
-                print(f"  ✓ Masks found in {roto_dir}")
-            else:
-                print(f"  → Warning: No masks found in {roto_dir}")
-
-    if "depth" in stages:
-        print("\n=== Stage: depth ===")
-        workflow_path = project_dir / "workflows" / "01_analysis.json"
-        depth_dir = project_dir / "depth"
-        if not workflow_path.exists():
-            print("  → Skipping (workflow not found)")
-        elif skip_existing and list(depth_dir.glob("*.png")):
-            print("  → Skipping (depth maps exist)")
-        else:
-            if overwrite:
-                clear_output_directory(depth_dir)
-            if not run_comfyui_workflow(
-                workflow_path, comfyui_url,
-                output_dir=depth_dir,
-                total_frames=total_frames,
-                stage_name="depth",
-            ):
-                print("  → Depth stage failed", file=sys.stderr)
-                return False
-        if auto_movie and list(depth_dir.glob("*.png")):
-            generate_preview_movie(depth_dir, project_dir / "preview" / "depth.mp4", fps)
-
-        clear_gpu_memory(comfyui_url)
-
-    if "roto" in stages:
-        print("\n=== Stage: roto ===")
-        workflow_path = project_dir / "workflows" / "02_segmentation.json"
-        roto_dir = project_dir / "roto"
-
-        prompts = [p.strip() for p in (roto_prompt or "person").split(",")]
-        prompts = [p for p in prompts if p]
-
-        refresh_workflow_from_template(workflow_path, "02_segmentation.json")
-
-        if not workflow_path.exists():
-            print("  → Skipping (workflow not found)")
-        elif skip_existing and (list(roto_dir.glob("*.png")) or list(roto_dir.glob("*/*.png"))):
-            print("  → Skipping (masks exist)")
-        else:
-            if overwrite:
-                clear_output_directory(roto_dir)
-
-            print(f"  → Segmenting {len(prompts)} target(s): {', '.join(prompts)}")
-
-            for i, prompt in enumerate(prompts):
-                prompt_name = prompt.replace(" ", "_")
-                output_subdir = roto_dir / prompt_name
-                output_subdir.mkdir(parents=True, exist_ok=True)
-
-                if len(prompts) > 1:
-                    print(f"\n  [{i+1}/{len(prompts)}] Segmenting: {prompt}")
-                update_segmentation_prompt(
-                    workflow_path, prompt, output_subdir, project_dir,
-                    start_frame=roto_start_frame
-                )
-                if not run_comfyui_workflow(
-                    workflow_path, comfyui_url,
-                    output_dir=output_subdir,
-                    total_frames=total_frames,
-                    stage_name=f"roto ({prompt})" if len(prompts) > 1 else "roto",
-                ):
-                    print(f"  → Segmentation failed for '{prompt}'", file=sys.stderr)
-
-        if auto_movie:
-            for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
-                if subdir.is_dir() and list(subdir.glob("*.png")):
-                    generate_preview_movie(subdir, project_dir / "preview" / "roto.mp4", fps)
-                    break
-
-        if separate_instances:
-            from separate_instances import separate_instances as do_separate
-
-            print("\n  --- Separating instances ---")
-            for prompt in prompts:
-                prompt_name = prompt.replace(" ", "_")
-                prompt_dir = roto_dir / prompt_name
-                if prompt_dir.exists() and list(prompt_dir.glob("*.png")):
-                    print(f"  → Processing: {prompt_name} → {prompt_name}_00/, {prompt_name}_01/, ...")
-                    result = do_separate(
-                        input_dir=prompt_dir,
-                        output_dir=roto_dir,
-                        min_area=500,
-                        prefix=prompt_name,
-                    )
-
-                    if result:
-                        print(f"    Created {len(result)} {prompt_name} directories")
-                        print(f"    Combined mask kept in: {prompt_name}/")
-                else:
-                    print(f"  → No {prompt_name} directory to separate")
-
-        clear_gpu_memory(comfyui_url)
-
-    if "matanyone" in stages:
-        print("\n=== Stage: matanyone ===")
-        workflow_path = project_dir / "workflows" / "04_matanyone.json"
-        roto_dir = project_dir / "roto"
-        combined_dir = roto_dir / "combined"
-        matte_dir = project_dir / "matte"
-
-        refresh_workflow_from_template(workflow_path, "04_matanyone.json")
-
-        person_pattern = re.compile(r"^person(_\d{2})?$")
-        person_dirs = []
-        for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
-            if not subdir.is_dir():
-                continue
-            if person_pattern.match(subdir.name) and list(subdir.glob("*.png")):
-                person_dirs.append(subdir)
-
-        if not workflow_path.exists():
-            print("  → Skipping (workflow not found)")
-        elif not person_dirs:
-            print("  → Skipping (no person masks found in roto/)")
-        else:
-            if overwrite:
-                clear_output_directory(matte_dir)
-                if combined_dir.exists():
-                    clear_output_directory(combined_dir)
-
-            output_dirs = []
-
-            for i, person_dir in enumerate(person_dirs):
-                out_dir = matte_dir / person_dir.name
-                output_dirs.append(out_dir)
-
-                if skip_existing and list(out_dir.glob("*.png")):
-                    print(f"  → Skipping {person_dir.name} (mattes exist)")
-                    continue
-
-                if len(person_dirs) > 1:
-                    print(f"\n  [{i+1}/{len(person_dirs)}] Refining: {person_dir.name}")
-                else:
-                    print(f"  → Refining masks from: {person_dir.name}")
-
-                out_dir.mkdir(parents=True, exist_ok=True)
-
-                update_matanyone_input(workflow_path, person_dir, out_dir, project_dir)
-                update_matanyone_resolution(workflow_path, source_frames)
-                if not run_comfyui_workflow(
-                    workflow_path, comfyui_url,
-                    output_dir=out_dir,
-                    total_frames=total_frames,
-                    stage_name=f"matanyone ({person_dir.name})" if len(person_dirs) > 1 else "matanyone",
-                ):
-                    print(f"  → MatAnyone stage failed for {person_dir.name}", file=sys.stderr)
-                    print(f"    (cleanplate will use raw roto masks instead)", file=sys.stderr)
-
-            valid_output_dirs = [d for d in output_dirs if d.exists() and list(d.glob("*.png"))]
-            if valid_output_dirs:
-                if skip_existing and list(combined_dir.glob("*.png")):
-                    print(f"  → Skipping combine (roto/combined/ exists)")
-                else:
-                    print("\n  --- Combining mattes ---")
-                    combine_mattes(valid_output_dirs, combined_dir, "combined")
-
-            if auto_movie and list(combined_dir.glob("*.png")):
-                generate_preview_movie(combined_dir, project_dir / "preview" / "matte.mp4", fps)
-
-        clear_gpu_memory(comfyui_url)
-
-    if "cleanplate" in stages:
-        print("\n=== Stage: cleanplate ===")
-        workflow_path = project_dir / "workflows" / "03_cleanplate.json"
-        cleanplate_dir = project_dir / "cleanplate"
-        roto_dir = project_dir / "roto"
-
-        roto_ready, roto_message = prepare_roto_for_cleanplate(roto_dir)
-
-        if not roto_ready:
-            print("")
-            print("  " + "=" * 50)
-            print("  !!!  NO ROTO DATA FOUND - SKIPPING CLEANPLATE  !!!")
-            print("  " + "=" * 50)
-            print("  Run the 'roto' stage first to generate masks.")
-            print("")
-        else:
-            refresh_workflow_from_template(workflow_path, "03_cleanplate.json")
-
-            if not workflow_path.exists():
-                print("  → Skipping (workflow not found)")
-            elif skip_existing and list(cleanplate_dir.glob("*.png")):
-                print("  → Skipping (cleanplates exist)")
-            else:
-                if overwrite:
-                    clear_output_directory(cleanplate_dir)
-
-                print(f"  → {roto_message}")
-
-                update_cleanplate_resolution(workflow_path, source_frames)
-                if not run_comfyui_workflow(
-                    workflow_path, comfyui_url,
-                    output_dir=cleanplate_dir,
-                    total_frames=total_frames,
-                    stage_name="cleanplate",
-                ):
-                    print("  → Cleanplate stage failed", file=sys.stderr)
-        if auto_movie and list(cleanplate_dir.glob("*.png")):
-            generate_preview_movie(cleanplate_dir, project_dir / "preview" / "cleanplate.mp4", fps)
-
-        clear_gpu_memory(comfyui_url)
-
-    if "colmap" in stages:
-        print("\n=== Stage: colmap ===")
-        colmap_sparse = project_dir / "colmap" / "sparse" / "0"
-        if skip_existing and colmap_sparse.exists():
-            print("  → Skipping (COLMAP sparse model exists)")
-        else:
-            if not run_colmap_reconstruction(
-                project_dir,
-                quality=colmap_quality,
-                run_dense=colmap_dense,
-                run_mesh=colmap_mesh,
-                use_masks=colmap_use_masks,
-                max_image_size=colmap_max_size
-            ):
-                print("  → COLMAP reconstruction failed", file=sys.stderr)
-
-        camera_dir = project_dir / "camera"
-        if (camera_dir / "extrinsics.json").exists():
-            print("\n  → Exporting camera to VFX formats...")
-            export_camera_to_vfx_formats(
-                project_dir,
-                start_frame=1,
-                fps=fps,
-            )
-
-        clear_gpu_memory(comfyui_url)
-
-    if "mocap" in stages:
-        print("\n=== Stage: mocap ===")
-        mocap_output = project_dir / "mocap" / "wham"
-        camera_dir = project_dir / "camera"
-        has_camera = camera_dir.exists() and (camera_dir / "extrinsics.json").exists()
-
-        if skip_existing and mocap_output.exists():
-            print("  → Skipping (mocap data exists)")
-        else:
-            if not has_camera and mocap_method == "wham":
-                print("  → Skipping WHAM (camera data required - run colmap stage first)")
-            else:
-                if has_camera:
-                    print(f"  → Using COLMAP camera data for improved accuracy")
-                if not run_mocap(
-                    project_dir,
-                    method=mocap_method,
-                    use_colmap_intrinsics=has_camera,
-                    skip_texture=False,
-                ):
-                    print("  → Motion capture failed", file=sys.stderr)
-
-        clear_gpu_memory(comfyui_url)
-
-    if "gsir" in stages:
-        print("\n=== Stage: gsir ===")
-        colmap_sparse = project_dir / "colmap" / "sparse" / "0"
-        gsir_checkpoint = project_dir / "gsir" / "model" / f"chkpnt{gsir_iterations}.pth"
-        if not colmap_sparse.exists():
-            print("  → Skipping (COLMAP reconstruction required first)")
-        elif skip_existing and gsir_checkpoint.exists():
-            print("  → Skipping (GS-IR checkpoint exists)")
-        else:
-            if not run_gsir_materials(
-                project_dir,
-                iterations_stage1=30000,
-                iterations_stage2=gsir_iterations,
-                gsir_path=gsir_path
-            ):
-                print("  → GS-IR material decomposition failed", file=sys.stderr)
-
-        clear_gpu_memory(comfyui_url)
-
-    if "camera" in stages:
-        print("\n=== Stage: camera ===")
-        camera_dir = project_dir / "camera"
-        if not (camera_dir / "extrinsics.json").exists():
-            print("  → Skipping (no camera data - run depth or colmap stage first)")
-        elif skip_existing and (camera_dir / "camera.abc").exists():
-            print("  → Skipping (camera.abc exists)")
-        else:
-            if not run_export_camera(project_dir, fps):
-                print("  → Camera export failed", file=sys.stderr)
+        handler = STAGE_HANDLERS.get(stage)
+        if handler:
+            if not handler(ctx, config):
+                if stage == "depth":
+                    return False
 
     print(f"\n{'='*60}")
     print(f"Pipeline complete: {project_dir}")
@@ -814,7 +202,8 @@ def run_pipeline(
     return True
 
 
-def main():
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="Automated VFX pipeline runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -966,7 +355,12 @@ def main():
         help="Keep existing output files instead of clearing them before running stages"
     )
 
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    """Main entry point."""
+    args = parse_arguments()
 
     if args.list_stages:
         print("Available stages:")
@@ -991,22 +385,16 @@ def main():
             sys.exit(1)
         print(f"Auto-detected mode: {mode}")
 
-    if mode == "docker":
-        if args.input is None:
-            print("Error: Docker mode requires an input file", file=sys.stderr)
-            print("Usage: run_pipeline.py <movie_file> --docker", file=sys.stderr)
+    if args.stages.lower() == "all":
+        stages = STAGE_ORDER.copy()
+    else:
+        stages = [s.strip() for s in args.stages.split(",")]
+        invalid = set(stages) - set(STAGES.keys())
+        if invalid:
+            print(f"Error: Invalid stages: {invalid}", file=sys.stderr)
+            print(f"Valid stages: {', '.join(STAGE_ORDER)}")
             sys.exit(1)
-        models_dir = args.models_dir or find_default_models_dir()
-        exit_code = run_docker_mode(
-            input_path=args.input,
-            project_name=args.name,
-            projects_dir=args.projects_dir,
-            models_dir=models_dir,
-            original_args=sys.argv,
-        )
-        sys.exit(exit_code)
-
-    check_conda_env_or_warn()
+        stages = sanitize_stages(stages)
 
     input_path = None
     project_dir = None
@@ -1017,8 +405,12 @@ def main():
             project_dir = last_project
             print(f"Using last project: {project_dir.name}")
         else:
-            print("Error: No input specified and no previous project found", file=sys.stderr)
-            print("Usage: run_pipeline.py <movie_file_or_project_dir>", file=sys.stderr)
+            if mode == "docker":
+                print("Error: Docker mode requires an input file", file=sys.stderr)
+                print("Usage: run_pipeline.py <movie_file> --docker", file=sys.stderr)
+            else:
+                print("Error: No input specified and no previous project found", file=sys.stderr)
+                print("Usage: run_pipeline.py <movie_file_or_project_dir>", file=sys.stderr)
             sys.exit(1)
     else:
         input_path = args.input.resolve()
@@ -1036,69 +428,43 @@ def main():
                     shutil.copytree(input_path, project_dir)
             print(f"Using existing project: {project_dir.name}")
 
-    if args.stages.lower() == "all":
-        stages = STAGE_ORDER.copy()
-    else:
-        stages = [s.strip() for s in args.stages.split(",")]
-        invalid = set(stages) - set(STAGES.keys())
-        if invalid:
-            print(f"Error: Invalid stages: {invalid}", file=sys.stderr)
-            print(f"Valid stages: {', '.join(STAGE_ORDER)}")
-            sys.exit(1)
-        stages = sanitize_stages(stages)
+    config = PipelineConfig(
+        input_path=input_path if not project_dir else None,
+        project_name=project_dir.name if project_dir else args.name,
+        projects_dir=project_dir.parent if project_dir else args.projects_dir,
+        stages=stages,
+        comfyui_url=args.comfyui_url,
+        fps=args.fps,
+        skip_existing=args.skip_existing,
+        overwrite=not args.no_overwrite,
+        auto_movie=args.auto_movie,
+        auto_start_comfyui=not args.no_auto_comfyui,
+        colmap_quality=args.colmap_quality,
+        colmap_dense=args.colmap_dense,
+        colmap_mesh=args.colmap_mesh,
+        colmap_use_masks=not args.colmap_no_masks,
+        colmap_max_size=args.colmap_max_size,
+        gsir_iterations=args.gsir_iterations,
+        gsir_path=args.gsir_path,
+        mocap_method=args.mocap_method,
+        roto_prompt=args.prompt,
+        roto_start_frame=args.start_frame,
+        separate_instances=args.separate_instances,
+    )
 
-    print(f"Stages to run: {', '.join(stages)}")
+    print(f"Stages to run: {', '.join(config.stages)}")
+
+    if mode == "docker":
+        models_dir = args.models_dir or find_default_models_dir()
+        exit_code = run_docker_mode(config, models_dir)
+        sys.exit(exit_code)
+
+    check_conda_env_or_warn()
 
     if project_dir:
         save_last_project(project_dir)
-        success = run_pipeline(
-            input_path=None,
-            project_name=project_dir.name,
-            projects_dir=project_dir.parent,
-            stages=stages,
-            comfyui_url=args.comfyui_url,
-            fps=args.fps,
-            skip_existing=args.skip_existing,
-            colmap_quality=args.colmap_quality,
-            colmap_dense=args.colmap_dense,
-            colmap_mesh=args.colmap_mesh,
-            colmap_use_masks=not args.colmap_no_masks,
-            colmap_max_size=args.colmap_max_size,
-            gsir_iterations=args.gsir_iterations,
-            gsir_path=args.gsir_path,
-            mocap_method=args.mocap_method,
-            auto_start_comfyui=not args.no_auto_comfyui,
-            roto_prompt=args.prompt,
-            roto_start_frame=args.start_frame,
-            separate_instances=args.separate_instances,
-            auto_movie=args.auto_movie,
-            overwrite=not args.no_overwrite,
-        )
-    else:
-        success = run_pipeline(
-            input_path=input_path,
-            project_name=args.name,
-            projects_dir=args.projects_dir,
-            stages=stages,
-            comfyui_url=args.comfyui_url,
-            fps=args.fps,
-            skip_existing=args.skip_existing,
-            colmap_quality=args.colmap_quality,
-            colmap_dense=args.colmap_dense,
-            colmap_mesh=args.colmap_mesh,
-            colmap_use_masks=not args.colmap_no_masks,
-            colmap_max_size=args.colmap_max_size,
-            gsir_iterations=args.gsir_iterations,
-            gsir_path=args.gsir_path,
-            mocap_method=args.mocap_method,
-            auto_start_comfyui=not args.no_auto_comfyui,
-            roto_prompt=args.prompt,
-            roto_start_frame=args.start_frame,
-            separate_instances=args.separate_instances,
-            auto_movie=args.auto_movie,
-            overwrite=not args.no_overwrite,
-        )
 
+    success = run_pipeline(config)
     sys.exit(0 if success else 1)
 
 
