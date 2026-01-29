@@ -343,7 +343,7 @@ def save_chunk_workflow(
     workflows_dir.mkdir(parents=True, exist_ok=True)
 
     output_path = workflows_dir / chunk.workflow_name
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding='utf-8') as f:
         json.dump(workflow, f, indent=2)
 
     return output_path
@@ -364,7 +364,7 @@ def save_batch_state(project_dir: Path, state: dict) -> None:
     state_dir.mkdir(parents=True, exist_ok=True)
 
     state_file = state_dir / STATE_FILENAME
-    with open(state_file, "w") as f:
+    with open(state_file, "w", encoding='utf-8') as f:
         json.dump(state, f, indent=2)
 
 

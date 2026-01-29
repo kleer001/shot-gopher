@@ -58,7 +58,7 @@ class InstallationStateManager:
         # Atomic write (write to temp, then rename)
         temp_file = self.state_file.with_suffix('.json.tmp')
         try:
-            with open(temp_file, 'w') as f:
+            with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump(self.state, indent=2, fp=f)
             temp_file.replace(self.state_file)
         except IOError as e:

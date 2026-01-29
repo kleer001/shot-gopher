@@ -59,7 +59,7 @@ class ProjectRepository(Repository[Project]):
             "updated_at": project.updated_at.isoformat(),
         }
 
-        with open(project.state_file, "w") as f:
+        with open(project.state_file, "w", encoding='utf-8') as f:
             json.dump(state, f, indent=2)
 
         return project

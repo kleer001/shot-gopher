@@ -63,7 +63,7 @@ def refresh_workflow_from_template(
         with open(template_path) as f:
             workflow_data = json.load(f)
         populated = populate_workflow(workflow_data, project_dir)
-        with open(workflow_path, 'w') as f:
+        with open(workflow_path, 'w', encoding='utf-8') as f:
             json.dump(populated, f, indent=2)
 
     if not workflow_path.exists():
@@ -134,7 +134,7 @@ def update_segmentation_prompt(
                 widgets[0] = str(relative_path / "mask")
                 node["widgets_values"] = widgets
 
-    with open(workflow_path, 'w') as f:
+    with open(workflow_path, 'w', encoding='utf-8') as f:
         json.dump(workflow, f, indent=2)
 
 
@@ -174,7 +174,7 @@ def update_matanyone_input(
                 widgets[0] = str(relative_path / "matte")
                 node["widgets_values"] = widgets
 
-    with open(workflow_path, 'w') as f:
+    with open(workflow_path, 'w', encoding='utf-8') as f:
         json.dump(workflow, f, indent=2)
 
 
@@ -224,7 +224,7 @@ def update_matanyone_resolution(
                     widgets[2] = output_height
                 node["widgets_values"] = widgets
 
-    with open(workflow_path, 'w') as f:
+    with open(workflow_path, 'w', encoding='utf-8') as f:
         json.dump(workflow, f, indent=2)
 
 
@@ -296,5 +296,5 @@ def update_cleanplate_resolution(
                 node["widgets_values"] = widgets
             break
 
-    with open(workflow_path, 'w') as f:
+    with open(workflow_path, 'w', encoding='utf-8') as f:
         json.dump(workflow, f, indent=2)
