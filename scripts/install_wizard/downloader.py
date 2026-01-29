@@ -433,14 +433,16 @@ Auto-downloads from Ultralytics releases.'''
         ]
 
         for method in install_methods:
-            # Check if the tool is available (for pipx)
             if method['check_cmd']:
-                check_result = subprocess.run(
-                    method['check_cmd'],
-                    capture_output=True,
-                    text=True
-                )
-                if check_result.returncode != 0:
+                try:
+                    check_result = subprocess.run(
+                        method['check_cmd'],
+                        capture_output=True,
+                        text=True
+                    )
+                    if check_result.returncode != 0:
+                        continue
+                except FileNotFoundError:
                     continue
 
             print_info(f"Trying to install gdown via {method['name']}...")
@@ -456,16 +458,16 @@ Auto-downloads from Ultralytics releases.'''
                     import gdown
                     return gdown
                 except ImportError:
-                    # pipx installs to a different location, need to use subprocess
-                    # Check if gdown CLI is available
-                    gdown_check = subprocess.run(
-                        ['gdown', '--version'],
-                        capture_output=True,
-                        text=True
-                    )
-                    if gdown_check.returncode == 0:
-                        # gdown CLI is available, use wrapper class
-                        return self._create_gdown_cli_wrapper()
+                    try:
+                        gdown_check = subprocess.run(
+                            ['gdown', '--version'],
+                            capture_output=True,
+                            text=True
+                        )
+                        if gdown_check.returncode == 0:
+                            return self._create_gdown_cli_wrapper()
+                    except FileNotFoundError:
+                        pass
                     continue
             else:
                 # Check for PEP 668 error and try next method
