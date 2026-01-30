@@ -15,7 +15,7 @@ import { stateManager } from '../managers/StateManager.js';
 import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
 import { formatDuration } from '../utils/time.js';
-import { ELEMENTS } from '../config/constants.js';
+import { ELEMENTS, EVENTS } from '../config/constants.js';
 
 export class ConfigController {
     constructor() {
@@ -65,6 +65,13 @@ export class ConfigController {
                 this.toggleRotoPrompt();
             });
         }
+
+        // Update VRAM warnings when vramAnalysis becomes available
+        stateManager.addEventListener(EVENTS.STATE_CHANGED, (e) => {
+            if (e.detail.updates?.vramAnalysis !== undefined) {
+                this.updateVramWarnings();
+            }
+        });
     }
 
     applyDefaultPreset() {
@@ -101,10 +108,11 @@ export class ConfigController {
             }
         });
 
-        // Update dependencies and time estimate
+        // Update dependencies, time estimate, and VRAM warnings
         this.updateStageDependencies();
         this.updateTimeEstimate();
         this.toggleRotoPrompt();
+        this.updateVramWarnings();
     }
 
     setDependentStage(stageValue, enabled) {
@@ -146,6 +154,51 @@ export class ConfigController {
 
         const rotoChecked = document.querySelector('input[value="roto"]')?.checked;
         this.setDependentStage('mama', rotoChecked);
+    }
+
+    updateVramWarnings() {
+        const vramAnalysis = stateManager.get('vramAnalysis');
+        if (!vramAnalysis?.stages) return;
+
+        this.elements.stageCheckboxes.forEach(checkbox => {
+            const stage = checkbox.value;
+            const analysis = vramAnalysis.stages[stage];
+            if (!analysis) return;
+
+            const label = checkbox.closest('label');
+            if (!label) return;
+
+            let warningEl = label.querySelector('.vram-warning');
+
+            if (analysis.status === 'warning' || analysis.status === 'insufficient') {
+                if (!warningEl) {
+                    warningEl = document.createElement('span');
+                    warningEl.title = analysis.message;
+                    warningEl.textContent = ' \u26A0\uFE0F';
+                    const textEl = label.querySelector('.checkbox-text, .stage-title, span');
+                    if (textEl) {
+                        textEl.appendChild(warningEl);
+                    }
+                }
+                const statusClass = analysis.status === 'insufficient' ? 'vram-insufficient' : 'vram-warning-status';
+                warningEl.className = `vram-warning ${statusClass}`;
+                warningEl.title = analysis.message;
+            } else if (analysis.status === 'chunked') {
+                if (!warningEl) {
+                    warningEl = document.createElement('span');
+                    warningEl.className = 'vram-warning vram-chunked';
+                    warningEl.title = analysis.message;
+                    warningEl.textContent = ' \u23F3';
+                    const textEl = label.querySelector('.checkbox-text, .stage-title, span');
+                    if (textEl) {
+                        textEl.appendChild(warningEl);
+                    }
+                }
+                warningEl.title = analysis.message;
+            } else if (warningEl) {
+                warningEl.remove();
+            }
+        });
     }
 
     toggleRotoPrompt() {

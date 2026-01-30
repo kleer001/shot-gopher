@@ -501,6 +501,28 @@ main {
     color: var(--text-muted);
 }
 
+/* VRAM Warnings */
+.vram-warning {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    cursor: help;
+    font-size: 0.9rem;
+}
+
+.vram-warning.vram-insufficient {
+    color: var(--danger);
+}
+
+.vram-warning.vram-warning-status {
+    color: var(--warning);
+}
+
+.vram-warning.vram-chunked {
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
 /* Roto prompt */
 .roto-prompt-wrapper {
     display: flex;

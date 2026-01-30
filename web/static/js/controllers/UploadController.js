@@ -124,12 +124,13 @@ export class UploadController {
         // Hide upload progress
         dom.hide(this.elements.uploadProgress);
 
-        // Update state with video info
+        // Update state with video info and VRAM analysis
         stateManager.setState({
             projectId: result.project_id,
             projectDir: result.project_dir,
             projectName: result.project_id,
             videoInfo: result.video_info,
+            vramAnalysis: result.vram_analysis,
             uploadProgress: 0,
             uploadFilename: null,
         });
