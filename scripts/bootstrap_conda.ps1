@@ -10,74 +10,8 @@ $ErrorActionPreference = "Stop"
 
 $REPO_URL = "https://github.com/kleer001/shot-gopher.git"
 
-# Capture starting directory and validate it's a safe install location
+# Capture starting directory FIRST - this is where the user wants to install
 $STARTING_DIR = (Get-Location).Path
-
-# Detect system directories that should not be used for installation
-$systemDirs = @(
-    "$env:SystemRoot",
-    "$env:SystemRoot\System32",
-    "$env:SystemRoot\SysWOW64",
-    "C:\Windows",
-    "C:\Windows\System32",
-    "C:\Windows\SysWOW64",
-    "$env:ProgramFiles",
-    "$env:ProgramFiles(x86)",
-    "C:\Program Files",
-    "C:\Program Files (x86)"
-)
-
-$isSystemDir = $false
-foreach ($sysDir in $systemDirs) {
-    if ($sysDir -and $STARTING_DIR -like "$sysDir*") {
-        $isSystemDir = $true
-        break
-    }
-}
-
-if ($isSystemDir) {
-    Write-Host ""
-    Write-Host "!" -ForegroundColor Yellow -NoNewline
-    Write-Host " You are running from a system directory: $STARTING_DIR" -ForegroundColor White
-    Write-Host "  Installing here is not allowed." -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "Please enter the full path where you want to install shot-gopher:" -ForegroundColor Cyan
-    Write-Host "  (e.g., C:\Projects or D:\VFX)" -ForegroundColor Gray
-    Write-Host ""
-
-    $customPath = Read-Host "Install directory"
-
-    if (-not $customPath) {
-        Write-Host "X No path provided. Exiting." -ForegroundColor Red
-        exit 1
-    }
-
-    $customPath = $customPath.Trim('"').Trim("'").Trim()
-
-    if (-not (Test-Path $customPath -IsValid)) {
-        Write-Host "X Invalid path: $customPath" -ForegroundColor Red
-        exit 1
-    }
-
-    if (-not (Test-Path $customPath)) {
-        $createDir = Read-Host "Directory does not exist. Create it? (Y/n)"
-        if ($createDir -notmatch "^[Nn]$") {
-            try {
-                New-Item -ItemType Directory -Path $customPath -Force | Out-Null
-                Write-Host "OK Created directory: $customPath" -ForegroundColor Green
-            } catch {
-                Write-Host "X Failed to create directory: $_" -ForegroundColor Red
-                exit 1
-            }
-        } else {
-            Write-Host "X Cannot proceed without a valid directory." -ForegroundColor Red
-            exit 1
-        }
-    }
-
-    $STARTING_DIR = $customPath
-}
-
 $INSTALL_DIR = Join-Path $STARTING_DIR "shot-gopher"
 $MINICONDA_URL = "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 $MINICONDA_INSTALLER = Join-Path $env:TEMP "Miniconda3-latest-Windows-x86_64.exe"
