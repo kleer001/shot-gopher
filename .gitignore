@@ -218,3 +218,10 @@ logs/
 # Credentials and tokens (DO NOT COMMIT)
 SMPL.login.dat
 HF_TOKEN.dat
+
+# Video files (too large for repo)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.y4m
