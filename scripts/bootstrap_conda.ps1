@@ -36,9 +36,46 @@ foreach ($sysDir in $systemDirs) {
 }
 
 if ($isSystemDir) {
-    # Fall back to user's home directory
-    $STARTING_DIR = $env:USERPROFILE
-    Write-Host "! Running from system directory - installing to $STARTING_DIR instead" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "!" -ForegroundColor Yellow -NoNewline
+    Write-Host " You are running from a system directory: $STARTING_DIR" -ForegroundColor White
+    Write-Host "  Installing here is not allowed." -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Please enter the full path where you want to install shot-gopher:" -ForegroundColor Cyan
+    Write-Host "  (e.g., C:\Projects or D:\VFX)" -ForegroundColor Gray
+    Write-Host ""
+
+    $customPath = Read-Host "Install directory"
+
+    if (-not $customPath) {
+        Write-Host "X No path provided. Exiting." -ForegroundColor Red
+        exit 1
+    }
+
+    $customPath = $customPath.Trim('"').Trim("'").Trim()
+
+    if (-not (Test-Path $customPath -IsValid)) {
+        Write-Host "X Invalid path: $customPath" -ForegroundColor Red
+        exit 1
+    }
+
+    if (-not (Test-Path $customPath)) {
+        $createDir = Read-Host "Directory does not exist. Create it? (Y/n)"
+        if ($createDir -notmatch "^[Nn]$") {
+            try {
+                New-Item -ItemType Directory -Path $customPath -Force | Out-Null
+                Write-Host "OK Created directory: $customPath" -ForegroundColor Green
+            } catch {
+                Write-Host "X Failed to create directory: $_" -ForegroundColor Red
+                exit 1
+            }
+        } else {
+            Write-Host "X Cannot proceed without a valid directory." -ForegroundColor Red
+            exit 1
+        }
+    }
+
+    $STARTING_DIR = $customPath
 }
 
 $INSTALL_DIR = Join-Path $STARTING_DIR "shot-gopher"
