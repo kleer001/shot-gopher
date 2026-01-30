@@ -109,25 +109,15 @@ end tell
     return result.returncode == 0
 
 
-def add_mac_to_dock(app_path: Path):
+def add_mac_to_dock(app_path: Path) -> bool:
     """Add an item to the macOS Dock (optional, asks user first)."""
+    # Escape path for XML (used in plist format)
+    path_str = str(app_path).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
     # This adds a persistent Dock item using defaults
     # Note: This requires the full path and works with .command files
     script = f'''
-tell application "System Events"
-    tell dock preferences
-        set properties to {{animate:true}}
-    end tell
-end tell
-
-tell application "Dock"
-    quit
-end tell
-
-delay 1
-
-do shell script "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>{app_path}</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'"
+do shell script "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>{path_str}</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'"
 
 do shell script "killall Dock"
 '''

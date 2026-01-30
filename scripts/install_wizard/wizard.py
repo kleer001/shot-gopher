@@ -821,14 +821,14 @@ class InstallationWizard:
 
         system = platform.system()
         if system == "Windows":
-            desc_line1 = "This will create shortcuts on your Desktop and Start Menu"
-            desc_line2 = "so you can launch Shot Gopher with a single click.       "
+            desc_line1 = "This will create shortcuts on your Desktop & Start Menu "
+            desc_line2 = "so you can launch Shot Gopher with a single click.      "
         elif system == "Darwin":
-            desc_line1 = "This will create an alias on your Desktop                "
-            desc_line2 = "so you can launch Shot Gopher with a single click.       "
+            desc_line1 = "This will create an alias on your Desktop               "
+            desc_line2 = "so you can launch Shot Gopher with a single click.      "
         else:
-            desc_line1 = "This will create a .desktop entry in your applications   "
-            desc_line2 = "menu so you can launch Shot Gopher from your app launcher"
+            desc_line1 = "This will create a .desktop entry in your applications  "
+            desc_line2 = "so you can launch Shot Gopher from your app launcher.   "
 
         print(f"""
 {Colors.OKCYAN}    ┌────────────────────────────────────────────────────────────┐
