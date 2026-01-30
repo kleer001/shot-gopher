@@ -2,8 +2,7 @@
 """Setup script for ComfyUI custom nodes.
 
 Installs the custom nodes required by the VFX pipeline to the local
-.vfx_pipeline/ComfyUI/custom_nodes/ directory. These nodes are mounted
-into the Docker container at runtime.
+.vfx_pipeline/ComfyUI/custom_nodes/ directory.
 
 Usage:
     python scripts/setup_comfyui_nodes.py
@@ -64,7 +63,6 @@ def main():
     if installer.install():
         print()
         print_success("ComfyUI custom nodes setup complete!")
-        print_info("These nodes will be mounted into Docker containers automatically.")
         return 0
     else:
         print()

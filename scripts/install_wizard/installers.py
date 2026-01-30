@@ -275,8 +275,7 @@ class GitRepoInstaller(ComponentInstaller):
 class ComfyUICustomNodesInstaller(ComponentInstaller):
     """Installer for ComfyUI custom nodes required by the VFX pipeline.
 
-    These nodes are mounted into the Docker container from the host filesystem,
-    allowing easy updates via ComfyUI Manager without rebuilding the image.
+    These nodes can be updated via ComfyUI Manager or git pull.
     """
 
     CUSTOM_NODES = [

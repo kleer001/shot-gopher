@@ -545,9 +545,8 @@ class InstallationWizard:
             )
             print(recommendation)
             print()
-            if not ask_yes_no("Continue with conda-based installation?", default=True):
+            if not ask_yes_no("Continue with installation?", default=True):
                 print_info("Installation cancelled")
-                print_info("For Docker-based installation: python scripts/install_wizard_docker.py")
                 return True
 
         # Check for resumable installation

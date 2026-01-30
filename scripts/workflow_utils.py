@@ -27,9 +27,7 @@ def get_comfyui_output_dir() -> Path:
     Returns:
         Path to ComfyUI output directory
     """
-    from env_config import INSTALL_DIR, is_in_container
-    if is_in_container():
-        return Path(os.environ.get("COMFYUI_OUTPUT_DIR", "/workspace"))
+    from env_config import INSTALL_DIR
     return INSTALL_DIR.parent.parent
 
 

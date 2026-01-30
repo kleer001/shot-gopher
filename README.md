@@ -70,43 +70,31 @@ This pipeline automates first-pass VFX prep work. Ingest a movie file, get produ
 
 ### Linux
 
-Use Docker for NVIDIA GPU support and isolated environment.
-
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_docker.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.sh | bash
 ```
 
-**Prerequisites:** NVIDIA GPU with driver, Docker with nvidia-container-toolkit
+**Prerequisites:** NVIDIA GPU with driver, Conda or Miniconda
 
-**Run:** `bash scripts/run_docker.sh --name MyProject video.mp4`
+**Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,camera`
 
 ---
 
 ### Windows
 
-Native Windows and WSL2 both supported:
+Native Windows installation:
 
-**Option 1: Native Windows (Conda)** - One-liner bootstrap:
 ```powershell
 irm https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.ps1 | iex
 ```
 
-**Option 2: WSL2 + Docker**
-1. Install WSL2: `wsl --install` or visit https://aka.ms/wsl
-2. Install Docker Desktop with WSL2 backend enabled
-3. Run from WSL2 terminal:
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_docker.sh | bash
-   ```
+**Prerequisites:** Windows 10 2004+ or Windows 11, NVIDIA GPU with driver, Conda or Miniconda
 
-**Prerequisites:** Windows 10 2004+ or Windows 11, NVIDIA GPU with driver
+**Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,camera`
 
 ---
 
 ### macOS
-
-Use Conda for GPU access (Docker can't access Metal/AMD GPUs on macOS).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.sh | bash
@@ -124,7 +112,7 @@ For step-by-step installation without the wizard, see the [Manual Installation G
 
 ## Running Your First Project
 
-After installation, you're ready to process your first video. The pipeline supports both Docker and Conda environments with similar workflows.
+After installation, you're ready to process your first video.
 
 **Quick start examples:**
 
@@ -133,13 +121,10 @@ After installation, you're ready to process your first video. The pipeline suppo
 ./shot-gopher                # Linux/macOS
 shot-gopher.bat              # Windows
 
-# Docker
-bash scripts/run_docker.sh --name MyProject --stages all video.mp4
-
-# Conda (all stages)
+# All stages
 python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,mocap,gsir,camera
 
-# Conda (8GB VRAM - skip high-memory stages)
+# 8GB VRAM (skip high-memory stages)
 python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,cleanplate,colmap,camera
 
 # Re-run stages on last project (auto-detects most recent)
@@ -152,7 +137,6 @@ python scripts/run_pipeline.py -s roto,cleanplate
 
 Complete documentation available in [docs/](docs/):
 - [Your First Project](docs/first-project.md) - Complete walkthrough for running your first pipeline
-- [Docker Guide](docs/docker.md) - Docker setup, usage, and troubleshooting
 - [Installation Guide](docs/installation.md) - Detailed setup instructions
 - [CLI Reference](docs/reference/cli.md) - Command-line usage and options
 - [Pipeline Stages](docs/reference/stages.md) - Individual stage documentation
@@ -183,20 +167,15 @@ Output follows VFX production conventions:
 
 ## System Requirements
 
-**Platform:** Linux, macOS, Windows (native or WSL2)
-**Python:** 3.10 or newer (local install only)
+**Platform:** Linux, macOS, Windows
+**Python:** 3.10 or newer
 
-**For Docker installation:**
-- Docker with docker-compose
-- NVIDIA Container Toolkit (installer can set this up automatically)
-- NVIDIA GPU with CUDA support
-
-**For local Conda installation:**
+**Requirements:**
 - Git, FFmpeg
 - NVIDIA GPU with CUDA support
 - Conda or Miniconda
 
-**Note:** macOS supports local Conda installation (CPU-only, no GPU acceleration). Windows supports both native Conda installation and WSL2 with Docker. See [Windows Guide](docs/platforms/windows.md) for details.
+**Note:** macOS supports Conda installation (CPU-only, no GPU acceleration). See [Windows Guide](docs/platforms/windows.md) for Windows-specific details.
 
 ## Installation Requirements
 

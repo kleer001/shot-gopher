@@ -1,128 +1,23 @@
 # Running Your First Project
 
-This guide walks you through running your first VFX pipeline project after installation. Choose the section that matches your installation method (Docker or Conda).
+This guide walks you through running your first VFX pipeline project after installation.
 
 ## Prerequisites
 
 Before running the pipeline, ensure you've completed installation:
-- **Docker users:** Run `./scripts/bootstrap_docker.sh` or `python scripts/install_wizard.py --docker`
-- **Conda users:** Run `./scripts/bootstrap_conda.sh` or `python scripts/install_wizard.py`
+
+```bash
+./scripts/bootstrap_conda.sh
+# or
+python scripts/install_wizard.py
+```
 
 Verify your installation is working:
 ```bash
-# Docker
-bash scripts/run_docker.sh --help
-
-# Conda
 python scripts/run_pipeline.py --help
 ```
 
-## Docker Environment
-
-### Basic Usage
-
-Process a video file with all pipeline stages:
-
-```bash
-bash scripts/run_docker.sh /path/to/video.mp4 --name MyFirstProject --stages all
-```
-
-This will:
-1. Extract frames from the video
-2. Generate depth maps
-3. Create segmentation masks
-4. Refine alpha mattes
-5. Generate clean plates (inpainting)
-6. Run COLMAP camera tracking
-7. Export camera data
-
-**Output location:** `../vfx_projects/MyFirstProject/`
-
-### Specific Stages
-
-Run only depth estimation and segmentation:
-
-```bash
-bash scripts/run_docker.sh /path/to/video.mp4 --name MyProject --stages depth,roto
-```
-
-### Common Workflows
-
-**Quick preview** (depth and segmentation only):
-```bash
-bash scripts/run_docker.sh \
-  ~/Videos/test_shot.mp4 \
-  --name TestShot \
-  --stages ingest,depth,roto
-```
-
-**Full VFX prep** (everything except motion capture):
-```bash
-bash scripts/run_docker.sh \
-  ~/Videos/shot001.mp4 \
-  --name Shot001 \
-  --stages ingest,depth,roto,mama,cleanplate,colmap,camera
-```
-
-**Camera tracking only** (for existing frame sequences):
-```bash
-bash scripts/run_docker.sh \
-  ../vfx_projects/Shot001/source/frames/ \
-  --name Shot001 \
-  --stages colmap,camera
-```
-
-### With Custom Options
-
-Custom segmentation prompt (specify objects to mask):
-```bash
-bash scripts/run_docker.sh \
-  ~/Videos/shot001.mp4 \
-  --name Shot001 \
-  --stages roto \
-  --prompt "person, car, building"
-```
-
-High-quality COLMAP reconstruction:
-```bash
-bash scripts/run_docker.sh \
-  ~/Videos/shot001.mp4 \
-  --name Shot001 \
-  --stages colmap \
-  --colmap-quality high
-```
-
-### Accessing Output
-
-Your processed files are stored on your host machine (not inside the container):
-
-```bash
-# Default location
-ls ../vfx_projects/MyFirstProject/
-
-# Custom location (if you set VFX_PROJECTS_DIR)
-ls $VFX_PROJECTS_DIR/MyFirstProject/
-```
-
-Output structure:
-```
-MyFirstProject/
-├── source/frames/      # Input frames (frame_0001.png, ...)
-├── depth/              # Depth maps
-├── roto/               # Segmentation masks
-├── matte/              # Refined alpha mattes
-├── cleanplate/         # Inpainted backgrounds
-├── camera/             # Camera data (Alembic, JSON, point clouds)
-└── colmap/             # COLMAP reconstruction data
-```
-
-**See [Docker Guide](docker.md) for complete documentation, troubleshooting, and advanced usage.**
-
----
-
-## Conda Environment
-
-### Basic Usage
+## Basic Usage
 
 Process a video with selected stages:
 
@@ -259,39 +154,7 @@ djv_view ../vfx_projects/MyProject/depth/
 
 ## Troubleshooting First Run
 
-### Docker Issues
-
-**Container can't find GPU:**
-```bash
-# Test NVIDIA Docker runtime
-docker run --rm --gpus all nvidia/cuda:12.1.0-base nvidia-smi
-
-# If fails, install NVIDIA Container Toolkit
-# See: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
-```
-
-**Models not found:**
-```bash
-# Verify models on host
-ls .vfx_pipeline/models/
-
-# Download missing models
-./scripts/download_models.sh
-python3 scripts/verify_models.py
-```
-
-**Volume mount permissions:**
-```bash
-# Ensure directories exist
-mkdir -p .vfx_pipeline/models
-mkdir -p ../vfx_projects
-
-# Check permissions
-ls -ld .vfx_pipeline/models
-ls -ld ../vfx_projects
-```
-
-### Conda Issues
+### Common Issues
 
 **Missing dependencies:**
 ```bash
@@ -329,8 +192,7 @@ python scripts/install_wizard.py
 **Slow processing:**
 - First run downloads models (can take time)
 - Verify GPU is being used (check `nvidia-smi`)
-- Docker: Ensure nvidia runtime is configured
-- Conda: Check PyTorch CUDA installation
+- Check PyTorch CUDA installation
 
 **Bad results:**
 - Check input video quality (resolution, lighting, motion blur)
@@ -344,7 +206,7 @@ python scripts/install_wizard.py
 
 After running your first project:
 
-1. **Review output** in `../vfx_projects/ProjectName/` (Docker) or `../vfx_projects/ProjectName/` (Conda)
+1. **Review output** in `../vfx_projects/ProjectName/`
 2. **Import to VFX tools** (Nuke, Blender, Houdini, etc.)
 3. **Refine results** manually downstream as needed
 4. **Experiment** with different stages and options
@@ -377,14 +239,14 @@ Here's a complete example from video to VFX-ready output:
 cp ~/Videos/my_shot.mp4 ~/Desktop/
 ```
 
-### Step 2: Run Pipeline (Docker)
+### Step 2: Run Pipeline
 
 ```bash
 # Full pipeline
-bash scripts/run_docker.sh \
+python scripts/run_pipeline.py \
   ~/Desktop/my_shot.mp4 \
   --name MyShot \
-  --stages all
+  -s ingest,depth,roto,mama,cleanplate,colmap,camera
 ```
 
 ### Step 3: Check Output
@@ -421,14 +283,14 @@ ReadGeo {
 
 ```bash
 # Re-run specific stage with different settings
-bash scripts/run_docker.sh \
+python scripts/run_pipeline.py \
   ~/Desktop/my_shot.mp4 \
   --name MyShot \
-  --stages roto \
+  -s roto \
   --prompt "person only"  # Different prompt
 ```
 
 ---
 
-**Version:** 1.0
-**Last Updated:** 2026-01-18
+**Version:** 1.1
+**Last Updated:** 2026-01-30

@@ -60,14 +60,6 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | | `--list-stages` | List available stages and exit |
 | `-c` | `--comfyui-url` | ComfyUI URL (default: `http://127.0.0.1:8188`) |
 
-### Mode Options
-
-| Short | Long | Description |
-|-------|------|-------------|
-| `-D` | `--docker` | Force Docker mode (auto-detected if not specified) |
-| `-L` | `--local` | Force local mode (auto-detected if not specified) |
-| | `--models-dir` | Path to models directory (Docker mode) |
-
 ### Segmentation Options
 
 | Long | Description |

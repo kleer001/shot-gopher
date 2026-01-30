@@ -213,20 +213,6 @@ python scripts/run_pipeline.py footage.mp4 -s roto,mama
 - Processes numbered roto directories only (e.g., `person_00/`, `bag_01/`)
 - Skips unnumbered directories (`person/`, `combined/`, `mask/`)
 
-**Docker Usage:**
-
-VideoMaMa models must be mounted separately when running in Docker:
-
-```bash
-# First, install models on host
-python scripts/video_mama_install.py
-
-# Then mount when running container
-docker run -v /path/to/.vfx_pipeline/models/VideoMaMa:/models/videomama ...
-```
-
-The container includes the VideoMaMa tools and conda environment. Only the models (~12GB) need to be mounted.
-
 ---
 
 ## cleanplate

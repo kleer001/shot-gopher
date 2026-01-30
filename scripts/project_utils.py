@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from env_config import INSTALL_DIR, is_in_container
+from env_config import INSTALL_DIR
 
 
 class ProjectMetadata:
@@ -131,16 +131,11 @@ LAST_PROJECT_FILE = INSTALL_DIR / ".last_project"
 
 
 def get_last_project_file() -> Path:
-    """Get the appropriate last-project file location.
-
-    In containers, uses projects dir; otherwise uses INSTALL_DIR.
+    """Get the last-project file location.
 
     Returns:
         Path to last project file
     """
-    if is_in_container():
-        projects_dir = Path(os.environ.get("VFX_PROJECTS_DIR", "/workspace/projects"))
-        return projects_dir / ".last_project"
     return LAST_PROJECT_FILE
 
 
@@ -150,13 +145,9 @@ def save_last_project(project_dir: Path) -> None:
     Args:
         project_dir: Project directory path
     """
-    if is_in_container():
-        last_project_file = project_dir.parent / ".last_project"
-    else:
-        last_project_file = LAST_PROJECT_FILE
-        INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+    INSTALL_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        last_project_file.write_text(str(project_dir.resolve()))
+        LAST_PROJECT_FILE.write_text(str(project_dir.resolve()))
     except PermissionError:
         pass
 
@@ -167,17 +158,11 @@ def get_last_project() -> Optional[Path]:
     Returns:
         Path to last project, or None if not found
     """
-    possible_files = [LAST_PROJECT_FILE]
-    if is_in_container():
-        projects_dir = Path(os.environ.get("VFX_PROJECTS_DIR", "/workspace/projects"))
-        possible_files.insert(0, projects_dir / ".last_project")
-
-    for last_project_file in possible_files:
-        if last_project_file.exists():
-            try:
-                path = Path(last_project_file.read_text().strip())
-                if path.exists() and path.is_dir():
-                    return path
-            except Exception:
-                pass
+    if LAST_PROJECT_FILE.exists():
+        try:
+            path = Path(LAST_PROJECT_FILE.read_text().strip())
+            if path.exists() and path.is_dir():
+                return path
+        except Exception:
+            pass
     return None

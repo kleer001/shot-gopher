@@ -4,29 +4,22 @@
 Single command to process footage through the entire pipeline:
   Movie file → Frame extraction → ComfyUI workflows → Post-processing
 
-Auto-detects your environment:
-- Local ComfyUI installed → runs locally
-- Docker image exists → runs in container
-
 Usage:
     python run_pipeline.py <input_movie> [options]
 
 Example:
     python run_pipeline.py /path/to/footage.mp4 --name "My_Shot" --stages all
     python run_pipeline.py /path/to/footage.mp4 --stages depth,roto,cleanplate
-    python run_pipeline.py /path/to/footage.mp4 --docker  # Force Docker mode
 """
 
 import argparse
 import os
-import shutil
 import sys
 from pathlib import Path
 
 from comfyui_manager import stop_comfyui, prepare_comfyui_for_processing
 from comfyui_utils import DEFAULT_COMFYUI_URL
-from docker_utils import check_docker_available, check_docker_image_exists, run_docker_mode
-from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR, is_in_container, INSTALL_DIR
+from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR, INSTALL_DIR
 from log_manager import LogCapture
 from pipeline_config import PipelineConfig, StageContext
 from pipeline_constants import STAGES, STAGE_ORDER, STAGES_REQUIRING_FRAMES
@@ -38,37 +31,9 @@ from stage_runners import setup_project, STAGE_HANDLERS
 COMFYUI_DIR = INSTALL_DIR / "ComfyUI"
 
 
-def check_local_comfyui_installed() -> bool:
-    """Check if local ComfyUI installation exists."""
+def check_comfyui_installed() -> bool:
+    """Check if ComfyUI installation exists."""
     return COMFYUI_DIR.exists() and (COMFYUI_DIR / "main.py").exists()
-
-
-def detect_execution_mode() -> str:
-    """Auto-detect the best execution mode.
-
-    Returns:
-        'local' if local ComfyUI is installed
-        'docker' if Docker is available with the vfx-ingest image
-        'none' if neither is available
-    """
-    if check_local_comfyui_installed():
-        return "local"
-
-    if check_docker_available() and check_docker_image_exists():
-        return "docker"
-
-    return "none"
-
-
-def find_default_models_dir() -> Path:
-    """Find the default models directory."""
-    env_models = os.environ.get("VFX_MODELS_DIR")
-    if env_models:
-        return Path(env_models)
-    default_path = INSTALL_DIR / "models"
-    if default_path.exists():
-        return default_path
-    return Path(__file__).parent.parent / ".vfx_pipeline" / "models"
 
 
 def sanitize_stages(stages: list[str]) -> list[str]:
@@ -119,13 +84,6 @@ def run_pipeline(config: PipelineConfig) -> bool:
 
     project_dir = config.projects_dir / project_name
     save_last_project(project_dir)
-
-    if is_in_container():
-        if not str(project_dir).startswith("/workspace"):
-            print(f"Error: In container, project directory must be under /workspace", file=sys.stderr)
-            print(f"  Got: {project_dir}", file=sys.stderr)
-            print(f"  Mount your project directory to /workspace or set VFX_PROJECTS_DIR=/workspace/projects", file=sys.stderr)
-            return False
 
     source_frames = project_dir / "source" / "frames"
     workflows_dir = Path(__file__).parent.parent / "workflow_templates"
@@ -257,23 +215,6 @@ def parse_arguments() -> argparse.Namespace:
         help="List available stages and exit"
     )
 
-    mode_group = parser.add_mutually_exclusive_group()
-    mode_group.add_argument(
-        "--docker", "-D",
-        action="store_true",
-        help="Force Docker mode (auto-detected if not specified)"
-    )
-    mode_group.add_argument(
-        "--local", "-L",
-        action="store_true",
-        help="Force local mode (auto-detected if not specified)"
-    )
-    parser.add_argument(
-        "--models-dir",
-        type=Path,
-        default=None,
-        help="Path to models directory (Docker mode, auto-detected if not specified)"
-    )
 
     parser.add_argument(
         "--colmap-quality", "-q",
@@ -368,22 +309,11 @@ def main():
             print(f"  {name}: {desc}")
         sys.exit(0)
 
-    if args.docker:
-        mode = "docker"
-    elif args.local:
-        mode = "local"
-    else:
-        mode = detect_execution_mode()
-        if mode == "none":
-            print("Error: No valid execution environment detected.", file=sys.stderr)
-            print("", file=sys.stderr)
-            print("Options:", file=sys.stderr)
-            print("  1. Install locally: python scripts/install_wizard.py", file=sys.stderr)
-            print("  2. Build Docker image: docker compose build", file=sys.stderr)
-            print("", file=sys.stderr)
-            print("Or force a mode with --docker or --local", file=sys.stderr)
-            sys.exit(1)
-        print(f"Auto-detected mode: {mode}")
+    if not check_comfyui_installed():
+        print("Error: ComfyUI not installed.", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("Install with: python scripts/install_wizard.py", file=sys.stderr)
+        sys.exit(1)
 
     if args.stages.lower() == "all":
         stages = STAGE_ORDER.copy()
@@ -405,12 +335,8 @@ def main():
             project_dir = last_project
             print(f"Using last project: {project_dir.name}")
         else:
-            if mode == "docker":
-                print("Error: Docker mode requires an input file", file=sys.stderr)
-                print("Usage: run_pipeline.py <movie_file> --docker", file=sys.stderr)
-            else:
-                print("Error: No input specified and no previous project found", file=sys.stderr)
-                print("Usage: run_pipeline.py <movie_file_or_project_dir>", file=sys.stderr)
+            print("Error: No input specified and no previous project found", file=sys.stderr)
+            print("Usage: run_pipeline.py <movie_file_or_project_dir>", file=sys.stderr)
             sys.exit(1)
     else:
         input_path = args.input.resolve()
@@ -420,12 +346,6 @@ def main():
 
         if input_path.is_dir() and (input_path / "source").exists():
             project_dir = input_path
-            if is_in_container() and str(project_dir).startswith("/workspace/input"):
-                project_dir = Path("/workspace/projects") / project_dir.name
-                print(f"Redirecting project to writable location: {project_dir}")
-                if not project_dir.exists():
-                    print(f"  Copying project from input to projects directory...")
-                    shutil.copytree(input_path, project_dir)
             print(f"Using existing project: {project_dir.name}")
 
     config = PipelineConfig(
@@ -453,11 +373,6 @@ def main():
     )
 
     print(f"Stages to run: {', '.join(config.stages)}")
-
-    if mode == "docker":
-        models_dir = args.models_dir or find_default_models_dir()
-        exit_code = run_docker_mode(config, models_dir)
-        sys.exit(exit_code)
 
     check_conda_env_or_warn()
 

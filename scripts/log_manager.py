@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import Optional, TextIO
 
 from install_wizard.platform import PlatformManager
-from env_config import is_in_container
 
 
 class TeeWriter:
@@ -182,10 +181,10 @@ class LogCapture:
     def _generate_log_filename(self) -> Path:
         """Generate timestamped log filename with OS and environment.
 
-        Format: YYYYMMDD_HHMMSS_microseconds_<osname>_<conda|docker>.log
+        Format: YYYYMMDD_HHMMSS_microseconds_<osname>_conda.log
         Examples:
             20260119_143022_123456_linux_conda.log
-            20260119_150033_789012_macos_docker.log
+            20260119_150033_789012_macos_conda.log
             20260119_161544_345678_windows_conda.log
 
         Microseconds ensure unique filenames even if multiple logs
@@ -203,9 +202,7 @@ class LogCapture:
         if environment == "wsl2":
             os_name = "wsl2"
 
-        env_type = "docker" if is_in_container() else "conda"
-
-        filename = f"{timestamp}_{microseconds}_{os_name}_{env_type}.log"
+        filename = f"{timestamp}_{microseconds}_{os_name}_conda.log"
         return self.log_dir / filename
 
     def _write_log_header(self) -> None:
@@ -215,7 +212,6 @@ class LogCapture:
         import sys as sys_module
 
         os_name, environment, pkg_mgr = PlatformManager.detect_platform()
-        env_type = "docker" if is_in_container() else "conda"
 
         git_commit = self._get_git_commit()
 
@@ -228,7 +224,6 @@ Timestamp:       {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 Git Commit:      {git_commit}
 OS:              {os_name} ({environment})
 Package Manager: {pkg_mgr}
-Environment:     {env_type}
 Python Version:  {sys_module.version.split()[0]}
 Platform:        {platform.platform()}
 Command:         {command_str}

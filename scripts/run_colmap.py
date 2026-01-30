@@ -30,7 +30,7 @@ from typing import Optional
 
 import numpy as np
 
-from env_config import check_conda_env_or_warn, is_in_container
+from env_config import check_conda_env_or_warn
 from log_manager import LogCapture
 from install_wizard.platform import PlatformManager
 from subprocess_utils import (
@@ -114,7 +114,7 @@ QUALITY_PRESETS = {
 class VirtualDisplay:
     """Context manager that starts Xvfb for headless GPU OpenGL support.
 
-    In container environments without a display, COLMAP's GPU SIFT extraction
+    In headless environments without a display, COLMAP's GPU SIFT extraction
     needs an X server for OpenGL context. This starts a virtual framebuffer.
     """
 
@@ -124,9 +124,11 @@ class VirtualDisplay:
         self._env_modified: bool = False
 
     def _needs_virtual_display(self) -> bool:
-        """Check if we need to start a virtual display."""
-        if not is_in_container():
-            return False
+        """Check if we need to start a virtual display.
+
+        In headless environments without a display, COLMAP's GPU SIFT extraction
+        needs an X server for OpenGL context. This starts a virtual framebuffer.
+        """
         return not os.environ.get("DISPLAY")
 
     def _find_free_display(self) -> Optional[int]:
