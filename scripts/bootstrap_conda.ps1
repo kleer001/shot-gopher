@@ -9,7 +9,23 @@ $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $REPO_URL = "https://github.com/kleer001/shot-gopher.git"
-$INSTALL_DIR = Join-Path (Get-Location) "shot-gopher"
+
+# Capture starting directory FIRST - this is where the user wants to install
+$STARTING_DIR = (Get-Location).Path
+$INSTALL_DIR = Join-Path $STARTING_DIR "shot-gopher"
+
+# Verify we can write to this directory before proceeding
+$testFile = Join-Path $STARTING_DIR ".bootstrap_write_test"
+try {
+    [IO.File]::WriteAllText($testFile, "test")
+    Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+} catch {
+    Write-Host ""
+    Write-Host "X Cannot install here: $STARTING_DIR" -ForegroundColor Red
+    Write-Host "  No write permission. Run PowerShell from a directory you own." -ForegroundColor Gray
+    Write-Host ""
+    exit 1
+}
 $MINICONDA_URL = "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 $MINICONDA_INSTALLER = Join-Path $env:TEMP "Miniconda3-latest-Windows-x86_64.exe"
 $GIT_INSTALLER = Join-Path $env:TEMP "Git-installer.exe"
@@ -28,6 +44,10 @@ function Install-Git {
 
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Host "Winget detected. Attempting to install Git via winget..." -ForegroundColor Yellow
+
+        # Save current directory before winget (some package managers change working dir)
+        $savedDir = (Get-Location).Path
+
         try {
             $process = Start-Process -FilePath "winget" -ArgumentList @(
                 "install", "--id", "Git.Git", "-e", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"
@@ -41,6 +61,9 @@ function Install-Git {
             }
         } catch {
             Write-Host "! Winget failed: $_, trying direct download..." -ForegroundColor Yellow
+        } finally {
+            # Restore directory in case winget changed it
+            Set-Location $savedDir
         }
     }
 
@@ -51,7 +74,7 @@ function Install-Git {
         $arch = if ([Environment]::Is64BitOperatingSystem) { "64-bit" } else { "32-bit" }
 
         try {
-            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest" -UseBasicParsing
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest"
             $asset = $release.assets | Where-Object { $_.name -match "^Git-.*-$arch\.exe$" } | Select-Object -First 1
             if ($asset) {
                 $gitUrl = $asset.browser_download_url
@@ -93,6 +116,9 @@ function Install-Git {
         Write-Host "Installing Git (this may take a minute)..." -ForegroundColor Yellow
         Write-Host "  Installation will be silent - please wait..." -ForegroundColor Gray
 
+        # Save current directory before installer (some installers change working dir)
+        $savedDir = (Get-Location).Path
+
         try {
             $process = Start-Process -FilePath $GIT_INSTALLER -ArgumentList @(
                 "/VERYSILENT",
@@ -112,13 +138,18 @@ function Install-Git {
             Write-Host "  Error: $_" -ForegroundColor Red
             Remove-Item $GIT_INSTALLER -Force -ErrorAction SilentlyContinue
             return $false
+        } finally {
+            # Restore directory in case installer changed it
+            Set-Location $savedDir
         }
 
         Remove-Item $GIT_INSTALLER -Force -ErrorAction SilentlyContinue
         Write-Host "OK Git installed successfully" -ForegroundColor Green
     }
 
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = (@($machinePath, $userPath) | Where-Object { $_ }) -join ";"
 
     $gitPaths = @(
         "C:\Program Files\Git\cmd",
@@ -136,9 +167,14 @@ function Install-Git {
 }
 
 function Test-CondaInstalled {
-    # Check multiple locations for conda
+    # First check if conda is in PATH
+    $condaCmd = Get-Command conda -ErrorAction SilentlyContinue
+    if ($condaCmd) {
+        return $condaCmd.Source
+    }
+
+    # Check common installation locations
     $condaLocations = @(
-        (Get-Command conda -ErrorAction SilentlyContinue),
         "$env:USERPROFILE\miniconda3\Scripts\conda.exe",
         "$env:USERPROFILE\anaconda3\Scripts\conda.exe",
         "$env:LOCALAPPDATA\miniconda3\Scripts\conda.exe",
@@ -149,7 +185,7 @@ function Test-CondaInstalled {
     )
 
     foreach ($loc in $condaLocations) {
-        if ($loc -and (Test-Path $loc -ErrorAction SilentlyContinue)) {
+        if (Test-Path $loc -ErrorAction SilentlyContinue) {
             return $loc
         }
     }
@@ -157,14 +193,7 @@ function Test-CondaInstalled {
 }
 
 function Get-CondaPath {
-    $conda = Test-CondaInstalled
-    if ($conda) {
-        if ($conda -is [System.Management.Automation.CommandInfo]) {
-            return $conda.Source
-        }
-        return $conda
-    }
-    return $null
+    return Test-CondaInstalled
 }
 
 function Install-Miniconda {
@@ -187,6 +216,9 @@ function Install-Miniconda {
 
     $installPath = "$env:USERPROFILE\miniconda3"
 
+    # Save current directory before installer (some installers change working dir)
+    $savedDir = (Get-Location).Path
+
     try {
         $process = Start-Process -FilePath $MINICONDA_INSTALLER -ArgumentList @(
             "/InstallationType=JustMe",
@@ -203,13 +235,18 @@ function Install-Miniconda {
         Write-Host "X Miniconda installation failed" -ForegroundColor Red
         Write-Host "  Error: $_" -ForegroundColor Red
         return $false
+    } finally {
+        # Restore directory in case installer changed it
+        Set-Location $savedDir
     }
 
     # Clean up installer
     Remove-Item $MINICONDA_INSTALLER -Force -ErrorAction SilentlyContinue
 
     # Refresh PATH
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = (@($machinePath, $userPath) | Where-Object { $_ }) -join ";"
 
     # Also add conda to current session path
     $env:Path = "$installPath;$installPath\Scripts;$installPath\Library\bin;$env:Path"
@@ -220,8 +257,6 @@ function Install-Miniconda {
 
 function Initialize-CondaShell {
     param([string]$CondaPath)
-
-    $condaDir = Split-Path (Split-Path $CondaPath -Parent) -Parent
 
     Write-Host "Initializing conda for PowerShell..." -ForegroundColor Yellow
 
@@ -326,21 +361,32 @@ function Install-VFXPipeline {
     Write-Host ""
 
     # Clone or update repository
+    $pushedLocation = $false
     if (Test-Path $INSTALL_DIR) {
         Write-Host "Directory $INSTALL_DIR already exists."
         $response = Read-Host "Update existing installation? (y/N)"
         if ($response -match "^[Yy]$") {
             Write-Host "Updating repository..."
             Push-Location $INSTALL_DIR
+            $pushedLocation = $true
             git pull
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "! Git pull failed, continuing with existing code..." -ForegroundColor Yellow
+            }
         } else {
             Write-Host "Using existing installation at $INSTALL_DIR"
             Push-Location $INSTALL_DIR
+            $pushedLocation = $true
         }
     } else {
         Write-Host "Cloning repository to $INSTALL_DIR..."
         git clone $REPO_URL $INSTALL_DIR
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "X Failed to clone repository" -ForegroundColor Red
+            return 1
+        }
         Push-Location $INSTALL_DIR
+        $pushedLocation = $true
     }
 
     Write-Banner "Launching Installation Wizard"
@@ -349,15 +395,17 @@ function Install-VFXPipeline {
     $pythonPath = Join-Path (Split-Path (Split-Path $condaPath -Parent) -Parent) "python.exe"
 
     if (Test-Path $pythonPath) {
-        & $pythonPath scripts/install_wizard.py $args
+        & $pythonPath scripts/install_wizard.py
     } else {
         # Fall back to conda run
-        & $condaPath run -n base python scripts/install_wizard.py $args
+        & $condaPath run -n base python scripts/install_wizard.py
     }
 
     $wizardExitCode = $LASTEXITCODE
 
-    Pop-Location
+    if ($pushedLocation) {
+        Pop-Location
+    }
 
     if ($wizardExitCode -ne 0) {
         Write-Banner "Installation Failed!" "Red"
@@ -392,3 +440,4 @@ try {
 
 Write-Host ""
 Read-Host "Press Enter to close"
+exit $script:exitCode
