@@ -17,7 +17,6 @@
 
 # Configuration - single source of truth
 VFX_ENV_NAME="vfx-pipeline"
-VFX_PIPELINE_BASE="${HOME}/.vfx_pipeline"
 
 # Colors for output (disable if not interactive)
 if [[ -t 1 ]]; then

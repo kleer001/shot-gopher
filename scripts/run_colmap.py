@@ -30,7 +30,7 @@ from typing import Optional
 
 import numpy as np
 
-from env_config import check_conda_env_or_warn
+from env_config import require_conda_env
 from log_manager import LogCapture
 from install_wizard.platform import PlatformManager
 from subprocess_utils import (
@@ -1545,7 +1545,7 @@ def run_colmap_pipeline(
 
 def main():
     # Check conda environment (warn but don't exit - allow --help to work)
-    check_conda_env_or_warn()
+    require_conda_env()
 
     parser = argparse.ArgumentParser(
         description="Run COLMAP reconstruction on a frame sequence",
