@@ -73,6 +73,10 @@ def main():
     print()
 
     start_web_script = repo_root / "start_web.py"
+    if not start_web_script.exists():
+        print(f"ERROR: Server script not found: {start_web_script}")
+        sys.exit(1)
+
     server_process = subprocess.Popen(
         [sys.executable, str(start_web_script), "--no-browser", "--port", str(args.port), "--host", args.host],
         cwd=str(repo_root),

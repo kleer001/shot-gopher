@@ -31,7 +31,10 @@ def get_desktop_path() -> Path:
     system = platform.system()
 
     if system == "Windows":
-        return Path(os.environ.get("USERPROFILE", "")) / "Desktop"
+        userprofile = os.environ.get("USERPROFILE")
+        if userprofile:
+            return Path(userprofile) / "Desktop"
+        return Path.home() / "Desktop"
     elif system == "Darwin":
         return Path.home() / "Desktop"
     else:
@@ -42,16 +45,20 @@ def get_desktop_path() -> Path:
         return Path.home() / "Desktop"
 
 
-def create_windows_shortcut(target_path: Path, shortcut_path: Path, icon_path: Path = None):
+def create_windows_shortcut(target_path: Path, shortcut_path: Path) -> bool:
     """Create a Windows .lnk shortcut using PowerShell."""
+    # Escape paths for PowerShell (replace backslashes, escape quotes)
+    target_str = str(target_path).replace("'", "''")
+    shortcut_str = str(shortcut_path).replace("'", "''")
+    workdir_str = str(target_path.parent).replace("'", "''")
 
-    # PowerShell script to create shortcut
+    # PowerShell script to create shortcut (use single quotes for paths)
     ps_script = f'''
 $WshShell = New-Object -ComObject WScript.Shell
-$Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
-$Shortcut.TargetPath = "{target_path}"
-$Shortcut.WorkingDirectory = "{target_path.parent}"
-$Shortcut.Description = "Launch Shot Gopher VFX Pipeline"
+$Shortcut = $WshShell.CreateShortcut('{shortcut_str}')
+$Shortcut.TargetPath = '{target_str}'
+$Shortcut.WorkingDirectory = '{workdir_str}'
+$Shortcut.Description = 'Launch Shot Gopher VFX Pipeline'
 $Shortcut.Save()
 '''
 
@@ -64,10 +71,13 @@ $Shortcut.Save()
     return result.returncode == 0
 
 
-def create_windows_start_menu_shortcut(target_path: Path):
+def create_windows_start_menu_shortcut(target_path: Path) -> bool:
     """Create a Windows Start Menu shortcut."""
-    start_menu = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+    appdata = os.environ.get("APPDATA")
+    if not appdata:
+        return False
 
+    start_menu = Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
     if not start_menu.exists():
         return False
 
@@ -75,14 +85,18 @@ def create_windows_start_menu_shortcut(target_path: Path):
     return create_windows_shortcut(target_path, shortcut_path)
 
 
-def create_mac_desktop_alias(target_path: Path, alias_path: Path):
+def create_mac_desktop_alias(target_path: Path, alias_path: Path) -> bool:
     """Create a macOS alias on the Desktop."""
+    # Escape paths for AppleScript (escape backslashes and quotes)
+    target_str = str(target_path).replace('\\', '\\\\').replace('"', '\\"')
+    parent_str = str(alias_path.parent).replace('\\', '\\\\').replace('"', '\\"')
+    name_str = alias_path.name.replace('\\', '\\\\').replace('"', '\\"')
 
     # Use osascript to create alias
     script = f'''
 tell application "Finder"
-    make new alias file at POSIX file "{alias_path.parent}" to POSIX file "{target_path}"
-    set name of result to "{alias_path.name}"
+    make new alias file at POSIX file "{parent_str}" to POSIX file "{target_str}"
+    set name of result to "{name_str}"
 end tell
 '''
 
@@ -127,36 +141,50 @@ do shell script "killall Dock"
     return result.returncode == 0
 
 
-def create_linux_desktop_entry(target_path: Path):
-    """Create a Linux .desktop file."""
+def create_linux_desktop_entry(target_path: Path, create_desktop: bool = True, create_menu: bool = True) -> bool:
+    """Create a Linux .desktop file.
 
-    # Create in user's applications directory
-    applications_dir = Path.home() / ".local" / "share" / "applications"
-    applications_dir.mkdir(parents=True, exist_ok=True)
+    Args:
+        target_path: Path to the launcher script
+        create_desktop: Whether to create desktop shortcut
+        create_menu: Whether to create applications menu entry
+    """
+    # Escape path for shell (single quotes need special handling)
+    parent_escaped = str(target_path.parent).replace("'", "'\\''")
+    name_escaped = target_path.name.replace("'", "'\\''")
 
     desktop_entry = f"""[Desktop Entry]
 Version=1.0
 Type=Application
 Name=Shot Gopher
 Comment=VFX Pipeline Web Interface
-Exec=bash -c 'cd "{target_path.parent}" && ./"{target_path.name}"'
+Exec=bash -c 'cd '\\'{parent_escaped}'\\' && ./'\\''{name_escaped}'\\'''
 Icon=video-x-generic
 Terminal=true
 Categories=Graphics;Video;
 """
 
-    desktop_file = applications_dir / "shot-gopher.desktop"
-    desktop_file.write_text(desktop_entry)
-    desktop_file.chmod(0o755)
+    created = False
 
-    # Also create on Desktop if it exists
-    desktop_path = get_desktop_path()
-    if desktop_path.exists():
-        desktop_shortcut = desktop_path / "Shot Gopher.desktop"
-        desktop_shortcut.write_text(desktop_entry)
-        desktop_shortcut.chmod(0o755)
+    # Create in applications menu
+    if create_menu:
+        applications_dir = Path.home() / ".local" / "share" / "applications"
+        applications_dir.mkdir(parents=True, exist_ok=True)
+        desktop_file = applications_dir / "shot-gopher.desktop"
+        desktop_file.write_text(desktop_entry, encoding='utf-8')
+        desktop_file.chmod(0o755)
+        created = True
 
-    return True
+    # Create on Desktop if requested and exists
+    if create_desktop:
+        desktop_path = get_desktop_path()
+        if desktop_path.exists():
+            desktop_shortcut = desktop_path / "Shot Gopher.desktop"
+            desktop_shortcut.write_text(desktop_entry, encoding='utf-8')
+            desktop_shortcut.chmod(0o755)
+            created = True
+
+    return created
 
 
 def main():
@@ -199,21 +227,26 @@ def main():
     create_desktop = args.desktop or args.all
     create_menu = args.menu or args.all
 
-    # If no flags, ask interactively
-    if not args.desktop and not args.menu and not args.all and not args.quiet:
-        print(f"Platform: {system}")
-        print(f"Launcher: {launcher}")
-        print()
+    # If no specific flags provided
+    if not args.desktop and not args.menu and not args.all:
+        if args.quiet:
+            # Quiet mode with no flags: default to desktop only
+            create_desktop = True
+        else:
+            # Interactive mode: ask user
+            print(f"Platform: {system}")
+            print(f"Launcher: {launcher}")
+            print()
 
-        response = input("Create Desktop shortcut? [Y/n]: ").strip().lower()
-        create_desktop = response != 'n'
+            response = input("Create Desktop shortcut? [Y/n]: ").strip().lower()
+            create_desktop = response != 'n'
 
-        if system == "Windows":
-            response = input("Create Start Menu shortcut? [Y/n]: ").strip().lower()
-            create_menu = response != 'n'
-        elif system == "Darwin":
-            response = input("Add to Dock? [y/N]: ").strip().lower()
-            create_menu = response == 'y'
+            if system == "Windows":
+                response = input("Create Start Menu shortcut? [Y/n]: ").strip().lower()
+                create_menu = response != 'n'
+            elif system == "Darwin":
+                response = input("Add to Dock? [y/N]: ").strip().lower()
+                create_menu = response == 'y'
 
     print()
 
@@ -257,14 +290,21 @@ def main():
                 print("  FAILED (you can drag the .command file to Dock manually)")
 
     else:  # Linux
-        print("Creating Linux desktop entry...")
-        if create_linux_desktop_entry(launcher):
-            created.append("Applications Menu")
-            if get_desktop_path().exists():
+        if create_menu:
+            print("Creating applications menu entry...")
+            if create_linux_desktop_entry(launcher, create_desktop=False, create_menu=True):
+                created.append("Applications Menu")
+                print("  OK")
+            else:
+                print("  FAILED")
+
+        if create_desktop:
+            print("Creating Desktop shortcut...")
+            if create_linux_desktop_entry(launcher, create_desktop=True, create_menu=False):
                 created.append("Desktop")
-            print("  OK")
-        else:
-            print("  FAILED")
+                print("  OK")
+            else:
+                print("  FAILED")
 
     print()
     if created:
