@@ -13,6 +13,19 @@ $REPO_URL = "https://github.com/kleer001/shot-gopher.git"
 # Capture starting directory FIRST - this is where the user wants to install
 $STARTING_DIR = (Get-Location).Path
 $INSTALL_DIR = Join-Path $STARTING_DIR "shot-gopher"
+
+# Verify we can write to this directory before proceeding
+$testFile = Join-Path $STARTING_DIR ".bootstrap_write_test"
+try {
+    [IO.File]::WriteAllText($testFile, "test")
+    Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+} catch {
+    Write-Host ""
+    Write-Host "X Cannot install here: $STARTING_DIR" -ForegroundColor Red
+    Write-Host "  No write permission. Run PowerShell from a directory you own." -ForegroundColor Gray
+    Write-Host ""
+    exit 1
+}
 $MINICONDA_URL = "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 $MINICONDA_INSTALLER = Join-Path $env:TEMP "Miniconda3-latest-Windows-x86_64.exe"
 $GIT_INSTALLER = Join-Path $env:TEMP "Git-installer.exe"
