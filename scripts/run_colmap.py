@@ -1544,9 +1544,6 @@ def run_colmap_pipeline(
 
 
 def main():
-    # Check conda environment (warn but don't exit - allow --help to work)
-    require_conda_env()
-
     parser = argparse.ArgumentParser(
         description="Run COLMAP reconstruction on a frame sequence",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1604,6 +1601,8 @@ def main():
     )
 
     args = parser.parse_args()
+
+    require_conda_env()
 
     if args.check:
         if check_colmap_available():

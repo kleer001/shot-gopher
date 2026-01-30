@@ -190,9 +190,6 @@ def run_segmentation(
 
 
 def main():
-    # Check conda environment (warn but don't exit - allow --help to work)
-    require_conda_env()
-
     parser = argparse.ArgumentParser(
         description="Run video segmentation with SAM3",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -241,6 +238,8 @@ def main():
     )
 
     args = parser.parse_args()
+
+    require_conda_env()
 
     project_dir = args.project_dir.resolve()
     if not project_dir.exists():
