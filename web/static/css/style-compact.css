@@ -589,6 +589,18 @@ body {
     text-align: center;
 }
 
+.stage-icon.pending {
+    color: var(--text-dim);
+}
+
+.stage-icon.processing {
+    color: var(--accent-blue);
+}
+
+.stage-icon.completed {
+    color: var(--accent-green);
+}
+
 /* Time Info */
 .time-info {
     display: flex;
@@ -733,40 +745,29 @@ body {
     color: var(--text-primary);
 }
 
+/* VRAM Warnings */
+.vram-warning {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    cursor: help;
+    font-size: 0.85rem;
+}
+
+.vram-warning.vram-insufficient {
+    color: var(--accent-red);
+}
+
+.vram-warning.vram-warning-status {
+    color: var(--accent-yellow);
+}
+
+.vram-warning.vram-chunked {
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
 /* Utility Classes */
 .hidden {
     display: none !important;
-}
-
-/* Responsive */
-@media (max-width: 1200px) {
-    .main-grid {
-        grid-template-columns: 350px 1fr;
-    }
-}
-
-@media (max-width: 900px) {
-    .main-grid {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr auto;
-    }
-
-    .panel-upload {
-        grid-column: 1;
-        grid-row: 1;
-    }
-
-    .panel-projects {
-        grid-column: 1;
-        grid-row: 2;
-    }
-
-    .panel-processing {
-        grid-column: 1;
-        grid-row: 3;
-    }
-
-    .processing-grid {
-        grid-template-columns: 1fr;
-    }
 }

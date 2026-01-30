@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -35,6 +36,7 @@ _project_service = None
 _pipeline_service = None
 
 active_jobs: Dict[str, dict] = {}
+active_jobs_lock = threading.Lock()
 
 
 def get_project_repo() -> ProjectRepository:
@@ -366,9 +368,22 @@ async def get_outputs(
     }
 
 
+def _check_comfyui_status() -> bool:
+    """Check if ComfyUI is running (blocking call)."""
+    import urllib.request
+    try:
+        req = urllib.request.Request("http://127.0.0.1:8188/system_stats", method="GET")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
 @router.get("/system/status")
 async def system_status():
     """Check system status (ComfyUI, disk space, etc.)."""
+    import asyncio
+
     status = {
         "comfyui": False,
         "disk_space_gb": 0,
@@ -377,10 +392,7 @@ async def system_status():
     }
 
     try:
-        import urllib.request
-        req = urllib.request.Request("http://127.0.0.1:8188/system_stats", method="GET")
-        with urllib.request.urlopen(req, timeout=2) as resp:
-            status["comfyui"] = resp.status == 200
+        status["comfyui"] = await asyncio.to_thread(_check_comfyui_status)
     except Exception:
         status["comfyui"] = False
 

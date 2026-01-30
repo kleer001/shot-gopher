@@ -170,15 +170,16 @@ export class ConfigController {
 
             let warningEl = label.querySelector('.vram-warning');
 
+            const appendWarning = (el) => {
+                const textEl = label.querySelector('.checkbox-text, .stage-title, span');
+                (textEl || label).appendChild(el);
+            };
+
             if (analysis.status === 'warning' || analysis.status === 'insufficient') {
                 if (!warningEl) {
                     warningEl = document.createElement('span');
-                    warningEl.title = analysis.message;
                     warningEl.textContent = ' \u26A0\uFE0F';
-                    const textEl = label.querySelector('.checkbox-text, .stage-title, span');
-                    if (textEl) {
-                        textEl.appendChild(warningEl);
-                    }
+                    appendWarning(warningEl);
                 }
                 const statusClass = analysis.status === 'insufficient' ? 'vram-insufficient' : 'vram-warning-status';
                 warningEl.className = `vram-warning ${statusClass}`;
@@ -187,12 +188,8 @@ export class ConfigController {
                 if (!warningEl) {
                     warningEl = document.createElement('span');
                     warningEl.className = 'vram-warning vram-chunked';
-                    warningEl.title = analysis.message;
                     warningEl.textContent = ' \u23F3';
-                    const textEl = label.querySelector('.checkbox-text, .stage-title, span');
-                    if (textEl) {
-                        textEl.appendChild(warningEl);
-                    }
+                    appendWarning(warningEl);
                 }
                 warningEl.title = analysis.message;
             } else if (warningEl) {

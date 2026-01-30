@@ -826,26 +826,3 @@ footer a:hover {
 .hidden {
     display: none !important;
 }
-
-/* Responsive */
-@media (max-width: 600px) {
-    .container {
-        padding: 12px;
-    }
-
-    .drop-zone {
-        padding: 40px 20px;
-    }
-
-    .preset-buttons {
-        flex-direction: column;
-    }
-
-    .complete-actions {
-        flex-direction: column;
-    }
-
-    .outputs-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}

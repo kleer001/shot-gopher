@@ -183,7 +183,8 @@ body {
     transition: all 0.3s;
 }
 
-.dropzone:hover {
+.dropzone:hover,
+.dropzone.drag-over {
     border-color: var(--accent);
     background: rgba(59, 130, 246, 0.05);
 }
@@ -534,6 +535,18 @@ body {
     color: white;
 }
 
+.stage-icon.pending {
+    color: var(--text-dim);
+}
+
+.stage-icon.processing {
+    color: var(--accent);
+}
+
+.stage-icon.completed {
+    color: var(--success);
+}
+
 /* Metrics */
 .metrics {
     display: grid;
@@ -636,6 +649,28 @@ body {
     height: 20px;
 }
 
+/* VRAM Warnings */
+.vram-warning {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    cursor: help;
+    font-size: 0.85rem;
+}
+
+.vram-warning.vram-insufficient {
+    color: var(--danger);
+}
+
+.vram-warning.vram-warning-status {
+    color: var(--warning);
+}
+
+.vram-warning.vram-chunked {
+    color: var(--text-dim);
+    opacity: 0.8;
+}
+
 /* Utility */
 .hidden {
     display: none !important;
@@ -657,11 +692,4 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--bg-hover);
-}
-
-/* Responsive */
-@media (max-width: 1200px) {
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
 }

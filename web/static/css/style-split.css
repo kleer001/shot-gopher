@@ -167,7 +167,8 @@ body {
     background: var(--bg-main);
 }
 
-.drop-area:hover {
+.drop-area:hover,
+.drop-area.drag-over {
     border-color: var(--accent);
     background: var(--bg-elevated);
 }
@@ -610,6 +611,18 @@ body {
     color: white;
 }
 
+.stage-icon.pending {
+    color: var(--text-muted);
+}
+
+.stage-icon.processing {
+    color: var(--accent);
+}
+
+.stage-icon.completed {
+    color: var(--success);
+}
+
 /* Processing Stats */
 .processing-stats {
     display: grid;
@@ -722,6 +735,28 @@ body {
     height: 20px;
 }
 
+/* VRAM Warnings */
+.vram-warning {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    cursor: help;
+    font-size: 0.85rem;
+}
+
+.vram-warning.vram-insufficient {
+    color: var(--danger);
+}
+
+.vram-warning.vram-warning-status {
+    color: var(--warning);
+}
+
+.vram-warning.vram-chunked {
+    color: var(--text-muted);
+    opacity: 0.8;
+}
+
 /* Utility */
 .hidden {
     display: none !important;
@@ -743,16 +778,4 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--bg-elevated);
-}
-
-/* Responsive */
-@media (max-width: 1024px) {
-    .split-container {
-        grid-template-columns: 1fr;
-    }
-
-    .pane-left {
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-    }
 }
