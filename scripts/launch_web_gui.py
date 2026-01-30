@@ -68,7 +68,7 @@ def main():
 |____/|_| |_|\___/ \__|  \____|\___/| .__/|_| |_|\___|_|
                                     |_|
     """)
-    print(f"Starting VFX Pipeline Web GUI...")
+    print(f"Starting Shot Gopher...")
     print(f"Server URL: {url}")
     print()
 

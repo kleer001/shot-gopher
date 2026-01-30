@@ -1,6 +1,6 @@
 @echo off
-REM Shot Gopher Web GUI Launcher for Windows
-REM Double-click this file to launch the web interface
+REM Shot Gopher - Windows Launcher
+REM Double-click this file to launch Shot Gopher
 
 setlocal EnableDelayedExpansion
 
@@ -10,7 +10,7 @@ cd /d "%SCRIPT_DIR%"
 
 echo.
 echo  ====================================
-echo   Shot Gopher - Web GUI Launcher
+echo        Shot Gopher Launcher
 echo  ====================================
 echo.
 
@@ -38,8 +38,8 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-REM Launch the web GUI
-echo Starting Shot Gopher Web GUI...
+REM Launch Shot Gopher
+echo Starting Shot Gopher...
 echo.
 python scripts/launch_web_gui.py
 

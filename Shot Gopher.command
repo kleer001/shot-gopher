@@ -1,6 +1,6 @@
 #!/bin/bash
-# Shot Gopher Web GUI Launcher for macOS
-# Double-click this file to launch the web interface
+# Shot Gopher - macOS Launcher
+# Double-click this file to launch Shot Gopher
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -8,7 +8,7 @@ cd "$SCRIPT_DIR"
 
 echo ""
 echo " ===================================="
-echo "  Shot Gopher - Web GUI Launcher"
+echo "      Shot Gopher Launcher"
 echo " ===================================="
 echo ""
 
@@ -46,8 +46,8 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Launch the web GUI
-echo "Starting Shot Gopher Web GUI..."
+# Launch Shot Gopher
+echo "Starting Shot Gopher..."
 echo ""
 python scripts/launch_web_gui.py
 
