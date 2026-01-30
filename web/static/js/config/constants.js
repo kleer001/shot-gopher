@@ -74,6 +74,7 @@ export const ELEMENTS = {
     PROJECT_DETAIL_PANEL: 'project-detail-panel',
     DETAIL_PROJECT_NAME: 'detail-project-name',
     DETAIL_STAGES: 'detail-stages',
+    STAGES_COUNTER: 'stages-counter',
     VRAM_INFO_SECTION: 'vram-info-section',
     VRAM_INFO: 'vram-info',
     DETAIL_VIDEO_SECTION: 'detail-video-section',

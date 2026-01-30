@@ -15,6 +15,18 @@ import { ELEMENTS, CSS_CLASSES } from '../config/constants.js';
 
 const ALL_STAGES = ['depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
 
+const STAGE_OUTPUT_DIRS = {
+    depth: 'depth',
+    roto: 'roto',
+    cleanplate: 'cleanplate',
+    colmap: 'colmap',
+    interactive: 'roto',
+    mama: 'matte',
+    mocap: 'mocap',
+    gsir: 'gsir',
+    camera: 'camera',
+};
+
 export class ProjectsController {
     constructor() {
         this.elements = {
@@ -22,6 +34,7 @@ export class ProjectsController {
             detailPanel: dom.getElement(ELEMENTS.PROJECT_DETAIL_PANEL),
             detailProjectName: dom.getElement(ELEMENTS.DETAIL_PROJECT_NAME),
             detailStages: dom.getElement(ELEMENTS.DETAIL_STAGES),
+            stagesCounter: dom.getElement(ELEMENTS.STAGES_COUNTER),
             vramInfoSection: dom.getElement(ELEMENTS.VRAM_INFO_SECTION),
             vramInfo: dom.getElement(ELEMENTS.VRAM_INFO),
             detailVideoSection: dom.getElement(ELEMENTS.DETAIL_VIDEO_SECTION),
@@ -74,7 +87,9 @@ export class ProjectsController {
             const safeName = dom.escapeHTML(proj.name || proj.project_id);
             const safeId = dom.escapeHTML(proj.project_id);
             const safeDir = dom.escapeHTML(proj.project_dir || '');
-            const safeStatus = dom.escapeHTML(proj.status || 'unknown');
+            const rawStatus = proj.status || 'unknown';
+            const displayStatus = rawStatus === 'unknown' ? 'ready' : rawStatus;
+            const safeStatus = dom.escapeHTML(displayStatus);
             const selectedClass = this.selectedProjectId === proj.project_id ? 'selected' : '';
             return `
             <div class="project-item ${selectedClass}" data-id="${safeId}" data-dir="${safeDir}">
@@ -134,7 +149,6 @@ export class ProjectsController {
     renderStagesStatus(projectData, outputsData) {
         if (!this.elements.detailStages) return;
 
-        const completedStages = new Set(projectData?.stages || []);
         const outputs = outputsData?.outputs || {};
 
         const stageLabels = {
@@ -149,10 +163,19 @@ export class ProjectsController {
             camera: 'Camera Tracking',
         };
 
+        let completedCount = 0;
+
         const html = ALL_STAGES.map(stage => {
-            const isCompleted = completedStages.has(stage) || outputs[stage];
+            const outputDir = STAGE_OUTPUT_DIRS[stage];
+            const outputData = outputs[outputDir];
+            const hasFiles = outputData && outputData.count > 0;
+            const isCompleted = hasFiles;
+
+            if (isCompleted) completedCount++;
+
             const stageClass = isCompleted ? 'completed' : '';
-            const statusText = isCompleted ? 'DONE' : '--';
+            const fileCount = outputData?.count || 0;
+            const statusText = isCompleted ? `${fileCount} files` : '';
             const label = stageLabels[stage] || stage.toUpperCase();
 
             return `
@@ -165,6 +188,10 @@ export class ProjectsController {
         }).join('');
 
         dom.setHTML(this.elements.detailStages, html);
+
+        if (this.elements.stagesCounter) {
+            dom.setText(this.elements.stagesCounter, `${completedCount}/${ALL_STAGES.length}`);
+        }
 
         const stageItems = this.elements.detailStages.querySelectorAll('.stage-status-item');
         stageItems.forEach(item => {
