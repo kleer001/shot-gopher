@@ -6,10 +6,13 @@
 
 $ErrorActionPreference = "Stop"
 
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 $REPO_URL = "https://github.com/kleer001/shot-gopher.git"
 $INSTALL_DIR = Join-Path (Get-Location) "shot-gopher"
 $MINICONDA_URL = "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 $MINICONDA_INSTALLER = Join-Path $env:TEMP "Miniconda3-latest-Windows-x86_64.exe"
+$GIT_INSTALLER = Join-Path $env:TEMP "Git-installer.exe"
 
 function Write-Banner {
     param([string]$Text, [string]$Color = "Cyan")
@@ -18,6 +21,118 @@ function Write-Banner {
     Write-Host "  $Text" -ForegroundColor $Color
     Write-Host ("=" * 60) -ForegroundColor $Color
     Write-Host ""
+}
+
+function Install-Git {
+    $installed = $false
+
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "Winget detected. Attempting to install Git via winget..." -ForegroundColor Yellow
+        try {
+            $process = Start-Process -FilePath "winget" -ArgumentList @(
+                "install", "--id", "Git.Git", "-e", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"
+            ) -Wait -PassThru -NoNewWindow
+
+            if ($process.ExitCode -eq 0 -or $process.ExitCode -eq -1978335189) {
+                Write-Host "OK Git installed successfully via winget" -ForegroundColor Green
+                $installed = $true
+            } else {
+                Write-Host "! Winget returned exit code $($process.ExitCode), trying direct download..." -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "! Winget failed: $_, trying direct download..." -ForegroundColor Yellow
+        }
+    }
+
+    if (-not $installed) {
+        Write-Host "Fetching latest Git release info..." -ForegroundColor Yellow
+        $gitUrl = $null
+
+        $arch = if ([Environment]::Is64BitOperatingSystem) { "64-bit" } else { "32-bit" }
+
+        try {
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest" -UseBasicParsing
+            $asset = $release.assets | Where-Object { $_.name -match "^Git-.*-$arch\.exe$" } | Select-Object -First 1
+            if ($asset) {
+                $gitUrl = $asset.browser_download_url
+                Write-Host "  Found: $($asset.name)" -ForegroundColor Gray
+            }
+        } catch {
+            Write-Host "! Could not fetch release info: $_" -ForegroundColor Yellow
+        }
+
+        if (-not $gitUrl) {
+            Write-Host "X Could not determine Git download URL" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Please install manually from: https://git-scm.com/download/win" -ForegroundColor Yellow
+            return $false
+        }
+
+        Write-Host "Downloading Git installer..." -ForegroundColor Yellow
+
+        try {
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -Uri $gitUrl -OutFile $GIT_INSTALLER -UseBasicParsing
+            $ProgressPreference = 'Continue'
+        } catch {
+            Write-Host "X Failed to download Git installer" -ForegroundColor Red
+            Write-Host "  Error: $_" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Please install manually from: https://git-scm.com/download/win" -ForegroundColor Yellow
+            return $false
+        }
+
+        if (-not (Test-Path $GIT_INSTALLER) -or (Get-Item $GIT_INSTALLER).Length -lt 1000000) {
+            Write-Host "X Downloaded file appears invalid" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Please install manually from: https://git-scm.com/download/win" -ForegroundColor Yellow
+            Remove-Item $GIT_INSTALLER -Force -ErrorAction SilentlyContinue
+            return $false
+        }
+
+        Write-Host "Installing Git (this may take a minute)..." -ForegroundColor Yellow
+        Write-Host "  Installation will be silent - please wait..." -ForegroundColor Gray
+
+        try {
+            $process = Start-Process -FilePath $GIT_INSTALLER -ArgumentList @(
+                "/VERYSILENT",
+                "/NORESTART",
+                "/NOCANCEL",
+                "/SP-",
+                "/CLOSEAPPLICATIONS",
+                "/RESTARTAPPLICATIONS",
+                "/COMPONENTS=icons,ext\reg\shellhere,assoc,assoc_sh"
+            ) -Wait -PassThru -NoNewWindow
+
+            if ($process.ExitCode -ne 0) {
+                throw "Installer exited with code $($process.ExitCode)"
+            }
+        } catch {
+            Write-Host "X Git installation failed" -ForegroundColor Red
+            Write-Host "  Error: $_" -ForegroundColor Red
+            Remove-Item $GIT_INSTALLER -Force -ErrorAction SilentlyContinue
+            return $false
+        }
+
+        Remove-Item $GIT_INSTALLER -Force -ErrorAction SilentlyContinue
+        Write-Host "OK Git installed successfully" -ForegroundColor Green
+    }
+
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+    $gitPaths = @(
+        "C:\Program Files\Git\cmd",
+        "C:\Program Files\Git\bin",
+        "C:\Program Files (x86)\Git\cmd",
+        "C:\Program Files (x86)\Git\bin"
+    )
+    foreach ($gitPath in $gitPaths) {
+        if ((Test-Path $gitPath) -and ($env:Path -notlike "*$gitPath*")) {
+            $env:Path = "$gitPath;$env:Path"
+        }
+    }
+
+    return $true
 }
 
 function Test-CondaInstalled {
@@ -128,13 +243,35 @@ function Install-VFXPipeline {
     Write-Host "Checking prerequisites..."
 
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Host "X Git is not installed" -ForegroundColor Red
+        Write-Host "X Git is not installed" -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "Git is required. Install options:" -ForegroundColor Yellow
-        Write-Host "  1. winget install Git.Git" -ForegroundColor Cyan
-        Write-Host "  2. Download from https://git-scm.com/download/win" -ForegroundColor Cyan
+        Write-Host "Git is required for the VFX Pipeline." -ForegroundColor White
+        Write-Host "It is used to download and update the pipeline code." -ForegroundColor Gray
         Write-Host ""
-        return 1
+
+        $response = Read-Host "Would you like to install Git automatically? (Y/n)"
+
+        if ($response -match "^[Nn]$") {
+            Write-Host ""
+            Write-Host "Manual installation required:" -ForegroundColor Yellow
+            Write-Host "  1. Run: winget install Git.Git" -ForegroundColor Cyan
+            Write-Host "  2. Or download from: https://git-scm.com/download/win" -ForegroundColor Cyan
+            Write-Host "  3. Restart PowerShell after installation" -ForegroundColor Cyan
+            Write-Host "  4. Re-run this bootstrap script" -ForegroundColor Cyan
+            Write-Host ""
+            return 1
+        }
+
+        Write-Host ""
+        if (-not (Install-Git)) {
+            return 1
+        }
+
+        if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+            Write-Host "X Could not find git after installation" -ForegroundColor Red
+            Write-Host "  Please restart PowerShell and try again" -ForegroundColor Yellow
+            return 1
+        }
     }
     Write-Host "OK Git found" -ForegroundColor Green
 
