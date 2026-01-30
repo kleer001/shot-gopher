@@ -39,8 +39,10 @@ export class WebSocketService extends EventTarget {
      * @private
      */
     _connect() {
-        // Clean up existing connection
+        // Clean up existing connection without resetting shouldReconnect
+        const shouldReconnect = this.shouldReconnect;
         this.disconnect();
+        this.shouldReconnect = shouldReconnect;
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/${this.projectId}`;

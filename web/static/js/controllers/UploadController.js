@@ -82,13 +82,15 @@ export class UploadController {
     }
 
     async handleFileSelected(file) {
-        // Validate file type
-        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        // Validate file type - handle edge cases (no extension, trailing dot)
+        const lastDotIndex = file.name.lastIndexOf('.');
+        const ext = lastDotIndex > 0 ? file.name.slice(lastDotIndex).toLowerCase() : '';
         const config = stateManager.get('config');
         const supportedFormats = config?.supportedVideoFormats || UPLOAD.SUPPORTED_FORMATS;
 
-        if (!supportedFormats.includes(ext)) {
-            stateManager.showError(`Unsupported file type: ${ext}`);
+        if (!ext || !supportedFormats.includes(ext)) {
+            const displayExt = ext || '(no extension)';
+            stateManager.showError(`Unsupported file type: ${displayExt}`);
             return;
         }
 

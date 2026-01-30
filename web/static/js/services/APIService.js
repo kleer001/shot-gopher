@@ -92,7 +92,11 @@ export class APIService {
             await this._handleErrorResponse(response, 'Upload failed');
         }
 
-        return response.json();
+        try {
+            return await response.json();
+        } catch {
+            throw new Error('Invalid response format from server');
+        }
     }
 
     // ----- Specific API endpoints -----
