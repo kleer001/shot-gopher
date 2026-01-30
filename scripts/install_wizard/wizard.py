@@ -824,11 +824,11 @@ class InstallationWizard:
             desc_line1 = "This will create shortcuts on your Desktop & Start Menu "
             desc_line2 = "so you can launch Shot Gopher with a single click.      "
         elif system == "Darwin":
-            desc_line1 = "This will create an alias on your Desktop               "
-            desc_line2 = "so you can launch Shot Gopher with a single click.      "
+            desc_line1 = "This will add Shot Gopher to your Desktop and Dock      "
+            desc_line2 = "so you can launch it with a single click.               "
         else:
-            desc_line1 = "This will create a .desktop entry in your applications  "
-            desc_line2 = "so you can launch Shot Gopher from your app launcher.   "
+            desc_line1 = "This will add Shot Gopher to your Desktop & apps menu   "
+            desc_line2 = "so you can launch it with a single click.               "
 
         print(f"""
 {Colors.OKCYAN}    ┌────────────────────────────────────────────────────────────┐
