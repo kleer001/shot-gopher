@@ -9,7 +9,39 @@ $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $REPO_URL = "https://github.com/kleer001/shot-gopher.git"
-$INSTALL_DIR = Join-Path (Get-Location) "shot-gopher"
+
+# Capture starting directory and validate it's a safe install location
+$STARTING_DIR = (Get-Location).Path
+
+# Detect system directories that should not be used for installation
+$systemDirs = @(
+    "$env:SystemRoot",
+    "$env:SystemRoot\System32",
+    "$env:SystemRoot\SysWOW64",
+    "C:\Windows",
+    "C:\Windows\System32",
+    "C:\Windows\SysWOW64",
+    "$env:ProgramFiles",
+    "$env:ProgramFiles(x86)",
+    "C:\Program Files",
+    "C:\Program Files (x86)"
+)
+
+$isSystemDir = $false
+foreach ($sysDir in $systemDirs) {
+    if ($sysDir -and $STARTING_DIR -like "$sysDir*") {
+        $isSystemDir = $true
+        break
+    }
+}
+
+if ($isSystemDir) {
+    # Fall back to user's home directory
+    $STARTING_DIR = $env:USERPROFILE
+    Write-Host "! Running from system directory - installing to $STARTING_DIR instead" -ForegroundColor Yellow
+}
+
+$INSTALL_DIR = Join-Path $STARTING_DIR "shot-gopher"
 $MINICONDA_URL = "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 $MINICONDA_INSTALLER = Join-Path $env:TEMP "Miniconda3-latest-Windows-x86_64.exe"
 $GIT_INSTALLER = Join-Path $env:TEMP "Git-installer.exe"
@@ -28,6 +60,10 @@ function Install-Git {
 
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Host "Winget detected. Attempting to install Git via winget..." -ForegroundColor Yellow
+
+        # Save current directory before winget (some package managers change working dir)
+        $savedDir = (Get-Location).Path
+
         try {
             $process = Start-Process -FilePath "winget" -ArgumentList @(
                 "install", "--id", "Git.Git", "-e", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"
@@ -41,6 +77,9 @@ function Install-Git {
             }
         } catch {
             Write-Host "! Winget failed: $_, trying direct download..." -ForegroundColor Yellow
+        } finally {
+            # Restore directory in case winget changed it
+            Set-Location $savedDir
         }
     }
 
@@ -93,6 +132,9 @@ function Install-Git {
         Write-Host "Installing Git (this may take a minute)..." -ForegroundColor Yellow
         Write-Host "  Installation will be silent - please wait..." -ForegroundColor Gray
 
+        # Save current directory before installer (some installers change working dir)
+        $savedDir = (Get-Location).Path
+
         try {
             $process = Start-Process -FilePath $GIT_INSTALLER -ArgumentList @(
                 "/VERYSILENT",
@@ -112,6 +154,9 @@ function Install-Git {
             Write-Host "  Error: $_" -ForegroundColor Red
             Remove-Item $GIT_INSTALLER -Force -ErrorAction SilentlyContinue
             return $false
+        } finally {
+            # Restore directory in case installer changed it
+            Set-Location $savedDir
         }
 
         Remove-Item $GIT_INSTALLER -Force -ErrorAction SilentlyContinue
@@ -187,6 +232,9 @@ function Install-Miniconda {
 
     $installPath = "$env:USERPROFILE\miniconda3"
 
+    # Save current directory before installer (some installers change working dir)
+    $savedDir = (Get-Location).Path
+
     try {
         $process = Start-Process -FilePath $MINICONDA_INSTALLER -ArgumentList @(
             "/InstallationType=JustMe",
@@ -203,6 +251,9 @@ function Install-Miniconda {
         Write-Host "X Miniconda installation failed" -ForegroundColor Red
         Write-Host "  Error: $_" -ForegroundColor Red
         return $false
+    } finally {
+        # Restore directory in case installer changed it
+        Set-Location $savedDir
     }
 
     # Clean up installer
