@@ -3,8 +3,8 @@
 
 This script creates platform-appropriate shortcuts:
 - Windows: Creates .lnk shortcut on Desktop and/or Start Menu
-- macOS: Creates alias on Desktop and offers to add to Dock
-- Linux: Creates .desktop file in applications menu
+- macOS: Creates alias on Desktop and/or adds to Dock
+- Linux: Creates .desktop file on Desktop and/or applications menu
 
 Usage:
     python scripts/create_shortcut.py              # Interactive mode
@@ -196,20 +196,13 @@ def main():
     # Determine which launcher to use
     if system == "Windows":
         launcher = repo_root / "Shot Gopher.bat"
-        if not launcher.exists():
-            print(f"ERROR: Launcher not found: {launcher}")
-            sys.exit(1)
-    elif system == "Darwin":
-        launcher = repo_root / "Shot Gopher.command"
-        if not launcher.exists():
-            print(f"ERROR: Launcher not found: {launcher}")
-            sys.exit(1)
     else:
-        # Linux - use the .command file (it's a bash script)
+        # macOS and Linux both use the .command file (bash script)
         launcher = repo_root / "Shot Gopher.command"
-        if not launcher.exists():
-            print(f"ERROR: Launcher not found: {launcher}")
-            sys.exit(1)
+
+    if not launcher.exists():
+        print(f"ERROR: Launcher not found: {launcher}")
+        sys.exit(1)
 
     created = []
 
