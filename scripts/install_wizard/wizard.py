@@ -4,6 +4,8 @@ This module contains the InstallationWizard class that coordinates
 all installation steps and provides the interactive installation flow.
 """
 
+import platform
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -31,6 +33,39 @@ from .utils import (
     tty_input,
 )
 from .validator import InstallationValidator
+
+
+# Golden/yellow color for the "G" in Gopher
+GOLD = '\033[93m'
+
+
+def print_setup_done_banner():
+    """Print the celebratory SETUP DONE banner."""
+    print(f"""
+{Colors.OKGREEN}
+    ╔══════════════════════════════════════════════════════════════════╗
+    ║                                                                  ║
+    ║    ███████╗███████╗████████╗██╗   ██╗██████╗                     ║
+    ║    ██╔════╝██╔════╝╚══██╔══╝██║   ██║██╔══██╗                    ║
+    ║    ███████╗█████╗     ██║   ██║   ██║██████╔╝                    ║
+    ║    ╚════██║██╔══╝     ██║   ██║   ██║██╔═══╝                     ║
+    ║    ███████║███████╗   ██║   ╚██████╔╝██║                         ║
+    ║    ╚══════╝╚══════╝   ╚═╝    ╚═════╝ ╚═╝                         ║
+    ║                                                                  ║
+    ║    ██████╗  ██████╗ ███╗   ██╗███████╗    ██╗                    ║
+    ║    ██╔══██╗██╔═══██╗████╗  ██║██╔════╝    ██║                    ║
+    ║    ██║  ██║██║   ██║██╔██╗ ██║█████╗      ██║                    ║
+    ║    ██║  ██║██║   ██║██║╚██╗██║██╔══╝                             ║
+    ║    ██████╔╝╚██████╔╝██║ ╚████║███████╗    ██╗                    ║
+    ║    ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚══════╝    ╚═╝                    ║
+    ║                                                                  ║
+    ╠══════════════════════════════════════════════════════════════════╣
+    ║                                                                  ║
+    ║{Colors.ENDC}    {Colors.BOLD}***  SHOT {GOLD}G{Colors.ENDC}{Colors.BOLD}OPHER IS READY TO GO!  ***{Colors.ENDC}{Colors.OKGREEN}                    ║
+    ║                                                                  ║
+    ╚══════════════════════════════════════════════════════════════════╝
+{Colors.ENDC}""")
+
 
 
 class InstallationWizard:
@@ -776,3 +811,71 @@ class InstallationWizard:
         print("  README.md - Pipeline overview and usage")
         print("  TESTING.md - Testing and validation guide")
         print("  IMPLEMENTATION_NOTES.md - Developer notes")
+
+        # Show the celebratory banner and offer shortcut creation
+        self.offer_shortcut_creation()
+
+    def offer_shortcut_creation(self):
+        """Show setup complete banner and offer to create desktop shortcuts."""
+        print_setup_done_banner()
+
+        print(f"\n{Colors.BOLD}    One more step: Create a desktop shortcut?{Colors.ENDC}")
+        print()
+
+        system = platform.system()
+        if system == "Windows":
+            print("    This will create shortcuts on your Desktop and Start Menu")
+            print("    so you can launch Shot Gopher with a single click.")
+        elif system == "Darwin":
+            print("    This will create an alias on your Desktop")
+            print("    so you can launch Shot Gopher with a single click.")
+        else:
+            print("    This will create a .desktop entry in your applications menu")
+            print("    so you can launch Shot Gopher from your app launcher.")
+
+        print()
+
+        if ask_yes_no("    Create desktop shortcut?", default=True):
+            self._create_shortcuts()
+        else:
+            print()
+            print_info("No shortcut created. You can create one later by running:")
+            print(f"    python scripts/create_shortcut.py")
+
+    def _create_shortcuts(self):
+        """Create desktop shortcuts using the create_shortcut.py script."""
+        create_shortcut_script = self.repo_root / "scripts" / "create_shortcut.py"
+
+        if not create_shortcut_script.exists():
+            print_error(f"Shortcut script not found: {create_shortcut_script}")
+            return
+
+        print()
+        try:
+            result = subprocess.run(
+                [sys.executable, str(create_shortcut_script), "--all", "--quiet"],
+                capture_output=True,
+                text=True,
+                cwd=str(self.repo_root)
+            )
+
+            if result.returncode == 0:
+                print_success("Desktop shortcut created!")
+                system = platform.system()
+                if system == "Windows":
+                    print_info("Look for 'Shot Gopher' on your Desktop and Start Menu")
+                elif system == "Darwin":
+                    print_info("Look for 'Shot Gopher' on your Desktop")
+                else:
+                    print_info("Look for 'Shot Gopher' in your applications menu")
+            else:
+                print_warning("Could not create shortcut automatically")
+                if result.stderr:
+                    print(f"    {result.stderr.strip()}")
+                print_info("You can create one manually by running:")
+                print(f"    python scripts/create_shortcut.py")
+
+        except Exception as e:
+            print_warning(f"Could not create shortcut: {e}")
+            print_info("You can create one manually by running:")
+            print(f"    python scripts/create_shortcut.py")
