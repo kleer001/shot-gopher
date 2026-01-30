@@ -55,7 +55,7 @@ Keep the root directory clean and public-facing. Include only:
 - **Dependency management**: `package.json`, `requirements.txt`, `Cargo.toml`, `go.mod`, `pom.xml`, etc.
 - **Documentation**: `README.md`, `LICENSE`, `CONTRIBUTING.md`
 - **Configuration**: `.gitignore`, `.env.example`, `.editorconfig`, linter configs
-- **CI/CD**: `.github/`, `.gitlab-ci.yml`, `Dockerfile`, `docker-compose.yml`
+- **CI/CD**: `.github/`, `.gitlab-ci.yml`
 - **LLM guidance**: `CLAUDE.md`, `.cursorrules`, etc.
 - **Essential package files**: `setup.py`, `Makefile`, `Cargo.toml`, etc.
 
@@ -350,7 +350,6 @@ Before committing any change, verify:
 
 4. **Test before commit**
    - Run the actual code path that was modified
-   - For Docker/container changes: test inside the container, not just locally
 
 5. **Match existing patterns**
    - Before implementing, check how similar functionality works elsewhere in the codebase
@@ -408,19 +407,15 @@ Before committing any change, verify:
 - **Configuration:** Centralized in `scripts/env_config.py` with environment variable overrides
 - **Dependency Injection:** Pass dependencies explicitly to functions/classes
 - **Path Handling:** Use `pathlib.Path`, never string concatenation
-- **Container Awareness:** All scripts must detect and adapt to container/local environment
 
 ### Testing Requirements
 - **Unit Test Coverage:** >80% for core logic (`scripts/` directory)
 - **Integration Tests:** Full pipeline tests with synthetic and real test data
-- **Performance Tests:** Container must be within 10% of local installation performance
 - **Test Fixtures:** Located in `tests/fixtures/` (synthetic and real data)
 
 ### Special Conventions
 - **SOLID/DRY Enforcement:** Apply to all new code
 - **No Hardcoded Paths:** Use environment variables (`VFX_MODELS_DIR`, `VFX_PROJECTS_DIR`, etc.)
-- **Backward Compatibility:** All changes must work in both local and container modes
-- **Error Messages:** Container-aware error messages (suggest volume mounts, etc.)
 
 ### Project Structure
 ```
@@ -430,8 +425,7 @@ shot-gopher/
 │   ├── fixtures/      # Test data (synthetic + real)
 │   └── integration/   # Integration tests
 ├── docs/              # Documentation and roadmaps
-├── workflow_templates/# ComfyUI workflow JSON files
-└── docker/            # Docker-related files (entrypoint, etc.)
+└── workflow_templates/# ComfyUI workflow JSON files
 ```
 
 ### Documentation Standards
@@ -441,7 +435,6 @@ shot-gopher/
 ### Prohibited Patterns
 - **Inline comments in function bodies** (strictly forbidden - code must be self-documenting)
 - **Hardcoded file paths** (use environment variables and `env_config.py`)
-- **Conda checks in containers** (detect environment and skip appropriately)
 - **Duplicated logic** (consolidate in shared utilities)
 - **Installing to user home directories** (NEVER install tools, models, or data to `~/`, `~/.local/`, `~/.vfx_pipeline/`, etc.)
 

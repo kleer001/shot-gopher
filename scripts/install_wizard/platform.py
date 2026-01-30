@@ -458,77 +458,50 @@ Then install {dependency}:
             return """
 🍎 macOS Detected
 
-Recommendation: Use conda-based installation wizard
-
-Why?
-  • Docker on macOS cannot access NVIDIA GPUs (runs in VM)
-  • Conda-based installation works natively on macOS
-  • All features available except GPU-accelerated processing
-
 Run: python scripts/install_wizard.py
+
+Notes:
+  • All features available except GPU-accelerated processing
+  • macOS uses CPU fallback for ML models
 """
 
         elif os_name == "linux" and environment == "native" and has_gpu:
             return """
 🐧 Linux + GPU Detected
 
-You have TWO options:
+Run: python scripts/install_wizard.py
 
-1. Docker-based (Recommended for production)
-   ✓ Isolated, containerized environment
-   ✓ Consistent across systems
-   ✓ Easier troubleshooting and deployment
-   ✗ Slight overhead from containerization
-   → Run: python scripts/install_wizard_docker.py
-
-2. Conda-based (Recommended for development)
-   ✓ Direct filesystem access
-   ✓ More flexible for development/debugging
-   ✓ Lower overhead
-   ✗ More dependencies to manage manually
-   → Run: python scripts/install_wizard.py
-
-Both work great on Linux! Choose based on your workflow.
+Benefits:
+  ✓ Direct filesystem access
+  ✓ Full GPU acceleration
+  ✓ Optimal performance
 """
 
         elif os_name == "linux" and environment == "wsl2" and has_gpu:
             return """
 🪟 WSL2 + GPU Detected
 
-Recommendation: Docker-based installation
+Run: python scripts/install_wizard.py
 
-Why?
-  • Excellent GPU support in WSL2 via NVIDIA Container Toolkit
-  • Cleaner separation between Windows and Linux environments
-  • Easier to manage and troubleshoot
-
-Alternative: Conda-based works too if you prefer direct access
-
-Docker: python scripts/install_wizard_docker.py
-Conda: python scripts/install_wizard.py
+Notes:
+  • GPU passthrough works via NVIDIA WSL2 drivers
+  • Install from within WSL2 environment
 """
 
         elif not has_gpu:
             return """
 ⚠️  No NVIDIA GPU Detected
 
-Recommendation: Conda-based installation
-
-Why?
-  • Motion capture requires NVIDIA GPU (12GB+ VRAM)
-  • Without GPU, only segmentation/roto workflows are available
-  • Conda-based is simpler for CPU-only usage
-
 Run: python scripts/install_wizard.py
 
-Note: If you add a GPU later, you can switch to Docker wizard
+Notes:
+  • Motion capture requires NVIDIA GPU (12GB+ VRAM)
+  • Without GPU, only segmentation/roto workflows are available
 """
 
         else:
             return """
-Choose installation method:
-  • Docker: python scripts/install_wizard_docker.py
-  • Conda: python scripts/install_wizard.py
+Run: python scripts/install_wizard.py
 """
 
     # =========================================================================

@@ -165,22 +165,6 @@ If automatic download fails, manually download from:
             'instructions': '''Video Depth Anything Small model will be downloaded from HuggingFace.
 This model uses ~6.8GB VRAM (vs 23.6GB for Large), suitable for most GPUs.'''
         },
-        'matanyone': {
-            'name': 'MatAnyone Model',
-            'requires_auth': False,
-            'use_huggingface': False,  # Use direct GitHub release download
-            'files': [
-                {
-                    'url': 'https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth',
-                    'filename': 'matanyone.pth',
-                    'size_mb': 141,
-                }
-            ],
-            'dest_dir_rel': 'ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint',
-            'instructions': '''MatAnyone model for stable video matting.
-Download from: https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth
-Place in ComfyUI/custom_nodes/ComfyUI-MatAnyone/checkpoint/matanyone.pth'''
-        },
         'gvhmr': {
             'name': 'GVHMR Checkpoints',
             'requires_auth': False,

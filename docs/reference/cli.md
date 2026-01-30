@@ -16,7 +16,7 @@ Run the VFX pipeline from a single command.
 | [interactive](stages.md#interactive) | Interactive segmentation | 4 GB |
 | [depth](stages.md#depth) | Depth maps | 7 GB |
 | [roto](stages.md#roto) | Segmentation masks | 4 GB |
-| [matanyone](stages.md#matanyone) | Matte refinement | 9 GB |
+| [mama](stages.md#mama) | Matte refinement | 12 GB |
 | [cleanplate](stages.md#cleanplate) | Object removal | 6 GB |
 | [colmap](stages.md#colmap) | Camera tracking | 2-4 GB |
 | [mocap](stages.md#mocap) | Motion capture | 12 GB |
@@ -59,14 +59,6 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | `-e` | `--skip-existing` | Skip stages with existing output |
 | | `--list-stages` | List available stages and exit |
 | `-c` | `--comfyui-url` | ComfyUI URL (default: `http://127.0.0.1:8188`) |
-
-### Mode Options
-
-| Short | Long | Description |
-|-------|------|-------------|
-| `-D` | `--docker` | Force Docker mode (auto-detected if not specified) |
-| `-L` | `--local` | Force local mode (auto-detected if not specified) |
-| | `--models-dir` | Path to models directory (Docker mode) |
 
 ### Segmentation Options
 
@@ -189,7 +181,7 @@ Pipeline creates this directory structure:
 │   ├── person_00/       # First person instance
 │   ├── person_01/       # Second person instance
 │   └── combined/        # Consolidated for cleanplate
-├── matte/               # MatAnyone refined mattes
+├── matte/               # VideoMaMa refined mattes
 │   ├── person_00/
 │   └── person_01/
 ├── cleanplate/          # Clean plates
@@ -216,7 +208,7 @@ Pipeline creates this directory structure:
 
 ## ComfyUI
 
-Pipeline auto-starts ComfyUI for depth, roto, matanyone, and cleanplate stages.
+Pipeline auto-starts ComfyUI for depth, roto, and cleanplate stages.
 
 **Manual control:**
 ```bash

@@ -33,11 +33,11 @@
       "promptLabel": "Segmentation Prompt",
       "promptPlaceholder": "person, car, building..."
     },
-    "matanyone": {
+    "mama": {
       "name": "Refine Mattes",
-      "displayName": "Refine Person Mattes (MatAnyone)",
+      "displayName": "Refine Person Mattes (VideoMaMa)",
       "description": "Improve quality of person masks",
-      "outputDir": "matanyone",
+      "outputDir": "matte",
       "estimatedTimePerFrame": 1.0,
       "required": false,
       "dependencies": ["roto"],
@@ -100,7 +100,7 @@
     "all": {
       "name": "Everything",
       "description": "All available stages including 3D reconstruction",
-      "stages": ["depth", "roto", "matanyone", "cleanplate", "colmap", "gsir", "mocap"]
+      "stages": ["depth", "roto", "mama", "cleanplate", "colmap", "gsir", "mocap"]
     }
   },
   "supportedVideoFormats": [

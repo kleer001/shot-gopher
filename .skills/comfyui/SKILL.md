@@ -5,7 +5,7 @@ description: ComfyUI workflow development for VFX pipelines. Use when editing wo
 
 # ComfyUI VFX Pipeline Skill
 
-ComfyUI is a node-based UI for Stable Diffusion and ML inference. This skill covers workflow JSON structure, the REST API, and the specific nodes used in this VFX pipeline (SAM3, Video-Depth-Anything, ProPainter, MatAnyone).
+ComfyUI is a node-based UI for Stable Diffusion and ML inference. This skill covers workflow JSON structure, the REST API, and the specific nodes used in this VFX pipeline (SAM3, Video-Depth-Anything, ProPainter).
 
 ## Quick Reference
 
@@ -73,10 +73,6 @@ Video object segmentation with text/point prompts.
 Video inpainting for object removal.
 - `ProPainterInpaint` - Remove masked regions with temporal consistency
 
-### MatAnyone
-Video matting for human subjects.
-- `MatAnyone` - Refine masks into alpha mattes
-
 ### Built-in Nodes
 - `SaveImage` / `PreviewImage` - Output handling
 - `MaskToImage` / `ImageToMask` - Type conversion
@@ -100,10 +96,10 @@ Parameters: `[path, skip_first, select_every_nth, batch_size, ...]`
 ```json
 {
   "type": "SAM3VideoSegmentation",
-  "widgets_values": ["text", "person", -1, 0.3]
+  "widgets_values": ["text", "person", 0, 0.3]
 }
 ```
-Parameters: `[mode, prompt, frame_idx, threshold]`
+Parameters: `[mode, prompt, frame_idx, threshold]` (frame_idx must be >= 0)
 
 ### Point-Prompt Segmentation
 ```json

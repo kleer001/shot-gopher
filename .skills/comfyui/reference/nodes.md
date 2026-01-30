@@ -119,7 +119,7 @@ Initialize video segmentation state.
 |--------|------|-------------|
 | mode | STRING | `"text"` or `"point"` |
 | text_prompt | STRING | Object description (text mode) |
-| frame_idx | INT | Reference frame (-1 = auto) |
+| frame_idx | INT | Reference frame (0 = first frame) |
 | threshold | FLOAT | Detection confidence (0.0-1.0, default: 0.3) |
 
 | Output | Type |
@@ -128,7 +128,7 @@ Initialize video segmentation state.
 
 **Text mode example:**
 ```json
-["text", "person", -1, 0.3]
+["text", "person", 0, 0.3]
 ```
 
 **Point mode example:**
@@ -223,32 +223,6 @@ Video inpainting with temporal consistency.
 | MASK_DILATE | Dilated mask |
 
 **VRAM tip:** Process at 720p, upscale output.
-
----
-
-## MatAnyone
-
-### MatAnyone
-Refine segmentation masks into alpha mattes.
-
-| Input | Type | Description |
-|-------|------|-------------|
-| src_video | IMAGE | Source frames |
-| foreground_mask | IMAGE | Initial mask (first frame only) |
-| foreground_MASK | MASK | Alternative mask input |
-| solid_color | IMAGE | Optional background |
-
-| Widget | Default | Description |
-|--------|---------|-------------|
-| start_frame | 0 | Begin processing |
-| propagate_frames | 10 | Temporal window |
-
-| Output | Type |
-|--------|------|
-| matte | IMAGE | Alpha matte sequence |
-| green_screen | IMAGE | Foreground on green |
-
-**Note:** Only needs first frame mask; propagates automatically.
 
 ---
 

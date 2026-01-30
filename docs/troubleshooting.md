@@ -103,7 +103,7 @@ python scripts/run_pipeline.py footage.mp4 -s depth,mocap
 | ingest | CPU |
 | depth | 7 GB |
 | roto | 4 GB |
-| matanyone | 9 GB |
+| mama | 12 GB |
 | cleanplate | 6 GB |
 | colmap | 2-4 GB |
 | mocap | 12 GB |
@@ -156,7 +156,7 @@ Which stages can run in parallel:
 ```
 ingest ─┬─► depth ──────────────────────┬─► camera
         │                               │
-        ├─► roto ─► matanyone ─► cleanplate
+        ├─► roto ─► mama ─► cleanplate
         │
         └─► colmap ─┬─► mocap
                     └─► gsir

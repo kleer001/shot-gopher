@@ -20,7 +20,7 @@ This pipeline automates first-pass VFX prep work. Ingest a movie file, get produ
 - **Frame extraction** - Convert video files to PNG frame sequences
 - **Depth estimation** - Monocular depth maps with temporal consistency (Video Depth Anything)
 - **Segmentation/Rotoscoping** - Text-prompted video segmentation for dynamic object masking (SAM3)
-- **Matte refinement** - Alpha matte generation for human subjects (MatAnyone)
+- **Matte refinement** - Alpha matte generation for human subjects (VideoMaMa)
 - **Clean plate generation** - Automated inpainting to remove objects from footage (ProPainter)
 - **Camera tracking** - Structure-from-Motion camera solves with bundle adjustment (COLMAP)
 - **3D reconstruction** - Dense point clouds and mesh generation from multi-view footage
@@ -44,7 +44,7 @@ This pipeline automates first-pass VFX prep work. Ingest a movie file, get produ
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) - Node-based workflow engine for ML inference
 - [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything) - Temporally consistent depth estimation
 - [Segment Anything Model 2/3](https://github.com/facebookresearch/segment-anything-2) - Text-prompted video segmentation
-- [MatAnyone](https://github.com/Shine-Light-Tech/MatAnyone) - Video matting for human alpha mattes
+- [VideoMaMa](https://github.com/hywang66/VideoMaMa) - Video matting for human alpha mattes
 - [ProPainter](https://github.com/sczhou/ProPainter) - Video inpainting for clean plates
 - [COLMAP](https://colmap.github.io/) - Structure-from-Motion and Multi-View Stereo
 - [FFmpeg](https://ffmpeg.org/) - Video/image processing
@@ -70,24 +70,20 @@ This pipeline automates first-pass VFX prep work. Ingest a movie file, get produ
 
 ### Linux
 
-Use Docker for NVIDIA GPU support and isolated environment.
-
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_docker.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.sh | bash
 ```
 
-**Prerequisites:** NVIDIA GPU with driver, Docker with nvidia-container-toolkit
+**Prerequisites:** NVIDIA GPU with driver, Conda or Miniconda
 
-**Run:** `bash scripts/run_docker.sh --name MyProject video.mp4`
+**Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,camera`
 
 ---
 
 ### Windows
 
-Native Windows and WSL2 both supported:
+One-liner bootstrap in **PowerShell** (not Command Prompt):
 
-**Option 1: Native Windows (Conda)** - One-liner bootstrap in **PowerShell** (not Command Prompt):
 ```powershell
 irm https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.ps1 | iex
 ```
@@ -95,21 +91,13 @@ irm https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstra
 > **Getting "irm is not recognized"?** You're in Command Prompt. Open **PowerShell** instead:
 > Press `Win+X` → select "Windows PowerShell" or "Terminal", then run the command above.
 
-**Option 2: WSL2 + Docker**
-1. Install WSL2: `wsl --install` or visit https://aka.ms/wsl
-2. Install Docker Desktop with WSL2 backend enabled
-3. Run from WSL2 terminal:
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_docker.sh | bash
-   ```
-
 **Prerequisites:** Windows 10 2004+ or Windows 11, NVIDIA GPU with driver
+
+**Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,camera`
 
 ---
 
 ### macOS
-
-Use Conda for GPU access (Docker can't access Metal/AMD GPUs on macOS).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.sh | bash
@@ -117,7 +105,7 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/b
 
 **Prerequisites:** macOS 11+, Apple Silicon recommended (Intel Macs slower)
 
-**Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,matanyone,cleanplate,colmap,camera`
+**Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,camera`
 
 ---
 
@@ -127,7 +115,7 @@ For step-by-step installation without the wizard, see the [Manual Installation G
 
 ## Running Your First Project
 
-After installation, you're ready to process your first video. The pipeline supports both Docker and Conda environments with similar workflows.
+After installation, you're ready to process your first video.
 
 **Quick start examples:**
 
@@ -136,13 +124,10 @@ After installation, you're ready to process your first video. The pipeline suppo
 ./shot-gopher                # Linux/macOS
 shot-gopher.bat              # Windows
 
-# Docker
-bash scripts/run_docker.sh --name MyProject --stages all video.mp4
+# All stages
+python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,mocap,gsir,camera
 
-# Conda (all stages)
-python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,matanyone,cleanplate,colmap,mocap,gsir,camera
-
-# Conda (8GB VRAM - skip high-memory stages)
+# 8GB VRAM (skip high-memory stages)
 python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,cleanplate,colmap,camera
 
 # Re-run stages on last project (auto-detects most recent)
@@ -155,7 +140,6 @@ python scripts/run_pipeline.py -s roto,cleanplate
 
 Complete documentation available in [docs/](docs/):
 - [Your First Project](docs/first-project.md) - Complete walkthrough for running your first pipeline
-- [Docker Guide](docs/docker.md) - Docker setup, usage, and troubleshooting
 - [Installation Guide](docs/installation.md) - Detailed setup instructions
 - [CLI Reference](docs/reference/cli.md) - Command-line usage and options
 - [Pipeline Stages](docs/reference/stages.md) - Individual stage documentation
@@ -186,20 +170,15 @@ Output follows VFX production conventions:
 
 ## System Requirements
 
-**Platform:** Linux, macOS, Windows (native or WSL2)
-**Python:** 3.10 or newer (local install only)
+**Platform:** Linux, macOS, Windows
+**Python:** 3.10 or newer
 
-**For Docker installation:**
-- Docker with docker-compose
-- NVIDIA Container Toolkit (installer can set this up automatically)
-- NVIDIA GPU with CUDA support
-
-**For local Conda installation:**
+**Requirements:**
 - Git, FFmpeg
 - NVIDIA GPU with CUDA support
 - Conda or Miniconda
 
-**Note:** macOS supports local Conda installation (CPU-only, no GPU acceleration). Windows supports both native Conda installation and WSL2 with Docker. See [Windows Guide](docs/platforms/windows.md) for details.
+**Note:** macOS supports Conda installation (CPU-only, no GPU acceleration). See [Windows Guide](docs/platforms/windows.md) for Windows-specific details.
 
 ## Installation Requirements
 
@@ -235,12 +214,12 @@ Output follows VFX production conventions:
 - Video Depth Anything: ~7 GB (Small model)
 - SAM3 (segmentation): ~4 GB
 - ProPainter (clean plates): ~6 GB
-- MatAnyone (matte refinement): 9+ GB
+- VideoMaMa (matte refinement): 12+ GB
 - COLMAP: CPU-based (minimal GPU usage)
 - GS-IR (material decomposition): 12+ GB
 - WHAM/ECON (motion capture): 12+ GB
 
-**Minimum Recommendation: 9 GB VRAM** (covers core pipeline including MatAnyone)
+**Minimum Recommendation: 12 GB VRAM** (covers core pipeline including VideoMaMa)
 **Comfortable Recommendation: 12 GB VRAM** (supports all features including motion capture and material decomposition)
 **Optimal: 24 GB VRAM** (allows higher batch sizes and parallel processing)
 

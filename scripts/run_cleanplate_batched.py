@@ -10,10 +10,9 @@ Usage:
     python run_cleanplate_batched.py /path/to/project --batch-size 10 --overlap 2
     python run_cleanplate_batched.py /path/to/project --dry-run
     python run_cleanplate_batched.py /path/to/project --resume
-    python run_cleanplate_batched.py /path/to/project --docker  # Force Docker mode
 
 Requirements:
-    - ComfyUI (via Docker container or local installation)
+    - ComfyUI installed
     - Source frames in project/source/frames/
     - Roto masks in project/roto/
 """
@@ -22,7 +21,6 @@ import argparse
 import json
 import os
 import shutil
-import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -33,7 +31,6 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from env_config import is_in_container
 from comfyui_utils import (
     DEFAULT_COMFYUI_URL,
     free_comfyui_memory,
@@ -49,155 +46,10 @@ REPO_ROOT = Path(__file__).parent.parent
 TEMPLATE_FILE = "03_cleanplate_chunk_template.json"
 
 
-def check_docker_available() -> bool:
-    """Check if Docker is available and running."""
-    try:
-        result = subprocess.run(
-            ["docker", "info"],
-            capture_output=True,
-            timeout=10
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
-
-
-def check_docker_image_exists() -> bool:
-    """Check if the vfx-ingest Docker image exists."""
-    try:
-        result = subprocess.run(
-            ["docker", "images", "-q", "vfx-ingest:latest"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        return bool(result.stdout.strip())
-    except Exception:
-        return False
-
-
-def detect_execution_mode() -> str:
-    """Detect whether to run in local or Docker mode.
-
-    Returns:
-        'container' if already in container
-        'docker' if Docker is available with the vfx-ingest image
-        'local' if local ComfyUI exists
-        'none' if no execution environment available
-    """
-    if is_in_container():
-        return "container"
-
-    if check_docker_available() and check_docker_image_exists():
-        return "docker"
-
+def check_comfyui_installed() -> bool:
+    """Check if ComfyUI is installed."""
     comfyui_path = REPO_ROOT / ".vfx_pipeline" / "ComfyUI"
-    if comfyui_path.exists() and (comfyui_path / "main.py").exists():
-        return "local"
-
-    return "none"
-
-
-def run_docker_mode(
-    project_dir: Path,
-    projects_dir: Path,
-    models_dir: Path,
-    original_args: list[str],
-) -> int:
-    """Run batched cleanplate in Docker mode.
-
-    Args:
-        project_dir: Path to project directory
-        projects_dir: Directory containing projects
-        models_dir: Path to models directory
-        original_args: Original command line arguments
-
-    Returns:
-        Exit code
-    """
-    project_dir = project_dir.resolve()
-    projects_dir = projects_dir.resolve()
-    models_dir = models_dir.resolve()
-
-    print(f"\n{'='*60}")
-    print("Batched Cleanplate (Docker Mode)")
-    print(f"{'='*60}")
-    print(f"Project: {project_dir}")
-    print(f"Projects dir: {projects_dir}")
-    print(f"Models: {models_dir}")
-
-    if not project_dir.exists():
-        print(f"Error: Project directory not found: {project_dir}", file=sys.stderr)
-        return 1
-
-    if not models_dir.exists():
-        print(f"Error: Models directory not found: {models_dir}", file=sys.stderr)
-        return 1
-
-    if not check_docker_available():
-        print("Error: Docker is not available or not running", file=sys.stderr)
-        return 1
-
-    if not check_docker_image_exists():
-        print("Error: Docker image 'vfx-ingest:latest' not found", file=sys.stderr)
-        print("Build it first: docker compose build", file=sys.stderr)
-        return 1
-
-    container_project = f"/workspace/projects/{project_dir.name}"
-
-    forward_args = []
-    skip_next = False
-    project_arg_replaced = False
-    for i, arg in enumerate(original_args[1:]):
-        if skip_next:
-            skip_next = False
-            continue
-        if arg in ("--docker", "-D", "--local", "-L"):
-            continue
-        if arg in ("--models-dir",) and i + 1 < len(original_args) - 1:
-            skip_next = True
-            continue
-        if arg.startswith("--models-dir="):
-            continue
-        if not arg.startswith("-") and not project_arg_replaced:
-            try:
-                arg_resolved = Path(arg).resolve()
-                if arg_resolved == project_dir:
-                    forward_args.append(container_project)
-                    project_arg_replaced = True
-                    continue
-            except Exception:
-                pass
-        forward_args.append(arg)
-
-    if not project_arg_replaced:
-        forward_args.insert(0, container_project)
-
-    env = os.environ.copy()
-    env["VFX_MODELS_DIR"] = str(models_dir)
-    env["VFX_PROJECTS_DIR"] = str(projects_dir)
-    env["HOST_UID"] = str(os.getuid()) if hasattr(os, 'getuid') else "0"
-    env["HOST_GID"] = str(os.getgid()) if hasattr(os, 'getgid') else "0"
-
-    docker_cmd = [
-        "docker", "compose", "run", "--rm",
-        "vfx-ingest",
-        "cleanplate-batched",
-    ] + forward_args
-
-    print(f"\nStarting Docker container...")
-    print(f"Running: docker compose run ... cleanplate-batched {' '.join(forward_args)}")
-
-    try:
-        result = subprocess.run(
-            docker_cmd,
-            cwd=str(REPO_ROOT),
-            env=env,
-        )
-        return result.returncode
-    except subprocess.CalledProcessError as e:
-        print(f"Error running Docker container: {e}", file=sys.stderr)
-        return 1
+    return comfyui_path.exists() and (comfyui_path / "main.py").exists()
 
 
 STATE_FILENAME = "cleanplate_batch_state.json"
@@ -752,22 +604,6 @@ def main():
         action="store_true",
         help="Don't auto-start ComfyUI (requires manual start)"
     )
-    parser.add_argument(
-        "--docker", "-D",
-        action="store_true",
-        help="Force Docker mode"
-    )
-    parser.add_argument(
-        "--local", "-L",
-        action="store_true",
-        help="Force local mode (skip Docker)"
-    )
-    parser.add_argument(
-        "--models-dir",
-        type=Path,
-        default=None,
-        help="Models directory (Docker mode only)"
-    )
 
     args = parser.parse_args()
 
@@ -775,35 +611,9 @@ def main():
         print(f"Error: Overlap ({args.overlap}) must be less than batch size ({args.batch_size})")
         sys.exit(1)
 
-    if args.docker and args.local:
-        print("Error: Cannot specify both --docker and --local", file=sys.stderr)
-        sys.exit(1)
-
-    execution_mode = detect_execution_mode()
-
-    if args.docker:
-        execution_mode = "docker"
-    elif args.local:
-        execution_mode = "local"
-
-    if execution_mode == "docker":
-        project_dir = args.project_dir.resolve()
-        projects_dir = project_dir.parent
-        models_dir = args.models_dir or REPO_ROOT / ".vfx_pipeline" / "models"
-
-        exit_code = run_docker_mode(
-            project_dir=project_dir,
-            projects_dir=projects_dir,
-            models_dir=models_dir,
-            original_args=sys.argv,
-        )
-        sys.exit(exit_code)
-
-    if execution_mode == "none":
-        print("Error: No execution environment available", file=sys.stderr)
-        print("Options:", file=sys.stderr)
-        print("  1. Build Docker image: docker compose build", file=sys.stderr)
-        print("  2. Install local ComfyUI: ./scripts/install_comfyui.sh", file=sys.stderr)
+    if not check_comfyui_installed():
+        print("Error: ComfyUI not installed", file=sys.stderr)
+        print("Install with: python scripts/install_wizard.py", file=sys.stderr)
         sys.exit(1)
 
     success = run_batched_cleanplate(

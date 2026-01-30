@@ -51,7 +51,7 @@
         {"name": "SAM3_VIDEO_STATE", "type": "SAM3_VIDEO_STATE", "links": [3, 5], "slot_index": 0}
       ],
       "properties": {"Node name for S&R": "SAM3VideoSegmentation"},
-      "widgets_values": ["text", "person", -1, 0.3],
+      "widgets_values": ["text", "person", 0, 0.3],
       "title": "🎯 Video Segmentation (text prompt)"
     },
     {

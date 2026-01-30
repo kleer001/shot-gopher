@@ -2,13 +2,7 @@
 
 This document covers Windows compatibility, prerequisites, and troubleshooting for the VFX Pipeline.
 
-**Support Status:** Native Windows support is available but WSL2 + Docker is recommended for best performance.
-
-## Quick Start
-
-**Recommended:** Use WSL2 + Docker (see [Docker Guide](../docker.md))
-
-**Native Windows:** Requires additional setup (see Prerequisites below)
+**Support Status:** Native Windows support is available via Conda.
 
 ---
 
@@ -35,8 +29,7 @@ This document covers Windows compatibility, prerequisites, and troubleshooting f
 
 ### IT Admin Setup
 
-If you don't have administrator access, give these one-pagers to your IT department:
-- [IT Setup: Docker/WSL2](../windows-it-docker.md) - For Docker-based installation
+If you don't have administrator access, give this one-pager to your IT department:
 - [IT Setup: Native](../windows-it-native.md) - For native conda installation
 
 ---
