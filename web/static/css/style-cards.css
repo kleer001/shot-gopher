@@ -20,6 +20,9 @@
     --danger: #ef4444;
     --shadow: rgba(0, 0, 0, 0.4);
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    /* Standard semantic alias for cross-variant compatibility */
+    --text-muted: var(--text-dim);
 }
 
 body {

@@ -40,51 +40,35 @@ export class ProcessingController {
         };
 
         this.timerInterval = null;
+        this._boundHandlers = {};
         this.setupEventListeners();
     }
 
     setupEventListeners() {
-        // Cancel button
+        this._boundHandlers.onCancelClick = () => this.handleCancel();
+        this._boundHandlers.onClearLogsClick = () => this.clearLogs();
+        this._boundHandlers.onStateChange = (e) => this.handleStateChange(e.detail);
+        this._boundHandlers.onProgressUpdate = (e) => this.handleProgressUpdate(e.detail);
+        this._boundHandlers.onLogMessage = (e) => this.appendLog(e.detail.message);
+        this._boundHandlers.onWsMessage = (e) => stateManager.updateProgress(e.detail);
+        this._boundHandlers.onWsConnected = () => console.log('WebSocket connected');
+        this._boundHandlers.onWsDisconnected = () => console.log('WebSocket disconnected');
+
         if (this.elements.cancelBtn) {
-            this.elements.cancelBtn.addEventListener('click', () => {
-                this.handleCancel();
-            });
+            this.elements.cancelBtn.addEventListener('click', this._boundHandlers.onCancelClick);
         }
 
-        // Clear logs button
         if (this.elements.clearLogsBtn) {
-            this.elements.clearLogsBtn.addEventListener('click', () => {
-                this.clearLogs();
-            });
+            this.elements.clearLogsBtn.addEventListener('click', this._boundHandlers.onClearLogsClick);
         }
 
-        // Listen to state changes
-        stateManager.addEventListener(EVENTS.STATE_CHANGED, (e) => {
-            this.handleStateChange(e.detail);
-        });
+        stateManager.addEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
+        stateManager.addEventListener(EVENTS.PROGRESS_UPDATE, this._boundHandlers.onProgressUpdate);
+        stateManager.addEventListener('logMessage', this._boundHandlers.onLogMessage);
 
-        // Listen to progress updates
-        stateManager.addEventListener(EVENTS.PROGRESS_UPDATE, (e) => {
-            this.handleProgressUpdate(e.detail);
-        });
-
-        // Listen to log messages
-        stateManager.addEventListener('logMessage', (e) => {
-            this.appendLog(e.detail.message);
-        });
-
-        // WebSocket events
-        wsService.addEventListener('message', (e) => {
-            stateManager.updateProgress(e.detail);
-        });
-
-        wsService.addEventListener('connected', () => {
-            console.log('WebSocket connected');
-        });
-
-        wsService.addEventListener('disconnected', () => {
-            console.log('WebSocket disconnected');
-        });
+        wsService.addEventListener('message', this._boundHandlers.onWsMessage);
+        wsService.addEventListener('connected', this._boundHandlers.onWsConnected);
+        wsService.addEventListener('disconnected', this._boundHandlers.onWsDisconnected);
     }
 
     handleStateChange(detail) {
@@ -303,5 +287,26 @@ export class ProcessingController {
         this.stopTimer();
         this.clearLogs();
         this.hideProcessingPanel();
+    }
+
+    destroy() {
+        this.stopTimer();
+
+        if (this.elements.cancelBtn && this._boundHandlers.onCancelClick) {
+            this.elements.cancelBtn.removeEventListener('click', this._boundHandlers.onCancelClick);
+        }
+        if (this.elements.clearLogsBtn && this._boundHandlers.onClearLogsClick) {
+            this.elements.clearLogsBtn.removeEventListener('click', this._boundHandlers.onClearLogsClick);
+        }
+
+        stateManager.removeEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
+        stateManager.removeEventListener(EVENTS.PROGRESS_UPDATE, this._boundHandlers.onProgressUpdate);
+        stateManager.removeEventListener('logMessage', this._boundHandlers.onLogMessage);
+
+        wsService.removeEventListener('message', this._boundHandlers.onWsMessage);
+        wsService.removeEventListener('connected', this._boundHandlers.onWsConnected);
+        wsService.removeEventListener('disconnected', this._boundHandlers.onWsDisconnected);
+
+        this._boundHandlers = {};
     }
 }

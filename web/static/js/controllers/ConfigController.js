@@ -30,48 +30,50 @@ export class ConfigController {
             stageCheckboxes: dom.getElements('input[name="stage"]'),
         };
 
+        this._boundHandlers = {
+            presetClicks: [],
+            checkboxChanges: [],
+        };
         this.setupEventListeners();
         this.applyDefaultPreset();
     }
 
     setupEventListeners() {
-        // Form submission
-        if (this.elements.configForm) {
-            this.elements.configForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.handleSubmit();
-            });
-        }
-
-        // Preset buttons
-        this.elements.presetButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const preset = btn.dataset.preset;
-                this.applyPreset(preset);
-            });
-        });
-
-        // Stage checkboxes
-        this.elements.stageCheckboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', () => {
-                this.handleStageChange(checkbox);
-                this.updateTimeEstimate();
-            });
-        });
-
-        // Roto checkbox - toggle prompt visibility
-        if (this.elements.stageRoto) {
-            this.elements.stageRoto.addEventListener('change', () => {
-                this.toggleRotoPrompt();
-            });
-        }
-
-        // Update VRAM warnings when vramAnalysis becomes available
-        stateManager.addEventListener(EVENTS.STATE_CHANGED, (e) => {
+        this._boundHandlers.onFormSubmit = (e) => {
+            e.preventDefault();
+            this.handleSubmit();
+        };
+        this._boundHandlers.onRotoChange = () => this.toggleRotoPrompt();
+        this._boundHandlers.onStateChange = (e) => {
             if (e.detail.updates?.vramAnalysis !== undefined) {
                 this.updateVramWarnings();
             }
+        };
+
+        if (this.elements.configForm) {
+            this.elements.configForm.addEventListener('submit', this._boundHandlers.onFormSubmit);
+        }
+
+        this.elements.presetButtons.forEach(btn => {
+            const handler = () => this.applyPreset(btn.dataset.preset);
+            this._boundHandlers.presetClicks.push({ btn, handler });
+            btn.addEventListener('click', handler);
         });
+
+        this.elements.stageCheckboxes.forEach(checkbox => {
+            const handler = () => {
+                this.handleStageChange(checkbox);
+                this.updateTimeEstimate();
+            };
+            this._boundHandlers.checkboxChanges.push({ checkbox, handler });
+            checkbox.addEventListener('change', handler);
+        });
+
+        if (this.elements.stageRoto) {
+            this.elements.stageRoto.addEventListener('change', this._boundHandlers.onRotoChange);
+        }
+
+        stateManager.addEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
     }
 
     applyDefaultPreset() {
@@ -315,5 +317,29 @@ export class ConfigController {
 
         dom.hide(this.elements.configForm);
         this.applyDefaultPreset();
+    }
+
+    destroy() {
+        if (this.elements.configForm && this._boundHandlers.onFormSubmit) {
+            this.elements.configForm.removeEventListener('submit', this._boundHandlers.onFormSubmit);
+        }
+
+        this._boundHandlers.presetClicks.forEach(({ btn, handler }) => {
+            btn.removeEventListener('click', handler);
+        });
+
+        this._boundHandlers.checkboxChanges.forEach(({ checkbox, handler }) => {
+            checkbox.removeEventListener('change', handler);
+        });
+
+        if (this.elements.stageRoto && this._boundHandlers.onRotoChange) {
+            this.elements.stageRoto.removeEventListener('change', this._boundHandlers.onRotoChange);
+        }
+
+        if (this._boundHandlers.onStateChange) {
+            stateManager.removeEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
+        }
+
+        this._boundHandlers = { presetClicks: [], checkboxChanges: [] };
     }
 }

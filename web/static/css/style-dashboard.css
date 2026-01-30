@@ -19,6 +19,9 @@
     --warning: #f59e0b;
     --danger: #ef4444;
     --font: -apple-system, system-ui, sans-serif;
+
+    /* Standard semantic alias for cross-variant compatibility */
+    --text-muted: var(--text-dim);
 }
 
 body {

@@ -20,6 +20,13 @@
     --accent-red: #ef4444;
     --font-mono: 'SF Mono', 'Monaco', 'Consolas', monospace;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    /* Standard semantic aliases for cross-variant compatibility */
+    --accent: var(--accent-blue);
+    --success: var(--accent-green);
+    --warning: var(--accent-yellow);
+    --danger: var(--accent-red);
+    --text-muted: var(--text-dim);
 }
 
 body {
@@ -755,11 +762,11 @@ body {
 }
 
 .vram-warning.vram-insufficient {
-    color: var(--accent-red);
+    color: var(--danger);
 }
 
 .vram-warning.vram-warning-status {
-    color: var(--accent-yellow);
+    color: var(--warning);
 }
 
 .vram-warning.vram-chunked {

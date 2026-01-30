@@ -19,46 +19,29 @@ export class SystemController {
     constructor() {
         this.elements = {
             systemStatus: dom.getElement(ELEMENTS.SYSTEM_STATUS),
-            statusText: null, // Will be found inside systemStatus
+            statusText: null,
             errorToast: dom.getElement(ELEMENTS.ERROR_TOAST),
             errorMessage: dom.getElement('error-message'),
             errorClose: dom.getElement('error-close'),
             shutdownBtn: dom.getElement('shutdown-btn'),
         };
 
-        // Find status text element
         if (this.elements.systemStatus) {
             this.elements.statusText = this.elements.systemStatus.querySelector('.status-text');
         }
 
         this.statusInterval = null;
+        this._boundHandlers = {};
         this.setupEventListeners();
         this.checkSystemStatus();
         this.startAutoRefresh();
     }
 
     setupEventListeners() {
-        // Error toast close button
-        if (this.elements.errorClose) {
-            this.elements.errorClose.addEventListener('click', () => {
-                this.hideError();
-            });
-        }
-
-        // Shutdown button
-        if (this.elements.shutdownBtn) {
-            this.elements.shutdownBtn.addEventListener('click', () => {
-                this.handleShutdown();
-            });
-        }
-
-        // Listen to error events from state
-        stateManager.addEventListener(EVENTS.ERROR, (e) => {
-            this.showError(e.detail.message);
-        });
-
-        // Listen to state changes
-        stateManager.addEventListener(EVENTS.STATE_CHANGED, (e) => {
+        this._boundHandlers.onErrorClose = () => this.hideError();
+        this._boundHandlers.onShutdown = () => this.handleShutdown();
+        this._boundHandlers.onError = (e) => this.showError(e.detail.message);
+        this._boundHandlers.onStateChange = (e) => {
             if ('errorMessage' in e.detail.updates) {
                 if (e.detail.newState.errorMessage) {
                     this.showError(e.detail.newState.errorMessage);
@@ -66,7 +49,18 @@ export class SystemController {
                     this.hideError();
                 }
             }
-        });
+        };
+
+        if (this.elements.errorClose) {
+            this.elements.errorClose.addEventListener('click', this._boundHandlers.onErrorClose);
+        }
+
+        if (this.elements.shutdownBtn) {
+            this.elements.shutdownBtn.addEventListener('click', this._boundHandlers.onShutdown);
+        }
+
+        stateManager.addEventListener(EVENTS.ERROR, this._boundHandlers.onError);
+        stateManager.addEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
     }
 
     async checkSystemStatus() {
@@ -193,5 +187,17 @@ export class SystemController {
 
     destroy() {
         this.stopAutoRefresh();
+
+        if (this.elements.errorClose && this._boundHandlers.onErrorClose) {
+            this.elements.errorClose.removeEventListener('click', this._boundHandlers.onErrorClose);
+        }
+        if (this.elements.shutdownBtn && this._boundHandlers.onShutdown) {
+            this.elements.shutdownBtn.removeEventListener('click', this._boundHandlers.onShutdown);
+        }
+
+        stateManager.removeEventListener(EVENTS.ERROR, this._boundHandlers.onError);
+        stateManager.removeEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
+
+        this._boundHandlers = {};
     }
 }

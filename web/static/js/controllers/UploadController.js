@@ -32,32 +32,32 @@ export class UploadController {
             videoFps: dom.getElement('video-fps'),
         };
 
+        this._boundHandlers = {};
         this.setupEventListeners();
     }
 
     setupEventListeners() {
-        // Browse button
+        this._boundHandlers.onBrowseClick = () => this.elements.fileInput?.click();
+        this._boundHandlers.onFileChange = (e) => {
+            const file = e.target.files?.[0];
+            if (file) this.handleFileSelected(file);
+        };
+        this._boundHandlers.onDragOver = (e) => this.handleDragOver(e);
+        this._boundHandlers.onDragLeave = (e) => this.handleDragLeave(e);
+        this._boundHandlers.onDrop = (e) => this.handleDrop(e);
+
         if (this.elements.browseBtn) {
-            this.elements.browseBtn.addEventListener('click', () => {
-                this.elements.fileInput?.click();
-            });
+            this.elements.browseBtn.addEventListener('click', this._boundHandlers.onBrowseClick);
         }
 
-        // File input change
         if (this.elements.fileInput) {
-            this.elements.fileInput.addEventListener('change', (e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                    this.handleFileSelected(file);
-                }
-            });
+            this.elements.fileInput.addEventListener('change', this._boundHandlers.onFileChange);
         }
 
-        // Drag and drop
         if (this.elements.dropZone) {
-            this.elements.dropZone.addEventListener('dragover', (e) => this.handleDragOver(e));
-            this.elements.dropZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
-            this.elements.dropZone.addEventListener('drop', (e) => this.handleDrop(e));
+            this.elements.dropZone.addEventListener('dragover', this._boundHandlers.onDragOver);
+            this.elements.dropZone.addEventListener('dragleave', this._boundHandlers.onDragLeave);
+            this.elements.dropZone.addEventListener('drop', this._boundHandlers.onDrop);
         }
     }
 
@@ -195,5 +195,20 @@ export class UploadController {
             this.elements.uploadProgressFill.style.width = '0%';
         }
         dom.setText(this.elements.uploadPercentText, '0');
+    }
+
+    destroy() {
+        if (this.elements.browseBtn && this._boundHandlers.onBrowseClick) {
+            this.elements.browseBtn.removeEventListener('click', this._boundHandlers.onBrowseClick);
+        }
+        if (this.elements.fileInput && this._boundHandlers.onFileChange) {
+            this.elements.fileInput.removeEventListener('change', this._boundHandlers.onFileChange);
+        }
+        if (this.elements.dropZone) {
+            this.elements.dropZone.removeEventListener('dragover', this._boundHandlers.onDragOver);
+            this.elements.dropZone.removeEventListener('dragleave', this._boundHandlers.onDragLeave);
+            this.elements.dropZone.removeEventListener('drop', this._boundHandlers.onDrop);
+        }
+        this._boundHandlers = {};
     }
 }
