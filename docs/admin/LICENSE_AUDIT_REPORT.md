@@ -1,6 +1,6 @@
 # License Audit Report: VFX Pipeline (shot-gopher)
 
-**Report Date:** 2026-01-20
+**Report Date:** 2026-01-30
 **Project:** shot-gopher / VFX Pipeline
 **Report Type:** Executive Summary
 
@@ -53,6 +53,8 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 | **ECON** | MPI Non-Commercial License | ❌ Non-commercial only |
 | **Depth Anything V3** (Giant/Nested models) | CC BY-NC 4.0 | ❌ Non-commercial only |
 | **3D Gaussian Splatting** (INRIA) | INRIA Non-Commercial | ❌ Non-commercial only |
+| **VideoMaMa** (code) | CC BY-NC 4.0 | ❌ Non-commercial only |
+| **VideoMaMa** (model weights) | Stability AI Community License | ⚠️ Free under $1M revenue; Enterprise license above |
 
 ### Tier 3: Registration/Agreement Required
 
@@ -247,6 +249,42 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 
 ---
 
+### VideoMaMa (Video Matting)
+
+**License:** Dual-licensed
+- **Code:** [CC BY-NC 4.0](https://github.com/cvlab-kaist/VideoMaMa) (Creative Commons Attribution-NonCommercial 4.0)
+- **Model Weights:** [Stability AI Community License](https://stability.ai/license) (inherited from Stable Video Diffusion)
+
+**Source:** [cvlab-kaist/VideoMaMa](https://github.com/cvlab-kaist/VideoMaMa)
+
+**Code License (CC BY-NC 4.0) - Permitted uses:**
+- Academic research
+- Teaching and education
+- Personal non-commercial projects
+- Public demonstrations (non-commercial)
+
+**Code License (CC BY-NC 4.0) - Prohibited uses:**
+- Commercial products or services
+- Revenue-generating applications
+
+**Model Weights (Stability AI Community License):**
+- ✅ Free for individuals/organizations with <$1M annual revenue
+- ⚠️ Requires Enterprise license for organizations with >$1M annual revenue
+- Attribution required: "Powered by Stability AI"
+- Cannot use outputs to train competing foundational models
+
+**Important notes:**
+- The code itself is strictly non-commercial (CC BY-NC 4.0)
+- Model weights have a revenue-based threshold via Stability AI
+- For commercial use, both licenses must be satisfied (code must be licensed separately)
+- The model builds upon Stable Video Diffusion (stabilityai/stable-video-diffusion-img2vid-xt)
+
+**Commercial licensing:**
+- Code: Contact KAIST CV Lab via GitHub
+- Model weights: Contact Stability AI for Enterprise license (revenue >$1M)
+
+---
+
 ### COLMAP (Camera Tracking)
 
 **License:** [BSD-3-Clause](https://colmap.github.io/license.html) (source code)
@@ -299,6 +337,8 @@ To use this pipeline commercially with all features, you would need:
    - Meshcapade (SMPL-X commercial): sales@meshcapade.com
    - INRIA (3D Gaussian Splatting): stip-sophia.transfert@inria.fr
    - ByteDance (Depth Anything Giant/Nested): Contact via GitHub
+   - KAIST CV Lab (VideoMaMa code): Contact via GitHub
+   - Stability AI (VideoMaMa model weights, if revenue >$1M): stability.ai/license
 
 2. **Use Apache-2.0 Depth Anything models** (Large variants)
 
@@ -315,7 +355,7 @@ Use only permissively-licensed components:
 | Depth estimation | Depth Anything V3 Large (Apache-2.0) ✅ |
 | Segmentation | SAM 2/3 (Apache-2.0) ✅ |
 | Clean plates | ❌ No permissive alternative (ProPainter restricted) |
-| Video matting | VideoMaMa (MIT license) ✅ |
+| Video matting | VideoMaMa (CC BY-NC 4.0 + Stability AI) ⚠️ |
 | Camera tracking | COLMAP (BSD, with care) ✅ |
 | Motion capture | WHAM (MIT) + SMPL-X (requires license) ⚠️ |
 | Material decomposition | GS-IR (MIT, but base tech restricted) ⚠️ |
@@ -362,7 +402,7 @@ All components are freely available for:
 
 2. **For research teams:** All components are freely available; ensure proper citation in publications.
 
-3. **For indie developers:** Use the permissive stack (SAM, Depth Anything Large, COLMAP, WHAM, VideoMaMa) for commercial projects; avoid ProPainter/ECON without licensing.
+3. **For indie developers:** Use the permissive stack (SAM, Depth Anything Large, COLMAP, WHAM) for commercial projects; VideoMaMa requires careful consideration of the dual-license (code is CC BY-NC 4.0, model weights are free only under $1M revenue); avoid ProPainter/ECON without licensing.
 
 4. **For SaaS deployment:** ComfyUI's GPL-3.0 and component licenses may have specific implications; consult legal counsel.
 
@@ -382,6 +422,8 @@ All components are freely available for:
 - [COLMAP License](https://colmap.github.io/license.html)
 - [FFmpeg Legal](https://www.ffmpeg.org/legal.html)
 - [PyTorch License](https://github.com/pytorch/pytorch/blob/main/LICENSE)
+- [VideoMaMa](https://github.com/cvlab-kaist/VideoMaMa)
+- [Stability AI Community License](https://stability.ai/license)
 
 ---
 
