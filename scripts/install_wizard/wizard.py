@@ -60,9 +60,9 @@ def print_setup_done_banner():
     ║    ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚══════╝    ╚═╝                    ║
     ║                                                                  ║
     ╠══════════════════════════════════════════════════════════════════╣
-    ║                                                                  ║
-    ║{Colors.ENDC}    {Colors.BOLD}***  SHOT {GOLD}G{Colors.ENDC}{Colors.BOLD}OPHER IS READY TO GO!  ***{Colors.ENDC}{Colors.OKGREEN}                    ║
-    ║                                                                  ║
+    ║{Colors.ENDC}                                                                  {Colors.OKGREEN}║
+    ║{Colors.ENDC}       {Colors.BOLD}* * *  SHOT {GOLD}G{Colors.ENDC}{Colors.BOLD}OPHER IS READY TO GO!  * * *{Colors.ENDC}               {Colors.OKGREEN}║
+    ║{Colors.ENDC}                                                                  {Colors.OKGREEN}║
     ╚══════════════════════════════════════════════════════════════════╝
 {Colors.ENDC}""")
 
@@ -819,21 +819,27 @@ class InstallationWizard:
         """Show setup complete banner and offer to create desktop shortcuts."""
         print_setup_done_banner()
 
-        print(f"\n{Colors.BOLD}    One more step: Create a desktop shortcut?{Colors.ENDC}")
-        print()
-
         system = platform.system()
         if system == "Windows":
-            print("    This will create shortcuts on your Desktop and Start Menu")
-            print("    so you can launch Shot Gopher with a single click.")
+            desc_line1 = "This will create shortcuts on your Desktop and Start Menu"
+            desc_line2 = "so you can launch Shot Gopher with a single click.       "
         elif system == "Darwin":
-            print("    This will create an alias on your Desktop")
-            print("    so you can launch Shot Gopher with a single click.")
+            desc_line1 = "This will create an alias on your Desktop                "
+            desc_line2 = "so you can launch Shot Gopher with a single click.       "
         else:
-            print("    This will create a .desktop entry in your applications menu")
-            print("    so you can launch Shot Gopher from your app launcher.")
+            desc_line1 = "This will create a .desktop entry in your applications   "
+            desc_line2 = "menu so you can launch Shot Gopher from your app launcher"
 
-        print()
+        print(f"""
+{Colors.OKCYAN}    ┌────────────────────────────────────────────────────────────┐
+    │                                                            │
+    │  {Colors.BOLD}        ★  One more step: Desktop shortcut?  ★{Colors.ENDC}{Colors.OKCYAN}          │
+    │                                                            │
+    │    {desc_line1}│
+    │    {desc_line2}│
+    │                                                            │
+    └────────────────────────────────────────────────────────────┘
+{Colors.ENDC}""")
 
         if ask_yes_no("    Create desktop shortcut?", default=True):
             self._create_shortcuts()
