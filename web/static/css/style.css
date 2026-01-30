@@ -501,6 +501,28 @@ main {
     color: var(--text-muted);
 }
 
+/* VRAM Warnings */
+.vram-warning {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    cursor: help;
+    font-size: 0.9rem;
+}
+
+.vram-warning.vram-insufficient {
+    color: var(--danger);
+}
+
+.vram-warning.vram-warning-status {
+    color: var(--warning);
+}
+
+.vram-warning.vram-chunked {
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
 /* Roto prompt */
 .roto-prompt-wrapper {
     display: flex;
@@ -803,27 +825,4 @@ footer a:hover {
 /* Utility */
 .hidden {
     display: none !important;
-}
-
-/* Responsive */
-@media (max-width: 600px) {
-    .container {
-        padding: 12px;
-    }
-
-    .drop-zone {
-        padding: 40px 20px;
-    }
-
-    .preset-buttons {
-        flex-direction: column;
-    }
-
-    .complete-actions {
-        flex-direction: column;
-    }
-
-    .outputs-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
 }

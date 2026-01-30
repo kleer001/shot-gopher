@@ -150,8 +150,16 @@ def run_pipeline_thread(
     skip_existing: bool,
 ):
     """Run pipeline in a background thread."""
-    from .api import active_jobs
-    from .websocket import update_progress, progress_updates
+    from .api import active_jobs, active_jobs_lock
+    from .websocket import update_progress
+
+    with active_jobs_lock:
+        active_jobs[project_id] = {
+            "status": "running",
+            "current_stage": stages[0] if stages else None,
+            "progress": 0.0,
+            "error": None,
+        }
 
     # Build command
     script_path = get_run_pipeline_path()
@@ -166,10 +174,10 @@ def run_pipeline_thread(
             break
 
     if not input_video:
-        # Update status
-        if project_id in active_jobs:
-            active_jobs[project_id]["status"] = "failed"
-            active_jobs[project_id]["error"] = "No input video found"
+        with active_jobs_lock:
+            if project_id in active_jobs:
+                active_jobs[project_id]["status"] = "failed"
+                active_jobs[project_id]["error"] = "No input video found"
         update_progress(project_id, {
             "status": "failed",
             "error": "No input video found",
@@ -187,7 +195,7 @@ def run_pipeline_thread(
     ]
 
     if roto_prompt and "roto" in stages:
-        cmd.extend(["--roto-prompt", roto_prompt])
+        cmd.extend(["--prompt", roto_prompt])
 
     if skip_existing:
         cmd.append("--skip-existing")
@@ -240,10 +248,11 @@ def run_pipeline_thread(
                 }
 
                 # Update stored state
-                if project_id in active_jobs:
-                    active_jobs[project_id]["current_stage"] = current_stage
-                    if "progress" in progress_info:
-                        active_jobs[project_id]["progress"] = progress_info["progress"]
+                with active_jobs_lock:
+                    if project_id in active_jobs:
+                        active_jobs[project_id]["current_stage"] = current_stage
+                        if "progress" in progress_info:
+                            active_jobs[project_id]["progress"] = progress_info["progress"]
 
                 # Send WebSocket update
                 update_progress(project_id, update)
@@ -255,29 +264,34 @@ def run_pipeline_thread(
         process.wait()
 
         # Update final status
-        if project_id in active_jobs:
-            if process.returncode == 0:
-                active_jobs[project_id]["status"] = "completed"
-                active_jobs[project_id]["progress"] = 1.0
-                update_progress(project_id, {
-                    "status": "completed",
-                    "progress": 1.0,
-                    "stage": stages[-1] if stages else None,
-                    "stage_index": len(stages) - 1,
-                    "total_stages": len(stages),
-                })
-            else:
-                active_jobs[project_id]["status"] = "failed"
-                active_jobs[project_id]["error"] = f"Pipeline exited with code {process.returncode}"
-                update_progress(project_id, {
-                    "status": "failed",
-                    "error": f"Pipeline exited with code {process.returncode}",
-                })
+        with active_jobs_lock:
+            if project_id in active_jobs:
+                if process.returncode == 0:
+                    active_jobs[project_id]["status"] = "completed"
+                    active_jobs[project_id]["progress"] = 1.0
+                else:
+                    active_jobs[project_id]["status"] = "failed"
+                    active_jobs[project_id]["error"] = f"Pipeline exited with code {process.returncode}"
+
+        if process.returncode == 0:
+            update_progress(project_id, {
+                "status": "completed",
+                "progress": 1.0,
+                "stage": stages[-1] if stages else None,
+                "stage_index": len(stages) - 1,
+                "total_stages": len(stages),
+            })
+        else:
+            update_progress(project_id, {
+                "status": "failed",
+                "error": f"Pipeline exited with code {process.returncode}",
+            })
 
     except Exception as e:
-        if project_id in active_jobs:
-            active_jobs[project_id]["status"] = "failed"
-            active_jobs[project_id]["error"] = str(e)
+        with active_jobs_lock:
+            if project_id in active_jobs:
+                active_jobs[project_id]["status"] = "failed"
+                active_jobs[project_id]["error"] = str(e)
         update_progress(project_id, {
             "status": "failed",
             "error": str(e),
@@ -309,22 +323,28 @@ def stop_pipeline(project_id: str) -> bool:
 
     Returns True if process was stopped, False if not running.
     """
+    from .api import active_jobs, active_jobs_lock
+
     if project_id not in active_processes:
         return False
 
     process = active_processes[project_id]
 
     try:
-        # Try graceful termination first
         process.terminate()
 
-        # Wait a bit
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            # Force kill
             process.kill()
             process.wait()
+
+        with active_jobs_lock:
+            if project_id in active_jobs:
+                active_jobs[project_id]["status"] = "cancelled"
+
+        if project_id in active_processes:
+            del active_processes[project_id]
 
         return True
     except Exception as e:

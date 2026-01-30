@@ -4,21 +4,23 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
-from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from env_config import DEFAULT_PROJECTS_DIR, INSTALL_DIR
 from install_wizard.platform import PlatformManager
+from vram_analyzer import analyze_and_save, load_vram_analysis
 from web.services.config_service import get_config_service
 from web.services.project_service import ProjectService
 from web.services.pipeline_service import PipelineService
 from web.repositories.project_repository import ProjectRepository
 from web.repositories.job_repository import JobRepository
+from web.models.domain import JobStatus
 from web.models.dto import (
     ProjectCreateRequest,
     JobStartRequest,
@@ -32,6 +34,9 @@ _project_repo = None
 _job_repo = None
 _project_service = None
 _pipeline_service = None
+
+active_jobs: Dict[str, dict] = {}
+active_jobs_lock = threading.Lock()
 
 
 def get_project_repo() -> ProjectRepository:
@@ -183,11 +188,24 @@ async def upload_video(
     project = get_project_repo().get(project_name)
     video_info = get_video_info(project.video_path) if project.video_path else {}
 
+    vram_analysis = None
+    if video_info:
+        try:
+            vram_analysis = analyze_and_save(
+                project_dir=project.path,
+                frame_count=video_info.get("frame_count", 0),
+                resolution=tuple(video_info.get("resolution", [1920, 1080])),
+                fps=video_info.get("fps", 24.0),
+            )
+        except Exception as e:
+            print(f"VRAM analysis failed: {e}")
+
     return {
         "project_id": project_name,
         "name": project_name,
         "project_dir": str(project.path),
         "video_info": video_info,
+        "vram_analysis": vram_analysis,
     }
 
 
@@ -277,6 +295,26 @@ async def stop_processing(
         return {"status": "not_running"}
 
 
+@router.get("/projects/{project_id}/vram")
+async def get_vram_analysis(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+):
+    """Get VRAM analysis for a project."""
+    project = project_service.get_project(project_id)
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project_entity = get_project_repo().get(project_id)
+    analysis = load_vram_analysis(project_entity.path)
+
+    if not analysis:
+        return {"project_id": project_id, "analysis": None, "message": "No VRAM analysis available"}
+
+    return {"project_id": project_id, "analysis": analysis}
+
+
 @router.get("/projects/{project_id}/outputs")
 async def get_outputs(
     project_id: str,
@@ -330,9 +368,22 @@ async def get_outputs(
     }
 
 
+def _check_comfyui_status() -> bool:
+    """Check if ComfyUI is running (blocking call)."""
+    import urllib.request
+    try:
+        req = urllib.request.Request("http://127.0.0.1:8188/system_stats", method="GET")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
 @router.get("/system/status")
 async def system_status():
     """Check system status (ComfyUI, disk space, etc.)."""
+    import asyncio
+
     status = {
         "comfyui": False,
         "disk_space_gb": 0,
@@ -341,10 +392,7 @@ async def system_status():
     }
 
     try:
-        import urllib.request
-        req = urllib.request.Request("http://127.0.0.1:8188/system_stats", method="GET")
-        with urllib.request.urlopen(req, timeout=2) as resp:
-            status["comfyui"] = resp.status == 200
+        status["comfyui"] = await asyncio.to_thread(_check_comfyui_status)
     except Exception:
         status["comfyui"] = False
 

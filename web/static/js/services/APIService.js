@@ -20,6 +20,17 @@ export class APIService {
     }
 
     /**
+     * Handle non-OK response by extracting error message
+     * @private
+     */
+    async _handleErrorResponse(response, fallbackMessage = 'Request failed') {
+        const error = await response.json().catch(() => ({
+            detail: `HTTP ${response.status}: ${response.statusText}`,
+        }));
+        throw new Error(error.detail || fallbackMessage);
+    }
+
+    /**
      * Make a generic API request
      * @private
      */
@@ -36,13 +47,9 @@ export class APIService {
             const response = await fetch(this.baseURL + url, config);
 
             if (!response.ok) {
-                const error = await response.json().catch(() => ({
-                    detail: `HTTP ${response.status}: ${response.statusText}`,
-                }));
-                throw new Error(error.detail || 'Request failed');
+                await this._handleErrorResponse(response);
             }
 
-            // Handle empty responses
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.includes('application/json')) {
                 return await response.json();
@@ -76,19 +83,20 @@ export class APIService {
      * POST with FormData (for file uploads)
      */
     async postForm(url, formData) {
-        // Don't set Content-Type header for FormData - browser sets it with boundary
-        return await fetch(this.baseURL + url, {
+        const response = await fetch(this.baseURL + url, {
             method: 'POST',
             body: formData,
-        }).then(async (response) => {
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({
-                    detail: `HTTP ${response.status}: ${response.statusText}`,
-                }));
-                throw new Error(error.detail || 'Upload failed');
-            }
-            return response.json();
         });
+
+        if (!response.ok) {
+            await this._handleErrorResponse(response, 'Upload failed');
+        }
+
+        try {
+            return await response.json();
+        } catch {
+            throw new Error('Invalid response format from server');
+        }
     }
 
     // ----- Specific API endpoints -----

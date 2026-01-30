@@ -20,6 +20,13 @@
     --accent-red: #ef4444;
     --font-mono: 'SF Mono', 'Monaco', 'Consolas', monospace;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    /* Standard semantic aliases for cross-variant compatibility */
+    --accent: var(--accent-blue);
+    --success: var(--accent-green);
+    --warning: var(--accent-yellow);
+    --danger: var(--accent-red);
+    --text-muted: var(--text-dim);
 }
 
 body {
@@ -589,6 +596,18 @@ body {
     text-align: center;
 }
 
+.stage-icon.pending {
+    color: var(--text-dim);
+}
+
+.stage-icon.processing {
+    color: var(--accent-blue);
+}
+
+.stage-icon.completed {
+    color: var(--accent-green);
+}
+
 /* Time Info */
 .time-info {
     display: flex;
@@ -733,40 +752,29 @@ body {
     color: var(--text-primary);
 }
 
+/* VRAM Warnings */
+.vram-warning {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    cursor: help;
+    font-size: 0.85rem;
+}
+
+.vram-warning.vram-insufficient {
+    color: var(--danger);
+}
+
+.vram-warning.vram-warning-status {
+    color: var(--warning);
+}
+
+.vram-warning.vram-chunked {
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
 /* Utility Classes */
 .hidden {
     display: none !important;
-}
-
-/* Responsive */
-@media (max-width: 1200px) {
-    .main-grid {
-        grid-template-columns: 350px 1fr;
-    }
-}
-
-@media (max-width: 900px) {
-    .main-grid {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr auto;
-    }
-
-    .panel-upload {
-        grid-column: 1;
-        grid-row: 1;
-    }
-
-    .panel-projects {
-        grid-column: 1;
-        grid-row: 2;
-    }
-
-    .panel-processing {
-        grid-column: 1;
-        grid-row: 3;
-    }
-
-    .processing-grid {
-        grid-template-columns: 1fr;
-    }
 }

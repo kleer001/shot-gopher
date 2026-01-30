@@ -80,7 +80,7 @@ class ProjectRepository(Repository[Project]):
 
         if state_file.exists():
             try:
-                with open(state_file) as f:
+                with open(state_file, encoding='utf-8') as f:
                     state = json.load(f)
 
                 return Project(

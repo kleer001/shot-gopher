@@ -15,7 +15,7 @@ import { stateManager } from '../managers/StateManager.js';
 import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
 import { formatDuration } from '../utils/time.js';
-import { ELEMENTS } from '../config/constants.js';
+import { ELEMENTS, EVENTS } from '../config/constants.js';
 
 export class ConfigController {
     constructor() {
@@ -30,41 +30,50 @@ export class ConfigController {
             stageCheckboxes: dom.getElements('input[name="stage"]'),
         };
 
+        this._boundHandlers = {
+            presetClicks: [],
+            checkboxChanges: [],
+        };
         this.setupEventListeners();
         this.applyDefaultPreset();
     }
 
     setupEventListeners() {
-        // Form submission
+        this._boundHandlers.onFormSubmit = (e) => {
+            e.preventDefault();
+            this.handleSubmit();
+        };
+        this._boundHandlers.onRotoChange = () => this.toggleRotoPrompt();
+        this._boundHandlers.onStateChange = (e) => {
+            if (e.detail.updates?.vramAnalysis !== undefined) {
+                this.updateVramWarnings();
+            }
+        };
+
         if (this.elements.configForm) {
-            this.elements.configForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.handleSubmit();
-            });
+            this.elements.configForm.addEventListener('submit', this._boundHandlers.onFormSubmit);
         }
 
-        // Preset buttons
         this.elements.presetButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const preset = btn.dataset.preset;
-                this.applyPreset(preset);
-            });
+            const handler = () => this.applyPreset(btn.dataset.preset);
+            this._boundHandlers.presetClicks.push({ btn, handler });
+            btn.addEventListener('click', handler);
         });
 
-        // Stage checkboxes
         this.elements.stageCheckboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', () => {
+            const handler = () => {
                 this.handleStageChange(checkbox);
                 this.updateTimeEstimate();
-            });
+            };
+            this._boundHandlers.checkboxChanges.push({ checkbox, handler });
+            checkbox.addEventListener('change', handler);
         });
 
-        // Roto checkbox - toggle prompt visibility
         if (this.elements.stageRoto) {
-            this.elements.stageRoto.addEventListener('change', () => {
-                this.toggleRotoPrompt();
-            });
+            this.elements.stageRoto.addEventListener('change', this._boundHandlers.onRotoChange);
         }
+
+        stateManager.addEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
     }
 
     applyDefaultPreset() {
@@ -101,62 +110,94 @@ export class ConfigController {
             }
         });
 
-        // Update dependencies and time estimate
+        // Update dependencies, time estimate, and VRAM warnings
         this.updateStageDependencies();
         this.updateTimeEstimate();
         this.toggleRotoPrompt();
+        this.updateVramWarnings();
+    }
+
+    setDependentStage(stageValue, enabled) {
+        const checkbox = document.querySelector(`input[value="${stageValue}"]`);
+        if (!checkbox) return;
+
+        if (enabled) {
+            checkbox.disabled = false;
+        } else {
+            checkbox.disabled = true;
+            checkbox.checked = false;
+        }
     }
 
     handleStageChange(checkbox) {
         const stage = checkbox.value;
 
-        // Handle COLMAP dependency
         if (stage === 'colmap') {
-            const gsirCheckbox = document.querySelector('input[value="gsir"]');
-            const mocapCheckbox = document.querySelector('input[value="mocap"]');
-
-            if (checkbox.checked) {
-                // Enable GSIR and MoCap
-                if (gsirCheckbox) gsirCheckbox.disabled = false;
-                if (mocapCheckbox) mocapCheckbox.disabled = false;
-            } else {
-                // Disable and uncheck GSIR and MoCap
-                if (gsirCheckbox) {
-                    gsirCheckbox.disabled = true;
-                    gsirCheckbox.checked = false;
-                }
-                if (mocapCheckbox) {
-                    mocapCheckbox.disabled = true;
-                    mocapCheckbox.checked = false;
-                }
-            }
+            const enabled = checkbox.checked;
+            this.setDependentStage('gsir', enabled);
+            this.setDependentStage('mocap', enabled);
+            this.setDependentStage('camera', enabled);
         }
 
-        // Clear active preset since user manually changed
+        if (stage === 'roto') {
+            this.setDependentStage('mama', checkbox.checked);
+        }
+
         this.elements.presetButtons.forEach(btn => {
             dom.removeClass(btn, 'active');
         });
     }
 
     updateStageDependencies() {
-        // Check if COLMAP is selected
-        const colmapCheckbox = document.querySelector('input[value="colmap"]');
-        const gsirCheckbox = document.querySelector('input[value="gsir"]');
-        const mocapCheckbox = document.querySelector('input[value="mocap"]');
+        const colmapChecked = document.querySelector('input[value="colmap"]')?.checked;
+        this.setDependentStage('gsir', colmapChecked);
+        this.setDependentStage('mocap', colmapChecked);
+        this.setDependentStage('camera', colmapChecked);
 
-        if (colmapCheckbox?.checked) {
-            if (gsirCheckbox) gsirCheckbox.disabled = false;
-            if (mocapCheckbox) mocapCheckbox.disabled = false;
-        } else {
-            if (gsirCheckbox) {
-                gsirCheckbox.disabled = true;
-                gsirCheckbox.checked = false;
+        const rotoChecked = document.querySelector('input[value="roto"]')?.checked;
+        this.setDependentStage('mama', rotoChecked);
+    }
+
+    updateVramWarnings() {
+        const vramAnalysis = stateManager.get('vramAnalysis');
+        if (!vramAnalysis?.stages) return;
+
+        this.elements.stageCheckboxes.forEach(checkbox => {
+            const stage = checkbox.value;
+            const analysis = vramAnalysis.stages[stage];
+            if (!analysis) return;
+
+            const label = checkbox.closest('label');
+            if (!label) return;
+
+            let warningEl = label.querySelector('.vram-warning');
+
+            const appendWarning = (el) => {
+                const textEl = label.querySelector('.checkbox-text, .stage-title, span');
+                (textEl || label).appendChild(el);
+            };
+
+            if (analysis.status === 'warning' || analysis.status === 'insufficient') {
+                if (!warningEl) {
+                    warningEl = document.createElement('span');
+                    warningEl.textContent = ' \u26A0\uFE0F';
+                    appendWarning(warningEl);
+                }
+                const statusClass = analysis.status === 'insufficient' ? 'vram-insufficient' : 'vram-warning-status';
+                warningEl.className = `vram-warning ${statusClass}`;
+                warningEl.title = analysis.message;
+            } else if (analysis.status === 'chunked') {
+                if (!warningEl) {
+                    warningEl = document.createElement('span');
+                    warningEl.className = 'vram-warning vram-chunked';
+                    warningEl.textContent = ' \u23F3';
+                    appendWarning(warningEl);
+                }
+                warningEl.title = analysis.message;
+            } else if (warningEl) {
+                warningEl.remove();
             }
-            if (mocapCheckbox) {
-                mocapCheckbox.disabled = true;
-                mocapCheckbox.checked = false;
-            }
-        }
+        });
     }
 
     toggleRotoPrompt() {
@@ -257,19 +298,16 @@ export class ConfigController {
     }
 
     reset() {
-        // Uncheck all stages
         this.elements.stageCheckboxes.forEach(checkbox => {
             checkbox.checked = false;
             checkbox.disabled = false;
         });
 
-        // Disable GSIR and MoCap by default
-        const gsirCheckbox = document.querySelector('input[value="gsir"]');
-        const mocapCheckbox = document.querySelector('input[value="mocap"]');
-        if (gsirCheckbox) gsirCheckbox.disabled = true;
-        if (mocapCheckbox) mocapCheckbox.disabled = true;
+        this.setDependentStage('gsir', false);
+        this.setDependentStage('mocap', false);
+        this.setDependentStage('camera', false);
+        this.setDependentStage('mama', false);
 
-        // Reset form
         if (this.elements.rotoPrompt) {
             this.elements.rotoPrompt.value = 'person';
         }
@@ -277,10 +315,31 @@ export class ConfigController {
             this.elements.skipExisting.checked = false;
         }
 
-        // Hide form
         dom.hide(this.elements.configForm);
-
-        // Apply default preset
         this.applyDefaultPreset();
+    }
+
+    destroy() {
+        if (this.elements.configForm && this._boundHandlers.onFormSubmit) {
+            this.elements.configForm.removeEventListener('submit', this._boundHandlers.onFormSubmit);
+        }
+
+        this._boundHandlers.presetClicks.forEach(({ btn, handler }) => {
+            btn.removeEventListener('click', handler);
+        });
+
+        this._boundHandlers.checkboxChanges.forEach(({ checkbox, handler }) => {
+            checkbox.removeEventListener('change', handler);
+        });
+
+        if (this.elements.stageRoto && this._boundHandlers.onRotoChange) {
+            this.elements.stageRoto.removeEventListener('change', this._boundHandlers.onRotoChange);
+        }
+
+        if (this._boundHandlers.onStateChange) {
+            stateManager.removeEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
+        }
+
+        this._boundHandlers = { presetClicks: [], checkboxChanges: [] };
     }
 }

@@ -32,32 +32,32 @@ export class UploadController {
             videoFps: dom.getElement('video-fps'),
         };
 
+        this._boundHandlers = {};
         this.setupEventListeners();
     }
 
     setupEventListeners() {
-        // Browse button
+        this._boundHandlers.onBrowseClick = () => this.elements.fileInput?.click();
+        this._boundHandlers.onFileChange = (e) => {
+            const file = e.target.files?.[0];
+            if (file) this.handleFileSelected(file);
+        };
+        this._boundHandlers.onDragOver = (e) => this.handleDragOver(e);
+        this._boundHandlers.onDragLeave = (e) => this.handleDragLeave(e);
+        this._boundHandlers.onDrop = (e) => this.handleDrop(e);
+
         if (this.elements.browseBtn) {
-            this.elements.browseBtn.addEventListener('click', () => {
-                this.elements.fileInput?.click();
-            });
+            this.elements.browseBtn.addEventListener('click', this._boundHandlers.onBrowseClick);
         }
 
-        // File input change
         if (this.elements.fileInput) {
-            this.elements.fileInput.addEventListener('change', (e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                    this.handleFileSelected(file);
-                }
-            });
+            this.elements.fileInput.addEventListener('change', this._boundHandlers.onFileChange);
         }
 
-        // Drag and drop
         if (this.elements.dropZone) {
-            this.elements.dropZone.addEventListener('dragover', (e) => this.handleDragOver(e));
-            this.elements.dropZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
-            this.elements.dropZone.addEventListener('drop', (e) => this.handleDrop(e));
+            this.elements.dropZone.addEventListener('dragover', this._boundHandlers.onDragOver);
+            this.elements.dropZone.addEventListener('dragleave', this._boundHandlers.onDragLeave);
+            this.elements.dropZone.addEventListener('drop', this._boundHandlers.onDrop);
         }
     }
 
@@ -82,13 +82,15 @@ export class UploadController {
     }
 
     async handleFileSelected(file) {
-        // Validate file type
-        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        // Validate file type - handle edge cases (no extension, trailing dot)
+        const lastDotIndex = file.name.lastIndexOf('.');
+        const ext = lastDotIndex > 0 ? file.name.slice(lastDotIndex).toLowerCase() : '';
         const config = stateManager.get('config');
         const supportedFormats = config?.supportedVideoFormats || UPLOAD.SUPPORTED_FORMATS;
 
-        if (!supportedFormats.includes(ext)) {
-            stateManager.showError(`Unsupported file type: ${ext}`);
+        if (!ext || !supportedFormats.includes(ext)) {
+            const displayExt = ext || '(no extension)';
+            stateManager.showError(`Unsupported file type: ${displayExt}`);
             return;
         }
 
@@ -124,12 +126,13 @@ export class UploadController {
         // Hide upload progress
         dom.hide(this.elements.uploadProgress);
 
-        // Update state with video info
+        // Update state with video info and VRAM analysis
         stateManager.setState({
             projectId: result.project_id,
             projectDir: result.project_dir,
             projectName: result.project_id,
             videoInfo: result.video_info,
+            vramAnalysis: result.vram_analysis,
             uploadProgress: 0,
             uploadFilename: null,
         });
@@ -194,5 +197,20 @@ export class UploadController {
             this.elements.uploadProgressFill.style.width = '0%';
         }
         dom.setText(this.elements.uploadPercentText, '0');
+    }
+
+    destroy() {
+        if (this.elements.browseBtn && this._boundHandlers.onBrowseClick) {
+            this.elements.browseBtn.removeEventListener('click', this._boundHandlers.onBrowseClick);
+        }
+        if (this.elements.fileInput && this._boundHandlers.onFileChange) {
+            this.elements.fileInput.removeEventListener('change', this._boundHandlers.onFileChange);
+        }
+        if (this.elements.dropZone) {
+            this.elements.dropZone.removeEventListener('dragover', this._boundHandlers.onDragOver);
+            this.elements.dropZone.removeEventListener('dragleave', this._boundHandlers.onDragLeave);
+            this.elements.dropZone.removeEventListener('drop', this._boundHandlers.onDrop);
+        }
+        this._boundHandlers = {};
     }
 }

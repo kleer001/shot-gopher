@@ -129,12 +129,13 @@ async def websocket_endpoint(websocket: WebSocket, project_id: str):
     await manager.connect(websocket, project_id)
 
     try:
-        # Send initial status if available
-        if project_id in progress_updates:
+        # Send initial status if available (use .get() to avoid race condition)
+        initial_progress = progress_updates.get(project_id)
+        if initial_progress is not None:
             await websocket.send_json({
                 "type": "progress",
                 "project_id": project_id,
-                **progress_updates[project_id],
+                **initial_progress,
             })
 
         # Keep connection alive and handle incoming messages

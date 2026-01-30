@@ -43,12 +43,18 @@ export class ProjectsController {
     }
 
     displayProjects(projects) {
-        const html = projects.map(proj => `
-            <div class="project-item" data-id="${proj.project_id}" data-dir="${proj.project_dir}">
-                <span class="project-name">${proj.name || proj.project_id}</span>
-                <span class="project-status ${proj.status}">${proj.status}</span>
+        const html = projects.map(proj => {
+            const safeName = dom.escapeHTML(proj.name || proj.project_id);
+            const safeId = dom.escapeHTML(proj.project_id);
+            const safeDir = dom.escapeHTML(proj.project_dir || '');
+            const safeStatus = dom.escapeHTML(proj.status || 'unknown');
+            return `
+            <div class="project-item" data-id="${safeId}" data-dir="${safeDir}">
+                <span class="project-name">${safeName}</span>
+                <span class="project-status ${safeStatus}">${safeStatus}</span>
             </div>
-        `).join('');
+        `;
+        }).join('');
 
         dom.setHTML(this.elements.projectsList, html);
 
