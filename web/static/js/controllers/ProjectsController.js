@@ -195,16 +195,31 @@ export class ProjectsController {
             const label = stageLabels[stage] || stage.toUpperCase();
 
             const vramInfo = vramStages[stage];
-            const vramGb = vramInfo?.base_vram_gb;
             const vramStatus = vramInfo?.status || 'ok';
-            const vramDisplay = vramGb !== undefined && vramGb > 0 ? `${vramGb} GB` : '';
-            const vramStatusClass = vramStatus === 'ok' ? '' : `vram-${vramStatus}`;
+            const vramMessage = vramInfo?.message || '';
+            const vramGb = vramInfo?.base_vram_gb;
+
+            let vramDisplay = '';
+            let vramStatusClass = '';
+            let vramTitle = vramMessage;
+
+            if (vramGb !== undefined && vramGb > 0) {
+                if (vramStatus === 'ok') {
+                    vramDisplay = `${vramGb} GB`;
+                } else if (vramStatus === 'warning' || vramStatus === 'insufficient') {
+                    vramDisplay = `⚠️ ${vramGb} GB`;
+                    vramStatusClass = `vram-${vramStatus}`;
+                } else if (vramStatus === 'chunked') {
+                    vramDisplay = `⏳ ${vramGb} GB`;
+                    vramStatusClass = 'vram-chunked';
+                }
+            }
 
             return `
             <div class="stage-status-item selectable ${stageClass}" data-stage="${stage}">
                 <div class="stage-marker"></div>
                 <span class="stage-status-name">${label}</span>
-                <span class="stage-vram ${vramStatusClass}">${vramDisplay}</span>
+                <span class="stage-vram ${vramStatusClass}" title="${dom.escapeHTML(vramTitle)}">${vramDisplay}</span>
                 <span class="stage-status-info">${statusText}</span>
             </div>
         `;
