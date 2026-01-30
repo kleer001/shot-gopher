@@ -14,18 +14,6 @@ $REPO_URL = "https://github.com/kleer001/shot-gopher.git"
 $STARTING_DIR = (Get-Location).Path
 $INSTALL_DIR = Join-Path $STARTING_DIR "shot-gopher"
 
-# Verify we can write to this directory before proceeding
-$testFile = Join-Path $STARTING_DIR ".bootstrap_write_test"
-try {
-    [IO.File]::WriteAllText($testFile, "test")
-    Remove-Item $testFile -Force -ErrorAction SilentlyContinue
-} catch {
-    Write-Host ""
-    Write-Host "X Cannot install here: $STARTING_DIR" -ForegroundColor Red
-    Write-Host "  No write permission. Run PowerShell from a directory you own." -ForegroundColor Gray
-    Write-Host ""
-    exit 1
-}
 $MINICONDA_URL = "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 $MINICONDA_INSTALLER = Join-Path $env:TEMP "Miniconda3-latest-Windows-x86_64.exe"
 $GIT_INSTALLER = Join-Path $env:TEMP "Git-installer.exe"
@@ -274,6 +262,19 @@ function Initialize-CondaShell {
 function Install-VFXPipeline {
     Write-Banner "VFX Pipeline - Automated Installer"
 
+    # Verify we can write to the install directory before proceeding
+    $testFile = Join-Path $STARTING_DIR ".bootstrap_write_test"
+    try {
+        [IO.File]::WriteAllText($testFile, "test")
+        Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+    } catch {
+        Write-Host ""
+        Write-Host "X Cannot install here: $STARTING_DIR" -ForegroundColor Red
+        Write-Host "  No write permission. Run PowerShell from a directory you own." -ForegroundColor Gray
+        Write-Host ""
+        return 1
+    }
+
     # Check for git
     Write-Host "Checking prerequisites..."
 
@@ -429,9 +430,9 @@ try {
     $script:exitCode = Install-VFXPipeline
 } catch {
     Write-Host ""
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+    Write-Host ("=" * 60) -ForegroundColor Red
     Write-Host "  Unexpected Error!" -ForegroundColor Red
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+    Write-Host ("=" * 60) -ForegroundColor Red
     Write-Host ""
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ""
@@ -440,4 +441,3 @@ try {
 
 Write-Host ""
 Read-Host "Press Enter to close"
-exit $script:exitCode
