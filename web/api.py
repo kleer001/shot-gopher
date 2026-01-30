@@ -363,28 +363,64 @@ async def get_vram_analysis(
     analysis = load_vram_analysis(project_entity.path)
 
     if not analysis:
-        video_path = project_entity.video_path
-        if not video_path:
-            source_dir = project_entity.path / "source"
-            for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]:
-                candidate = source_dir / f"input{ext}"
-                if candidate.exists():
-                    video_path = candidate
-                    break
+        frame_count = 0
+        resolution = (1920, 1080)
+        fps = 24.0
 
-        if video_path and video_path.exists():
-            video_info = await asyncio.to_thread(get_video_info, video_path)
-            if video_info and video_info.get("frame_count"):
+        # First check if we have frames already
+        frames_dir = project_entity.path / "source" / "frames"
+        if frames_dir.exists():
+            frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+            if frame_files:
+                frame_count = len(frame_files)
+                # Try to get resolution from first frame
                 try:
-                    analysis = await asyncio.to_thread(
-                        analyze_and_save,
-                        project_entity.path,
-                        video_info.get("frame_count", 0),
-                        tuple(video_info.get("resolution", [1920, 1080])),
-                        video_info.get("fps", 24.0),
-                    )
-                except Exception as e:
-                    print(f"Failed to generate VRAM analysis: {e}")
+                    from PIL import Image
+                    first_frame = sorted(frame_files)[0]
+                    with Image.open(first_frame) as img:
+                        resolution = img.size
+                except Exception:
+                    pass
+
+        # If no frames, try video file
+        if frame_count == 0:
+            video_path = project_entity.video_path
+            if not video_path:
+                source_dir = project_entity.path / "source"
+                for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]:
+                    candidate = source_dir / f"input{ext}"
+                    if candidate.exists():
+                        video_path = candidate
+                        break
+                # Also check for any video file
+                if not video_path and source_dir.exists():
+                    for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]:
+                        for vf in source_dir.glob(f"*{ext}"):
+                            if vf.is_file():
+                                video_path = vf
+                                break
+                        if video_path:
+                            break
+
+            if video_path and video_path.exists():
+                video_info = await asyncio.to_thread(get_video_info, video_path)
+                if video_info:
+                    frame_count = video_info.get("frame_count", 0)
+                    res = video_info.get("resolution", [1920, 1080])
+                    resolution = tuple(res) if res else (1920, 1080)
+                    fps = video_info.get("fps", 24.0)
+
+        if frame_count > 0:
+            try:
+                analysis = await asyncio.to_thread(
+                    analyze_and_save,
+                    project_entity.path,
+                    frame_count,
+                    resolution,
+                    fps,
+                )
+            except Exception as e:
+                print(f"Failed to generate VRAM analysis: {e}")
 
     if not analysis:
         return {"project_id": project_id, "analysis": None, "message": "No VRAM analysis available"}

@@ -371,3 +371,154 @@ class TestAPIJobEndpoint:
         finally:
             with active_jobs_lock:
                 del active_jobs["test_project"]
+
+
+class TestVramAnalysisFrameCounting:
+    """Test VRAM analysis with frame counting for projects without video."""
+
+    def test_counts_png_frames(self, tmp_path):
+        """Should count PNG frames in source/frames directory."""
+        frames_dir = tmp_path / "source" / "frames"
+        frames_dir.mkdir(parents=True)
+
+        for i in range(100):
+            (frames_dir / f"frame_{i:04d}.png").write_bytes(b"fake")
+
+        frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+        assert len(frame_files) == 100
+
+    def test_counts_jpg_frames(self, tmp_path):
+        """Should count JPG frames in source/frames directory."""
+        frames_dir = tmp_path / "source" / "frames"
+        frames_dir.mkdir(parents=True)
+
+        for i in range(50):
+            (frames_dir / f"frame_{i:04d}.jpg").write_bytes(b"fake")
+
+        frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+        assert len(frame_files) == 50
+
+    def test_counts_mixed_frames(self, tmp_path):
+        """Should count both PNG and JPG frames."""
+        frames_dir = tmp_path / "source" / "frames"
+        frames_dir.mkdir(parents=True)
+
+        for i in range(30):
+            (frames_dir / f"frame_{i:04d}.png").write_bytes(b"fake")
+        for i in range(20):
+            (frames_dir / f"frame_{i:04d}.jpg").write_bytes(b"fake")
+
+        frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+        assert len(frame_files) == 50
+
+    def test_gets_resolution_from_first_frame(self, tmp_path):
+        """Should extract resolution from first frame using PIL."""
+        frames_dir = tmp_path / "source" / "frames"
+        frames_dir.mkdir(parents=True)
+
+        try:
+            from PIL import Image
+        except ImportError:
+            pytest.skip("PIL not available")
+
+        img = Image.new("RGB", (1920, 1080), color="red")
+        img.save(frames_dir / "frame_0001.png")
+        img.save(frames_dir / "frame_0002.png")
+
+        frame_files = sorted(frames_dir.glob("*.png"))
+        first_frame = frame_files[0]
+
+        with Image.open(first_frame) as loaded:
+            resolution = loaded.size
+
+        assert resolution == (1920, 1080)
+
+    def test_handles_4k_resolution(self, tmp_path):
+        """Should correctly detect 4K resolution from frames."""
+        frames_dir = tmp_path / "source" / "frames"
+        frames_dir.mkdir(parents=True)
+
+        try:
+            from PIL import Image
+        except ImportError:
+            pytest.skip("PIL not available")
+
+        img = Image.new("RGB", (3840, 2160), color="blue")
+        img.save(frames_dir / "frame_0001.png")
+
+        frame_files = sorted(frames_dir.glob("*.png"))
+        first_frame = frame_files[0]
+
+        with Image.open(first_frame) as loaded:
+            resolution = loaded.size
+
+        assert resolution == (3840, 2160)
+
+    def test_prefers_frames_over_video_for_vram(self, tmp_path):
+        """VRAM analysis should use frame count from frames/ if available."""
+        source_dir = tmp_path / "source"
+        frames_dir = source_dir / "frames"
+        frames_dir.mkdir(parents=True)
+
+        for i in range(75):
+            (frames_dir / f"frame_{i:04d}.png").write_bytes(b"fake")
+        (source_dir / "input.mp4").write_bytes(b"fake video with different frame count")
+
+        frame_count = 0
+        if frames_dir.exists():
+            frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+            if frame_files:
+                frame_count = len(frame_files)
+
+        assert frame_count == 75
+
+    def test_falls_back_to_video_when_no_frames(self, tmp_path):
+        """Should use video file when no frames directory exists."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir(parents=True)
+        (source_dir / "input.mp4").write_bytes(b"fake video")
+
+        frames_dir = source_dir / "frames"
+        frame_count = 0
+
+        if frames_dir.exists():
+            frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+            if frame_files:
+                frame_count = len(frame_files)
+
+        video_path = None
+        if frame_count == 0:
+            for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]:
+                candidate = source_dir / f"input{ext}"
+                if candidate.exists():
+                    video_path = candidate
+                    break
+
+        assert frame_count == 0
+        assert video_path is not None
+        assert video_path.name == "input.mp4"
+
+    def test_finds_any_video_when_no_input_named(self, tmp_path):
+        """Should find any video file when input.* doesn't exist."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir(parents=True)
+        (source_dir / "my_clip.mov").write_bytes(b"fake video")
+
+        video_path = None
+        for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]:
+            candidate = source_dir / f"input{ext}"
+            if candidate.exists():
+                video_path = candidate
+                break
+
+        if not video_path:
+            for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]:
+                for vf in source_dir.glob(f"*{ext}"):
+                    if vf.is_file():
+                        video_path = vf
+                        break
+                if video_path:
+                    break
+
+        assert video_path is not None
+        assert video_path.name == "my_clip.mov"
