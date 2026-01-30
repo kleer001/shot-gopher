@@ -408,12 +408,26 @@ export class ProjectsController {
         }
 
         try {
-            const projectData = await apiService.getProject(this.selectedProjectId);
-            const status = projectData.status;
+            const jobData = await apiService.getJobStatus(this.selectedProjectId);
+            const status = jobData.status;
+            const btn = this.elements.reprocessBtn;
 
-            if (status === 'complete' || status === 'failed') {
+            if (status === 'running') {
+                const stage = jobData.current_stage || 'processing';
+                const progress = Math.round((jobData.progress || 0) * 100);
+                btn.textContent = `${stage.toUpperCase()} ${progress}%`;
+            } else if (status === 'completed' || status === 'complete') {
                 this.stopProcessingStatusPoll();
-                this.onProcessingComplete(status);
+                this.onProcessingComplete('complete');
+            } else if (status === 'failed' || status === 'cancelled') {
+                this.stopProcessingStatusPoll();
+                this.onProcessingComplete('failed');
+            } else if (status === 'idle') {
+                const projectData = await apiService.getProject(this.selectedProjectId);
+                if (projectData.status === 'complete' || projectData.status === 'failed') {
+                    this.stopProcessingStatusPoll();
+                    this.onProcessingComplete(projectData.status);
+                }
             }
         } catch (error) {
             console.error('Failed to check processing status:', error);

@@ -323,12 +323,37 @@ async def stop_processing(
         return {"status": "not_running"}
 
 
+@router.get("/projects/{project_id}/job")
+async def get_job_status(project_id: str):
+    """Get current job status for a project."""
+    with active_jobs_lock:
+        job = active_jobs.get(project_id)
+
+    if not job:
+        return {
+            "project_id": project_id,
+            "status": "idle",
+            "message": "No active job"
+        }
+
+    return {
+        "project_id": project_id,
+        "status": job.get("status", "unknown"),
+        "current_stage": job.get("current_stage"),
+        "progress": job.get("progress", 0),
+        "error": job.get("error"),
+        "message": job.get("message"),
+    }
+
+
 @router.get("/projects/{project_id}/vram")
 async def get_vram_analysis(
     project_id: str,
     project_service: ProjectService = Depends(get_project_service),
 ):
-    """Get VRAM analysis for a project."""
+    """Get VRAM analysis for a project, generating it on-demand if missing."""
+    import asyncio
+
     project = project_service.get_project(project_id)
 
     if not project:
@@ -336,6 +361,30 @@ async def get_vram_analysis(
 
     project_entity = get_project_repo().get(project_id)
     analysis = load_vram_analysis(project_entity.path)
+
+    if not analysis:
+        video_path = project_entity.video_path
+        if not video_path:
+            source_dir = project_entity.path / "source"
+            for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]:
+                candidate = source_dir / f"input{ext}"
+                if candidate.exists():
+                    video_path = candidate
+                    break
+
+        if video_path and video_path.exists():
+            video_info = await asyncio.to_thread(get_video_info, video_path)
+            if video_info and video_info.get("frame_count"):
+                try:
+                    analysis = await asyncio.to_thread(
+                        analyze_and_save,
+                        project_entity.path,
+                        video_info.get("frame_count", 0),
+                        tuple(video_info.get("resolution", [1920, 1080])),
+                        video_info.get("fps", 24.0),
+                    )
+                except Exception as e:
+                    print(f"Failed to generate VRAM analysis: {e}")
 
     if not analysis:
         return {"project_id": project_id, "analysis": None, "message": "No VRAM analysis available"}

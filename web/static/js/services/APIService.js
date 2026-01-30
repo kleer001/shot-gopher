@@ -220,6 +220,14 @@ export class APIService {
     }
 
     /**
+     * Get job status for a project
+     * @param {string} projectId - Project ID
+     */
+    async getJobStatus(projectId) {
+        return this.get(API.PROJECT_JOB(projectId));
+    }
+
+    /**
      * Delete a project
      * @param {string} projectId - Project ID
      */

@@ -16,6 +16,7 @@ export const API = {
     PROJECT_OUTPUTS: (id) => `/api/projects/${id}/outputs`,
     PROJECT_CANCEL: (id) => `/api/projects/${id}/stop`,  // Backend uses /stop endpoint
     PROJECT_START: (id) => `/api/projects/${id}/start`,
+    PROJECT_JOB: (id) => `/api/projects/${id}/job`,
     PROJECT_OPEN_FOLDER: (id) => `/api/projects/${id}/open-folder`,
     PROJECT_VRAM: (id) => `/api/projects/${id}/vram`,
 };
