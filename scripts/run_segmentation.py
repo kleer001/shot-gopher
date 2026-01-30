@@ -25,8 +25,8 @@ import urllib.request
 from pathlib import Path
 from typing import Optional, List
 
-# Environment check - ensure correct conda environment is active
-from env_config import check_conda_env_or_warn
+# Environment check - require correct conda environment
+from env_config import require_conda_env
 
 # ComfyUI utilities (shared with run_pipeline.py)
 from comfyui_utils import (
@@ -190,9 +190,6 @@ def run_segmentation(
 
 
 def main():
-    # Check conda environment (warn but don't exit - allow --help to work)
-    check_conda_env_or_warn()
-
     parser = argparse.ArgumentParser(
         description="Run video segmentation with SAM3",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -241,6 +238,8 @@ def main():
     )
 
     args = parser.parse_args()
+
+    require_conda_env()
 
     project_dir = args.project_dir.resolve()
     if not project_dir.exists():

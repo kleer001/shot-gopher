@@ -19,7 +19,7 @@ from pathlib import Path
 
 from comfyui_manager import stop_comfyui, prepare_comfyui_for_processing
 from comfyui_utils import DEFAULT_COMFYUI_URL
-from env_config import check_conda_env_or_warn, DEFAULT_PROJECTS_DIR, INSTALL_DIR
+from env_config import require_conda_env, DEFAULT_PROJECTS_DIR, INSTALL_DIR
 from log_manager import LogCapture
 from pipeline_config import PipelineConfig, StageContext
 from pipeline_constants import STAGES, STAGE_ORDER, STAGES_REQUIRING_FRAMES
@@ -374,7 +374,7 @@ def main():
 
     print(f"Stages to run: {', '.join(config.stages)}")
 
-    check_conda_env_or_warn()
+    require_conda_env()
 
     if project_dir:
         save_last_project(project_dir)
