@@ -336,8 +336,9 @@ async def get_outputs(
     for dir_name in output_dirs:
         dir_path = project_dir / dir_name
         if dir_path.exists() and dir_path.is_dir():
+            all_files = list(dir_path.rglob("*"))
             files = []
-            for f in sorted(dir_path.iterdir()):
+            for f in sorted(all_files):
                 if f.is_file():
                     files.append({
                         "name": f.name,

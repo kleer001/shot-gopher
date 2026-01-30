@@ -13,9 +13,10 @@ import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
 import { ELEMENTS, CSS_CLASSES } from '../config/constants.js';
 
-const ALL_STAGES = ['depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
+const ALL_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
 
 const STAGE_OUTPUT_DIRS = {
+    ingest: 'source',
     depth: 'depth',
     roto: 'roto',
     cleanplate: 'cleanplate',
@@ -152,6 +153,7 @@ export class ProjectsController {
         const outputs = outputsData?.outputs || {};
 
         const stageLabels = {
+            ingest: 'Ingest Video Frames',
             depth: 'Zdepth Estimation',
             roto: 'Auto Segmentation (Roto)',
             cleanplate: 'Clean Plate',
