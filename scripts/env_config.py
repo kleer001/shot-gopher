@@ -184,44 +184,48 @@ def get_activation_instructions() -> str:
         Multi-line string with activation instructions.
     """
     active_env = get_active_conda_env()
+    cmd = get_activation_command()
 
     lines = [
         "",
-        "=" * 60,
-        f"VFX Pipeline requires the '{CONDA_ENV_NAME}' conda environment",
-        "=" * 60,
+        "⚠️  ╔══════════════════════════════════════════════════════════════╗  ⚠️",
+        "⚠️  ║                                                              ║  ⚠️",
+        "⚠️  ║              WRONG CONDA ENVIRONMENT ACTIVE                  ║  ⚠️",
+        "⚠️  ║                                                              ║  ⚠️",
+        "⚠️  ╚══════════════════════════════════════════════════════════════╝  ⚠️",
         "",
     ]
 
     if active_env:
-        lines.append(f"Currently active: '{active_env}'")
-        lines.append(f"Required:         '{CONDA_ENV_NAME}'")
-        lines.append("")
+        lines.append(f"    Currently active: '{active_env}'")
+        lines.append(f"    Required:         '{CONDA_ENV_NAME}'")
     else:
-        lines.append("No conda environment is currently active.")
-        lines.append("")
+        lines.append("    No conda environment is currently active.")
+        lines.append(f"    Required: '{CONDA_ENV_NAME}'")
 
-    lines.append("To activate the correct environment, run:")
     lines.append("")
-    lines.append(f"    {get_activation_command()}")
+    lines.append("    ┌────────────────────────────────────────────────────────┐")
+    lines.append("    │  To fix this, run:                                     │")
+    lines.append("    │                                                        │")
+    lines.append(f"    │      {cmd:<50} │")
+    lines.append("    │                                                        │")
+    lines.append("    └────────────────────────────────────────────────────────┘")
     lines.append("")
 
     if ACTIVATION_SCRIPT.exists():
-        lines.append("Or use the generated activation script:")
-        lines.append("")
+        lines.append("    Or use the generated activation script:")
         if is_windows():
             ps1_script = INSTALL_DIR / "activate.ps1"
             bat_script = INSTALL_DIR / "activate.bat"
             if ps1_script.exists():
-                lines.append(f"    PowerShell: . {ps1_script}")
+                lines.append(f"        PowerShell: . {ps1_script}")
             if bat_script.exists():
-                lines.append(f"    CMD:        {bat_script}")
+                lines.append(f"        CMD:        {bat_script}")
         else:
-            lines.append(f"    source {ACTIVATION_SCRIPT}")
+            lines.append(f"        source {ACTIVATION_SCRIPT}")
         lines.append("")
 
-    lines.append("Then re-run this script.")
-    lines.append("=" * 60)
+    lines.append("    Then re-run this script.")
     lines.append("")
 
     return "\n".join(lines)

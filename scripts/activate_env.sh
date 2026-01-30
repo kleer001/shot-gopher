@@ -47,6 +47,32 @@ _vfx_log_error() {
     echo -e "${RED}[vfx-env]${NC} $1" >&2
 }
 
+_vfx_show_activation_warning() {
+    local current_env="$1"
+    echo "" >&2
+    echo -e "${RED}⚠️  ╔══════════════════════════════════════════════════════════════╗  ⚠️${NC}" >&2
+    echo -e "${RED}⚠️  ║                                                              ║  ⚠️${NC}" >&2
+    echo -e "${RED}⚠️  ║              WRONG CONDA ENVIRONMENT ACTIVE                  ║  ⚠️${NC}" >&2
+    echo -e "${RED}⚠️  ║                                                              ║  ⚠️${NC}" >&2
+    echo -e "${RED}⚠️  ╚══════════════════════════════════════════════════════════════╝  ⚠️${NC}" >&2
+    echo "" >&2
+    if [[ -n "$current_env" ]]; then
+        echo -e "    Currently active: ${YELLOW}'$current_env'${NC}" >&2
+        echo -e "    Required:         ${GREEN}'$VFX_ENV_NAME'${NC}" >&2
+    else
+        echo "    No conda environment is currently active." >&2
+        echo -e "    Required: ${GREEN}'$VFX_ENV_NAME'${NC}" >&2
+    fi
+    echo "" >&2
+    echo "    ┌────────────────────────────────────────────────────────┐" >&2
+    echo "    │  To fix this, run:                                     │" >&2
+    echo "    │                                                        │" >&2
+    echo -e "    │      ${GREEN}conda activate $VFX_ENV_NAME${NC}                        │" >&2
+    echo "    │                                                        │" >&2
+    echo "    └────────────────────────────────────────────────────────┘" >&2
+    echo "" >&2
+}
+
 # -----------------------------------------------------------------------------
 # Check if we're in the right environment
 # -----------------------------------------------------------------------------
@@ -158,11 +184,7 @@ _vfx_activate() {
 
     # Just checking?
     if $check_only; then
-        if [[ -n "$CONDA_DEFAULT_ENV" ]]; then
-            _vfx_log_warn "Wrong environment: '$CONDA_DEFAULT_ENV' (need '$VFX_ENV_NAME')"
-        else
-            _vfx_log_warn "No conda environment active (need '$VFX_ENV_NAME')"
-        fi
+        _vfx_show_activation_warning "$CONDA_DEFAULT_ENV"
         return 1
     fi
 
@@ -189,7 +211,7 @@ _vfx_activate() {
         return 0
     else
         _vfx_log_error "Failed to activate environment '$VFX_ENV_NAME'"
-        _vfx_log_error "Try manually: conda activate $VFX_ENV_NAME"
+        _vfx_show_activation_warning "$CONDA_DEFAULT_ENV"
         return 1
     fi
 }

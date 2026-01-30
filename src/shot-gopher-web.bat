@@ -29,11 +29,7 @@ REM Activate the vfx-pipeline environment
 echo Activating vfx-pipeline environment...
 call conda activate vfx-pipeline
 if %ERRORLEVEL% neq 0 (
-    echo ERROR: Failed to activate vfx-pipeline environment
-    echo.
-    echo Please run the install wizard first:
-    echo   python scripts/install_wizard.py
-    echo.
+    call "%SCRIPT_DIR%..\scripts\show_conda_error.bat"
     pause
     exit /b 1
 )
