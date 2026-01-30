@@ -153,17 +153,18 @@ export class ProjectsController {
                 apiService.getProjectVram(projectId).catch(() => null),
             ]);
 
-            this.renderStagesStatus(projectData, outputsData);
+            this.renderStagesStatus(projectData, outputsData, vramData);
             this.renderVramInfo(vramData);
         } catch (error) {
             console.error('Failed to load project details:', error);
         }
     }
 
-    renderStagesStatus(projectData, outputsData) {
+    renderStagesStatus(projectData, outputsData, vramData) {
         if (!this.elements.detailStages) return;
 
         const outputs = outputsData?.outputs || {};
+        const vramStages = vramData?.analysis?.stages || {};
 
         const stageLabels = {
             ingest: 'Ingest Video Frames',
@@ -193,10 +194,17 @@ export class ProjectsController {
             const statusText = isCompleted ? `${fileCount} files` : '';
             const label = stageLabels[stage] || stage.toUpperCase();
 
+            const vramInfo = vramStages[stage];
+            const vramGb = vramInfo?.base_vram_gb;
+            const vramStatus = vramInfo?.status || 'ok';
+            const vramDisplay = vramGb !== undefined && vramGb > 0 ? `${vramGb} GB` : '';
+            const vramStatusClass = vramStatus === 'ok' ? '' : `vram-${vramStatus}`;
+
             return `
             <div class="stage-status-item selectable ${stageClass}" data-stage="${stage}">
                 <div class="stage-marker"></div>
                 <span class="stage-status-name">${label}</span>
+                <span class="stage-vram ${vramStatusClass}">${vramDisplay}</span>
                 <span class="stage-status-info">${statusText}</span>
             </div>
         `;

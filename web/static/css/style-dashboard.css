@@ -633,6 +633,26 @@ body {
     color: var(--success);
 }
 
+.stage-vram {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: 'IBM Plex Mono', monospace;
+    min-width: 45px;
+    text-align: right;
+}
+
+.stage-vram.vram-warning {
+    color: var(--warning, #f59e0b);
+}
+
+.stage-vram.vram-insufficient {
+    color: var(--danger);
+}
+
+.stage-vram.vram-chunked {
+    color: var(--accent);
+}
+
 /* VRAM Display */
 .vram-display {
     padding: 12px;
