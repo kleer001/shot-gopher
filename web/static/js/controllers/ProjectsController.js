@@ -85,15 +85,15 @@ export class ProjectsController {
 
     displayProjects(projects) {
         const html = projects.map(proj => {
-            const safeName = dom.escapeHTML(proj.name || proj.project_id);
-            const safeId = dom.escapeHTML(proj.project_id);
-            const safeDir = dom.escapeHTML(proj.project_dir || '');
+            const projectId = proj.name;
+            const safeName = dom.escapeHTML(projectId);
+            const safeId = dom.escapeHTML(projectId);
             const rawStatus = proj.status || 'unknown';
             const displayStatus = rawStatus === 'unknown' ? 'ready' : rawStatus;
             const safeStatus = dom.escapeHTML(displayStatus);
-            const selectedClass = this.selectedProjectId === proj.project_id ? 'selected' : '';
+            const selectedClass = this.selectedProjectId === projectId ? 'selected' : '';
             return `
-            <div class="project-item ${selectedClass}" data-id="${safeId}" data-dir="${safeDir}">
+            <div class="project-item ${selectedClass}" data-id="${safeId}">
                 <span class="project-name">${safeName}</span>
                 <span class="project-status ${safeStatus}">${safeStatus}</span>
             </div>
