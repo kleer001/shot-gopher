@@ -866,14 +866,21 @@ class InstallationWizard:
             )
 
             if result.returncode == 0:
-                print_success("Desktop shortcut created!")
-                system = platform.system()
-                if system == "Windows":
-                    print_info("Look for 'Shot Gopher' on your Desktop and Start Menu")
-                elif system == "Darwin":
-                    print_info("Look for 'Shot Gopher' on your Desktop")
+                print_success("Shortcuts created!")
+                # Show which shortcuts were created (from script output)
+                for line in result.stdout.splitlines():
+                    if line.startswith("Created shortcuts:"):
+                        print_info(line)
+                        break
                 else:
-                    print_info("Look for 'Shot Gopher' in your applications menu")
+                    # Fallback if output format changed
+                    system = platform.system()
+                    if system == "Windows":
+                        print_info("Look for 'Shot Gopher' on your Desktop and Start Menu")
+                    elif system == "Darwin":
+                        print_info("Look for 'Shot Gopher' on your Desktop")
+                    else:
+                        print_info("Look for 'Shot Gopher' in your applications menu")
             else:
                 print_warning("Could not create shortcut automatically")
                 if result.stderr:

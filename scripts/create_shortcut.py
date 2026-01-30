@@ -237,6 +237,10 @@ def main():
             elif system == "Darwin":
                 response = input("Add to Dock? [y/N]: ").strip().lower()
                 create_menu = response == 'y'
+            else:
+                # Linux - ask about applications menu
+                response = input("Create applications menu entry? [Y/n]: ").strip().lower()
+                create_menu = response != 'n'
 
     print()
 
