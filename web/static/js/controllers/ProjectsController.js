@@ -415,7 +415,17 @@ export class ProjectsController {
             if (status === 'running') {
                 const stage = jobData.current_stage || 'processing';
                 const progress = Math.round((jobData.progress || 0) * 100);
-                btn.textContent = `${stage.toUpperCase()} ${progress}%`;
+                const lastOutput = jobData.last_output || '';
+
+                if (lastOutput && lastOutput.length > 0) {
+                    const truncated = lastOutput.length > 45 ? lastOutput.slice(0, 45) + '...' : lastOutput;
+                    btn.textContent = truncated;
+                    btn.title = lastOutput;
+                } else if (progress > 0) {
+                    btn.textContent = `${stage.toUpperCase()} ${progress}%`;
+                } else {
+                    btn.textContent = `${stage.toUpperCase()}...`;
+                }
             } else if (status === 'completed' || status === 'complete') {
                 this.stopProcessingStatusPoll();
                 this.onProcessingComplete('complete');

@@ -354,6 +354,8 @@ def wait_for_completion(
             current_files = len(list(output_dir.glob("*.png")))
             if current_files != last_file_count:
                 last_file_count = current_files
+                if stage_name and total_frames > 0:
+                    print(f"[ComfyUI] {stage_name} frame {current_files}/{total_frames}")
             if current_files > 0:
                 if total_frames > 0:
                     file_info = f" | {current_files}/{total_frames} frames"

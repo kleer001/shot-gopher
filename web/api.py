@@ -342,7 +342,7 @@ async def get_job_status(project_id: str):
         "current_stage": job.get("current_stage"),
         "progress": job.get("progress", 0),
         "error": job.get("error"),
-        "message": job.get("message"),
+        "last_output": job.get("last_output", ""),
     }
 
 

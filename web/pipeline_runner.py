@@ -230,6 +230,15 @@ def run_pipeline_thread(
             if not line:
                 continue
 
+            # Skip carriage-return spinner lines (they overwrite themselves)
+            if line.startswith("\r") or line.startswith("    \r"):
+                clean_line = line.lstrip("\r").strip()
+                if clean_line:
+                    with active_jobs_lock:
+                        if project_id in active_jobs:
+                            active_jobs[project_id]["last_output"] = clean_line
+                continue
+
             # Parse progress
             progress_info = parse_progress_line(line, current_stage, stages)
 
@@ -251,14 +260,17 @@ def run_pipeline_thread(
                 with active_jobs_lock:
                     if project_id in active_jobs:
                         active_jobs[project_id]["current_stage"] = current_stage
+                        active_jobs[project_id]["last_output"] = line[:100]
                         if "progress" in progress_info:
                             active_jobs[project_id]["progress"] = progress_info["progress"]
 
                 # Send WebSocket update
                 update_progress(project_id, update)
-
-            # Also send raw log line (for log viewer)
-            # update_progress(project_id, {"type": "log", "line": line})
+            else:
+                # Store any output line for display
+                with active_jobs_lock:
+                    if project_id in active_jobs:
+                        active_jobs[project_id]["last_output"] = line[:100]
 
         # Wait for process to complete
         process.wait()
