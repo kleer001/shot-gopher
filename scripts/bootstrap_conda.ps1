@@ -165,9 +165,14 @@ function Install-Git {
 }
 
 function Test-CondaInstalled {
-    # Check multiple locations for conda
+    # First check if conda is in PATH
+    $condaCmd = Get-Command conda -ErrorAction SilentlyContinue
+    if ($condaCmd) {
+        return $condaCmd.Source
+    }
+
+    # Check common installation locations
     $condaLocations = @(
-        (Get-Command conda -ErrorAction SilentlyContinue),
         "$env:USERPROFILE\miniconda3\Scripts\conda.exe",
         "$env:USERPROFILE\anaconda3\Scripts\conda.exe",
         "$env:LOCALAPPDATA\miniconda3\Scripts\conda.exe",
@@ -178,7 +183,7 @@ function Test-CondaInstalled {
     )
 
     foreach ($loc in $condaLocations) {
-        if ($loc -and (Test-Path $loc -ErrorAction SilentlyContinue)) {
+        if (Test-Path $loc -ErrorAction SilentlyContinue) {
             return $loc
         }
     }
@@ -255,8 +260,6 @@ function Install-Miniconda {
 
 function Initialize-CondaShell {
     param([string]$CondaPath)
-
-    $condaDir = Split-Path (Split-Path $CondaPath -Parent) -Parent
 
     Write-Host "Initializing conda for PowerShell..." -ForegroundColor Yellow
 
@@ -361,21 +364,32 @@ function Install-VFXPipeline {
     Write-Host ""
 
     # Clone or update repository
+    $pushedLocation = $false
     if (Test-Path $INSTALL_DIR) {
         Write-Host "Directory $INSTALL_DIR already exists."
         $response = Read-Host "Update existing installation? (y/N)"
         if ($response -match "^[Yy]$") {
             Write-Host "Updating repository..."
             Push-Location $INSTALL_DIR
+            $pushedLocation = $true
             git pull
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "! Git pull failed, continuing with existing code..." -ForegroundColor Yellow
+            }
         } else {
             Write-Host "Using existing installation at $INSTALL_DIR"
             Push-Location $INSTALL_DIR
+            $pushedLocation = $true
         }
     } else {
         Write-Host "Cloning repository to $INSTALL_DIR..."
         git clone $REPO_URL $INSTALL_DIR
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "X Failed to clone repository" -ForegroundColor Red
+            return 1
+        }
         Push-Location $INSTALL_DIR
+        $pushedLocation = $true
     }
 
     Write-Banner "Launching Installation Wizard"
@@ -384,15 +398,17 @@ function Install-VFXPipeline {
     $pythonPath = Join-Path (Split-Path (Split-Path $condaPath -Parent) -Parent) "python.exe"
 
     if (Test-Path $pythonPath) {
-        & $pythonPath scripts/install_wizard.py $args
+        & $pythonPath scripts/install_wizard.py
     } else {
         # Fall back to conda run
-        & $condaPath run -n base python scripts/install_wizard.py $args
+        & $condaPath run -n base python scripts/install_wizard.py
     }
 
     $wizardExitCode = $LASTEXITCODE
 
-    Pop-Location
+    if ($pushedLocation) {
+        Pop-Location
+    }
 
     if ($wizardExitCode -ne 0) {
         Write-Banner "Installation Failed!" "Red"
