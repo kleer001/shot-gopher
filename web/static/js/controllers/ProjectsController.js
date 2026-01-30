@@ -152,15 +152,15 @@ export class ProjectsController {
         const outputs = outputsData?.outputs || {};
 
         const stageLabels = {
-            depth: 'Depth Maps',
-            roto: 'Rotoscopy',
+            depth: 'Zdepth Estimation',
+            roto: 'Auto Segmentation (Roto)',
             cleanplate: 'Clean Plate',
-            colmap: 'COLMAP',
+            colmap: 'Camera Tracking (COLMAP)',
             interactive: 'Interactive Segmentation',
-            mama: 'VideoMaMa',
-            mocap: 'Motion Capture',
-            gsir: 'GS-IR',
-            camera: 'Camera Tracking',
+            mama: 'Matte Refinement (VideoMaMa)',
+            mocap: 'Human MoCap (SMPL+)',
+            gsir: '3D Reconstruction (GS-IR)',
+            camera: 'Camera Export (Alembic)',
         };
 
         let completedCount = 0;
