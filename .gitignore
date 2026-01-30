@@ -225,3 +225,6 @@ HF_TOKEN.dat
 *.avi
 *.mkv
 *.y4m
+
+# Claude Code skills (local development only)
+.skills/
