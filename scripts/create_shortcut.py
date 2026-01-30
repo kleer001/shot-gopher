@@ -140,16 +140,16 @@ def create_linux_desktop_entry(target_path: Path, create_desktop: bool = True, c
         create_desktop: Whether to create desktop shortcut
         create_menu: Whether to create applications menu entry
     """
-    # Escape path for shell (single quotes need special handling)
-    parent_escaped = str(target_path.parent).replace("'", "'\\''")
-    name_escaped = target_path.name.replace("'", "'\\''")
+    # Escape paths for bash double-quoted strings
+    parent_escaped = str(target_path.parent).replace('\\', '\\\\').replace('"', '\\"').replace('$', '\\$').replace('`', '\\`')
+    name_escaped = target_path.name.replace('\\', '\\\\').replace('"', '\\"').replace('$', '\\$').replace('`', '\\`')
 
     desktop_entry = f"""[Desktop Entry]
 Version=1.0
 Type=Application
 Name=Shot Gopher
 Comment=VFX Pipeline Web Interface
-Exec=bash -c 'cd '\\'{parent_escaped}'\\' && ./'\\''{name_escaped}'\\'''
+Exec=bash -c 'cd "{parent_escaped}" && "./{name_escaped}"'
 Icon=video-x-generic
 Terminal=true
 Categories=Graphics;Video;
