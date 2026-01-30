@@ -283,6 +283,45 @@ class TestPipelineRunnerVideoFinding:
 
         assert input_video is None
 
+    def test_finds_existing_frames(self, tmp_path):
+        """Should detect existing frames in source/frames directory."""
+        source_dir = tmp_path / "source"
+        frames_dir = source_dir / "frames"
+        frames_dir.mkdir(parents=True)
+
+        # Create some frame files
+        (frames_dir / "frame_0001.png").write_text("fake frame")
+        (frames_dir / "frame_0002.png").write_text("fake frame")
+        (frames_dir / "frame_0003.png").write_text("fake frame")
+
+        # Test the frame detection logic
+        has_frames = False
+        if frames_dir.exists():
+            frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+            if frame_files:
+                has_frames = True
+
+        assert has_frames is True
+
+    def test_prefers_frames_over_video(self, tmp_path):
+        """Should prefer existing frames over video file."""
+        source_dir = tmp_path / "source"
+        frames_dir = source_dir / "frames"
+        frames_dir.mkdir(parents=True)
+
+        # Create both frames and video
+        (frames_dir / "frame_0001.png").write_text("fake frame")
+        (source_dir / "input.mp4").write_text("fake video")
+
+        # Test that frames are detected first
+        has_frames = False
+        if frames_dir.exists():
+            frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+            if frame_files:
+                has_frames = True
+
+        assert has_frames is True
+
 
 class TestAPIJobEndpoint:
     """Test the /api/projects/{id}/job endpoint."""

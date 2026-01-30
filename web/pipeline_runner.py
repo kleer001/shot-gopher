@@ -164,30 +164,40 @@ def run_pipeline_thread(
     # Build command
     script_path = get_run_pipeline_path()
     source_dir = Path(project_dir) / "source"
+    frames_dir = source_dir / "frames"
 
-    # Find the input video - check for any video file in source/
+    # Find the input - either a video file or existing frames
     input_video = None
+    has_frames = False
     video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]
 
-    # First try input.* naming convention
-    for ext in video_extensions:
-        candidate = source_dir / f"input{ext}"
-        if candidate.exists():
-            input_video = candidate
-            break
+    # First check if we have frames already
+    if frames_dir.exists():
+        frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+        if frame_files:
+            has_frames = True
 
-    # If not found, look for any video file in source/
-    if not input_video and source_dir.exists():
+    # If no frames, look for a video file
+    if not has_frames:
+        # First try input.* naming convention
         for ext in video_extensions:
-            for video_file in source_dir.glob(f"*{ext}"):
-                if video_file.is_file():
-                    input_video = video_file
-                    break
-            if input_video:
+            candidate = source_dir / f"input{ext}"
+            if candidate.exists():
+                input_video = candidate
                 break
 
-    if not input_video:
-        error_msg = f"No input video found in {source_dir}"
+        # If not found, look for any video file in source/
+        if not input_video and source_dir.exists():
+            for ext in video_extensions:
+                for video_file in source_dir.glob(f"*{ext}"):
+                    if video_file.is_file():
+                        input_video = video_file
+                        break
+                if input_video:
+                    break
+
+    if not input_video and not has_frames:
+        error_msg = f"No input video or frames found in {source_dir}"
         with active_jobs_lock:
             if project_id in active_jobs:
                 active_jobs[project_id]["status"] = "failed"
@@ -199,15 +209,26 @@ def run_pipeline_thread(
         })
         return
 
-    cmd = [
-        sys.executable,
-        str(script_path),
-        str(input_video),
-        "--name", Path(project_dir).name,
-        "--projects-dir", str(Path(project_dir).parent),
-        "--stages", ",".join(stages),
-        "--no-auto-comfyui",  # Web server already manages ComfyUI
-    ]
+    # Build command - use project dir if we have frames, video path otherwise
+    if has_frames:
+        # Pass the project directory - run_pipeline.py can work with existing frames
+        cmd = [
+            sys.executable,
+            str(script_path),
+            str(project_dir),
+            "--stages", ",".join(stages),
+            "--no-auto-comfyui",
+        ]
+    else:
+        cmd = [
+            sys.executable,
+            str(script_path),
+            str(input_video),
+            "--name", Path(project_dir).name,
+            "--projects-dir", str(Path(project_dir).parent),
+            "--stages", ",".join(stages),
+            "--no-auto-comfyui",
+        ]
 
     if roto_prompt and "roto" in stages:
         cmd.extend(["--prompt", roto_prompt])
