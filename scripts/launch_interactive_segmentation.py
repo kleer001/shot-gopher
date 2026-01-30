@@ -106,7 +106,7 @@ def prepare_workflow(project_dir: Path) -> Path:
 
     populated = populate_workflow(workflow_data, project_dir)
 
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(populated, f, indent=2)
 
     return output_path

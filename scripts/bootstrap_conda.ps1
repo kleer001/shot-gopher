@@ -121,116 +121,137 @@ function Initialize-CondaShell {
     }
 }
 
-Write-Banner "VFX Pipeline - Automated Installer"
+function Install-VFXPipeline {
+    Write-Banner "VFX Pipeline - Automated Installer"
 
-# Check for git
-Write-Host "Checking prerequisites..."
+    # Check for git
+    Write-Host "Checking prerequisites..."
 
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "X Git is not installed" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Git is required. Install options:" -ForegroundColor Yellow
-    Write-Host "  1. winget install Git.Git" -ForegroundColor Cyan
-    Write-Host "  2. Download from https://git-scm.com/download/win" -ForegroundColor Cyan
-    Write-Host ""
-    exit 1
-}
-Write-Host "OK Git found" -ForegroundColor Green
-
-# Check for conda
-$condaPath = Get-CondaPath
-
-if (-not $condaPath) {
-    Write-Host "X Conda/Miniconda not found" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Miniconda is required for the VFX Pipeline." -ForegroundColor White
-    Write-Host "It provides isolated Python environments with GPU support." -ForegroundColor Gray
-    Write-Host ""
-
-    $response = Read-Host "Would you like to install Miniconda automatically? (Y/n)"
-
-    if ($response -match "^[Nn]$") {
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Host "X Git is not installed" -ForegroundColor Red
         Write-Host ""
-        Write-Host "Manual installation required:" -ForegroundColor Yellow
-        Write-Host "  1. Download from: https://docs.conda.io/en/latest/miniconda.html" -ForegroundColor Cyan
-        Write-Host "  2. Run the installer (use defaults)" -ForegroundColor Cyan
-        Write-Host "  3. Restart PowerShell" -ForegroundColor Cyan
-        Write-Host "  4. Re-run this bootstrap script" -ForegroundColor Cyan
+        Write-Host "Git is required. Install options:" -ForegroundColor Yellow
+        Write-Host "  1. winget install Git.Git" -ForegroundColor Cyan
+        Write-Host "  2. Download from https://git-scm.com/download/win" -ForegroundColor Cyan
         Write-Host ""
-        exit 1
+        return 1
     }
+    Write-Host "OK Git found" -ForegroundColor Green
 
-    Write-Host ""
-    if (-not (Install-Miniconda)) {
-        exit 1
-    }
-
+    # Check for conda
     $condaPath = Get-CondaPath
+
     if (-not $condaPath) {
-        Write-Host "X Could not find conda after installation" -ForegroundColor Red
-        Write-Host "  Please restart PowerShell and try again" -ForegroundColor Yellow
-        exit 1
-    }
+        Write-Host "X Conda/Miniconda not found" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Miniconda is required for the VFX Pipeline." -ForegroundColor White
+        Write-Host "It provides isolated Python environments with GPU support." -ForegroundColor Gray
+        Write-Host ""
 
-    Initialize-CondaShell -CondaPath $condaPath
-} else {
-    Write-Host "OK Conda found: $condaPath" -ForegroundColor Green
-}
+        $response = Read-Host "Would you like to install Miniconda automatically? (Y/n)"
 
-# Verify conda works
-try {
-    $condaVersion = & $condaPath --version 2>&1
-    Write-Host "OK $condaVersion" -ForegroundColor Green
-} catch {
-    Write-Host "! Could not verify conda version" -ForegroundColor Yellow
-}
+        if ($response -match "^[Nn]$") {
+            Write-Host ""
+            Write-Host "Manual installation required:" -ForegroundColor Yellow
+            Write-Host "  1. Download from: https://docs.conda.io/en/latest/miniconda.html" -ForegroundColor Cyan
+            Write-Host "  2. Run the installer (use defaults)" -ForegroundColor Cyan
+            Write-Host "  3. Restart PowerShell" -ForegroundColor Cyan
+            Write-Host "  4. Re-run this bootstrap script" -ForegroundColor Cyan
+            Write-Host ""
+            return 1
+        }
 
-Write-Host ""
+        Write-Host ""
+        if (-not (Install-Miniconda)) {
+            return 1
+        }
 
-# Clone or update repository
-if (Test-Path $INSTALL_DIR) {
-    Write-Host "Directory $INSTALL_DIR already exists."
-    $response = Read-Host "Update existing installation? (y/N)"
-    if ($response -match "^[Yy]$") {
-        Write-Host "Updating repository..."
-        Push-Location $INSTALL_DIR
-        git pull
+        $condaPath = Get-CondaPath
+        if (-not $condaPath) {
+            Write-Host "X Could not find conda after installation" -ForegroundColor Red
+            Write-Host "  Please restart PowerShell and try again" -ForegroundColor Yellow
+            return 1
+        }
+
+        Initialize-CondaShell -CondaPath $condaPath
     } else {
-        Write-Host "Using existing installation at $INSTALL_DIR"
+        Write-Host "OK Conda found: $condaPath" -ForegroundColor Green
+    }
+
+    # Verify conda works
+    try {
+        $condaVersion = & $condaPath --version 2>&1
+        Write-Host "OK $condaVersion" -ForegroundColor Green
+    } catch {
+        Write-Host "! Could not verify conda version" -ForegroundColor Yellow
+    }
+
+    Write-Host ""
+
+    # Clone or update repository
+    if (Test-Path $INSTALL_DIR) {
+        Write-Host "Directory $INSTALL_DIR already exists."
+        $response = Read-Host "Update existing installation? (y/N)"
+        if ($response -match "^[Yy]$") {
+            Write-Host "Updating repository..."
+            Push-Location $INSTALL_DIR
+            git pull
+        } else {
+            Write-Host "Using existing installation at $INSTALL_DIR"
+            Push-Location $INSTALL_DIR
+        }
+    } else {
+        Write-Host "Cloning repository to $INSTALL_DIR..."
+        git clone $REPO_URL $INSTALL_DIR
         Push-Location $INSTALL_DIR
     }
-} else {
-    Write-Host "Cloning repository to $INSTALL_DIR..."
-    git clone $REPO_URL $INSTALL_DIR
-    Push-Location $INSTALL_DIR
+
+    Write-Banner "Launching Installation Wizard"
+
+    # Run the wizard using the conda we found/installed
+    $pythonPath = Join-Path (Split-Path (Split-Path $condaPath -Parent) -Parent) "python.exe"
+
+    if (Test-Path $pythonPath) {
+        & $pythonPath scripts/install_wizard.py $args
+    } else {
+        # Fall back to conda run
+        & $condaPath run -n base python scripts/install_wizard.py $args
+    }
+
+    $wizardExitCode = $LASTEXITCODE
+
+    Pop-Location
+
+    if ($wizardExitCode -ne 0) {
+        Write-Banner "Installation Failed!" "Red"
+        Write-Host "Check the error messages above and try again." -ForegroundColor Yellow
+        return $wizardExitCode
+    }
+
+    Write-Banner "Installation Complete!" "Green"
+    Write-Host "Next steps:"
+    Write-Host "  1. Restart PowerShell (if conda was just installed)"
+    Write-Host "  2. Activate environment: conda activate vfx-pipeline"
+    Write-Host "  3. Or use: . $INSTALL_DIR\.vfx_pipeline\activate.ps1"
+    Write-Host "  4. Run: python scripts/run_pipeline.py --help"
+    Write-Host ""
+
+    return 0
 }
 
-Write-Banner "Launching Installation Wizard"
-
-# Run the wizard using the conda we found/installed
-$pythonPath = Join-Path (Split-Path (Split-Path $condaPath -Parent) -Parent) "python.exe"
-
-if (Test-Path $pythonPath) {
-    & $pythonPath scripts/install_wizard.py $args
-} else {
-    # Fall back to conda run
-    & $condaPath run -n base python scripts/install_wizard.py $args
+$script:exitCode = 0
+try {
+    $script:exitCode = Install-VFXPipeline
+} catch {
+    Write-Host ""
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+    Write-Host "  Unexpected Error!" -ForegroundColor Red
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+    Write-Host ""
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ""
+    $script:exitCode = 1
 }
 
-$wizardExitCode = $LASTEXITCODE
-
-Pop-Location
-
-if ($wizardExitCode -ne 0) {
-    Write-Banner "Installation Failed!" "Red"
-    Write-Host "Check the error messages above and try again." -ForegroundColor Yellow
-    exit $wizardExitCode
-}
-
-Write-Banner "Installation Complete!" "Green"
-Write-Host "Next steps:"
-Write-Host "  1. Restart PowerShell (if conda was just installed)"
-Write-Host "  2. Activate environment: conda activate vfx-pipeline"
-Write-Host "  3. Or use: . $INSTALL_DIR\.vfx_pipeline\activate.ps1"
-Write-Host "  4. Run: python scripts/run_pipeline.py --help"
 Write-Host ""
+Read-Host "Press Enter to close"

@@ -82,13 +82,16 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/b
 
 ### Windows
 
-Native Windows installation:
+One-liner bootstrap in **PowerShell** (not Command Prompt):
 
 ```powershell
 irm https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.ps1 | iex
 ```
 
-**Prerequisites:** Windows 10 2004+ or Windows 11, NVIDIA GPU with driver, Conda or Miniconda
+> **Getting "irm is not recognized"?** You're in Command Prompt. Open **PowerShell** instead:
+> Press `Win+X` → select "Windows PowerShell" or "Terminal", then run the command above.
+
+**Prerequisites:** Windows 10 2004+ or Windows 11, NVIDIA GPU with driver
 
 **Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,camera`
 

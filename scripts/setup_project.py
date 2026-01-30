@@ -138,7 +138,7 @@ def copy_and_populate_workflows(
 
         # Write to project
         output_path = project_workflows_dir / workflow_path.name
-        with open(output_path, 'w') as f:
+        with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(populated, f, indent=2)
 
         created.append(output_path)

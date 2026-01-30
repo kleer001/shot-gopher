@@ -48,7 +48,7 @@ class ProjectMetadata:
             data: Metadata dict to save
         """
         self.project_dir.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "w") as f:
+        with open(self.path, "w", encoding='utf-8') as f:
             json.dump(data, f, indent=2)
 
     def update(self, **kwargs) -> dict:

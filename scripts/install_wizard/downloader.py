@@ -287,9 +287,8 @@ Auto-downloads from Ultralytics releases.'''
                 return False
 
         except ImportError:
-            print_error("huggingface_hub not installed")
-            print_info("Install with: pip install huggingface_hub")
-            return False
+            print_info("huggingface_hub not available, using direct download...")
+            return self._download_huggingface_direct(repo_id, dest_dir, target_filename)
         except Exception as e:
             print_error(f"Download failed: {e}")
             return False
@@ -417,14 +416,16 @@ Auto-downloads from Ultralytics releases.'''
         ]
 
         for method in install_methods:
-            # Check if the tool is available (for pipx)
             if method['check_cmd']:
-                check_result = subprocess.run(
-                    method['check_cmd'],
-                    capture_output=True,
-                    text=True
-                )
-                if check_result.returncode != 0:
+                try:
+                    check_result = subprocess.run(
+                        method['check_cmd'],
+                        capture_output=True,
+                        text=True
+                    )
+                    if check_result.returncode != 0:
+                        continue
+                except FileNotFoundError:
                     continue
 
             print_info(f"Trying to install gdown via {method['name']}...")
@@ -440,16 +441,16 @@ Auto-downloads from Ultralytics releases.'''
                     import gdown
                     return gdown
                 except ImportError:
-                    # pipx installs to a different location, need to use subprocess
-                    # Check if gdown CLI is available
-                    gdown_check = subprocess.run(
-                        ['gdown', '--version'],
-                        capture_output=True,
-                        text=True
-                    )
-                    if gdown_check.returncode == 0:
-                        # gdown CLI is available, use wrapper class
-                        return self._create_gdown_cli_wrapper()
+                    try:
+                        gdown_check = subprocess.run(
+                            ['gdown', '--version'],
+                            capture_output=True,
+                            text=True
+                        )
+                        if gdown_check.returncode == 0:
+                            return self._create_gdown_cli_wrapper()
+                    except FileNotFoundError:
+                        pass
                     continue
             else:
                 # Check for PEP 668 error and try next method
@@ -465,6 +466,25 @@ Auto-downloads from Ultralytics releases.'''
         print("  2. Using pip with user flag: pip install --user gdown")
         print("  3. In a virtual environment: python -m venv venv && source venv/bin/activate && pip install gdown")
         return None
+
+    def _download_huggingface_direct(self, repo_id: str, dest_dir: Path, target_filename: str) -> bool:
+        """Download from HuggingFace using direct URL (fallback when huggingface_hub unavailable).
+
+        Args:
+            repo_id: HuggingFace repository ID (e.g., 'depth-anything/Video-Depth-Anything-Small')
+            dest_dir: Destination directory for the model file
+            target_filename: Filename to save as
+
+        Returns:
+            True if successful
+        """
+        url = f"https://huggingface.co/{repo_id}/resolve/main/{target_filename}"
+        dest_path = dest_dir / target_filename
+
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f"  Downloading from {url}...")
+        return self.download_file(url, dest_path)
 
     def _create_gdown_cli_wrapper(self):
         """Create a wrapper object that mimics gdown module using CLI."""

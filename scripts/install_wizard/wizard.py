@@ -514,7 +514,7 @@ class InstallationWizard:
             if email and '@' in email:
                 password = tty_input("Enter your SMPL-X password: ").strip()
                 if password:
-                    with open(smpl_creds_file, 'w') as f:
+                    with open(smpl_creds_file, 'w', encoding='utf-8') as f:
                         f.write(email + '\n')
                         f.write(password + '\n')
                     smpl_creds_file.chmod(0o600)

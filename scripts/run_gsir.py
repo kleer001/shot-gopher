@@ -493,7 +493,7 @@ def export_materials(
             "environment": "environment.png" if envmap.exists() else None,
         }
     }
-    with open(output_dir / "gsir_metadata.json", "w") as f:
+    with open(output_dir / "gsir_metadata.json", "w", encoding='utf-8') as f:
         json.dump(metadata, f, indent=2)
 
     return True
