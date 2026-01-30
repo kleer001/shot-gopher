@@ -379,16 +379,56 @@ def _check_comfyui_status() -> bool:
         return False
 
 
+def _get_gpu_info() -> dict:
+    """Get GPU information using nvidia-smi."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            parts = result.stdout.strip().split(", ")
+            if len(parts) >= 2:
+                return {
+                    "name": parts[0].strip(),
+                    "vram_gb": round(int(parts[1].strip()) / 1024, 1)
+                }
+    except Exception:
+        pass
+    return {"name": "Unknown", "vram_gb": 0}
+
+
+def _get_dir_size_gb(path: Path) -> float:
+    """Get directory size in GB."""
+    try:
+        total = 0
+        for entry in path.rglob("*"):
+            if entry.is_file():
+                total += entry.stat().st_size
+        return round(total / (1024**3), 1)
+    except Exception:
+        return 0
+
+
 @router.get("/system/status")
 async def system_status():
-    """Check system status (ComfyUI, disk space, etc.)."""
+    """Check system status (ComfyUI, disk space, GPU, etc.)."""
     import asyncio
+    import platform
 
     status = {
         "comfyui": False,
-        "disk_space_gb": 0,
+        "os": platform.system(),
+        "disk_free_gb": 0,
+        "disk_total_gb": 0,
+        "disk_used_percent": 0,
+        "projects_size_gb": 0,
         "projects_dir": str(DEFAULT_PROJECTS_DIR),
         "install_dir": str(INSTALL_DIR),
+        "gpu_name": "Unknown",
+        "gpu_vram_gb": 0,
     }
 
     try:
@@ -398,14 +438,26 @@ async def system_status():
 
     try:
         projects_dir = Path(DEFAULT_PROJECTS_DIR)
+        target_dir = projects_dir if projects_dir.exists() else projects_dir.parent
+        if target_dir.exists():
+            stat = shutil.disk_usage(target_dir)
+            status["disk_free_gb"] = round(stat.free / (1024**3), 1)
+            status["disk_total_gb"] = round(stat.total / (1024**3), 1)
+            status["disk_used_percent"] = round((stat.used / stat.total) * 100)
+    except Exception:
+        pass
+
+    try:
+        projects_dir = Path(DEFAULT_PROJECTS_DIR)
         if projects_dir.exists():
-            stat = shutil.disk_usage(projects_dir)
-            status["disk_space_gb"] = round(stat.free / (1024**3), 1)
-        else:
-            parent = projects_dir.parent
-            if parent.exists():
-                stat = shutil.disk_usage(parent)
-                status["disk_space_gb"] = round(stat.free / (1024**3), 1)
+            status["projects_size_gb"] = await asyncio.to_thread(_get_dir_size_gb, projects_dir)
+    except Exception:
+        pass
+
+    try:
+        gpu_info = await asyncio.to_thread(_get_gpu_info)
+        status["gpu_name"] = gpu_info["name"]
+        status["gpu_vram_gb"] = gpu_info["vram_gb"]
     except Exception:
         pass
 

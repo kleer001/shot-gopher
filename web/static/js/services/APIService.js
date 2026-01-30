@@ -204,6 +204,30 @@ export class APIService {
     }
 
     /**
+     * Get project details
+     * @param {string} projectId - Project ID
+     */
+    async getProject(projectId) {
+        return this.get(`${API.PROJECTS}/${projectId}`);
+    }
+
+    /**
+     * Get project VRAM analysis
+     * @param {string} projectId - Project ID
+     */
+    async getProjectVram(projectId) {
+        return this.get(API.PROJECT_VRAM(projectId));
+    }
+
+    /**
+     * Delete a project
+     * @param {string} projectId - Project ID
+     */
+    async deleteProject(projectId) {
+        return this._request(`${API.PROJECTS}/${projectId}`, { method: 'DELETE' });
+    }
+
+    /**
      * Open project folder
      * @param {string} projectId - Project ID
      */

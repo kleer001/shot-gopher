@@ -70,6 +70,18 @@ export const ELEMENTS = {
     // Projects
     PROJECTS_LIST: 'projects-list',
 
+    // Project Detail
+    PROJECT_DETAIL_PANEL: 'project-detail-panel',
+    DETAIL_PROJECT_NAME: 'detail-project-name',
+    DETAIL_STAGES: 'detail-stages',
+    VRAM_INFO_SECTION: 'vram-info-section',
+    VRAM_INFO: 'vram-info',
+    DETAIL_VIDEO_SECTION: 'detail-video-section',
+    DETAIL_VIDEO_INFO: 'detail-video-info',
+    OPEN_FOLDER_BTN: 'open-folder-btn',
+    DELETE_PROJECT_BTN: 'delete-project-btn',
+    REPROCESS_BTN: 'reprocess-btn',
+
     // System
     SYSTEM_STATUS: 'system-status',
     ERROR_TOAST: 'error-toast',

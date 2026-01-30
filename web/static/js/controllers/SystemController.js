@@ -24,6 +24,10 @@ export class SystemController {
             errorMessage: dom.getElement('error-message'),
             errorClose: dom.getElement('error-close'),
             shutdownBtn: dom.getElement('shutdown-btn'),
+            sysOs: dom.getElement('sys-os'),
+            sysDisk: dom.getElement('sys-disk'),
+            sysProjects: dom.getElement('sys-projects'),
+            sysGpu: dom.getElement('sys-gpu'),
         };
 
         if (this.elements.systemStatus) {
@@ -67,17 +71,38 @@ export class SystemController {
         try {
             const status = await apiService.getSystemStatus();
 
-            // Update state
             stateManager.setState({
                 comfyuiOnline: status.comfyui,
-                diskSpaceGB: status.disk_space_gb,
+                diskSpaceGB: status.disk_free_gb,
             });
 
-            // Update UI
             this.updateStatusDisplay(status.comfyui);
+            this.updateSystemInfo(status);
         } catch (error) {
             console.error('Failed to check system status:', error);
             this.updateStatusDisplay(false);
+        }
+    }
+
+    updateSystemInfo(status) {
+        if (this.elements.sysOs) {
+            dom.setText(this.elements.sysOs, status.os || '--');
+        }
+
+        if (this.elements.sysDisk) {
+            const used = status.disk_total_gb - status.disk_free_gb;
+            const percent = status.disk_used_percent || 0;
+            dom.setText(this.elements.sysDisk, `${percent}% (${used.toFixed(0)}GB / ${status.disk_total_gb}GB)`);
+        }
+
+        if (this.elements.sysProjects) {
+            dom.setText(this.elements.sysProjects, `${status.projects_size_gb || 0} GB`);
+        }
+
+        if (this.elements.sysGpu) {
+            const gpuName = status.gpu_name || 'Unknown';
+            const vram = status.gpu_vram_gb || 0;
+            dom.setText(this.elements.sysGpu, `${gpuName} ${vram}GB`);
         }
     }
 

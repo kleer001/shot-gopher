@@ -57,16 +57,13 @@ body {
 .topbar h1 {
     font-size: 16px;
     font-weight: 700;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
 }
 
 .version {
-    font-size: 10px;
-    padding: 3px 8px;
-    background: var(--border);
-    border-radius: 3px;
+    font-size: 11px;
     color: var(--text-dim);
-    font-weight: 600;
+    font-weight: 400;
 }
 
 .topbar-right {
@@ -93,20 +90,6 @@ body {
 .sys-status.online .sys-indicator {
     background: var(--success);
     box-shadow: 0 0 8px var(--success);
-}
-
-.view-link {
-    color: var(--text-dim);
-    text-decoration: none;
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: all 0.2s;
-}
-
-.view-link:hover {
-    color: var(--text);
-    background: var(--bg-hover);
 }
 
 .shutdown-link {
@@ -141,12 +124,18 @@ body {
     overflow: hidden;
 }
 
-.col-left,
-.col-right {
+.col-left {
     display: flex;
     flex-direction: column;
     gap: 16px;
     overflow-y: auto;
+}
+
+.col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow: hidden;
 }
 
 /* Cards */
@@ -275,6 +264,33 @@ body {
     color: var(--accent);
 }
 
+/* System Info */
+.system-info {
+    padding: 12px 16px;
+    background: var(--bg);
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+}
+
+.info-row:not(:last-child) {
+    border-bottom: 1px solid var(--border);
+}
+
+.info-label {
+    color: var(--text-dim);
+}
+
+.info-value {
+    color: var(--text);
+    font-weight: 500;
+}
+
 /* Config Card */
 .stages-grid {
     display: grid;
@@ -391,8 +407,13 @@ body {
 }
 
 /* Projects Card */
+.projects-card {
+    flex-shrink: 0;
+    max-height: 45%;
+}
+
 .projects-scroll {
-    max-height: 400px;
+    max-height: 250px;
     overflow-y: auto;
 }
 
@@ -419,6 +440,12 @@ body {
     background: var(--bg-hover);
 }
 
+.project-item.selected {
+    background: var(--bg-hover);
+    border-left: 3px solid var(--accent);
+    padding-left: 9px;
+}
+
 .project-name {
     font-size: 13px;
     font-weight: 600;
@@ -442,6 +469,248 @@ body {
 .project-status.completed {
     background: var(--success);
     color: white;
+}
+
+/* Project Detail Card */
+.detail-card {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-card .card-body {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.detail-card .card-header {
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.detail-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-action {
+    padding: 6px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-action:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+}
+
+.btn-action.btn-danger:hover {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: white;
+}
+
+.detail-section {
+    margin-bottom: 20px;
+}
+
+.detail-section:last-child {
+    margin-bottom: 0;
+}
+
+.section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+}
+
+/* Pipeline Stages Status */
+.stages-status {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stage-status-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.stage-status-item:hover {
+    background: var(--bg-hover);
+}
+
+.stage-status-item.selectable {
+    border: 1px solid transparent;
+}
+
+.stage-status-item.selectable.selected {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.stage-marker {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+}
+
+.stage-status-item.completed .stage-marker {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+}
+
+.stage-status-item.running .stage-marker {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.stage-status-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.stage-status-item.completed .stage-status-name {
+    color: var(--text);
+}
+
+.stage-status-item.running .stage-status-name {
+    color: var(--accent);
+}
+
+.stage-status-info {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.stage-status-item.completed .stage-status-info {
+    color: var(--success);
+}
+
+/* VRAM Display */
+.vram-display {
+    padding: 12px;
+    background: var(--bg);
+    border-radius: 6px;
+}
+
+.vram-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+}
+
+.vram-row:not(:last-child) {
+    border-bottom: 1px solid var(--border);
+}
+
+.vram-label {
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.vram-value {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.vram-value.ok {
+    color: var(--success);
+}
+
+.vram-value.warning {
+    color: var(--warning);
+}
+
+.vram-value.danger {
+    color: var(--danger);
+}
+
+.vram-note {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid var(--warning);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--warning);
+}
+
+/* Detail Stats */
+.detail-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.detail-stat {
+    text-align: center;
+    padding: 12px;
+    background: var(--bg);
+    border-radius: 6px;
+}
+
+.detail-stat-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+}
+
+.detail-stat-value {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+/* Reprocess Button */
+.btn-reprocess {
+    width: 100%;
+    padding: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-reprocess:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
+.btn-reprocess:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* Processing Card */

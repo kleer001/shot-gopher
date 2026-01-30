@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VFX Pipeline (Dashboard)</title>
+    <title>Shot Gopher - VFX Pipeline</title>
     <link rel="stylesheet" href="/static/css/style-dashboard.css">
 </head>
 <body>
@@ -11,8 +11,8 @@
         <!-- Top Bar -->
         <nav class="topbar">
             <div class="topbar-left">
-                <h1>VFX PIPELINE</h1>
-                <span class="version">DASHBOARD</span>
+                <h1>Shot Gopher</h1>
+                <span class="version">v0.1 alpha</span>
             </div>
             <div class="topbar-right">
                 <div id="system-status" class="sys-status">
@@ -20,10 +20,6 @@
                     <span class="sys-indicator"></span>
                     <span class="status-text sys-label">--</span>
                 </div>
-                <a href="/" class="view-link">Classic</a>
-                <a href="/compact" class="view-link">Compact</a>
-                <a href="/split" class="view-link">Split</a>
-                <a href="/cards" class="view-link">Cards</a>
                 <button type="button" id="shutdown-btn" class="shutdown-link" aria-label="Shutdown platform" title="Shutdown the VFX Pipeline platform">
                     Shutdown
                 </button>
@@ -76,6 +72,26 @@
                                 <div class="stat-value" id="video-fps">--</div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- System Info -->
+                <div class="system-info" id="system-info">
+                    <div class="info-row">
+                        <span class="info-label">OS</span>
+                        <span class="info-value" id="sys-os">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Disk</span>
+                        <span class="info-value" id="sys-disk">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Projects</span>
+                        <span class="info-value" id="sys-projects">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">GPU</span>
+                        <span class="info-value" id="sys-gpu">--</span>
                     </div>
                 </div>
 
@@ -161,6 +177,47 @@
                     <div class="card-body">
                         <div id="projects-list" class="projects-scroll">
                             <div class="loading-text">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Project Detail Panel (shown when project selected) -->
+                <div id="project-detail-panel" class="card detail-card hidden">
+                    <div class="card-header">
+                        <h2>PROJECT: <span id="detail-project-name">--</span></h2>
+                        <div class="detail-actions">
+                            <button type="button" id="open-folder-btn" class="btn-action" title="Open in file manager">FOLDER</button>
+                            <button type="button" id="delete-project-btn" class="btn-action btn-danger" title="Delete project">DELETE</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Pipeline Stages Status -->
+                        <div class="detail-section">
+                            <div class="section-label">PIPELINE STAGES</div>
+                            <div id="detail-stages" class="stages-status">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- VRAM Info -->
+                        <div id="vram-info-section" class="detail-section hidden">
+                            <div class="section-label">GPU MEMORY</div>
+                            <div id="vram-info" class="vram-display">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Video Info -->
+                        <div id="detail-video-section" class="detail-section hidden">
+                            <div class="section-label">VIDEO INFO</div>
+                            <div id="detail-video-info" class="detail-stats">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="detail-section">
+                            <button type="button" id="reprocess-btn" class="btn-reprocess">REPROCESS SELECTED STAGES</button>
                         </div>
                     </div>
                 </div>
