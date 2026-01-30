@@ -60,7 +60,7 @@ def main():
     url = f"http://{args.host}:{args.port}"
     repo_root = Path(__file__).parent.parent
 
-    print("""
+    print(r"""
  ____  _           _      ____             _
 / ___|| |__   ___ | |_   / ___| ___  _ __ | |__   ___ _ __
 \___ \| '_ \ / _ \| __| | |  _ / _ \| '_ \| '_ \ / _ \ '__|
