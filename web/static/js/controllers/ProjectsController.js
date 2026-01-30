@@ -386,7 +386,7 @@ export class ProjectsController {
         } catch (error) {
             console.error('Failed to start processing:', error);
             btn.classList.remove('processing');
-            btn.textContent = 'FAILED - RETRY?';
+            btn.textContent = 'FAILED';
             btn.disabled = false;
 
             setTimeout(() => {

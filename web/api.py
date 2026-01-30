@@ -302,10 +302,12 @@ async def start_processing(
     pipeline_service: PipelineService = Depends(get_pipeline_service),
 ):
     """Start pipeline processing for a project."""
+    print(f"[START] project_id={project_id}, stages={config.stages}")
     try:
         response = pipeline_service.start_job(project_id, config)
         return response.model_dump()
     except ValueError as e:
+        print(f"[START ERROR] {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
