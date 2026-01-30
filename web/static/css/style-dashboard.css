@@ -624,24 +624,36 @@ body {
     color: var(--accent);
 }
 
-.stage-status-info {
+.stage-vram {
     font-size: 11px;
     color: var(--text-dim);
     font-family: 'IBM Plex Mono', monospace;
-    min-width: 120px;
+    width: 65px;
+    flex-shrink: 0;
     text-align: right;
 }
 
-.stage-status-item.completed .stage-status-info {
-    color: var(--success);
-}
-
-.stage-vram {
-    font-size: 10px;
+.stage-file-count {
+    font-size: 11px;
     color: var(--text-dim);
     font-family: 'IBM Plex Mono', monospace;
-    min-width: 55px;
-    text-align: center;
+    width: 55px;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.stage-file-size {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: 'IBM Plex Mono', monospace;
+    width: 60px;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.stage-status-item.completed .stage-file-count,
+.stage-status-item.completed .stage-file-size {
+    color: var(--success);
 }
 
 .stage-vram.vram-warning {

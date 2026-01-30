@@ -39,7 +39,16 @@ function formatFileSize(bytes) {
         size /= 1024;
         unitIndex++;
     }
-    return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+    if (unitIndex === 0) {
+        return `${Math.round(size)} B`;
+    }
+    if (size >= 100) {
+        return `${Math.round(size)} ${units[unitIndex]}`;
+    }
+    if (size >= 10) {
+        return `${size.toFixed(1)} ${units[unitIndex]}`;
+    }
+    return `${size.toFixed(2)} ${units[unitIndex]}`;
 }
 
 export class ProjectsController {
@@ -193,11 +202,12 @@ export class ProjectsController {
             const fileCount = outputData?.total_files || outputData?.count || 0;
             const label = stageLabels[stage] || stage.toUpperCase();
 
-            let filesInfo = '';
+            let fileCountDisplay = '';
+            let fileSizeDisplay = '';
             if (isCompleted && fileCount > 0) {
                 const totalBytes = (outputData?.files || []).reduce((sum, f) => sum + (f.size || 0), 0);
-                const sizeStr = formatFileSize(totalBytes);
-                filesInfo = `${fileCount} Files / ${sizeStr}`;
+                fileCountDisplay = `${fileCount}`;
+                fileSizeDisplay = formatFileSize(totalBytes);
             }
 
             const vramInfo = vramStages[stage];
@@ -226,7 +236,8 @@ export class ProjectsController {
                 <div class="stage-marker"></div>
                 <span class="stage-status-name">${label}</span>
                 <span class="stage-vram ${vramStatusClass}" title="${dom.escapeHTML(vramTitle)}">${vramDisplay}</span>
-                <span class="stage-status-info">${filesInfo}</span>
+                <span class="stage-file-count">${fileCountDisplay}</span>
+                <span class="stage-file-size">${fileSizeDisplay}</span>
             </div>
         `;
         }).join('');
