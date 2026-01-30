@@ -346,21 +346,12 @@ async def get_outputs(
                         "path": str(f),
                     })
             if files:
-                outputs[dir_name] = {
+                output_key = dir_name.split("/")[0]
+                outputs[output_key] = {
                     "count": len(files),
                     "files": files[:10],
                     "total_files": len(files),
                 }
-
-    frames_dir = project_dir / "source" / "frames"
-    if frames_dir.exists() and frames_dir.is_dir():
-        frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
-        if frame_files:
-            outputs["source"] = {
-                "count": len(frame_files),
-                "files": [{"name": f.name, "path": str(f)} for f in sorted(frame_files)[:5]],
-                "total_files": len(frame_files),
-            }
 
     return {
         "project_id": project_id,
