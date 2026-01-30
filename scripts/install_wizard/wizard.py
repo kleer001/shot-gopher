@@ -878,9 +878,9 @@ class InstallationWizard:
                     if system == "Windows":
                         print_info("Look for 'Shot Gopher' on your Desktop and Start Menu")
                     elif system == "Darwin":
-                        print_info("Look for 'Shot Gopher' on your Desktop")
+                        print_info("Look for 'Shot Gopher' on your Desktop and in the Dock")
                     else:
-                        print_info("Look for 'Shot Gopher' in your applications menu")
+                        print_info("Look for 'Shot Gopher' on your Desktop and in apps menu")
             else:
                 print_warning("Could not create shortcut automatically")
                 if result.stderr:
