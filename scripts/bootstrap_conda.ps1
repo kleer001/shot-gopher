@@ -74,7 +74,7 @@ function Install-Git {
         $arch = if ([Environment]::Is64BitOperatingSystem) { "64-bit" } else { "32-bit" }
 
         try {
-            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest" -UseBasicParsing
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest"
             $asset = $release.assets | Where-Object { $_.name -match "^Git-.*-$arch\.exe$" } | Select-Object -First 1
             if ($asset) {
                 $gitUrl = $asset.browser_download_url
@@ -147,7 +147,9 @@ function Install-Git {
         Write-Host "OK Git installed successfully" -ForegroundColor Green
     }
 
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = (@($machinePath, $userPath) | Where-Object { $_ }) -join ";"
 
     $gitPaths = @(
         "C:\Program Files\Git\cmd",
@@ -191,14 +193,7 @@ function Test-CondaInstalled {
 }
 
 function Get-CondaPath {
-    $conda = Test-CondaInstalled
-    if ($conda) {
-        if ($conda -is [System.Management.Automation.CommandInfo]) {
-            return $conda.Source
-        }
-        return $conda
-    }
-    return $null
+    return Test-CondaInstalled
 }
 
 function Install-Miniconda {
@@ -249,7 +244,9 @@ function Install-Miniconda {
     Remove-Item $MINICONDA_INSTALLER -Force -ErrorAction SilentlyContinue
 
     # Refresh PATH
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = (@($machinePath, $userPath) | Where-Object { $_ }) -join ";"
 
     # Also add conda to current session path
     $env:Path = "$installPath;$installPath\Scripts;$installPath\Library\bin;$env:Path"
@@ -443,3 +440,4 @@ try {
 
 Write-Host ""
 Read-Host "Press Enter to close"
+exit $script:exitCode
