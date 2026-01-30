@@ -112,7 +112,7 @@
                             </label>
                             <div class="flow-arrow">→</div>
                             <label class="flow-stage">
-                                <input type="checkbox" name="stage" value="mama">
+                                <input type="checkbox" name="stage" value="mama" disabled>
                                 <div class="stage-box">
                                     <div class="stage-num">3</div>
                                     <div class="stage-name">VideoMaMa</div>
@@ -130,6 +130,10 @@
 
                         <div class="stages-extra">
                             <label class="extra-stage">
+                                <input type="checkbox" name="stage" value="interactive">
+                                <span>Interactive Segmentation</span>
+                            </label>
+                            <label class="extra-stage">
                                 <input type="checkbox" name="stage" value="colmap">
                                 <span>Camera Solve (COLMAP)</span>
                             </label>
@@ -140,6 +144,10 @@
                             <label class="extra-stage">
                                 <input type="checkbox" name="stage" value="gsir" disabled>
                                 <span>Materials (GS-IR)</span>
+                            </label>
+                            <label class="extra-stage">
+                                <input type="checkbox" name="stage" value="camera" disabled>
+                                <span>Camera Export (Alembic)</span>
                             </label>
                         </div>
 

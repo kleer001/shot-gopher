@@ -107,56 +107,45 @@ export class ConfigController {
         this.toggleRotoPrompt();
     }
 
+    setDependentStage(stageValue, enabled) {
+        const checkbox = document.querySelector(`input[value="${stageValue}"]`);
+        if (!checkbox) return;
+
+        if (enabled) {
+            checkbox.disabled = false;
+        } else {
+            checkbox.disabled = true;
+            checkbox.checked = false;
+        }
+    }
+
     handleStageChange(checkbox) {
         const stage = checkbox.value;
 
-        // Handle COLMAP dependency
         if (stage === 'colmap') {
-            const gsirCheckbox = document.querySelector('input[value="gsir"]');
-            const mocapCheckbox = document.querySelector('input[value="mocap"]');
-
-            if (checkbox.checked) {
-                // Enable GSIR and MoCap
-                if (gsirCheckbox) gsirCheckbox.disabled = false;
-                if (mocapCheckbox) mocapCheckbox.disabled = false;
-            } else {
-                // Disable and uncheck GSIR and MoCap
-                if (gsirCheckbox) {
-                    gsirCheckbox.disabled = true;
-                    gsirCheckbox.checked = false;
-                }
-                if (mocapCheckbox) {
-                    mocapCheckbox.disabled = true;
-                    mocapCheckbox.checked = false;
-                }
-            }
+            const enabled = checkbox.checked;
+            this.setDependentStage('gsir', enabled);
+            this.setDependentStage('mocap', enabled);
+            this.setDependentStage('camera', enabled);
         }
 
-        // Clear active preset since user manually changed
+        if (stage === 'roto') {
+            this.setDependentStage('mama', checkbox.checked);
+        }
+
         this.elements.presetButtons.forEach(btn => {
             dom.removeClass(btn, 'active');
         });
     }
 
     updateStageDependencies() {
-        // Check if COLMAP is selected
-        const colmapCheckbox = document.querySelector('input[value="colmap"]');
-        const gsirCheckbox = document.querySelector('input[value="gsir"]');
-        const mocapCheckbox = document.querySelector('input[value="mocap"]');
+        const colmapChecked = document.querySelector('input[value="colmap"]')?.checked;
+        this.setDependentStage('gsir', colmapChecked);
+        this.setDependentStage('mocap', colmapChecked);
+        this.setDependentStage('camera', colmapChecked);
 
-        if (colmapCheckbox?.checked) {
-            if (gsirCheckbox) gsirCheckbox.disabled = false;
-            if (mocapCheckbox) mocapCheckbox.disabled = false;
-        } else {
-            if (gsirCheckbox) {
-                gsirCheckbox.disabled = true;
-                gsirCheckbox.checked = false;
-            }
-            if (mocapCheckbox) {
-                mocapCheckbox.disabled = true;
-                mocapCheckbox.checked = false;
-            }
-        }
+        const rotoChecked = document.querySelector('input[value="roto"]')?.checked;
+        this.setDependentStage('mama', rotoChecked);
     }
 
     toggleRotoPrompt() {
@@ -257,19 +246,16 @@ export class ConfigController {
     }
 
     reset() {
-        // Uncheck all stages
         this.elements.stageCheckboxes.forEach(checkbox => {
             checkbox.checked = false;
             checkbox.disabled = false;
         });
 
-        // Disable GSIR and MoCap by default
-        const gsirCheckbox = document.querySelector('input[value="gsir"]');
-        const mocapCheckbox = document.querySelector('input[value="mocap"]');
-        if (gsirCheckbox) gsirCheckbox.disabled = true;
-        if (mocapCheckbox) mocapCheckbox.disabled = true;
+        this.setDependentStage('gsir', false);
+        this.setDependentStage('mocap', false);
+        this.setDependentStage('camera', false);
+        this.setDependentStage('mama', false);
 
-        // Reset form
         if (this.elements.rotoPrompt) {
             this.elements.rotoPrompt.value = 'person';
         }
@@ -277,10 +263,7 @@ export class ConfigController {
             this.elements.skipExisting.checked = false;
         }
 
-        // Hide form
         dom.hide(this.elements.configForm);
-
-        // Apply default preset
         this.applyDefaultPreset();
     }
 }

@@ -10,6 +10,17 @@
       "dependencies": [],
       "defaultEnabled": false
     },
+    "interactive": {
+      "name": "Interactive",
+      "displayName": "Interactive Segmentation",
+      "description": "Manual point-based segmentation workflow",
+      "outputDir": "roto",
+      "estimatedTimePerFrame": 1.0,
+      "required": false,
+      "dependencies": [],
+      "defaultEnabled": false,
+      "note": "Use for manual selection instead of automatic roto"
+    },
     "depth": {
       "name": "Depth Maps",
       "displayName": "Generate Depth Maps",
@@ -63,7 +74,7 @@
       "required": false,
       "dependencies": [],
       "defaultEnabled": false,
-      "enables": ["gsir", "mocap"]
+      "enables": ["gsir", "mocap", "camera"]
     },
     "gsir": {
       "name": "Materials",
@@ -84,6 +95,16 @@
       "required": false,
       "dependencies": ["colmap"],
       "defaultEnabled": false
+    },
+    "camera": {
+      "name": "Camera Export",
+      "displayName": "Export Camera (Alembic)",
+      "description": "Export tracked camera to Alembic format",
+      "outputDir": "camera",
+      "estimatedTimePerFrame": 0.01,
+      "required": false,
+      "dependencies": ["colmap"],
+      "defaultEnabled": false
     }
   },
   "presets": {
@@ -100,7 +121,7 @@
     "all": {
       "name": "Everything",
       "description": "All available stages including 3D reconstruction",
-      "stages": ["depth", "roto", "mama", "cleanplate", "colmap", "gsir", "mocap"]
+      "stages": ["depth", "roto", "mama", "cleanplate", "colmap", "gsir", "mocap", "camera"]
     }
   },
   "supportedVideoFormats": [

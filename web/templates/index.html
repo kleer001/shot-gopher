@@ -107,9 +107,13 @@
                                 <input type="text" id="roto-prompt" name="roto-prompt" value="person" placeholder="person">
                             </div>
                             <label class="checkbox-label">
-                                <input type="checkbox" name="stage" value="mama">
+                                <input type="checkbox" name="stage" value="interactive">
+                                <span class="checkbox-text">Interactive Segmentation</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="stage" value="mama" disabled>
                                 <span class="checkbox-text">Refine Person Mattes (VideoMaMa)</span>
-                                <span class="checkbox-note">Requires Roto with person masks</span>
+                                <span class="checkbox-note">Requires Roto</span>
                             </label>
                             <label class="checkbox-label">
                                 <input type="checkbox" name="stage" value="cleanplate" checked>
@@ -127,6 +131,11 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" name="stage" value="mocap" disabled>
                                 <span class="checkbox-text">Motion Capture</span>
+                                <span class="checkbox-note">Requires COLMAP</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="stage" value="camera" disabled>
+                                <span class="checkbox-text">Camera Export (Alembic)</span>
                                 <span class="checkbox-note">Requires COLMAP</span>
                             </label>
                         </div>

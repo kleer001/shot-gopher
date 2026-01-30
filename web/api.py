@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
-from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -19,6 +18,7 @@ from web.services.project_service import ProjectService
 from web.services.pipeline_service import PipelineService
 from web.repositories.project_repository import ProjectRepository
 from web.repositories.job_repository import JobRepository
+from web.models.domain import JobStatus
 from web.models.dto import (
     ProjectCreateRequest,
     JobStartRequest,
@@ -32,6 +32,8 @@ _project_repo = None
 _job_repo = None
 _project_service = None
 _pipeline_service = None
+
+active_jobs: Dict[str, dict] = {}
 
 
 def get_project_repo() -> ProjectRepository:

@@ -45,7 +45,12 @@ Parameters:
         </div>
 
         <label class="{{ stage_checkbox_class }}">
-            <input type="checkbox" name="stage" value="mama">
+            <input type="checkbox" name="stage" value="interactive">
+            <span class="checkbox-text">Interactive Segmentation</span>
+            <span class="checkbox-note">Manual point-based selection workflow</span>
+        </label>
+        <label class="{{ stage_checkbox_class }}">
+            <input type="checkbox" name="stage" value="mama" disabled>
             <span class="checkbox-text">Refine Person Mattes (VideoMaMa)</span>
             <span class="checkbox-note">Requires Roto with person masks</span>
         </label>
@@ -67,6 +72,11 @@ Parameters:
         <label class="{{ stage_checkbox_class }}">
             <input type="checkbox" name="stage" value="mocap" disabled>
             <span class="checkbox-text">Extract Motion (MoCap)</span>
+            <span class="checkbox-note">Requires COLMAP camera tracking</span>
+        </label>
+        <label class="{{ stage_checkbox_class }}">
+            <input type="checkbox" name="stage" value="camera" disabled>
+            <span class="checkbox-text">Export Camera (Alembic)</span>
             <span class="checkbox-note">Requires COLMAP camera tracking</span>
         </label>
     </div>

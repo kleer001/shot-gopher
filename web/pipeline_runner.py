@@ -151,7 +151,14 @@ def run_pipeline_thread(
 ):
     """Run pipeline in a background thread."""
     from .api import active_jobs
-    from .websocket import update_progress, progress_updates
+    from .websocket import update_progress
+
+    active_jobs[project_id] = {
+        "status": "running",
+        "current_stage": stages[0] if stages else None,
+        "progress": 0.0,
+        "error": None,
+    }
 
     # Build command
     script_path = get_run_pipeline_path()
@@ -187,7 +194,7 @@ def run_pipeline_thread(
     ]
 
     if roto_prompt and "roto" in stages:
-        cmd.extend(["--roto-prompt", roto_prompt])
+        cmd.extend(["--prompt", roto_prompt])
 
     if skip_existing:
         cmd.append("--skip-existing")
@@ -309,22 +316,27 @@ def stop_pipeline(project_id: str) -> bool:
 
     Returns True if process was stopped, False if not running.
     """
+    from .api import active_jobs
+
     if project_id not in active_processes:
         return False
 
     process = active_processes[project_id]
 
     try:
-        # Try graceful termination first
         process.terminate()
 
-        # Wait a bit
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            # Force kill
             process.kill()
             process.wait()
+
+        if project_id in active_jobs:
+            active_jobs[project_id]["status"] = "cancelled"
+
+        if project_id in active_processes:
+            del active_processes[project_id]
 
         return True
     except Exception as e:
