@@ -64,6 +64,12 @@ REQUIRED_MODELS=(
     "/models/wham"
 )
 
+# Optional VideoMaMa models (only warn if mama stage is requested)
+VIDEOMAMA_MODELS=(
+    "/models/videomama/stable-video-diffusion-img2vid-xt"
+    "/models/videomama/checkpoints/VideoMaMa"
+)
+
 MISSING_MODELS=0
 for model in "${REQUIRED_MODELS[@]}"; do
     if [ ! -d "$model" ]; then
@@ -77,6 +83,32 @@ done
 if [ $MISSING_MODELS -eq 1 ]; then
     echo -e "${YELLOW}Some models are missing. Pipeline may fail on certain stages.${NC}"
     echo "Run model download script on host: ./scripts/download_models.sh"
+fi
+
+# Check for VideoMaMa models if mama stage is requested
+MAMA_REQUESTED=false
+for arg in "$@"; do
+    if [[ "$arg" == *"mama"* ]] || [[ "$arg" == "all" ]]; then
+        MAMA_REQUESTED=true
+        break
+    fi
+done
+
+if [ "$MAMA_REQUESTED" = "true" ]; then
+    MISSING_MAMA_MODELS=0
+    for model in "${VIDEOMAMA_MODELS[@]}"; do
+        if [ ! -d "$model" ]; then
+            echo -e "${YELLOW}  WARNING: VideoMaMa model not found: $model${NC}"
+            MISSING_MAMA_MODELS=1
+        else
+            echo -e "${GREEN}  ✓ Found: $model${NC}"
+        fi
+    done
+    if [ $MISSING_MAMA_MODELS -eq 1 ]; then
+        echo -e "${YELLOW}VideoMaMa models missing. Download on host:${NC}"
+        echo "  python scripts/video_mama_install.py"
+        echo "Then copy to /models/videomama/ or mount the directory"
+    fi
 fi
 
 # Set permissions on VFX pipeline directory for non-root user
@@ -121,6 +153,13 @@ if [ -d "$SMPLX_SRC" ]; then
     else
         echo -e "${GREEN}  ✓ SMPL-X models already linked${NC}"
     fi
+fi
+
+# VideoMaMa models for mama stage
+# Models are mounted at /models/videomama and accessed directly via environment variable
+VIDEOMAMA_SRC="/models/videomama"
+if [ -d "$VIDEOMAMA_SRC" ]; then
+    echo -e "${GREEN}  ✓ VideoMaMa models available at ${VIDEOMAMA_SRC}${NC}"
 fi
 
 # Determine if ComfyUI is needed based on stages

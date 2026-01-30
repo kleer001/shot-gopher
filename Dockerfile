@@ -236,8 +236,51 @@ RUN cd ComfyUI-SAM3 && \
 
 WORKDIR /app
 
-# Stage 6: Pipeline scripts
-FROM comfyui AS pipeline
+# Stage 6: VideoMaMa (diffusion-based video matting)
+FROM comfyui AS videomama
+
+# Install Miniconda for VideoMaMa's isolated environment
+ENV CONDA_DIR=/opt/conda
+RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
+    bash /tmp/miniconda.sh -b -p ${CONDA_DIR} && \
+    rm /tmp/miniconda.sh && \
+    ${CONDA_DIR}/bin/conda init bash && \
+    ${CONDA_DIR}/bin/conda clean -afy
+
+ENV PATH="${CONDA_DIR}/bin:$PATH"
+
+# Create VideoMaMa conda environment with Python 3.10
+RUN conda create -n videomama python=3.10 -y && \
+    conda clean -afy
+
+# Install PyTorch with CUDA in videomama environment
+RUN conda run -n videomama pip install --no-cache-dir \
+    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Install VideoMaMa dependencies in conda environment
+RUN conda run -n videomama pip install --no-cache-dir \
+    diffusers \
+    transformers \
+    accelerate \
+    huggingface_hub \
+    opencv-python \
+    einops \
+    omegaconf \
+    safetensors
+
+# Clone VideoMaMa repository
+WORKDIR /app/.vfx_pipeline/tools
+RUN git clone https://github.com/cvlab-kaist/VideoMaMa.git
+
+# Install VideoMaMa requirements if they exist
+RUN if [ -f "VideoMaMa/requirements.txt" ]; then \
+        conda run -n videomama pip install --no-cache-dir -r VideoMaMa/requirements.txt; \
+    fi
+
+WORKDIR /app
+
+# Stage 7: Pipeline scripts
+FROM videomama AS pipeline
 
 # Build-time UID/GID for pre-setting ownership (most Linux users have UID 1000)
 ARG VFX_UID=1000
@@ -271,7 +314,11 @@ ENV CONTAINER=true \
     GSIR_PATH=/app/.vfx_pipeline/GS-IR \
     QT_QPA_PLATFORM=offscreen \
     HOST_UID=0 \
-    HOST_GID=0
+    HOST_GID=0 \
+    VIDEOMAMA_TOOLS_DIR=/app/.vfx_pipeline/tools/VideoMaMa \
+    VIDEOMAMA_MODELS_DIR=/models/videomama \
+    CONDA_DIR=/opt/conda \
+    PATH="/opt/conda/bin:$PATH"
 
 # Expose ports
 EXPOSE 8188

@@ -29,14 +29,36 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from env_config import INSTALL_DIR
+from env_config import INSTALL_DIR, is_in_container
 from pipeline_utils import get_gpu_vram_gb
 
 VIDEOMAMA_ENV_NAME = "videomama"
-VIDEOMAMA_TOOLS_DIR = INSTALL_DIR / "tools" / "VideoMaMa"
-VIDEOMAMA_MODELS_DIR = INSTALL_DIR / "models" / "VideoMaMa"
-SVD_MODEL_DIR = VIDEOMAMA_MODELS_DIR / "stable-video-diffusion-img2vid-xt"
-VIDEOMAMA_CHECKPOINT_DIR = VIDEOMAMA_MODELS_DIR / "checkpoints" / "VideoMaMa"
+
+def _get_videomama_paths() -> tuple[Path, Path, Path, Path]:
+    """Get VideoMaMa paths based on environment (container vs local).
+
+    Returns:
+        Tuple of (tools_dir, models_dir, svd_model_dir, checkpoint_dir)
+    """
+    if is_in_container():
+        tools_dir = Path(os.environ.get(
+            "VIDEOMAMA_TOOLS_DIR",
+            "/app/.vfx_pipeline/tools/VideoMaMa"
+        ))
+        models_dir = Path(os.environ.get(
+            "VIDEOMAMA_MODELS_DIR",
+            "/models/videomama"
+        ))
+    else:
+        tools_dir = INSTALL_DIR / "tools" / "VideoMaMa"
+        models_dir = INSTALL_DIR / "models" / "VideoMaMa"
+
+    svd_model_dir = models_dir / "stable-video-diffusion-img2vid-xt"
+    checkpoint_dir = models_dir / "checkpoints" / "VideoMaMa"
+
+    return tools_dir, models_dir, svd_model_dir, checkpoint_dir
+
+VIDEOMAMA_TOOLS_DIR, VIDEOMAMA_MODELS_DIR, SVD_MODEL_DIR, VIDEOMAMA_CHECKPOINT_DIR = _get_videomama_paths()
 
 
 def print_info(msg: str) -> None:
@@ -57,6 +79,12 @@ def print_warning(msg: str) -> None:
 
 def find_conda() -> str | None:
     """Find conda executable."""
+    if is_in_container():
+        conda_dir = os.environ.get("CONDA_DIR", "/opt/conda")
+        conda_path = Path(conda_dir) / "bin" / "conda"
+        if conda_path.exists():
+            return str(conda_path)
+
     for cmd in ["conda", "mamba"]:
         try:
             result = subprocess.run(
@@ -79,15 +107,35 @@ def find_conda() -> str | None:
 def check_installation() -> bool:
     """Verify VideoMaMa is properly installed."""
     if not VIDEOMAMA_TOOLS_DIR.exists():
-        print_error("VideoMaMa not installed. Run: python scripts/video_mama_install.py")
+        if is_in_container():
+            print_error(f"VideoMaMa tools not found at {VIDEOMAMA_TOOLS_DIR}")
+            print_error("This should be installed in the Docker image.")
+        else:
+            print_error("VideoMaMa not installed. Run: python scripts/video_mama_install.py")
         return False
 
     if not SVD_MODEL_DIR.exists():
-        print_error("SVD model not downloaded. Run: python scripts/video_mama_install.py")
+        if is_in_container():
+            print_error(f"SVD model not found at {SVD_MODEL_DIR}")
+            print_error("Mount VideoMaMa models: -v /path/to/videomama:/models/videomama")
+            print_error("Models required:")
+            print_error("  - videomama/stable-video-diffusion-img2vid-xt/")
+            print_error("  - videomama/checkpoints/VideoMaMa/")
+        else:
+            print_error("SVD model not downloaded. Run: python scripts/video_mama_install.py")
         return False
 
     if not VIDEOMAMA_CHECKPOINT_DIR.exists():
-        print_error("VideoMaMa checkpoint not downloaded. Run: python scripts/video_mama_install.py")
+        if is_in_container():
+            print_error(f"VideoMaMa checkpoint not found at {VIDEOMAMA_CHECKPOINT_DIR}")
+            print_error("Mount VideoMaMa models: -v /path/to/videomama:/models/videomama")
+        else:
+            print_error("VideoMaMa checkpoint not downloaded. Run: python scripts/video_mama_install.py")
+        return False
+
+    conda_exe = find_conda()
+    if not conda_exe:
+        print_error("Conda not found")
         return False
 
     return True

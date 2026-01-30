@@ -25,7 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from env_config import INSTALL_DIR
+from env_config import INSTALL_DIR, is_in_container
 
 VIDEOMAMA_ENV_NAME = "videomama"
 VIDEOMAMA_PYTHON_VERSION = "3.10"
@@ -397,6 +397,22 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Install VideoMaMa for video matting")
     parser.add_argument("--check", action="store_true", help="Check installation status only")
     args = parser.parse_args()
+
+    if is_in_container():
+        print_header("VideoMaMa Installation (Container Mode)")
+        print_info("VideoMaMa tools are pre-installed in the Docker image.")
+        print_info("Models should be mounted at /models/videomama/")
+        print()
+        print_info("Required model directories:")
+        print("  /models/videomama/stable-video-diffusion-img2vid-xt/")
+        print("  /models/videomama/checkpoints/VideoMaMa/")
+        print()
+        print_info("To download models on the host, run this script outside the container:")
+        print("  python scripts/video_mama_install.py")
+        print()
+        print_info("Then mount the models directory:")
+        print("  -v /path/to/.vfx_pipeline/models/VideoMaMa:/models/videomama")
+        return 0
 
     if args.check:
         status = check_installation()
