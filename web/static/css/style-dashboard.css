@@ -627,6 +627,9 @@ body {
 .stage-status-info {
     font-size: 11px;
     color: var(--text-dim);
+    font-family: 'IBM Plex Mono', monospace;
+    min-width: 120px;
+    text-align: right;
 }
 
 .stage-status-item.completed .stage-status-info {
@@ -637,8 +640,8 @@ body {
     font-size: 10px;
     color: var(--text-dim);
     font-family: 'IBM Plex Mono', monospace;
-    min-width: 45px;
-    text-align: right;
+    min-width: 55px;
+    text-align: center;
 }
 
 .stage-vram.vram-warning {

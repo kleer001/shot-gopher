@@ -190,9 +190,15 @@ export class ProjectsController {
             if (isCompleted) completedCount++;
 
             const stageClass = isCompleted ? 'completed' : '';
-            const fileCount = outputData?.count || 0;
-            const statusText = isCompleted ? `${fileCount} files` : '';
+            const fileCount = outputData?.total_files || outputData?.count || 0;
             const label = stageLabels[stage] || stage.toUpperCase();
+
+            let filesInfo = '';
+            if (isCompleted && fileCount > 0) {
+                const totalBytes = (outputData?.files || []).reduce((sum, f) => sum + (f.size || 0), 0);
+                const sizeStr = formatFileSize(totalBytes);
+                filesInfo = `${fileCount} Files / ${sizeStr}`;
+            }
 
             const vramInfo = vramStages[stage];
             const vramStatus = vramInfo?.status || 'ok';
@@ -220,7 +226,7 @@ export class ProjectsController {
                 <div class="stage-marker"></div>
                 <span class="stage-status-name">${label}</span>
                 <span class="stage-vram ${vramStatusClass}" title="${dom.escapeHTML(vramTitle)}">${vramDisplay}</span>
-                <span class="stage-status-info">${statusText}</span>
+                <span class="stage-status-info">${filesInfo}</span>
             </div>
         `;
         }).join('');
