@@ -30,12 +30,6 @@ REQUIRED_MODELS = {
         "optional": False,
         "description": "WHAM - for human motion capture",
     },
-    "matanyone": {
-        "path": MODEL_DIR / "matanyone",
-        "files": ["matanyone.pth"],
-        "optional": True,
-        "description": "MatAnyone - for matte refinement (optional)",
-    },
     "smplx": {
         "path": MODEL_DIR / "smplx",
         "files": ["SMPLX_NEUTRAL.pkl", "SMPLX_MALE.pkl", "SMPLX_FEMALE.pkl"],

@@ -50,7 +50,6 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 | Component | License | Commercial Use |
 |-----------|---------|----------------|
 | **ProPainter** | NTU S-Lab License 1.0 | ❌ Non-commercial only |
-| **MatAnyone** | NTU S-Lab License 1.0 | ❌ Non-commercial only |
 | **ECON** | MPI Non-Commercial License | ❌ Non-commercial only |
 | **Depth Anything V3** (Giant/Nested models) | CC BY-NC 4.0 | ❌ Non-commercial only |
 | **3D Gaussian Splatting** (INRIA) | INRIA Non-Commercial | ❌ Non-commercial only |
@@ -154,17 +153,6 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 - Any activity for commercial gain
 
 **Commercial licensing:** Contact Dr. Shangchen Zhou (shangchenzhou@gmail.com)
-
----
-
-### MatAnyone (Video Matting)
-
-**License:** [NTU S-Lab License 1.0](https://github.com/pq-yang/MatAnyone)
-**Source:** [pq-yang/MatAnyone](https://github.com/pq-yang/MatAnyone)
-
-**Same restrictions as ProPainter** - non-commercial use only.
-
-**Note:** Built upon Cutie and ProPainter, inheriting their license restrictions.
 
 ---
 
@@ -306,7 +294,7 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 To use this pipeline commercially with all features, you would need:
 
 1. **Contact for commercial licenses:**
-   - NTU S-Lab (ProPainter, MatAnyone): shangchenzhou@gmail.com
+   - NTU S-Lab (ProPainter): shangchenzhou@gmail.com
    - Max Planck Institute (ECON, SMPL-X): ps-licensing@tue.mpg.de
    - Meshcapade (SMPL-X commercial): sales@meshcapade.com
    - INRIA (3D Gaussian Splatting): stip-sophia.transfert@inria.fr
@@ -327,7 +315,7 @@ Use only permissively-licensed components:
 | Depth estimation | Depth Anything V3 Large (Apache-2.0) ✅ |
 | Segmentation | SAM 2/3 (Apache-2.0) ✅ |
 | Clean plates | ❌ No permissive alternative (ProPainter restricted) |
-| Video matting | ❌ No permissive alternative (MatAnyone restricted) |
+| Video matting | VideoMaMa (MIT license) ✅ |
 | Camera tracking | COLMAP (BSD, with care) ✅ |
 | Motion capture | WHAM (MIT) + SMPL-X (requires license) ⚠️ |
 | Material decomposition | GS-IR (MIT, but base tech restricted) ⚠️ |
@@ -370,11 +358,11 @@ All components are freely available for:
 
 ## Recommendations
 
-1. **For production VFX studios:** Contact NTU S-Lab and MPI for commercial licenses before deploying ProPainter, MatAnyone, and ECON in production pipelines.
+1. **For production VFX studios:** Contact NTU S-Lab and MPI for commercial licenses before deploying ProPainter and ECON in production pipelines.
 
 2. **For research teams:** All components are freely available; ensure proper citation in publications.
 
-3. **For indie developers:** Use the permissive stack (SAM, Depth Anything Large, COLMAP, WHAM) for commercial projects; avoid ProPainter/MatAnyone/ECON without licensing.
+3. **For indie developers:** Use the permissive stack (SAM, Depth Anything Large, COLMAP, WHAM, VideoMaMa) for commercial projects; avoid ProPainter/ECON without licensing.
 
 4. **For SaaS deployment:** ComfyUI's GPL-3.0 and component licenses may have specific implications; consult legal counsel.
 
@@ -386,7 +374,6 @@ All components are freely available for:
 - [SAM 2 License](https://github.com/facebookresearch/sam2/blob/main/LICENSE)
 - [Depth Anything V3](https://github.com/ByteDance-Seed/Depth-Anything-3)
 - [ProPainter License](https://github.com/sczhou/ProPainter/blob/main/LICENSE)
-- [MatAnyone](https://github.com/pq-yang/MatAnyone)
 - [ECON License](https://github.com/YuliangXiu/ECON/blob/master/LICENSE)
 - [SMPL-X License](https://smpl-x.is.tue.mpg.de/modellicense.html)
 - [WHAM](https://github.com/yohanshin/WHAM)

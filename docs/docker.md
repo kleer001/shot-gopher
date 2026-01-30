@@ -33,7 +33,6 @@ This downloads:
 - SAM3 (Segment Anything Model 3)
 - Video Depth Anything
 - WHAM (4D Human Motion Capture)
-- MatAnyone (Matte Refinement)
 
 **Optional:** SMPL-X models (required for mocap stage only):
 - Can be downloaded automatically with the install wizard
@@ -357,12 +356,11 @@ Projects are compatible - you can process with Docker and view with local tools.
 
 ### ComfyUI
 - Main ComfyUI installation
-- 5 custom nodes:
+- 4 custom nodes:
   - VideoHelperSuite
   - Video-Depth-Anything
   - SAM3
   - ProPainter
-  - MatAnyone
 
 ### Your Code
 - All `scripts/` Python modules

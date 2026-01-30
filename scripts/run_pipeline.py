@@ -100,7 +100,7 @@ def run_pipeline(config: PipelineConfig) -> bool:
     Returns:
         True if all stages successful
     """
-    comfyui_stages = {"depth", "roto", "matanyone", "cleanplate"}
+    comfyui_stages = {"depth", "roto", "cleanplate"}
     needs_comfyui = bool(comfyui_stages & set(config.stages))
 
     comfyui_was_started = False

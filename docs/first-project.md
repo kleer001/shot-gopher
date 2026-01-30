@@ -61,7 +61,7 @@ bash scripts/run_docker.sh \
 bash scripts/run_docker.sh \
   ~/Videos/shot001.mp4 \
   --name Shot001 \
-  --stages ingest,depth,roto,matanyone,cleanplate,colmap,camera
+  --stages ingest,depth,roto,mama,cleanplate,colmap,camera
 ```
 
 **Camera tracking only** (for existing frame sequences):
@@ -189,7 +189,7 @@ python scripts/run_pipeline.py video.mp4 \
 | `ingest` | Extract frames from video | PNG sequence in `source/frames/` |
 | `depth` | Monocular depth estimation | Depth maps in `depth/` |
 | `roto` | Text-prompted segmentation | Binary masks in `roto/` |
-| `matanyone` | Alpha matte refinement (humans) | Alpha mattes in `matte/` |
+| `mama` | Alpha matte refinement (VideoMaMa) | Alpha mattes in `matte/` |
 | `cleanplate` | Video inpainting | Clean backgrounds in `cleanplate/` |
 | `colmap` | Structure-from-Motion camera solve | Point cloud, camera poses in `colmap/` |
 | `camera` | Export camera to multiple formats | Alembic, JSON, meshes in `camera/` |

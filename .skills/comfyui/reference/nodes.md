@@ -226,32 +226,6 @@ Video inpainting with temporal consistency.
 
 ---
 
-## MatAnyone
-
-### MatAnyone
-Refine segmentation masks into alpha mattes.
-
-| Input | Type | Description |
-|-------|------|-------------|
-| src_video | IMAGE | Source frames |
-| foreground_mask | IMAGE | Initial mask (first frame only) |
-| foreground_MASK | MASK | Alternative mask input |
-| solid_color | IMAGE | Optional background |
-
-| Widget | Default | Description |
-|--------|---------|-------------|
-| start_frame | 0 | Begin processing |
-| propagate_frames | 10 | Temporal window |
-
-| Output | Type |
-|--------|------|
-| matte | IMAGE | Alpha matte sequence |
-| green_screen | IMAGE | Foreground on green |
-
-**Note:** Only needs first frame mask; propagates automatically.
-
----
-
 ## Built-in Nodes
 
 ### SaveImage

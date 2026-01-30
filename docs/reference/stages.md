@@ -14,7 +14,7 @@ Detailed documentation for each processing stage.
 | [interactive](#interactive) | Interactive segmentation | 4 GB | Browser-based point/box selection |
 | [depth](#depth) | Depth maps | 7 GB | Frames → Depth + camera |
 | [roto](#roto) | Segmentation | 4 GB | Frames → Masks |
-| [matanyone](#matanyone) | Matte refinement | 9 GB | Person masks → Alpha mattes |
+| [mama](#mama) | Matte refinement | 12 GB | Roto masks → Alpha mattes |
 | [cleanplate](#cleanplate) | Object removal | 6 GB | Frames + masks → Clean plates |
 | [colmap](#colmap) | Camera tracking | 2-4 GB | Frames → 3D reconstruction |
 | [mocap](#mocap) | Motion capture | 12 GB | Frames + camera → Pose + mesh |
@@ -132,7 +132,7 @@ Creates segmentation masks using SAM3 (Segment Anything Model 3).
 - **Phantom detection:** Background objects incorrectly identified as people
 - **Inconsistent instance count:** Different number of people detected across frames
 
-These issues compound in downstream stages (matanyone, cleanplate) and are difficult to fix in post.
+These issues compound in downstream stages (mama, cleanplate) and are difficult to fix in post.
 
 ### Basic Usage
 
@@ -179,34 +179,39 @@ Use `--separate-instances` to explicitly enable this behavior (enabled by defaul
 
 ---
 
-## matanyone
+## mama
 
-Refines person masks into production-quality alpha mattes.
+Refines roto masks into production-quality alpha mattes using VideoMaMa diffusion-based matting.
 
 | | |
 |---|---|
-| **VRAM** | ~9 GB |
-| **Input** | `roto/person_00/*.png`, `roto/person_01/*.png`, etc. |
-| **Output** | `matte/person_00/*.png`, `matte/person_01/*.png`, etc. |
-| **Workflow** | `04_matanyone.json` |
+| **VRAM** | ~12 GB (24 GB recommended) |
+| **Input** | `roto/<prompt>_00/*.png`, `roto/<prompt>_01/*.png`, etc. (numbered instance directories) |
+| **Output** | `matte/<prompt>_00/*.png`, `matte/<prompt>_01/*.png`, etc. |
+| **Workflow** | None (VideoMaMa conda environment) |
 
 **Requirements:**
-- ComfyUI server running
-- ComfyUI-MatAnyone custom node
-- MatAnyone checkpoint (~450 MB)
+- VideoMaMa installed via `python scripts/video_mama_install.py` (~12 GB disk space)
+- Separate conda environment (created automatically)
 
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s roto,matanyone
+python scripts/run_pipeline.py footage.mp4 -s roto,mama
 ```
 
 **What it does:**
-- Refines rough SAM3 masks into clean edges (hair, clothing detail)
-- Applies temporal consistency across frames
+- Refines coarse SAM3 masks into soft alpha mattes with fine edge detail
+- Uses Stable Video Diffusion for temporal consistency
+- Processes videos in chunks (auto-sized based on VRAM)
 - Combines multiple mattes into `roto/combined/` for cleanplate
 
-**Limitations:**
-- **People only** — trained on humans, won't improve car/object masks
-- Skipped automatically if no person masks exist
+**Processing:**
+- Auto-detects GPU VRAM to set optimal chunk size (14 frames for 24GB)
+- Clears VRAM between chunks to prevent OOM errors
+- Auto-reduces chunk size on OOM and retries
+
+**Notes:**
+- Processes numbered roto directories only (e.g., `person_00/`, `bag_01/`)
+- Skips unnumbered directories (`person/`, `combined/`, `mask/`)
 
 ---
 
@@ -231,7 +236,7 @@ python scripts/run_pipeline.py footage.mp4 -s roto,cleanplate
 
 **Mask handling:**
 1. Collects all masks from `roto/` subdirectories
-2. Substitutes MatAnyone mattes for person masks (if available)
+2. Uses VideoMaMa refined mattes if available (from `matte/` directory)
 3. Combines into single mask for inpainting
 
 ---

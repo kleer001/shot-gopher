@@ -20,7 +20,7 @@ This pipeline automates first-pass VFX prep work. Ingest a movie file, get produ
 - **Frame extraction** - Convert video files to PNG frame sequences
 - **Depth estimation** - Monocular depth maps with temporal consistency (Video Depth Anything)
 - **Segmentation/Rotoscoping** - Text-prompted video segmentation for dynamic object masking (SAM3)
-- **Matte refinement** - Alpha matte generation for human subjects (MatAnyone)
+- **Matte refinement** - Alpha matte generation for human subjects (VideoMaMa)
 - **Clean plate generation** - Automated inpainting to remove objects from footage (ProPainter)
 - **Camera tracking** - Structure-from-Motion camera solves with bundle adjustment (COLMAP)
 - **3D reconstruction** - Dense point clouds and mesh generation from multi-view footage
@@ -44,7 +44,7 @@ This pipeline automates first-pass VFX prep work. Ingest a movie file, get produ
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) - Node-based workflow engine for ML inference
 - [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything) - Temporally consistent depth estimation
 - [Segment Anything Model 2/3](https://github.com/facebookresearch/segment-anything-2) - Text-prompted video segmentation
-- [MatAnyone](https://github.com/Shine-Light-Tech/MatAnyone) - Video matting for human alpha mattes
+- [VideoMaMa](https://github.com/hywang66/VideoMaMa) - Video matting for human alpha mattes
 - [ProPainter](https://github.com/sczhou/ProPainter) - Video inpainting for clean plates
 - [COLMAP](https://colmap.github.io/) - Structure-from-Motion and Multi-View Stereo
 - [FFmpeg](https://ffmpeg.org/) - Video/image processing
@@ -114,7 +114,7 @@ curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/b
 
 **Prerequisites:** macOS 11+, Apple Silicon recommended (Intel Macs slower)
 
-**Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,matanyone,cleanplate,colmap,camera`
+**Run:** `python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,camera`
 
 ---
 
@@ -137,7 +137,7 @@ shot-gopher.bat              # Windows
 bash scripts/run_docker.sh --name MyProject --stages all video.mp4
 
 # Conda (all stages)
-python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,matanyone,cleanplate,colmap,mocap,gsir,camera
+python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,mocap,gsir,camera
 
 # Conda (8GB VRAM - skip high-memory stages)
 python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,cleanplate,colmap,camera
@@ -232,12 +232,12 @@ Output follows VFX production conventions:
 - Video Depth Anything: ~7 GB (Small model)
 - SAM3 (segmentation): ~4 GB
 - ProPainter (clean plates): ~6 GB
-- MatAnyone (matte refinement): 9+ GB
+- VideoMaMa (matte refinement): 12+ GB
 - COLMAP: CPU-based (minimal GPU usage)
 - GS-IR (material decomposition): 12+ GB
 - WHAM/ECON (motion capture): 12+ GB
 
-**Minimum Recommendation: 9 GB VRAM** (covers core pipeline including MatAnyone)
+**Minimum Recommendation: 12 GB VRAM** (covers core pipeline including VideoMaMa)
 **Comfortable Recommendation: 12 GB VRAM** (supports all features including motion capture and material decomposition)
 **Optimal: 24 GB VRAM** (allows higher batch sizes and parallel processing)
 

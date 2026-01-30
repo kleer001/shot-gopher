@@ -296,10 +296,6 @@ class ComfyUICustomNodesInstaller(ComponentInstaller):
             "name": "ComfyUI_ProPainter_Nodes",
             "url": "https://github.com/daniabib/ComfyUI_ProPainter_Nodes.git",
         },
-        {
-            "name": "ComfyUI-MatAnyone",
-            "url": "https://github.com/FuouM/ComfyUI-MatAnyone.git",
-        },
     ]
 
     def __init__(self, install_dir: Optional[Path] = None, size_gb: float = 0.5):
@@ -450,3 +446,76 @@ class GSIRInstaller(ComponentInstaller):
         self.installed = True
         print_success(f"GS-IR installed to {self.install_dir}")
         return True
+
+
+class VideoMaMaInstaller(ComponentInstaller):
+    """Installer for VideoMaMa (diffusion-based video matting).
+
+    VideoMaMa requires:
+    - Separate conda environment (videomama)
+    - Stable Video Diffusion base model (~10GB)
+    - VideoMaMa checkpoint (~1.5GB)
+    - PyTorch with CUDA support
+
+    Total disk space: ~12GB
+    """
+
+    def __init__(self, size_gb: float = 12.0):
+        super().__init__("VideoMaMa", size_gb)
+        self.tools_dir = INSTALL_DIR / "tools" / "VideoMaMa"
+        self.models_dir = INSTALL_DIR / "models" / "VideoMaMa"
+        self.svd_dir = self.models_dir / "stable-video-diffusion-img2vid-xt"
+        self.checkpoint_dir = self.models_dir / "checkpoints" / "VideoMaMa"
+        self.env_name = "videomama"
+
+    def check(self) -> bool:
+        repo_exists = self.tools_dir.exists() and (self.tools_dir / ".git").exists()
+        svd_exists = self.svd_dir.exists() and bool(list(self.svd_dir.glob("*.safetensors")))
+        checkpoint_exists = self.checkpoint_dir.exists() and bool(list(self.checkpoint_dir.glob("*")))
+
+        conda_exe = self._find_conda()
+        env_exists = False
+        if conda_exe:
+            success, output = run_command(
+                [conda_exe, "env", "list"], check=False, capture=True
+            )
+            env_exists = success and self.env_name in output
+
+        self.installed = repo_exists and svd_exists and checkpoint_exists and env_exists
+        return self.installed
+
+    def _find_conda(self) -> Optional[str]:
+        import os
+        for cmd in ["conda", "mamba"]:
+            if shutil.which(cmd):
+                return cmd
+        conda_exe = os.environ.get("CONDA_EXE")
+        if conda_exe and Path(conda_exe).exists():
+            return str(conda_exe)
+        return None
+
+    def install(self) -> bool:
+        print(f"\nInstalling VideoMaMa (diffusion-based video matting)...")
+        print_info("This will create a separate conda environment and download ~12GB of models")
+
+        repo_root = INSTALL_DIR.parent
+        install_script = repo_root / "scripts" / "video_mama_install.py"
+
+        if not install_script.exists():
+            print_error(f"VideoMaMa install script not found: {install_script}")
+            return False
+
+        print_info("Running VideoMaMa installation script...")
+        success, _ = run_command(
+            [sys.executable, str(install_script)],
+            check=False,
+            capture=False
+        )
+
+        if success:
+            self.installed = True
+            print_success("VideoMaMa installed successfully")
+        else:
+            print_error("VideoMaMa installation failed")
+
+        return success

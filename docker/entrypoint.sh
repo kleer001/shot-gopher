@@ -62,7 +62,6 @@ REQUIRED_MODELS=(
     "/models/sam3"
     "/models/videodepthanything"
     "/models/wham"
-    "/models/matanyone"
 )
 
 MISSING_MODELS=0
@@ -100,21 +99,6 @@ if [ -d "/workspace/projects" ]; then
     echo -e "${GREEN}  ✓ Linked projects to ComfyUI input${NC}"
 fi
 
-# MatAnyone expects checkpoint in its own directory
-MATANYONE_SRC="/models/matanyone/matanyone.pth"
-MATANYONE_DST="${COMFYUI_DIR}/custom_nodes/ComfyUI-MatAnyone/checkpoint"
-if [ -f "$MATANYONE_SRC" ]; then
-    mkdir -p "$MATANYONE_DST"
-    if [ ! -e "$MATANYONE_DST/matanyone.pth" ]; then
-        ln -sf "$MATANYONE_SRC" "$MATANYONE_DST/matanyone.pth"
-        echo -e "${GREEN}  ✓ Linked MatAnyone model${NC}"
-    else
-        echo -e "${GREEN}  ✓ MatAnyone model already linked${NC}"
-    fi
-else
-    echo -e "${YELLOW}  WARNING: MatAnyone model not found at $MATANYONE_SRC${NC}"
-fi
-
 # SAM3 expects model at ComfyUI root (downloads automatically if missing, but symlink avoids re-download)
 SAM3_SRC="/models/sam3/sam3.pt"
 SAM3_DST="${COMFYUI_DIR}/sam3.pt"
@@ -140,7 +124,7 @@ if [ -d "$SMPLX_SRC" ]; then
 fi
 
 # Determine if ComfyUI is needed based on stages
-COMFYUI_STAGES="depth|roto|matanyone|cleanplate"
+COMFYUI_STAGES="depth|roto|cleanplate"
 NEED_COMFYUI=false
 
 # Interactive and cleanplate-batched modes always need ComfyUI

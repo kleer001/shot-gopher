@@ -25,8 +25,6 @@ from pipeline_utils import (
 from workflow_utils import (
     refresh_workflow_from_template,
     update_segmentation_prompt,
-    update_matanyone_input,
-    update_matanyone_resolution,
     update_cleanplate_resolution,
 )
 
@@ -44,7 +42,7 @@ __all__ = [
     "run_stage_interactive",
     "run_stage_depth",
     "run_stage_roto",
-    "run_stage_matanyone",
+    "run_stage_mama",
     "run_stage_cleanplate",
     "run_stage_colmap",
     "run_stage_mocap",
@@ -519,11 +517,14 @@ def _separate_roto_instances(roto_dir: Path, prompts: list[str]) -> None:
             print(f"  → No {prompt_name} directory to separate")
 
 
-def run_stage_matanyone(
+def run_stage_mama(
     ctx: "StageContext",
     config: "PipelineConfig",
 ) -> bool:
-    """Run MatAnyone matte refinement stage.
+    """Run VideoMaMa matte refinement stage.
+
+    Processes roto masks through VideoMaMa diffusion-based matting
+    to produce high-quality alpha mattes.
 
     Args:
         ctx: Stage execution context
@@ -532,29 +533,35 @@ def run_stage_matanyone(
     Returns:
         True if successful
     """
-    print("\n=== Stage: matanyone ===")
-    workflow_path = ctx.project_dir / "workflows" / "04_matanyone.json"
+    print("\n=== Stage: mama ===")
     roto_dir = ctx.project_dir / "roto"
-    combined_dir = roto_dir / "combined"
     matte_dir = ctx.project_dir / "matte"
+    combined_dir = roto_dir / "combined"
 
-    refresh_workflow_from_template(workflow_path, "04_matanyone.json")
+    numbered_pattern = re.compile(r"^.+_\d{2}$")
+    skip_dirs = {"person", "combined", "mask"}
 
-    person_pattern = re.compile(r"^person(_\d{2})?$")
-    person_dirs = []
+    roto_dirs = []
     for subdir in sorted(roto_dir.iterdir()) if roto_dir.exists() else []:
         if not subdir.is_dir():
             continue
-        if person_pattern.match(subdir.name) and list(subdir.glob("*.png")):
-            person_dirs.append(subdir)
+        if subdir.name in skip_dirs:
+            continue
+        if numbered_pattern.match(subdir.name) and list(subdir.glob("*.png")):
+            roto_dirs.append(subdir)
 
-    if not workflow_path.exists():
-        print("  → Skipping (workflow not found)")
+    if not roto_dirs:
+        print("  → Skipping (no numbered roto directories found)")
+        print("    Expected: roto/person_00/, roto/person_01/, roto/bag_00/, etc.")
         return True
 
-    if not person_dirs:
-        print("  → Skipping (no person masks found in roto/)")
-        return True
+    print(f"  → Found {len(roto_dirs)} roto directories to process")
+
+    from video_mama import process_roto_directory, check_installation
+
+    if not check_installation():
+        print("  → VideoMaMa not installed. Run: python scripts/video_mama_install.py")
+        return False
 
     if ctx.overwrite:
         clear_output_directory(matte_dir)
@@ -563,45 +570,39 @@ def run_stage_matanyone(
 
     output_dirs = []
 
-    for i, person_dir in enumerate(person_dirs):
-        out_dir = matte_dir / person_dir.name
+    for i, roto_subdir in enumerate(roto_dirs):
+        out_dir = matte_dir / roto_subdir.name
         output_dirs.append(out_dir)
 
-        if ctx.skip_existing and list(out_dir.glob("*.png")):
-            print(f"  → Skipping {person_dir.name} (mattes exist)")
+        if ctx.skip_existing and out_dir.exists() and list(out_dir.glob("*.png")):
+            print(f"  → Skipping {roto_subdir.name} (mattes exist)")
             continue
 
-        if len(person_dirs) > 1:
-            print(f"\n  [{i+1}/{len(person_dirs)}] Refining: {person_dir.name}")
+        if len(roto_dirs) > 1:
+            print(f"\n  [{i+1}/{len(roto_dirs)}] Processing: {roto_subdir.name}")
         else:
-            print(f"  → Refining masks from: {person_dir.name}")
+            print(f"  → Processing: {roto_subdir.name}")
 
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        update_matanyone_input(workflow_path, person_dir, out_dir, ctx.project_dir)
-        update_matanyone_resolution(workflow_path, ctx.source_frames)
-
-        if not run_comfyui_workflow(
-            workflow_path, ctx.comfyui_url,
+        success = process_roto_directory(
+            project_dir=ctx.project_dir,
+            roto_subdir=roto_subdir.name,
             output_dir=out_dir,
-            total_frames=ctx.total_frames,
-            stage_name=f"matanyone ({person_dir.name})" if len(person_dirs) > 1 else "matanyone",
-        ):
-            print(f"  → MatAnyone stage failed for {person_dir.name}", file=sys.stderr)
-            print(f"    (cleanplate will use raw roto masks instead)", file=sys.stderr)
+        )
+
+        if not success:
+            print(f"  → VideoMaMa failed for {roto_subdir.name}", file=sys.stderr)
 
     valid_output_dirs = [d for d in output_dirs if d.exists() and list(d.glob("*.png"))]
     if valid_output_dirs:
-        if ctx.skip_existing and list(combined_dir.glob("*.png")):
+        if ctx.skip_existing and combined_dir.exists() and list(combined_dir.glob("*.png")):
             print(f"  → Skipping combine (roto/combined/ exists)")
         else:
             print("\n  --- Combining mattes ---")
             combine_mattes(valid_output_dirs, combined_dir, "combined")
 
-    if ctx.auto_movie and list(combined_dir.glob("*.png")):
+    if ctx.auto_movie and combined_dir.exists() and list(combined_dir.glob("*.png")):
         generate_preview_movie(combined_dir, ctx.project_dir / "preview" / "matte.mp4", ctx.fps)
 
-    clear_gpu_memory(ctx.comfyui_url)
     return True
 
 
@@ -818,7 +819,7 @@ STAGE_HANDLERS: dict[str, Callable[["StageContext", "PipelineConfig"], bool]] = 
     "interactive": run_stage_interactive,
     "depth": run_stage_depth,
     "roto": run_stage_roto,
-    "matanyone": run_stage_matanyone,
+    "mama": run_stage_mama,
     "cleanplate": run_stage_cleanplate,
     "colmap": run_stage_colmap,
     "mocap": run_stage_mocap,

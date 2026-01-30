@@ -379,7 +379,6 @@ class DockerCheckpointDownloader(CheckpointDownloader):
         'sam3': 'sam3',
         'video_depth_anything': 'videodepthanything',
         'wham': 'wham',
-        'matanyone': 'matanyone',
         'smplx': 'smplx',
     }
 
@@ -850,7 +849,7 @@ class DockerWizard:
 
         self.setup_credentials()
 
-        checkpoints_to_download = ['sam3', 'video_depth_anything', 'wham', 'matanyone']
+        checkpoints_to_download = ['sam3', 'video_depth_anything', 'wham']
         download_smplx = False
 
         smpl_creds_file = self.repo_root / "SMPL.login.dat"

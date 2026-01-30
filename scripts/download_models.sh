@@ -63,7 +63,7 @@ fi
 
 # SAM3 (via HuggingFace)
 echo ""
-echo -e "${BLUE}[1/4] SAM3 (Segment Anything Model 3)${NC}"
+echo -e "${BLUE}[1/3] SAM3 (Segment Anything Model 3)${NC}"
 if [ -d "$MODEL_DIR/sam3" ] && [ "$(ls -A "$MODEL_DIR/sam3")" ]; then
     echo -e "${GREEN}✓ SAM3 already exists${NC}"
 else
@@ -74,7 +74,7 @@ fi
 
 # Video Depth Anything
 echo ""
-echo -e "${BLUE}[2/4] Video Depth Anything${NC}"
+echo -e "${BLUE}[2/3] Video Depth Anything${NC}"
 if [ -d "$MODEL_DIR/videodepthanything" ] && [ "$(ls -A "$MODEL_DIR/videodepthanything")" ]; then
     echo -e "${GREEN}✓ Video Depth Anything already exists${NC}"
 else
@@ -85,7 +85,7 @@ fi
 
 # WHAM (4D Human Motion Capture)
 echo ""
-echo -e "${BLUE}[3/4] WHAM (4D Human MoCap)${NC}"
+echo -e "${BLUE}[3/3] WHAM (4D Human MoCap)${NC}"
 if [ -d "$MODEL_DIR/wham" ] && [ -f "$MODEL_DIR/wham/wham_vit_w_3dpw.pth.tar" ]; then
     echo -e "${GREEN}✓ WHAM already exists${NC}"
 else
@@ -94,21 +94,6 @@ else
     # WHAM model from official repository
     python3 -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='yohanshin/WHAM', filename='wham_vit_w_3dpw.pth.tar', local_dir='$MODEL_DIR/wham')"
     echo -e "${GREEN}✓ WHAM downloaded${NC}"
-fi
-
-# MatAnyone
-echo ""
-echo -e "${BLUE}[4/4] MatAnyone (Matte Refinement)${NC}"
-if [ -f "$MODEL_DIR/matanyone/matanyone.pth" ]; then
-    echo -e "${GREEN}✓ MatAnyone already exists${NC}"
-else
-    echo -e "${YELLOW}Downloading MatAnyone...${NC}"
-    mkdir -p "$MODEL_DIR/matanyone"
-    # MatAnyone from GitHub releases
-    download_file "MatAnyone" \
-        "https://github.com/FuouM/ComfyUI-MatAnyone/releases/download/v1.0/matanyone.pth" \
-        "$MODEL_DIR/matanyone/matanyone.pth"
-    echo -e "${GREEN}✓ MatAnyone downloaded${NC}"
 fi
 
 echo ""

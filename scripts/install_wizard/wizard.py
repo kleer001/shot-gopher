@@ -13,7 +13,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, PythonPackageInstaller, SystemPackageInstaller
+from .installers import CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, PythonPackageInstaller, SystemPackageInstaller, VideoMaMaInstaller
 from .platform import PlatformManager
 from .state import InstallationStateManager
 from .utils import (
@@ -147,6 +147,15 @@ class InstallationWizard:
             ]
         }
 
+        # VideoMaMa (diffusion-based video matting for alpha mattes)
+        self.components['videomama'] = {
+            'name': 'VideoMaMa',
+            'required': False,
+            'installers': [
+                VideoMaMaInstaller(size_gb=12.0)
+            ]
+        }
+
         # ComfyUI and custom nodes
         comfyui_dir = self.install_dir / "ComfyUI"
         self.components['comfyui'] = {
@@ -183,12 +192,6 @@ class InstallationWizard:
                     'https://github.com/daniabib/ComfyUI_ProPainter_Nodes.git',
                     comfyui_dir / "custom_nodes" / "ComfyUI_ProPainter_Nodes",
                     size_gb=1.5,  # Models auto-downloaded
-                ),
-                GitRepoInstaller(
-                    'ComfyUI-MatAnyone',
-                    'https://github.com/FuouM/ComfyUI-MatAnyone.git',
-                    comfyui_dir / "custom_nodes" / "ComfyUI-MatAnyone",
-                    size_gb=0.1,  # Code only, model downloaded separately
                 )
             ]
         }
@@ -653,10 +656,6 @@ class InstallationWizard:
             # Download SAM3 model for segmentation
             print("\nDownloading SAM3 model (for segmentation/roto workflows)...")
             self.checkpoint_downloader.download_all_checkpoints(['sam3'], self.state_manager)
-
-            # Download MatAnyone model for video matting
-            print("\nDownloading MatAnyone model (for person matte refinement)...")
-            self.checkpoint_downloader.download_all_checkpoints(['matanyone'], self.state_manager)
 
         # Download checkpoints for motion capture components
         mocap_components = [cid for cid in to_install if cid in ['wham', 'gvhmr']]

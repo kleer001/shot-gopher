@@ -211,8 +211,7 @@ WORKDIR /app/.vfx_pipeline/ComfyUI/custom_nodes
 RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     git clone https://github.com/yuvraj108c/ComfyUI-Video-Depth-Anything.git && \
     git clone https://github.com/PozzettiAndrea/ComfyUI-SAM3.git && \
-    git clone https://github.com/daniabib/ComfyUI_ProPainter_Nodes.git && \
-    git clone https://github.com/FuouM/ComfyUI-MatAnyone.git
+    git clone https://github.com/daniabib/ComfyUI_ProPainter_Nodes.git
 
 # Install custom node dependencies
 RUN for dir in */; do \

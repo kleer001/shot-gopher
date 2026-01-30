@@ -20,7 +20,7 @@ STAGE_OUTPUT_DIRS = {
     "interactive": "roto",
     "depth": "depth",
     "roto": "roto",
-    "matanyone": "matte",
+    "mama": "matte",
     "cleanplate": "cleanplate",
     "colmap": "colmap",
     "mocap": "mocap",
