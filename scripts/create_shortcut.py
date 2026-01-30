@@ -111,8 +111,9 @@ end tell
 
 def add_mac_to_dock(app_path: Path) -> bool:
     """Add an item to the macOS Dock (optional, asks user first)."""
-    # Escape path for XML (used in plist format)
-    path_str = str(app_path).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    # Escape path for shell (single quotes) and XML (plist format)
+    path_str = str(app_path).replace("'", "'\\''")
+    path_str = path_str.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
     # This adds a persistent Dock item using defaults
     # Note: This requires the full path and works with .command files
