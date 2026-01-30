@@ -430,9 +430,9 @@ try {
     $script:exitCode = Install-VFXPipeline
 } catch {
     Write-Host ""
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+    Write-Host ("=" * 60) -ForegroundColor Red
     Write-Host "  Unexpected Error!" -ForegroundColor Red
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+    Write-Host ("=" * 60) -ForegroundColor Red
     Write-Host ""
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ""
