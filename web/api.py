@@ -222,13 +222,41 @@ async def create_project(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def _get_project_size_bytes(path: Path) -> int:
+    """Get project directory size in bytes."""
+    try:
+        total = 0
+        for entry in path.rglob("*"):
+            if entry.is_file():
+                total += entry.stat().st_size
+        return total
+    except Exception:
+        return 0
+
+
 @router.get("/projects")
 async def list_projects(
     project_service: ProjectService = Depends(get_project_service)
 ):
-    """List all projects."""
+    """List all projects with sizes."""
+    import asyncio
+
     response = project_service.list_projects()
-    return {"projects": [p.model_dump() for p in response.projects[:20]]}
+    projects_data = []
+
+    for proj_dto in response.projects[:20]:
+        project_entity = get_project_repo().get(proj_dto.name)
+        if project_entity:
+            size_bytes = await asyncio.to_thread(
+                _get_project_size_bytes, project_entity.path
+            )
+            proj_dict = proj_dto.model_dump()
+            proj_dict["size_bytes"] = size_bytes
+            projects_data.append(proj_dict)
+        else:
+            projects_data.append(proj_dto.model_dump())
+
+    return {"projects": projects_data}
 
 
 @router.get("/projects/{project_id}")

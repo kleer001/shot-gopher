@@ -28,6 +28,20 @@ const STAGE_OUTPUT_DIRS = {
     camera: 'camera',
 };
 
+function formatFileSize(bytes) {
+    if (bytes === null || bytes === undefined || bytes === 0) {
+        return '0 B';
+    }
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let unitIndex = 0;
+    let size = bytes;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+    }
+    return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
 export class ProjectsController {
     constructor() {
         this.elements = {
@@ -48,6 +62,7 @@ export class ProjectsController {
         this.selectedProjectId = null;
         this.selectedStages = new Set();
         this.refreshInterval = null;
+        this.processingPollInterval = null;
 
         this.bindDetailActions();
         this.loadProjects();
@@ -88,14 +103,12 @@ export class ProjectsController {
             const projectId = proj.name;
             const safeName = dom.escapeHTML(projectId);
             const safeId = dom.escapeHTML(projectId);
-            const rawStatus = proj.status || 'unknown';
-            const displayStatus = rawStatus === 'unknown' ? 'ready' : rawStatus;
-            const safeStatus = dom.escapeHTML(displayStatus);
+            const sizeDisplay = formatFileSize(proj.size_bytes);
             const selectedClass = this.selectedProjectId === projectId ? 'selected' : '';
             return `
             <div class="project-item ${selectedClass}" data-id="${safeId}">
                 <span class="project-name">${safeName}</span>
-                <span class="project-status ${safeStatus}">${safeStatus}</span>
+                <span class="project-size">${sizeDisplay}</span>
             </div>
         `;
         }).join('');
@@ -212,18 +225,18 @@ export class ProjectsController {
             item.classList.add('selected');
         }
 
-        this.updateReprocessButton();
+        this.updateProcessButton();
     }
 
-    updateReprocessButton() {
+    updateProcessButton() {
         if (!this.elements.reprocessBtn) return;
 
         const count = this.selectedStages.size;
         if (count > 0) {
-            this.elements.reprocessBtn.textContent = `REPROCESS ${count} STAGE${count > 1 ? 'S' : ''}`;
+            this.elements.reprocessBtn.textContent = `PROCESS ${count} STAGE${count > 1 ? 'S' : ''}`;
             this.elements.reprocessBtn.disabled = false;
         } else {
-            this.elements.reprocessBtn.textContent = 'SELECT STAGES TO REPROCESS';
+            this.elements.reprocessBtn.textContent = 'SELECT STAGES TO PROCESS';
             this.elements.reprocessBtn.disabled = true;
         }
     }
@@ -305,11 +318,102 @@ export class ProjectsController {
         if (!this.selectedProjectId || this.selectedStages.size === 0) return;
 
         const stages = Array.from(this.selectedStages);
-        console.log('Reprocess stages:', stages, 'for project:', this.selectedProjectId);
+        const btn = this.elements.reprocessBtn;
+
+        btn.disabled = true;
+        btn.classList.add('processing');
+        btn.textContent = 'STARTING...';
+
+        try {
+            const config = {
+                stages: stages,
+                roto_prompt: 'person',
+                skip_existing: false,
+            };
+
+            await apiService.startProcessing(this.selectedProjectId, config);
+
+            btn.textContent = 'PROCESSING...';
+
+            stateManager.setState({
+                currentProject: this.selectedProjectId,
+                selectedStages: stages,
+                processingActive: true,
+            });
+
+            this.startProcessingStatusPoll();
+
+        } catch (error) {
+            console.error('Failed to start processing:', error);
+            btn.classList.remove('processing');
+            btn.textContent = 'FAILED - RETRY?';
+            btn.disabled = false;
+
+            setTimeout(() => {
+                this.updateProcessButton();
+            }, 3000);
+        }
+    }
+
+    startProcessingStatusPoll() {
+        if (this.processingPollInterval) {
+            clearInterval(this.processingPollInterval);
+        }
+
+        this.processingPollInterval = setInterval(async () => {
+            await this.checkProcessingStatus();
+        }, 2000);
+    }
+
+    stopProcessingStatusPoll() {
+        if (this.processingPollInterval) {
+            clearInterval(this.processingPollInterval);
+            this.processingPollInterval = null;
+        }
+    }
+
+    async checkProcessingStatus() {
+        if (!this.selectedProjectId) {
+            this.stopProcessingStatusPoll();
+            return;
+        }
+
+        try {
+            const projectData = await apiService.getProject(this.selectedProjectId);
+            const status = projectData.status;
+
+            if (status === 'complete' || status === 'failed') {
+                this.stopProcessingStatusPoll();
+                this.onProcessingComplete(status);
+            }
+        } catch (error) {
+            console.error('Failed to check processing status:', error);
+        }
+    }
+
+    onProcessingComplete(status) {
+        const btn = this.elements.reprocessBtn;
+        btn.classList.remove('processing');
+
+        if (status === 'complete') {
+            btn.textContent = 'COMPLETE!';
+            btn.classList.add('completed');
+        } else {
+            btn.textContent = 'FAILED';
+            btn.classList.add('failed');
+        }
+
+        setTimeout(() => {
+            btn.classList.remove('completed', 'failed');
+            this.selectedStages.clear();
+            this.updateProcessButton();
+            this.showProjectDetails(this.selectedProjectId);
+        }, 2000);
+
+        this.loadProjects();
 
         stateManager.setState({
-            currentProject: this.selectedProjectId,
-            selectedStages: stages,
+            processingActive: false,
         });
     }
 
@@ -334,5 +438,6 @@ export class ProjectsController {
 
     destroy() {
         this.stopAutoRefresh();
+        this.stopProcessingStatusPoll();
     }
 }

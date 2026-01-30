@@ -14,6 +14,7 @@ class ProjectDTO(BaseModel):
     stages: List[str] = []
     created_at: datetime
     updated_at: datetime
+    size_bytes: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

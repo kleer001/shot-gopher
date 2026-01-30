@@ -259,3 +259,127 @@ class TestFrontendBackendConsistency:
 
         # Both should have the same stages (order doesn't matter)
         assert set(frontend_all_stages) == set(backend_stages)
+
+
+class TestProjectSizeBytes:
+    """Test project size calculation functionality."""
+
+    def test_project_dto_has_size_bytes_field(self):
+        """ProjectDTO should have 'size_bytes' optional field."""
+        from web.models.dto import ProjectDTO
+
+        field_names = set(ProjectDTO.model_fields.keys())
+        assert "size_bytes" in field_names, "ProjectDTO should have 'size_bytes' field"
+
+    def test_project_dto_size_bytes_is_optional(self):
+        """size_bytes should be optional and default to None."""
+        from web.models.dto import ProjectDTO
+        from web.models.domain import ProjectStatus
+
+        dto = ProjectDTO(
+            name="test_project",
+            status=ProjectStatus.CREATED,
+            stages=[],
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+
+        assert dto.size_bytes is None
+
+    def test_project_dto_accepts_size_bytes(self):
+        """ProjectDTO should accept size_bytes value."""
+        from web.models.dto import ProjectDTO
+        from web.models.domain import ProjectStatus
+
+        dto = ProjectDTO(
+            name="test_project",
+            status=ProjectStatus.CREATED,
+            stages=[],
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            size_bytes=1024000,
+        )
+
+        assert dto.size_bytes == 1024000
+
+    def test_get_project_size_bytes_function(self, tmp_path):
+        """_get_project_size_bytes should calculate directory size."""
+        from web.api import _get_project_size_bytes
+
+        project_dir = tmp_path / "test_project"
+        project_dir.mkdir()
+
+        (project_dir / "file1.txt").write_text("Hello" * 100)
+        (project_dir / "file2.txt").write_text("World" * 200)
+        (project_dir / "subdir").mkdir()
+        (project_dir / "subdir" / "file3.txt").write_text("Nested" * 50)
+
+        size = _get_project_size_bytes(project_dir)
+
+        assert size > 0
+        expected_size = 500 + 1000 + 300
+        assert size == expected_size
+
+    def test_get_project_size_bytes_empty_dir(self, tmp_path):
+        """Empty directory should return 0 bytes."""
+        from web.api import _get_project_size_bytes
+
+        project_dir = tmp_path / "empty_project"
+        project_dir.mkdir()
+
+        size = _get_project_size_bytes(project_dir)
+        assert size == 0
+
+    def test_get_project_size_bytes_nonexistent_dir(self, tmp_path):
+        """Non-existent directory should return 0 (graceful failure)."""
+        from web.api import _get_project_size_bytes
+
+        fake_path = tmp_path / "does_not_exist"
+        size = _get_project_size_bytes(fake_path)
+        assert size == 0
+
+    def test_project_size_in_serialization(self):
+        """size_bytes should be included in model_dump output."""
+        from web.models.dto import ProjectDTO
+        from web.models.domain import ProjectStatus
+
+        dto = ProjectDTO(
+            name="test_project",
+            status=ProjectStatus.CREATED,
+            stages=[],
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            size_bytes=5000000,
+        )
+
+        data = dto.model_dump()
+        assert "size_bytes" in data
+        assert data["size_bytes"] == 5000000
+
+
+class TestFormatFileSize:
+    """Test file size formatting logic (matches frontend formatFileSize function)."""
+
+    def test_format_bytes(self):
+        """Test formatting various byte sizes."""
+        def format_file_size(size_bytes):
+            if size_bytes is None or size_bytes == 0:
+                return "0 B"
+            units = ['B', 'KB', 'MB', 'GB', 'TB']
+            unit_index = 0
+            size = float(size_bytes)
+            while size >= 1024 and unit_index < len(units) - 1:
+                size /= 1024
+                unit_index += 1
+            if unit_index == 0:
+                return f"{int(size)} {units[unit_index]}"
+            return f"{size:.1f} {units[unit_index]}"
+
+        assert format_file_size(0) == "0 B"
+        assert format_file_size(500) == "500 B"
+        assert format_file_size(1024) == "1.0 KB"
+        assert format_file_size(1536) == "1.5 KB"
+        assert format_file_size(1048576) == "1.0 MB"
+        assert format_file_size(1572864) == "1.5 MB"
+        assert format_file_size(1073741824) == "1.0 GB"
+        assert format_file_size(None) == "0 B"

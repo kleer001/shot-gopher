@@ -476,6 +476,13 @@ body {
     color: white;
 }
 
+.project-size {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 500;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
 /* Project Detail Card */
 .detail-card {
     flex: 1;
@@ -724,6 +731,35 @@ body {
 .btn-reprocess:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.btn-reprocess.processing {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    cursor: wait;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.btn-reprocess.completed {
+    background: var(--success);
+    border-color: var(--success);
+    color: white;
+}
+
+.btn-reprocess.failed {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: white;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
 }
 
 /* Processing Card */
