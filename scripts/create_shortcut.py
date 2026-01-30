@@ -196,10 +196,10 @@ def main():
 
     # Determine which launcher to use
     if system == "Windows":
-        launcher = repo_root / "Shot Gopher.bat"
+        launcher = repo_root / "src" / "shot-gopher-web.bat"
     else:
         # macOS and Linux both use the .command file (bash script)
-        launcher = repo_root / "Shot Gopher.command"
+        launcher = repo_root / "src" / "shot-gopher-web.command"
 
     if not launcher.exists():
         print(f"ERROR: Launcher not found: {launcher}")

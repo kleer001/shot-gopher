@@ -122,7 +122,7 @@ After installation, you're ready to process your first video.
 ```bash
 # User-friendly TUI (recommended for new users)
 ./shot-gopher                # Linux/macOS
-shot-gopher.bat              # Windows
+src\shot-gopher.bat          # Windows
 
 # All stages
 python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,mocap,gsir,camera
