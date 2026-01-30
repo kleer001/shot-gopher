@@ -106,13 +106,15 @@ export class ProcessingController {
         // Set project name
         dom.setText(this.elements.processingProjectName, state.projectName || '--');
 
-        // Build stages list
+        // Build stages list (escape values for defense in depth)
         const stagesHTML = state.selectedStages.map(stageId => {
             const stageName = config?.stages?.[stageId]?.name || stageId;
+            const safeStageId = dom.escapeHTML(stageId);
+            const safeStageName = dom.escapeHTML(stageName);
             return `
-                <div class="stage-item pending" data-stage="${stageId}">
+                <div class="stage-item pending" data-stage="${safeStageId}">
                     <span class="stage-icon">○</span>
-                    <span>${stageName}</span>
+                    <span>${safeStageName}</span>
                     <span class="stage-status">pending</span>
                 </div>
             `;
