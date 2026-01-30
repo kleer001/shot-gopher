@@ -163,24 +163,39 @@ def run_pipeline_thread(
 
     # Build command
     script_path = get_run_pipeline_path()
-    video_path = Path(project_dir) / "source"
+    source_dir = Path(project_dir) / "source"
 
-    # Find the input video
+    # Find the input video - check for any video file in source/
     input_video = None
-    for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]:
-        candidate = video_path / f"input{ext}"
+    video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]
+
+    # First try input.* naming convention
+    for ext in video_extensions:
+        candidate = source_dir / f"input{ext}"
         if candidate.exists():
             input_video = candidate
             break
 
+    # If not found, look for any video file in source/
+    if not input_video and source_dir.exists():
+        for ext in video_extensions:
+            for video_file in source_dir.glob(f"*{ext}"):
+                if video_file.is_file():
+                    input_video = video_file
+                    break
+            if input_video:
+                break
+
     if not input_video:
+        error_msg = f"No input video found in {source_dir}"
         with active_jobs_lock:
             if project_id in active_jobs:
                 active_jobs[project_id]["status"] = "failed"
-                active_jobs[project_id]["error"] = "No input video found"
+                active_jobs[project_id]["error"] = error_msg
+                active_jobs[project_id]["last_output"] = error_msg
         update_progress(project_id, {
             "status": "failed",
-            "error": "No input video found",
+            "error": error_msg,
         })
         return
 
