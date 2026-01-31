@@ -851,7 +851,8 @@ class InstallationWizard:
                 [sys.executable, str(create_shortcut_script), "--all", "--quiet"],
                 capture_output=True,
                 text=True,
-                cwd=str(self.repo_root)
+                cwd=str(self.repo_root),
+                timeout=60
             )
 
             if result.returncode == 0:
