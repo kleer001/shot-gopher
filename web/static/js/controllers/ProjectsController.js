@@ -13,15 +13,17 @@ import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
 import { ELEMENTS, CSS_CLASSES } from '../config/constants.js';
 
+const FALLBACK_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
+
 function getStagesFromConfig() {
     const config = stateManager.getState().config;
-    if (!config || !config.stages) {
-        console.warn('Config not loaded, using fallback stages');
-        return ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
+    if (!config || !config.stages || Object.keys(config.stages).length === 0) {
+        console.warn('Config not loaded or empty, using fallback stages');
+        return FALLBACK_STAGES;
     }
     const stages = Object.keys(config.stages);
     console.log('Stages from config:', stages);
-    return stages;
+    return stages.length > 0 ? stages : FALLBACK_STAGES;
 }
 
 function getStageOutputDir(stageId) {
@@ -250,11 +252,13 @@ export class ProjectsController {
         `;
         }).join('');
 
+        console.log('Setting HTML for stages, length:', html.length);
         dom.setHTML(this.elements.detailStages, html);
 
         if (this.elements.stagesCounter) {
             dom.setText(this.elements.stagesCounter, `${completedCount}/${allStages.length}`);
         }
+        console.log('Stages rendered, counter:', `${completedCount}/${allStages.length}`);
 
         const stageItems = this.elements.detailStages.querySelectorAll('.stage-status-item');
         stageItems.forEach(item => {
