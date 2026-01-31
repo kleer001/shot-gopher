@@ -17,11 +17,14 @@ SCRIPTS_DIR = Path(__file__).parent
 def _scripts_path() -> Generator[None, None, None]:
     """Temporarily add scripts directory to sys.path."""
     scripts_dir = str(Path(__file__).parent.parent)
-    sys.path.insert(0, scripts_dir)
+    already_present = scripts_dir in sys.path
+    if not already_present:
+        sys.path.insert(0, scripts_dir)
     try:
         yield
     finally:
-        sys.path.remove(scripts_dir)
+        if not already_present and scripts_dir in sys.path:
+            sys.path.remove(scripts_dir)
 
 
 def find_blender() -> Optional[Path]:
@@ -75,9 +78,19 @@ def export_mesh_sequence_to_alembic(
         True if export succeeded
 
     Raises:
-        FileNotFoundError: If Blender is not installed
+        FileNotFoundError: If Blender is not installed or input_dir not found
+        ValueError: If input_dir is not a directory or parameters invalid
         RuntimeError: If export fails
     """
+    if not input_dir.exists():
+        raise FileNotFoundError(f"Input directory not found: {input_dir}")
+    if not input_dir.is_dir():
+        raise ValueError(f"Input path is not a directory: {input_dir}")
+    if fps <= 0:
+        raise ValueError(f"FPS must be positive, got {fps}")
+    if start_frame < 0:
+        raise ValueError(f"Start frame must be non-negative, got {start_frame}")
+
     if blender_path is None:
         blender_path = find_blender()
 

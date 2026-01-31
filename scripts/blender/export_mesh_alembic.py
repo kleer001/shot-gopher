@@ -44,12 +44,8 @@ def find_obj_files(input_dir: Path) -> list[Path]:
     Returns:
         Sorted list of OBJ file paths
     """
-    obj_files = sorted(input_dir.glob("*.obj"))
-
-    if not obj_files:
-        obj_files = sorted(input_dir.glob("*.OBJ"))
-
-    return obj_files
+    obj_files = list(input_dir.glob("*.obj")) + list(input_dir.glob("*.OBJ"))
+    return sorted(set(obj_files))
 
 
 def import_obj_sequence_as_shape_keys(
@@ -118,9 +114,9 @@ def import_obj_sequence_as_shape_keys(
         print("Note: Only 1 OBJ file - exporting static mesh (no animation)")
         return base_obj
 
-    for i, key in enumerate(base_obj.data.shape_keys.key_blocks[1:], start=0):
+    for i, key in enumerate(base_obj.data.shape_keys.key_blocks[1:], start=1):
         frame = start_frame + i
-        prev_frame = max(start_frame, frame - 1)
+        prev_frame = frame - 1
 
         key.value = 0.0
         key.keyframe_insert(data_path="value", frame=prev_frame)
