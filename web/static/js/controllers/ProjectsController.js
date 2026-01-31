@@ -11,7 +11,7 @@
 import { stateManager } from '../managers/StateManager.js';
 import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
-import { ELEMENTS, CSS_CLASSES } from '../config/constants.js';
+import { ELEMENTS, EVENTS, CSS_CLASSES } from '../config/constants.js';
 
 const ALL_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
 
@@ -96,9 +96,39 @@ export class ProjectsController {
         this.refreshInterval = null;
         this.processingPollInterval = null;
 
+        this._boundHandlers = {};
+        this.setupEventListeners();
         this.bindDetailActions();
         this.loadProjects();
         this.startAutoRefresh();
+    }
+
+    setupEventListeners() {
+        this._boundHandlers.onUploadComplete = (e) => this.handleUploadComplete(e.detail);
+        stateManager.addEventListener(EVENTS.UPLOAD_COMPLETE, this._boundHandlers.onUploadComplete);
+    }
+
+    async handleUploadComplete(detail) {
+        const projectId = detail.projectId;
+        await this.loadProjects();
+        await this.selectProjectById(projectId);
+    }
+
+    async selectProjectById(projectId) {
+        this.selectedProjectId = projectId;
+        this.selectedStages.clear();
+        this.stageOptions = {};
+
+        const items = this.elements.projectsList?.querySelectorAll('.project-item');
+        items?.forEach(el => {
+            if (el.dataset.id === projectId) {
+                el.classList.add('selected');
+            } else {
+                el.classList.remove('selected');
+            }
+        });
+
+        await this.showProjectDetails(projectId);
     }
 
     bindDetailActions() {
@@ -630,5 +660,10 @@ export class ProjectsController {
     destroy() {
         this.stopAutoRefresh();
         this.stopProcessingStatusPoll();
+
+        if (this._boundHandlers.onUploadComplete) {
+            stateManager.removeEventListener(EVENTS.UPLOAD_COMPLETE, this._boundHandlers.onUploadComplete);
+        }
+        this._boundHandlers = {};
     }
 }

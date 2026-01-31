@@ -109,6 +109,7 @@ export const EVENTS = {
     STATE_CHANGED: 'stateChanged',
     PROGRESS_UPDATE: 'progressUpdate',
     UPLOAD_PROGRESS: 'uploadProgress',
+    UPLOAD_COMPLETE: 'uploadComplete',
     ERROR: 'error',
     CONFIG_LOADED: 'configLoaded',
     PIPELINE_COMPLETE: 'pipelineComplete',

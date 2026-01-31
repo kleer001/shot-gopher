@@ -13,7 +13,7 @@
 import { stateManager } from '../managers/StateManager.js';
 import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
-import { ELEMENTS, UPLOAD } from '../config/constants.js';
+import { ELEMENTS, EVENTS, UPLOAD } from '../config/constants.js';
 
 export class UploadController {
     constructor() {
@@ -123,10 +123,8 @@ export class UploadController {
     }
 
     handleUploadSuccess(result) {
-        // Hide upload progress
         dom.hide(this.elements.uploadProgress);
 
-        // Update state with video info and VRAM analysis
         stateManager.setState({
             projectId: result.project_id,
             projectDir: result.project_dir,
@@ -137,19 +135,9 @@ export class UploadController {
             uploadFilename: null,
         });
 
-        // Validate and show video info
-        if (result.video_info && result.video_info.resolution) {
-            this.displayVideoInfo(result.video_info, result.project_id);
-        } else {
-            // Show warning but continue
-            stateManager.showError('Could not extract video info, but upload succeeded');
-        }
-
-        // Show config form
-        const configForm = dom.getElement(ELEMENTS.CONFIG_FORM);
-        if (configForm) {
-            dom.show(configForm);
-        }
+        stateManager.dispatchEvent(new CustomEvent(EVENTS.UPLOAD_COMPLETE, {
+            detail: { projectId: result.project_id },
+        }));
     }
 
     displayVideoInfo(info, filename) {
