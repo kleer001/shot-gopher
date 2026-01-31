@@ -142,6 +142,31 @@ def parse_progress_line(line: str, current_stage: str, stages: list) -> Optional
     return result if result else None
 
 
+def update_job_repo_status(project_id: str, status: str, error: str = None):
+    """Update job status in the job repository."""
+    from .api import get_job_repo
+    from .models.domain import JobStatus
+    from datetime import datetime
+
+    job_repo = get_job_repo()
+    job = job_repo.get(project_id)
+
+    if job:
+        if status == "completed":
+            job.status = JobStatus.COMPLETE
+            job.completed_at = datetime.now()
+            job.progress = 1.0
+        elif status == "failed":
+            job.status = JobStatus.FAILED
+            job.completed_at = datetime.now()
+            job.error = error
+        elif status == "cancelled":
+            job.status = JobStatus.CANCELLED
+            job.completed_at = datetime.now()
+
+        job_repo.save(job)
+
+
 def run_pipeline_thread(
     project_id: str,
     project_dir: str,
@@ -203,6 +228,7 @@ def run_pipeline_thread(
                 active_jobs[project_id]["status"] = "failed"
                 active_jobs[project_id]["error"] = error_msg
                 active_jobs[project_id]["last_output"] = error_msg
+        update_job_repo_status(project_id, "failed", error_msg)
         update_progress(project_id, {
             "status": "failed",
             "error": error_msg,
@@ -322,6 +348,7 @@ def run_pipeline_thread(
                     active_jobs[project_id]["error"] = f"Pipeline exited with code {process.returncode}"
 
         if process.returncode == 0:
+            update_job_repo_status(project_id, "completed")
             update_progress(project_id, {
                 "status": "completed",
                 "progress": 1.0,
@@ -330,9 +357,11 @@ def run_pipeline_thread(
                 "total_stages": len(stages),
             })
         else:
+            error_msg = f"Pipeline exited with code {process.returncode}"
+            update_job_repo_status(project_id, "failed", error_msg)
             update_progress(project_id, {
                 "status": "failed",
-                "error": f"Pipeline exited with code {process.returncode}",
+                "error": error_msg,
             })
 
     except Exception as e:
@@ -340,6 +369,7 @@ def run_pipeline_thread(
             if project_id in active_jobs:
                 active_jobs[project_id]["status"] = "failed"
                 active_jobs[project_id]["error"] = str(e)
+        update_job_repo_status(project_id, "failed", str(e))
         update_progress(project_id, {
             "status": "failed",
             "error": str(e),
@@ -390,6 +420,8 @@ def stop_pipeline(project_id: str) -> bool:
         with active_jobs_lock:
             if project_id in active_jobs:
                 active_jobs[project_id]["status"] = "cancelled"
+
+        update_job_repo_status(project_id, "cancelled")
 
         if project_id in active_processes:
             del active_processes[project_id]

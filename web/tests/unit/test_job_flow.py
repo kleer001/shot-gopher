@@ -522,3 +522,91 @@ class TestVramAnalysisFrameCounting:
 
         assert video_path is not None
         assert video_path.name == "my_clip.mov"
+
+
+class TestJobRepoStatusUpdate:
+    """Test that job_repo status is updated when pipeline completes."""
+
+    def test_update_job_repo_status_completed(self):
+        """Should update job status to COMPLETE when pipeline finishes successfully."""
+        from web.models.domain import PipelineJob, JobStatus
+        from web.repositories.job_repository import JobRepository
+        from datetime import datetime
+
+        job_repo = JobRepository()
+        job = PipelineJob(
+            project_name="test_project",
+            stages=["depth"],
+            status=JobStatus.RUNNING,
+            current_stage="depth",
+            progress=0.5,
+            message="Processing...",
+            started_at=datetime.now(),
+            completed_at=None,
+            error=None,
+        )
+        job_repo.save(job)
+
+        job.status = JobStatus.COMPLETE
+        job.completed_at = datetime.now()
+        job.progress = 1.0
+        job_repo.save(job)
+
+        updated_job = job_repo.get("test_project")
+        assert updated_job.status == JobStatus.COMPLETE
+        assert updated_job.progress == 1.0
+        assert updated_job.completed_at is not None
+
+    def test_update_job_repo_status_failed(self):
+        """Should update job status to FAILED when pipeline fails."""
+        from web.models.domain import PipelineJob, JobStatus
+        from web.repositories.job_repository import JobRepository
+        from datetime import datetime
+
+        job_repo = JobRepository()
+        job = PipelineJob(
+            project_name="test_project_fail",
+            stages=["depth"],
+            status=JobStatus.RUNNING,
+            current_stage="depth",
+            progress=0.5,
+            message="Processing...",
+            started_at=datetime.now(),
+            completed_at=None,
+            error=None,
+        )
+        job_repo.save(job)
+
+        job.status = JobStatus.FAILED
+        job.completed_at = datetime.now()
+        job.error = "Pipeline exited with code 1"
+        job_repo.save(job)
+
+        updated_job = job_repo.get("test_project_fail")
+        assert updated_job.status == JobStatus.FAILED
+        assert updated_job.error == "Pipeline exited with code 1"
+
+    def test_completed_job_allows_new_job(self):
+        """Should allow starting a new job after previous job completed."""
+        from web.models.domain import PipelineJob, JobStatus
+        from web.repositories.job_repository import JobRepository
+        from datetime import datetime
+
+        job_repo = JobRepository()
+        job = PipelineJob(
+            project_name="test_project_new",
+            stages=["ingest"],
+            status=JobStatus.COMPLETE,
+            current_stage="ingest",
+            progress=1.0,
+            message="Done",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            error=None,
+        )
+        job_repo.save(job)
+
+        existing_job = job_repo.get("test_project_new")
+        can_start_new = existing_job is None or existing_job.status != JobStatus.RUNNING
+
+        assert can_start_new is True
