@@ -788,6 +788,18 @@ body {
     color: white;
 }
 
+.btn-reprocess.showing-output {
+    min-height: 60px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    text-align: left;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.4;
+    padding: 8px 12px;
+}
+
 @keyframes pulse {
     0%, 100% {
         opacity: 1;

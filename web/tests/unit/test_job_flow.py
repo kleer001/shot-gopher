@@ -151,57 +151,23 @@ class TestPipelineRunnerProgressParsing:
         assert result["current_stage"] == "depth"
         assert result["stage_index"] == 0
 
-    def test_parse_comfyui_file_progress(self):
-        """ComfyUI file progress should be parsed correctly."""
+    def test_parse_output_line(self):
+        """Any output line should be captured as message."""
         from web.pipeline_runner import parse_progress_line
 
         result = parse_progress_line("[ComfyUI] depth frame 42/100", "depth", ["depth"])
 
         assert result is not None
-        assert result["frame"] == 42
-        assert result["total_frames"] == 100
-        assert result["progress"] == 0.42
+        assert result["message"] == "[ComfyUI] depth frame 42/100"
 
-    def test_parse_ffmpeg_progress(self):
-        """FFmpeg extraction progress should be parsed correctly."""
-        from web.pipeline_runner import parse_progress_line
-
-        result = parse_progress_line("[FFmpeg] Extracting frame 50/200", "ingest", ["ingest"])
-
-        assert result is not None
-        assert result["frame"] == 50
-        assert result["total_frames"] == 200
-        assert result["progress"] == 0.25
-
-    def test_parse_colmap_progress(self):
-        """COLMAP registration progress should be parsed correctly."""
-        from web.pipeline_runner import parse_progress_line
-
-        result = parse_progress_line("Registered 30/100 images", "colmap", ["colmap"])
-
-        assert result is not None
-        assert result["frame"] == 30
-        assert result["total_frames"] == 100
-        assert result["progress"] == 0.30
-
-    def test_parse_bracket_progress(self):
-        """Bracket-style progress [1/5] should be parsed correctly."""
-        from web.pipeline_runner import parse_progress_line
-
-        result = parse_progress_line("[3/10] Processing frame_0003.png", "mocap", ["mocap"])
-
-        assert result is not None
-        assert result["frame"] == 3
-        assert result["total_frames"] == 10
-        assert result["progress"] == 0.30
-
-    def test_parse_non_progress_line(self):
-        """Non-progress lines should return None."""
+    def test_parse_any_line_returns_message(self):
+        """All lines should return a message."""
         from web.pipeline_runner import parse_progress_line
 
         result = parse_progress_line("Some random output text", "depth", ["depth"])
 
-        assert result is None
+        assert result is not None
+        assert result["message"] == "Some random output text"
 
 
 class TestPipelineRunnerVideoFinding:

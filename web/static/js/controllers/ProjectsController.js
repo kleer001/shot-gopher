@@ -429,13 +429,12 @@ export class ProjectsController {
                 const lastOutput = jobData.last_output || '';
 
                 if (lastOutput && lastOutput.length > 0) {
-                    const truncated = lastOutput.length > 45 ? lastOutput.slice(0, 45) + '...' : lastOutput;
-                    btn.textContent = truncated;
+                    btn.textContent = lastOutput;
                     btn.title = lastOutput;
-                } else if (progress > 0) {
-                    btn.textContent = `${stage.toUpperCase()} ${progress}%`;
+                    btn.classList.add('showing-output');
                 } else {
                     btn.textContent = `${stage.toUpperCase()}...`;
+                    btn.classList.remove('showing-output');
                 }
             } else if (status === 'completed' || status === 'complete') {
                 this.stopProcessingStatusPoll();
