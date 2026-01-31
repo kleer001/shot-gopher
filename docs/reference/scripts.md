@@ -491,29 +491,29 @@ python scripts/texture_projection.py <mesh_dir> <frames_dir> <camera_dir> <outpu
 **Basic texture projection**:
 ```bash
 python scripts/texture_projection.py \
-    mocap/econ/meshes \
+    mocap/mesh_sequence \
     source/frames \
     camera \
-    mocap/econ/textured_meshes
+    mocap/textured_meshes
 ```
 
 **High resolution textures**:
 ```bash
 python scripts/texture_projection.py \
-    mocap/econ/meshes \
+    mocap/mesh_sequence \
     source/frames \
     camera \
-    mocap/econ/textured_meshes \
+    mocap/textured_meshes \
     --resolution 4096
 ```
 
 **Different output format**:
 ```bash
 python scripts/texture_projection.py \
-    mocap/econ/meshes \
+    mocap/mesh_sequence \
     source/frames \
     camera \
-    mocap/econ/textured_meshes \
+    mocap/textured_meshes \
     --format fbx
 ```
 
@@ -655,18 +655,18 @@ python scripts/mesh_deform.py <project_dir> [options]
 ```bash
 python scripts/mesh_deform.py ./projects/Actor01 \
     --smplx-rest mocap/smplx_rest.obj \
-    --econ-rest mocap/econ/mesh_0001.obj \
+    --clothed-rest mocap/clothed/mesh_0001.obj \
     --smplx-sequence mocap/smplx_animated/ \
-    --output mocap/econ_animated/
+    --output mocap/clothed_animated/
 ```
 
 **With correspondence caching** (faster iteration):
 ```bash
 python scripts/mesh_deform.py ./projects/Actor01 \
     --smplx-rest mocap/smplx_rest.obj \
-    --econ-rest mocap/econ/mesh_0001.obj \
+    --clothed-rest mocap/clothed/mesh_0001.obj \
     --smplx-sequence mocap/smplx_animated/ \
-    --output mocap/econ_animated/ \
+    --output mocap/clothed_animated/ \
     --cache mocap/correspondence.npz
 ```
 
@@ -680,9 +680,9 @@ python scripts/mesh_deform.py ./projects/Actor01 \
 ```bash
 python scripts/mesh_deform.py ./projects/Actor01 \
     --smplx-rest mocap/smplx_rest.obj \
-    --econ-rest mocap/econ/mesh_0001.obj \
+    --clothed-rest mocap/clothed/mesh_0001.obj \
     --smplx-sequence mocap/smplx_animated/ \
-    --output mocap/econ_animated/ \
+    --output mocap/clothed_animated/ \
     --smoothing-map mocap/smoothing_weights.png
 ```
 

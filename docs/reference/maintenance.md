@@ -337,8 +337,8 @@ Install directory: /home/user/shot-gopher/.vfx_pipeline
 [Components]
   pytorch              completed
   colmap               completed
+  gvhmr                completed
   wham                 completed
-  econ                 completed
   comfyui              completed
 
 [Git Repositories]

@@ -328,8 +328,8 @@ Tracks installation progress:
   "components": {
     "pytorch": "completed",
     "colmap": "completed",
-    "wham": "in_progress",
-    "econ": "pending",
+    "gvhmr": "in_progress",
+    "wham": "pending",
     "comfyui": "completed"
   },
   "last_updated": "2026-01-12 14:30:00",
@@ -361,8 +361,8 @@ Output:
 Previous installation detected (incomplete)
 
 Completed: pytorch, colmap, comfyui
-In progress: wham
-Pending: econ
+In progress: gvhmr
+Pending: wham
 
 Resume installation? [Y/n]: y
 ```
