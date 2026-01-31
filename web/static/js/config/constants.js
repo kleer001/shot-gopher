@@ -57,18 +57,6 @@ export const ELEMENTS = {
     BROWSE_BTN: 'browse-btn',
     UPLOAD_PROGRESS: 'upload-progress',
 
-    // Config
-    CONFIG_FORM: 'config-form',
-    ROTO_PROMPT: 'roto-prompt',
-    ROTO_START_FRAME: 'roto-start-frame',
-    SKIP_EXISTING: 'skip-existing',
-
-    // Processing
-    PROCESSING_PANEL: 'processing-panel',
-    PROGRESS_PERCENT: 'progress-percent',
-    CURRENT_STAGE_NAME: 'current-stage-name',
-    LOG_OUTPUT: 'log-output',
-
     // Projects
     PROJECTS_LIST: 'projects-list',
 

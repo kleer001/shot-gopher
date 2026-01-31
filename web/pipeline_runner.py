@@ -20,6 +20,8 @@ def get_run_pipeline_path() -> Path:
     return Path(__file__).parent.parent / "scripts" / "run_pipeline.py"
 
 
+ANSI_ESCAPE_PATTERN = re.compile(r'\x1b\[[0-9;]*[mGKHF]|\x1b\].*?\x07')
+
 FRAME_PATTERNS = [
     re.compile(r'frame\s+(\d+)\s*/\s*(\d+)', re.IGNORECASE),
     re.compile(r'(\d+)\s*/\s*(\d+)\s*frames', re.IGNORECASE),
@@ -30,12 +32,17 @@ FRAME_PATTERNS = [
 PROGRESS_PATTERN = re.compile(r'(\d+(?:\.\d+)?)\s*%')
 
 
+def strip_ansi_codes(text: str) -> str:
+    """Remove ANSI escape sequences from text."""
+    return ANSI_ESCAPE_PATTERN.sub('', text)
+
+
 def parse_progress_line(line: str, current_stage: str, stages: list) -> Optional[dict]:
     """Parse a line of pipeline output for progress information.
 
     Returns dict with the line as message, plus stage/frame/progress detection.
     """
-    result = {"message": line.strip()[:200]}
+    result = {"message": strip_ansi_codes(line.strip()[:200])}
 
     for pattern in FRAME_PATTERNS:
         match = pattern.search(line)
@@ -183,10 +190,6 @@ def run_pipeline_thread(
         if opts.get("iterations"):
             cmd.extend(["-i", str(opts["iterations"])])
 
-        opts = stage_options.get("camera", {})
-        if opts.get("rotation_order"):
-            cmd.extend(["--rotation-order", opts["rotation_order"]])
-
     # Start process
     try:
         env = os.environ.copy()
@@ -219,7 +222,7 @@ def run_pipeline_thread(
 
             # Skip carriage-return spinner lines (they overwrite themselves)
             if line.startswith("\r") or line.startswith("    \r"):
-                clean_line = line.lstrip("\r").strip()
+                clean_line = strip_ansi_codes(line.lstrip("\r").strip())
                 if clean_line:
                     with active_jobs_lock:
                         if project_id in active_jobs:
@@ -247,7 +250,7 @@ def run_pipeline_thread(
                 with active_jobs_lock:
                     if project_id in active_jobs:
                         active_jobs[project_id]["current_stage"] = current_stage
-                        active_jobs[project_id]["last_output"] = line[:100]
+                        active_jobs[project_id]["last_output"] = strip_ansi_codes(line[:100])
                         if "progress" in progress_info:
                             active_jobs[project_id]["progress"] = progress_info["progress"]
 
@@ -257,7 +260,7 @@ def run_pipeline_thread(
                 # Store any output line for display
                 with active_jobs_lock:
                     if project_id in active_jobs:
-                        active_jobs[project_id]["last_output"] = line[:100]
+                        active_jobs[project_id]["last_output"] = strip_ansi_codes(line[:100])
 
         # Wait for process to complete
         process.wait()

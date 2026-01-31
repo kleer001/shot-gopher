@@ -45,9 +45,6 @@ const STAGE_OPTIONS = {
     gsir: [
         { id: 'iterations', label: 'Iterations', type: 'number', default: 35000, placeholder: '35000' },
     ],
-    camera: [
-        { id: 'rotation_order', label: 'Rotation', type: 'select', default: 'zxy', options: ['xyz', 'zxy', 'zyx'] },
-    ],
 };
 
 function formatFileSize(bytes) {
