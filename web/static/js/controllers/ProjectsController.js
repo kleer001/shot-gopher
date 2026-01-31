@@ -13,36 +13,20 @@ import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
 import { ELEMENTS, CSS_CLASSES } from '../config/constants.js';
 
-const FALLBACK_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
+const ALL_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
 
-function getStagesFromConfig() {
-    const config = stateManager.getState().config;
-    if (!config || !config.stages || Object.keys(config.stages).length === 0) {
-        console.warn('Config not loaded or empty, using fallback stages');
-        return FALLBACK_STAGES;
-    }
-    const stages = Object.keys(config.stages);
-    console.log('Stages from config:', stages);
-    return stages.length > 0 ? stages : FALLBACK_STAGES;
-}
-
-function getStageOutputDir(stageId) {
-    const config = stateManager.getState().config;
-    if (!config || !config.stages || !config.stages[stageId]) {
-        const fallback = { ingest: 'source', depth: 'depth', roto: 'roto', cleanplate: 'cleanplate', colmap: 'colmap', interactive: 'roto', mama: 'matte', mocap: 'mocap', gsir: 'gsir', camera: 'camera' };
-        return fallback[stageId] || stageId;
-    }
-    const outputDir = config.stages[stageId].outputDir || stageId;
-    return outputDir.split('/')[0];
-}
-
-function getStageDisplayName(stageId) {
-    const config = stateManager.getState().config;
-    if (!config || !config.stages || !config.stages[stageId]) {
-        return stageId.toUpperCase();
-    }
-    return config.stages[stageId].displayName || config.stages[stageId].name || stageId;
-}
+const STAGE_OUTPUT_DIRS = {
+    ingest: 'source',
+    depth: 'depth',
+    roto: 'roto',
+    cleanplate: 'cleanplate',
+    colmap: 'colmap',
+    interactive: 'roto',
+    mama: 'matte',
+    mocap: 'mocap',
+    gsir: 'gsir',
+    camera: 'camera',
+};
 
 function formatFileSize(bytes) {
     if (bytes === null || bytes === undefined || bytes === 0) {
@@ -186,21 +170,28 @@ export class ProjectsController {
     }
 
     renderStagesStatus(projectData, outputsData, vramData) {
-        console.log('renderStagesStatus called', { projectData, outputsData, vramData });
-        if (!this.elements.detailStages) {
-            console.error('detailStages element not found!');
-            return;
-        }
+        if (!this.elements.detailStages) return;
 
         const outputs = outputsData?.outputs || {};
         const vramStages = vramData?.analysis?.stages || {};
-        const allStages = getStagesFromConfig();
-        console.log('allStages:', allStages, 'count:', allStages.length);
+
+        const stageLabels = {
+            ingest: 'Ingest Video Frames',
+            depth: 'Zdepth Estimation',
+            roto: 'Auto Segmentation (Roto)',
+            cleanplate: 'Clean Plate',
+            colmap: 'Camera Tracking (COLMAP)',
+            interactive: 'Interactive Segmentation',
+            mama: 'Matte Refinement (VideoMaMa)',
+            mocap: 'Human MoCap (SMPL+)',
+            gsir: '3D Reconstruction (GS-IR)',
+            camera: 'Camera Export (Alembic)',
+        };
 
         let completedCount = 0;
 
-        const html = allStages.map(stage => {
-            const outputDir = getStageOutputDir(stage);
+        const html = ALL_STAGES.map(stage => {
+            const outputDir = STAGE_OUTPUT_DIRS[stage];
             const outputData = outputs[outputDir];
             const hasFiles = outputData && outputData.count > 0;
             const isCompleted = hasFiles;
@@ -209,7 +200,7 @@ export class ProjectsController {
 
             const stageClass = isCompleted ? 'completed' : '';
             const fileCount = outputData?.total_files || outputData?.count || 0;
-            const label = getStageDisplayName(stage);
+            const label = stageLabels[stage] || stage.toUpperCase();
 
             let fileCountDisplay = '';
             let fileSizeDisplay = '';
@@ -252,13 +243,11 @@ export class ProjectsController {
         `;
         }).join('');
 
-        console.log('Setting HTML for stages, length:', html.length);
         dom.setHTML(this.elements.detailStages, html);
 
         if (this.elements.stagesCounter) {
-            dom.setText(this.elements.stagesCounter, `${completedCount}/${allStages.length}`);
+            dom.setText(this.elements.stagesCounter, `${completedCount}/${ALL_STAGES.length}`);
         }
-        console.log('Stages rendered, counter:', `${completedCount}/${allStages.length}`);
 
         const stageItems = this.elements.detailStages.querySelectorAll('.stage-status-item');
         stageItems.forEach(item => {
