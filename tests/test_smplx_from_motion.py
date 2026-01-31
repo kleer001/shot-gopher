@@ -18,6 +18,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from smplx_from_motion import (
     load_motion_data,
     find_smplx_models,
+    extract_frame_number,
+    detect_source_start_frame,
 )
 
 
@@ -289,3 +291,94 @@ class TestMotionDataIntegrity:
             # All arrays should have same number of frames
             assert loaded["poses"].shape[0] == loaded["trans"].shape[0]
             assert loaded["betas"].shape[0] == loaded["poses"].shape[0]
+
+
+class TestExtractFrameNumber:
+    """Test frame number extraction from filenames."""
+
+    def test_standard_frame_format(self):
+        """Test extracting from standard frame_0001.png format."""
+        assert extract_frame_number("frame_0001.png") == 1
+        assert extract_frame_number("frame_0100.png") == 100
+        assert extract_frame_number("frame_1001.png") == 1001
+
+    def test_depth_format(self):
+        """Test extracting from depth_00001.png format."""
+        assert extract_frame_number("depth_00001.png") == 1
+        assert extract_frame_number("depth_01000.png") == 1000
+
+    def test_no_number_returns_negative(self):
+        """Test that filenames without numbers return -1."""
+        assert extract_frame_number("readme.txt") == -1
+        assert extract_frame_number("config.json") == -1
+
+    def test_multiple_numbers_takes_first(self):
+        """Test that first number is extracted when multiple present."""
+        assert extract_frame_number("frame_0001_v2.png") == 1
+
+
+class TestDetectSourceStartFrame:
+    """Test source frame sequence start detection."""
+
+    def test_detect_start_frame_1(self):
+        """Test detection when sequence starts at frame 1."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            frames_dir = project_dir / "source" / "frames"
+            frames_dir.mkdir(parents=True)
+
+            for i in range(1, 11):
+                (frames_dir / f"frame_{i:04d}.png").touch()
+
+            assert detect_source_start_frame(project_dir) == 1
+
+    def test_detect_start_frame_1001(self):
+        """Test detection when sequence starts at frame 1001 (VFX convention)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            frames_dir = project_dir / "source" / "frames"
+            frames_dir.mkdir(parents=True)
+
+            for i in range(1001, 1011):
+                (frames_dir / f"frame_{i:04d}.png").touch()
+
+            assert detect_source_start_frame(project_dir) == 1001
+
+    def test_detect_start_frame_arbitrary(self):
+        """Test detection with arbitrary start frame."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            frames_dir = project_dir / "source" / "frames"
+            frames_dir.mkdir(parents=True)
+
+            for i in range(500, 510):
+                (frames_dir / f"frame_{i:04d}.jpg").touch()
+
+            assert detect_source_start_frame(project_dir) == 500
+
+    def test_missing_frames_dir_returns_default(self):
+        """Test that missing frames directory returns default of 1."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            assert detect_source_start_frame(project_dir) == 1
+
+    def test_empty_frames_dir_returns_default(self):
+        """Test that empty frames directory returns default of 1."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            frames_dir = project_dir / "source" / "frames"
+            frames_dir.mkdir(parents=True)
+            assert detect_source_start_frame(project_dir) == 1
+
+    def test_mixed_file_types(self):
+        """Test detection with mixed png and jpg files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            frames_dir = project_dir / "source" / "frames"
+            frames_dir.mkdir(parents=True)
+
+            (frames_dir / "frame_0100.png").touch()
+            (frames_dir / "frame_0101.jpg").touch()
+            (frames_dir / "frame_0102.png").touch()
+
+            assert detect_source_start_frame(project_dir) == 100
