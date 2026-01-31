@@ -557,7 +557,6 @@ body {
 .stages-status {
     display: flex;
     flex-direction: column;
-    gap: 8px;
 }
 
 .stage-status-item {
@@ -588,6 +587,24 @@ body {
 .stage-wrapper {
     display: flex;
     flex-direction: column;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.stage-wrapper.selected {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.stage-wrapper .stage-status-item.selectable {
+    border: none;
+    margin-bottom: 0;
+}
+
+.stage-wrapper .stage-status-item.selectable.selected {
+    border: none;
+    background: transparent;
 }
 
 .stage-expand-icon {
@@ -599,16 +616,11 @@ body {
 }
 
 .stage-options-panel {
-    margin-left: 22px;
-    padding: 8px 12px;
-    background: var(--bg-hover);
-    border-radius: 0 0 6px 6px;
-    border: 1px solid var(--border);
-    border-top: none;
+    padding: 8px 12px 8px 34px;
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    margin-top: -1px;
+    border-top: 1px solid var(--border);
 }
 
 .stage-options-panel.hidden {

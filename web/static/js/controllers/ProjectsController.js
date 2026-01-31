@@ -295,11 +295,13 @@ export class ProjectsController {
         if (this.selectedStages.has(stage)) {
             this.selectedStages.delete(stage);
             item.classList.remove('selected');
+            if (wrapper) wrapper.classList.remove('selected');
             if (optionsPanel) optionsPanel.classList.add('hidden');
             if (expandIcon) expandIcon.textContent = '▸';
         } else {
             this.selectedStages.add(stage);
             item.classList.add('selected');
+            if (wrapper) wrapper.classList.add('selected');
             if (optionsPanel) {
                 optionsPanel.classList.remove('hidden');
                 this.bindStageOptionHandlers(stage, optionsPanel);
