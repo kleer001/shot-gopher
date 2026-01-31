@@ -277,37 +277,25 @@ python scripts/run_pipeline.py footage.mp4 -s colmap -q high -d
 
 ## mocap
 
-Human motion capture using GVHMR (preferred) or WHAM (fallback).
+Human motion capture using GVHMR.
 
 | | |
 |---|---|
 | **VRAM** | ~12 GB |
 | **Input** | `source/frames/*.png`, `camera/extrinsics.json` |
-| **Output** | `mocap/gvhmr/` or `mocap/wham/`, `mocap/mesh_sequence/` |
-| **Workflow** | None (GVHMR/WHAM) |
+| **Output** | `mocap/motion.pkl`, `mocap/mesh_sequence/` |
+| **Workflow** | None (GVHMR) |
 
 **Requirements:**
-- GVHMR or WHAM installed ([Installation guide](../installation.md))
+- GVHMR installed ([Installation guide](../installation.md))
 - Camera data from `colmap` stage
 
 ```bash
 python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
 ```
 
-**Method selection:**
-```bash
-# Auto (default): tries GVHMR first, falls back to WHAM
-python scripts/run_mocap.py MyShot --method auto
-
-# Force GVHMR
-python scripts/run_mocap.py MyShot --method gvhmr
-
-# Force WHAM
-python scripts/run_mocap.py MyShot --method wham
-```
-
 **Pipeline:**
-1. **GVHMR/WHAM** — Extracts world-grounded pose from video (SMPL-X compatible)
+1. **GVHMR** — Extracts world-grounded pose from video (SMPL-X compatible)
 2. **Mesh Generation** — Creates animated SMPL-X mesh sequence
 
 **Troubleshooting:** See [Mocap issues](troubleshooting.md#motion-capture-requires-camera-data)

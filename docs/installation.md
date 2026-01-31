@@ -8,7 +8,7 @@ The installation wizard provides a guided, menu-driven interface for installing 
 
 - Conda environment management (automatic)
 - Dependency installation (PyTorch, COLMAP, etc.)
-- Git repository cloning (GVHMR, WHAM, ComfyUI)
+- Git repository cloning (GVHMR, ComfyUI)
 - Checkpoint downloading (automatic with progress bars)
 - Installation validation (smoke tests)
 - Configuration file generation
@@ -99,8 +99,7 @@ Output:
   ✗ PyTorch with CUDA
 
 [Motion Capture]
-  ✗ GVHMR (preferred)
-  ✗ WHAM (fallback)
+  ✗ GVHMR
 ```
 
 ### Validate Installation
@@ -132,7 +131,7 @@ The wizard detects incomplete components and offers to resume.
 Skip the menu and install directly:
 
 ```bash
-python scripts/install_wizard.py -C wham
+python scripts/install_wizard.py -C gvhmr
 python scripts/install_wizard.py -C comfyui
 python scripts/install_wizard.py -C pytorch
 ```
@@ -142,8 +141,7 @@ Valid components:
 - `pytorch` - PyTorch with CUDA
 - `colmap` - COLMAP (built from source)
 - `mocap_core` - All motion capture tools
-- `gvhmr` - GVHMR motion capture (preferred)
-- `wham` - WHAM motion capture (fallback)
+- `gvhmr` - GVHMR motion capture
 - `comfyui` - ComfyUI and custom nodes
 
 ## Installation Menus
@@ -171,8 +169,7 @@ What would you like to install?
 - SAM3 custom node
 
 **Option 3** adds:
-- GVHMR (motion capture, preferred)
-- WHAM (motion capture, fallback)
+- GVHMR (motion capture)
 - All checkpoints (automatic download)
 
 **Option 4** shows a detailed component checklist.
@@ -196,8 +193,7 @@ Choose individual components:
   [ ] SAM3
 
 [Motion Capture]
-  [ ] GVHMR (motion capture, preferred)
-  [ ] WHAM (motion capture, fallback)
+  [ ] GVHMR (motion capture)
 ```
 
 Use spacebar to toggle, Enter to confirm.
@@ -253,9 +249,6 @@ Checkpoints are downloaded automatically:
 **GVHMR:**
 - GVHMR model checkpoints (~4.0 GB)
 
-**WHAM (fallback):**
-- `wham_vit_w_3dpw.pth.tar` (1.2 GB)
-
 Downloads include:
 - Progress bars with percentage and MB transferred
 - Resume capability (if interrupted)
@@ -283,7 +276,6 @@ Generated configuration with all paths:
   "python_executable": "/home/user/miniconda3/envs/vfx-pipeline/bin/python",
   "install_dir": "/home/user/shot-gopher/.vfx_pipeline",
   "gvhmr_dir": "/home/user/shot-gopher/.vfx_pipeline/GVHMR",
-  "wham_dir": "/home/user/shot-gopher/.vfx_pipeline/WHAM",
   "comfyui_dir": "/home/user/shot-gopher/.vfx_pipeline/ComfyUI",
   "cuda_available": true,
   "cuda_version": "12.1"
@@ -302,12 +294,11 @@ Environment activation script:
 conda activate vfx-pipeline
 
 # Set up Python path
-export PYTHONPATH="${PYTHONPATH}:/path/to/.vfx_pipeline/GVHMR:/path/to/.vfx_pipeline/WHAM"
+export PYTHONPATH="${PYTHONPATH}:/path/to/.vfx_pipeline/GVHMR"
 
 # Set up environment variables
 export VFX_PIPELINE_BASE="/path/to/.vfx_pipeline"
 export GVHMR_DIR="/path/to/.vfx_pipeline/GVHMR"
-export WHAM_DIR="/path/to/.vfx_pipeline/WHAM"
 export SMPLX_MODEL_DIR="${VFX_PIPELINE_BASE}/smplx_models"
 
 echo "✓ VFX Pipeline environment activated"
@@ -329,7 +320,6 @@ Tracks installation progress:
     "pytorch": "completed",
     "colmap": "completed",
     "gvhmr": "in_progress",
-    "wham": "pending",
     "comfyui": "completed"
   },
   "last_updated": "2026-01-12 14:30:00",
@@ -362,7 +352,6 @@ Previous installation detected (incomplete)
 
 Completed: pytorch, colmap, comfyui
 In progress: gvhmr
-Pending: wham
 
 Resume installation? [Y/n]: y
 ```
@@ -397,7 +386,6 @@ Verifies checkpoint files exist and have correct size:
 ```
 [Checkpoint Validation]
   ✓ GVHMR checkpoint found (4.0 GB)
-  ✓ WHAM checkpoint found (1.2 GB)
 ```
 
 ### Repository Tests
@@ -407,7 +395,6 @@ Checks git repositories are clean:
 ```
 [Repository Status]
   ✓ GVHMR: Clean working directory
-  ✓ WHAM: Clean working directory
   ✓ ComfyUI: Clean working directory
 ```
 
@@ -451,7 +438,6 @@ Clean up space or choose a different installation directory.
 URLs may be outdated. Manually download and place in correct directories:
 
 - GVHMR: `.vfx_pipeline/GVHMR/checkpoints/`
-- WHAM: `.vfx_pipeline/WHAM/checkpoints/`
 
 ### "Import errors after installation"
 
@@ -490,16 +476,10 @@ Each component can be installed separately:
 # PyTorch
 conda install pytorch pytorch-cuda=12.1 -c pytorch -c nvidia -y
 
-# GVHMR (preferred)
+# GVHMR
 cd .vfx_pipeline
 git clone https://github.com/zju3dv/GVHMR.git
 cd GVHMR
-pip install -r requirements.txt
-
-# WHAM (fallback)
-cd .vfx_pipeline
-git clone https://github.com/yohanshin/WHAM.git
-cd WHAM
 pip install -r requirements.txt
 ```
 

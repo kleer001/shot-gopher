@@ -53,7 +53,7 @@ python scripts/run_pipeline.py ~/Videos/shot001.mp4 \
   --name Shot001
 ```
 
-**Motion capture** (requires GVHMR or WHAM + SMPL-X models):
+**Motion capture** (requires GVHMR + SMPL-X models):
 ```bash
 python scripts/run_pipeline.py ~/Videos/person_walking.mp4 \
   -s ingest,colmap,mocap \

@@ -4,9 +4,9 @@ This guide explains how to test each component of the motion capture pipeline in
 
 ## Overview
 
-The mocap pipeline uses GVHMR (preferred) or WHAM (fallback) for motion tracking:
+The mocap pipeline uses GVHMR for motion tracking:
 
-1. **Motion tracking** (GVHMR/WHAM) - Skeleton animation in world space
+1. **Motion tracking** (GVHMR) - Skeleton animation in world space
 2. **Mesh generation** - SMPL-X mesh sequence from motion data
 3. **Texture projection** - Multi-view UV texturing
 
@@ -28,9 +28,8 @@ python scripts/run_mocap.py --check
 #   ✓ trimesh
 #   ✓ opencv
 #   ✓ pillow
-# Motion capture methods:
-#   ✓ gvhmr (preferred)
-#   ✓ wham (fallback)
+# Motion capture:
+#   ✓ gvhmr
 ```
 
 ### Test Data Setup
@@ -57,50 +56,35 @@ python scripts/run_pipeline.py test_footage.mp4 \
 # - camera/ (COLMAP camera data)
 ```
 
-## Stage 1: Motion Tracking (GVHMR/WHAM)
+## Stage 1: Motion Tracking (GVHMR)
 
 **Purpose:** Extract skeleton animation in world coordinates
 
 ### Test Command
 
 ```bash
-# Auto-select best method (GVHMR preferred)
 python scripts/run_mocap.py projects/Test_Shot
-
-# Force specific method
-python scripts/run_mocap.py projects/Test_Shot --method gvhmr
-python scripts/run_mocap.py projects/Test_Shot --method wham
 ```
 
 ### Expected Behavior
 
 1. Loads frames from `source/frames/`
 2. Optionally uses masks from `roto/` to focus on person
-3. Runs GVHMR or WHAM inference
-4. Saves results to `mocap/gvhmr/output.pkl` or `mocap/wham/motion.pkl`
+3. Runs GVHMR inference
+4. Saves results to `mocap/motion.pkl`
 
 ### Success Criteria
 
 ```bash
-# Check output file exists (GVHMR)
-ls projects/Test_Shot/mocap/gvhmr/output.pkl
-
-# Or for WHAM
-ls projects/Test_Shot/mocap/wham/motion.pkl
+# Check output file exists
+ls projects/Test_Shot/mocap/motion.pkl
 
 # Validate motion data
 python -c "
 import pickle
 
-# Try GVHMR output first, fall back to WHAM
-try:
-    with open('projects/Test_Shot/mocap/gvhmr/output.pkl', 'rb') as f:
-        data = pickle.load(f)
-    print('Using GVHMR output')
-except FileNotFoundError:
-    with open('projects/Test_Shot/mocap/wham/motion.pkl', 'rb') as f:
-        data = pickle.load(f)
-    print('Using WHAM output')
+with open('projects/Test_Shot/mocap/motion.pkl', 'rb') as f:
+    data = pickle.load(f)
 
 # Check structure
 print(f'Keys: {data.keys()}')
@@ -125,10 +109,6 @@ if 'transl' in data:
 - Install GVHMR: `git clone https://github.com/zju3dv/GVHMR.git && cd GVHMR && pip install -e .`
 - Download checkpoints from GVHMR project page
 
-**"WHAM not available":**
-- Install WHAM: `git clone https://github.com/yohanshin/WHAM.git && cd WHAM && pip install -e .`
-- Download checkpoints from WHAM project page
-
 **"No frames found":**
 - Check `projects/Test_Shot/source/frames/` contains frame_*.png files
 - Run ingest stage first: `python scripts/run_pipeline.py footage.mp4 --stages ingest`
@@ -136,7 +116,6 @@ if 'transl' in data:
 **Motion looks wrong:**
 - Verify person is visible and upright in frames
 - Check segmentation masks if using roto/ (should tightly bound person)
-- Try the other method (`--method wham` if GVHMR fails, or vice versa)
 
 ## Stage 2: Mesh Generation
 
@@ -146,7 +125,7 @@ if 'transl' in data:
 
 ```bash
 python scripts/smplx_from_motion.py projects/Test_Shot \
-    --motion mocap/gvhmr/output.pkl \
+    --motion mocap/motion.pkl \
     --output mocap/smplx_animated/
 ```
 
@@ -262,7 +241,7 @@ python scripts/run_mocap.py projects/Test_Shot
 
 # Expected output:
 # mocap/
-# ├── gvhmr/output.pkl (or wham/motion.pkl)
+# ├── motion.pkl
 # └── mesh_sequence/frame_*.obj
 ```
 
@@ -270,8 +249,7 @@ python scripts/run_mocap.py projects/Test_Shot
 
 ```bash
 # Check all outputs exist
-test -d projects/Test_Shot/mocap/gvhmr && echo "✓ GVHMR output" || \
-test -d projects/Test_Shot/mocap/wham && echo "✓ WHAM output"
+test -f projects/Test_Shot/mocap/motion.pkl && echo "✓ Motion data"
 test -d projects/Test_Shot/mocap/mesh_sequence && echo "✓ Mesh Sequence"
 
 # Import test (requires Maya/Blender/Houdini)
@@ -286,7 +264,6 @@ Typical processing times on GPU (RTX 3090):
 | Stage | Time (100 frames) | Notes |
 |-------|------------------|-------|
 | GVHMR | ~2-3 minutes | GPU inference |
-| WHAM | ~2-3 minutes | GPU inference |
 | Mesh generation | ~1-2 minutes | Per-frame SMPL-X |
 | Texture | ~5-10 minutes | Depends on resolution |
 
@@ -298,8 +275,6 @@ Typical processing times on GPU (RTX 3090):
 
 ```bash
 # Process shorter sequences or use lower-res frames
-# GVHMR and WHAM have different memory profiles
-# Try --method wham if GVHMR runs out of memory
 ```
 
 ### Mesh Not Aligned with Camera
@@ -318,12 +293,8 @@ print('Camera 0 position:', cameras[0][:3, 3])
 
 # Load motion
 import pickle
-try:
-    with open('projects/Test_Shot/mocap/gvhmr/output.pkl', 'rb') as f:
-        motion = pickle.load(f)
-except FileNotFoundError:
-    with open('projects/Test_Shot/mocap/wham/motion.pkl', 'rb') as f:
-        motion = pickle.load(f)
+with open('projects/Test_Shot/mocap/motion.pkl', 'rb') as f:
+    motion = pickle.load(f)
 
 if 'transl' in motion:
     print('Person position:', motion['transl'][0])
@@ -337,17 +308,16 @@ if 'transl' in motion:
 Remember dependency order:
 1. Ingest → frames
 2. COLMAP → camera data
-3. Motion (GVHMR/WHAM) → requires frames
+3. Motion (GVHMR) → requires frames
 4. Mesh generation → requires motion data
 5. Texture → requires mesh sequence + camera + frames
 
 ## Debugging Tips
 
 1. **Start small:** Test on 10-20 frame sequence first
-2. **Check method availability:** Run `python scripts/run_mocap.py --check`
-3. **Try both methods:** If GVHMR fails, try WHAM and vice versa
-4. **Check data formats:** Print shapes/types of all loaded data
-5. **Test stages independently:** Don't run full pipeline until each stage works
+2. **Check availability:** Run `python scripts/run_mocap.py --check`
+3. **Check data formats:** Print shapes/types of all loaded data
+4. **Test stages independently:** Don't run full pipeline until each stage works
 
 ## Unit Tests
 
@@ -413,13 +383,11 @@ When reporting bugs, include:
 - Test data characteristics (frame count, resolution, person visibility)
 - GPU info (`nvidia-smi`)
 - Python version (`python --version`)
-- Which method was used (GVHMR or WHAM)
 
 ## Next Steps
 
 After successful testing:
 1. Test on real production footage
-2. Compare GVHMR vs WHAM results for your use case
-3. Implement Alembic export (currently exports OBJ sequence)
-4. Add seam blending to texture projection
-5. Support multi-person workflows
+2. Implement Alembic export (currently exports OBJ sequence)
+3. Add seam blending to texture projection
+4. Support multi-person workflows

@@ -393,23 +393,12 @@ class TestRunGvhmrMotionTracking:
 
 
 class TestRunMocapPipeline:
-    def test_missing_dependencies(self):
-        """Test that pipeline handles missing dependencies gracefully."""
+    def test_missing_gvhmr(self):
+        """Test that pipeline handles missing GVHMR gracefully."""
         with tempfile.TemporaryDirectory() as tmpdir:
             project_dir = Path(tmpdir)
             (project_dir / "source").mkdir()
 
             from run_mocap import run_mocap_pipeline
-            result = run_mocap_pipeline(project_dir, method="auto")
-            assert result is False
-
-    def test_method_selection_auto(self):
-        """Test that auto method selection works."""
-        from run_mocap import run_mocap_pipeline
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_dir = Path(tmpdir)
-            (project_dir / "source").mkdir()
-
-            result = run_mocap_pipeline(project_dir, method="auto")
+            result = run_mocap_pipeline(project_dir)
             assert result is False

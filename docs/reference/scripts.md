@@ -13,7 +13,7 @@ While `run_pipeline.py` orchestrates the full pipeline, each component can also 
 | `setup_project.py` | Initialize project structure | Project path | Directory tree |
 | `run_colmap.py` | COLMAP reconstruction | Frames | 3D model |
 | `run_segmentation.py` | Dynamic scene segmentation | Frames | Masks |
-| `run_mocap.py` | Human motion capture (GVHMR/WHAM) | Frames + camera | Mesh sequences |
+| `run_mocap.py` | Human motion capture (GVHMR) | Frames + camera | Mesh sequences |
 | `run_gsir.py` | Material decomposition | COLMAP model | PBR materials |
 | `export_camera.py` | Camera export | Camera JSON | Alembic/FBX |
 | `texture_projection.py` | Texture SMPL-X meshes | Meshes + frames | Textured meshes |
@@ -214,7 +214,7 @@ Scene boundaries prevent mask propagation across cuts.
 
 ## run_mocap.py
 
-Human motion capture pipeline using GVHMR (preferred) or WHAM (fallback).
+Human motion capture pipeline using GVHMR.
 
 ### Usage
 
@@ -228,26 +228,15 @@ python scripts/run_mocap.py <project_dir> [options]
 - `project_dir` - Project directory with frames and camera data
 
 **Options**:
-- `--method`, `-m` - Motion capture method: `auto` (default), `gvhmr`, or `wham`
 - `--skip-texture` - Skip texture projection (faster, kept for compatibility)
 - `--check` - Validate installation without processing
 - `--no-colmap-intrinsics` - Don't use COLMAP camera intrinsics
 
 ### Examples
 
-**Full motion capture** (auto-selects best available method):
+**Full motion capture**:
 ```bash
 python scripts/run_mocap.py ./projects/Actor01
-```
-
-**Force GVHMR**:
-```bash
-python scripts/run_mocap.py ./projects/Actor01 --method gvhmr
-```
-
-**Force WHAM** (fallback):
-```bash
-python scripts/run_mocap.py ./projects/Actor01 --method wham
 ```
 
 **Check installation**:
@@ -263,31 +252,21 @@ python scripts/run_mocap.py ./projects/Actor01 --check
 
 ### Output
 
-- `mocap/gvhmr/` or `mocap/wham/` - Pose estimates (depending on method)
-  - `output.pkl` - Motion data (poses, translation, shape)
+- `mocap/motion.pkl` - Motion data (poses, translation, shape)
 - `mocap/mesh_sequence/` - Exported mesh sequence
   - `mesh_*.obj` - OBJ mesh files
 
 ### Pipeline
 
-1. **GVHMR/WHAM** extracts 3D pose from video (world-grounded motion)
+1. **GVHMR** extracts 3D pose from video (world-grounded motion)
 2. **SMPL-X mesh generation** creates animated body mesh sequence
-
-### Method Selection
-
-| Method | Description |
-|--------|-------------|
-| `auto` | Tries GVHMR first, falls back to WHAM if unavailable (default) |
-| `gvhmr` | Force GVHMR (SIGGRAPH Asia 2024, more accurate) |
-| `wham` | Force WHAM (fallback option) |
 
 ### Tips
 
 - Requires good camera tracking (from COLMAP or Depth-Anything-V3)
 - Actor should be visible in majority of frames
 - Better results with frontal views
-- GVHMR provides better accuracy for world-grounded motion
-- WHAM is a reliable fallback if GVHMR is not installed
+- GVHMR provides accurate world-grounded motion (SIGGRAPH Asia 2024)
 
 ---
 
@@ -548,7 +527,7 @@ python scripts/texture_projection.py \
 
 ## smplx_from_motion.py
 
-Generate animated SMPL-X mesh sequences from motion capture data (GVHMR or WHAM).
+Generate animated SMPL-X mesh sequences from motion capture data.
 
 ### Usage
 
@@ -562,7 +541,7 @@ python scripts/smplx_from_motion.py <project_dir> [options]
 - `project_dir` - Project directory
 
 **Required**:
-- `--motion` - Path to motion.pkl file (from GVHMR or WHAM)
+- `--motion` - Path to motion.pkl file (from GVHMR)
 - `--output` - Output directory for mesh sequence
 
 **Optional**:
@@ -576,14 +555,14 @@ python scripts/smplx_from_motion.py <project_dir> [options]
 **Basic mesh generation**:
 ```bash
 python scripts/smplx_from_motion.py ./projects/Actor01 \
-    --motion mocap/wham/motion.pkl \
+    --motion mocap/motion.pkl \
     --output mocap/smplx_animated/
 ```
 
 **With rest pose export**:
 ```bash
 python scripts/smplx_from_motion.py ./projects/Actor01 \
-    --motion mocap/wham/motion.pkl \
+    --motion mocap/motion.pkl \
     --output mocap/smplx_animated/ \
     --rest-pose mocap/smplx_rest.obj
 ```
@@ -591,14 +570,14 @@ python scripts/smplx_from_motion.py ./projects/Actor01 \
 **Specific gender model**:
 ```bash
 python scripts/smplx_from_motion.py ./projects/Actor01 \
-    --motion mocap/wham/motion.pkl \
+    --motion mocap/motion.pkl \
     --output mocap/smplx_animated/ \
     --gender female
 ```
 
 ### Input
 
-- `mocap/gvhmr/output.pkl` or `mocap/wham/motion.pkl` - Motion data containing:
+- `mocap/motion.pkl` - Motion data containing:
   - `poses`: SMPL pose parameters
   - `trans`: Root translation
   - `betas`: Shape parameters

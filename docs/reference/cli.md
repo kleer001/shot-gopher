@@ -191,8 +191,8 @@ Pipeline creates this directory structure:
 │   ├── dense/           # Dense point cloud (optional)
 │   └── meshed/          # Mesh (optional)
 ├── mocap/
-│   ├── gvhmr/           # GVHMR pose estimates (preferred)
-│   └── wham/            # WHAM pose estimates (fallback)
+│   ├── motion.pkl       # GVHMR pose estimates
+│   └── mesh_sequence/   # SMPL-X mesh sequence
 ├── gsir/
 │   ├── model/           # Checkpoints
 │   └── materials/       # Albedo, roughness, metallic
@@ -230,7 +230,7 @@ python scripts/run_pipeline.py footage.mp4 -c http://192.168.1.100:8188
 
 ```bash
 python scripts/run_colmap.py MyShot -q high
-python scripts/run_mocap.py MyShot --method auto  # auto, gvhmr, or wham
+python scripts/run_mocap.py MyShot
 python scripts/export_camera.py MyShot --fps 24
 ```
 

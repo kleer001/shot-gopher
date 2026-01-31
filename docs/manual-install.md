@@ -175,7 +175,7 @@ conda install -c conda-forge colmap
 
 Required only for the `mocap` stage.
 
-### GVHMR (Preferred)
+### GVHMR
 
 ```bash
 cd .vfx_pipeline
@@ -185,21 +185,6 @@ pip install -r requirements.txt
 
 # Download checkpoints from GVHMR project page
 cd ..
-```
-
-### WHAM (Fallback)
-
-```bash
-cd .vfx_pipeline
-git clone https://github.com/yohanshin/WHAM.git
-cd WHAM
-pip install -r requirements.txt
-
-# Download checkpoint
-mkdir -p checkpoints
-cd checkpoints
-# Download wham_vit_w_3dpw.pth.tar from WHAM releases
-cd ../..
 ```
 
 ### SMPL-X Models
@@ -217,7 +202,6 @@ Create `.vfx_pipeline/config.json`:
   "install_dir": ".vfx_pipeline",
   "comfyui_dir": ".vfx_pipeline/ComfyUI",
   "gvhmr_dir": ".vfx_pipeline/GVHMR",
-  "wham_dir": ".vfx_pipeline/WHAM",
   "cuda_available": true
 }
 ```
@@ -247,8 +231,6 @@ shot-gopher/
 │   │       ├── sam3/
 │   │       └── depth/
 │   ├── GVHMR/
-│   │   └── checkpoints/
-│   ├── WHAM/
 │   │   └── checkpoints/
 │   └── config.json
 ├── scripts/
