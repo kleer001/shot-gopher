@@ -16,9 +16,12 @@ import { ELEMENTS, CSS_CLASSES } from '../config/constants.js';
 function getStagesFromConfig() {
     const config = stateManager.getState().config;
     if (!config || !config.stages) {
+        console.warn('Config not loaded, using fallback stages');
         return ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
     }
-    return Object.keys(config.stages);
+    const stages = Object.keys(config.stages);
+    console.log('Stages from config:', stages);
+    return stages;
 }
 
 function getStageOutputDir(stageId) {
@@ -181,11 +184,16 @@ export class ProjectsController {
     }
 
     renderStagesStatus(projectData, outputsData, vramData) {
-        if (!this.elements.detailStages) return;
+        console.log('renderStagesStatus called', { projectData, outputsData, vramData });
+        if (!this.elements.detailStages) {
+            console.error('detailStages element not found!');
+            return;
+        }
 
         const outputs = outputsData?.outputs || {};
         const vramStages = vramData?.analysis?.stages || {};
         const allStages = getStagesFromConfig();
+        console.log('allStages:', allStages, 'count:', allStages.length);
 
         let completedCount = 0;
 
