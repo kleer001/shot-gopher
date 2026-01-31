@@ -130,7 +130,7 @@ class TestCopyAndPopulateWorkflows:
             source_workflow = {
                 "nodes": [{"widgets_values": ["source/frames/"]}]
             }
-            with open(workflows_dir / "test.json", "w", encoding='utf-8') as f:
+            with open(workflows_dir / "test.json", "w") as f:
                 json.dump(source_workflow, f)
 
             # Create project
@@ -144,7 +144,7 @@ class TestCopyAndPopulateWorkflows:
             assert created[0].exists()
 
             # Verify populated content
-            with open(created[0], encoding='utf-8') as f:
+            with open(created[0]) as f:
                 result = json.load(f)
 
             expected_path = str(project_dir / "source/frames") + "/"

@@ -95,12 +95,12 @@ class TestLoadCameraData:
 
             # Create test extrinsics (2 frames, identity matrices)
             extrinsics = [np.eye(4).tolist(), np.eye(4).tolist()]
-            with open(camera_dir / "extrinsics.json", "w", encoding='utf-8') as f:
+            with open(camera_dir / "extrinsics.json", "w") as f:
                 json.dump(extrinsics, f)
 
             # Create test intrinsics
             intrinsics = {"fx": 1000, "fy": 1000, "cx": 960, "cy": 540}
-            with open(camera_dir / "intrinsics.json", "w", encoding='utf-8') as f:
+            with open(camera_dir / "intrinsics.json", "w") as f:
                 json.dump(intrinsics, f)
 
             loaded_ext, loaded_int, source = load_camera_data(camera_dir)
@@ -115,7 +115,7 @@ class TestLoadCameraData:
 
             # Create test extrinsics (2 frames, identity matrices)
             extrinsics = [np.eye(4).tolist(), np.eye(4).tolist()]
-            with open(camera_dir / "extrinsics.json", "w", encoding='utf-8') as f:
+            with open(camera_dir / "extrinsics.json", "w") as f:
                 json.dump(extrinsics, f)
 
             # Create test intrinsics (COLMAP format with extra fields)
@@ -123,11 +123,11 @@ class TestLoadCameraData:
                 "fx": 1000, "fy": 1000, "cx": 960, "cy": 540,
                 "width": 1920, "height": 1080, "model": "OPENCV"
             }
-            with open(camera_dir / "intrinsics.json", "w", encoding='utf-8') as f:
+            with open(camera_dir / "intrinsics.json", "w") as f:
                 json.dump(intrinsics, f)
 
             # Create colmap_raw.json to indicate COLMAP source
-            with open(camera_dir / "colmap_raw.json", "w", encoding='utf-8') as f:
+            with open(camera_dir / "colmap_raw.json", "w") as f:
                 json.dump({"source": "colmap"}, f)
 
             loaded_ext, loaded_int, source = load_camera_data(camera_dir)
@@ -162,7 +162,7 @@ class TestExportJsonCamera:
 
             assert output_path.exists()
 
-            with open(output_path, encoding='utf-8') as f:
+            with open(output_path) as f:
                 data = json.load(f)
 
             assert data["start_frame"] == 1001
@@ -191,7 +191,7 @@ class TestExportAfterEffectsJsx:
             assert output_path.exists()
 
             # Verify file content
-            with open(output_path, encoding='utf-8') as f:
+            with open(output_path) as f:
                 content = f.read()
 
             # Check for key JSX elements

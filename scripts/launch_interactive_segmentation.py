@@ -101,7 +101,7 @@ def prepare_workflow(project_dir: Path) -> Path:
 
     output_path = workflows_dir / TEMPLATE_NAME
 
-    with open(template_path, encoding='utf-8') as f:
+    with open(template_path) as f:
         workflow_data = json.load(f)
 
     populated = populate_workflow(workflow_data, project_dir)

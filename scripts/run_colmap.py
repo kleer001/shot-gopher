@@ -534,7 +534,7 @@ def count_model_images(model_dir: Path) -> int:
             pass
     elif images_txt.exists():
         try:
-            with open(images_txt, "r", encoding='utf-8') as f:
+            with open(images_txt, "r") as f:
                 lines = [l for l in f if l.strip() and not l.startswith("#")]
                 return len(lines) // 2
         except IOError:
@@ -825,7 +825,7 @@ def read_colmap_cameras(cameras_path: Path) -> dict:
 
     txt_path = cameras_path.parent / "cameras.txt"
     if txt_path.exists():
-        with open(txt_path, encoding='utf-8') as f:
+        with open(txt_path) as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -861,7 +861,7 @@ def read_colmap_cameras(cameras_path: Path) -> dict:
             ], capture_output=True, check=True, shell=is_bat)
 
             # Now read the text file
-            with open(temp_dir / "cameras.txt", encoding='utf-8') as f:
+            with open(temp_dir / "cameras.txt") as f:
                 for line in f:
                     line = line.strip()
                     if not line or line.startswith("#"):
@@ -899,7 +899,7 @@ def read_colmap_images(images_path: Path, debug: bool = False) -> dict:
     if txt_path.exists():
         if debug:
             print(f"    DEBUG: Found text file: {txt_path}")
-        with open(txt_path, encoding='utf-8') as f:
+        with open(txt_path) as f:
             all_lines = f.readlines()
 
         if debug:
@@ -978,7 +978,7 @@ def read_colmap_images(images_path: Path, debug: bool = False) -> dict:
                 else:
                     print(f"    DEBUG: Converted file not found!")
 
-            with open(txt_file, encoding='utf-8') as f:
+            with open(txt_file) as f:
                 all_lines = f.readlines()
 
             if debug:

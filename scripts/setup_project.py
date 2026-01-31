@@ -131,7 +131,7 @@ def copy_and_populate_workflows(
             continue
 
         # Load and populate
-        with open(workflow_path, encoding='utf-8') as f:
+        with open(workflow_path) as f:
             workflow_data = json.load(f)
 
         populated = populate_workflow(workflow_data, project_dir)

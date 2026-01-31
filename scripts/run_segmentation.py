@@ -76,7 +76,7 @@ def queue_workflow(workflow_path: Path, comfyui_url: str, prompt: Optional[str] 
     Returns:
         Prompt ID for tracking
     """
-    with open(workflow_path, encoding='utf-8') as f:
+    with open(workflow_path) as f:
         workflow = json.load(f)
 
     api_workflow = convert_workflow_to_api_format(workflow)

@@ -76,10 +76,10 @@ def load_cameras(camera_dir: Path) -> Tuple[np.ndarray, dict]:
     if not intrinsics_file.exists():
         raise FileNotFoundError(f"Camera intrinsics not found: {intrinsics_file}")
 
-    with open(extrinsics_file, encoding='utf-8') as f:
+    with open(extrinsics_file) as f:
         extrinsics = np.array(json.load(f))
 
-    with open(intrinsics_file, encoding='utf-8') as f:
+    with open(intrinsics_file) as f:
         intrinsics = json.load(f)
 
     return extrinsics, intrinsics

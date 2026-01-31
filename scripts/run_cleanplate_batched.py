@@ -136,7 +136,7 @@ def load_template_workflow() -> dict:
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")
 
-    with open(template_path, encoding='utf-8') as f:
+    with open(template_path) as f:
         return json.load(f)
 
 
@@ -205,7 +205,7 @@ def load_batch_state(project_dir: Path) -> dict:
     """Load batch processing state."""
     state_file = project_dir / "cleanplate" / STATE_FILENAME
     if state_file.exists():
-        with open(state_file, encoding='utf-8') as f:
+        with open(state_file) as f:
             return json.load(f)
     return {"completed_chunks": [], "settings": {}}
 

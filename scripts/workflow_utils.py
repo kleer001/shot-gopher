@@ -56,7 +56,7 @@ def refresh_workflow_from_template(
         project_dir = workflow_path.parent.parent
 
     def copy_and_populate():
-        with open(template_path, encoding='utf-8') as f:
+        with open(template_path) as f:
             workflow_data = json.load(f)
         populated = populate_workflow(workflow_data, project_dir)
         with open(workflow_path, 'w', encoding='utf-8') as f:
@@ -64,12 +64,12 @@ def refresh_workflow_from_template(
 
     if not workflow_path.exists():
         copy_and_populate()
-        print(f"  -> Copied workflow from template: {template_name}")
+        print(f"  → Copied workflow from template: {template_name}")
         return True
 
     if template_path.stat().st_mtime > workflow_path.stat().st_mtime:
         copy_and_populate()
-        print(f"  -> Refreshed workflow from template: {template_name}")
+        print(f"  → Refreshed workflow from template: {template_name}")
         return True
 
     return False
@@ -91,11 +91,11 @@ def update_segmentation_prompt(
         project_dir: Project root for computing relative paths
         start_frame: If provided, set frame_idx and enable bidirectional propagation
     """
-    print(f"  -> Setting segmentation prompt: {prompt}")
+    print(f"  → Setting segmentation prompt: {prompt}")
     if start_frame is not None:
-        print(f"  -> Starting segmentation from frame {start_frame} (bidirectional)")
+        print(f"  → Starting segmentation from frame {start_frame} (bidirectional)")
 
-    with open(workflow_path, encoding='utf-8') as f:
+    with open(workflow_path) as f:
         workflow = json.load(f)
 
     for node in workflow.get("nodes", []):
@@ -164,7 +164,7 @@ def update_cleanplate_resolution(
     if not frames:
         frames = sorted(source_frames_dir.glob("*.exr"))
     if not frames:
-        print("  -> Warning: No source frames found, using default resolution")
+        print("  → Warning: No source frames found, using default resolution")
         return
 
     source_width, source_height = get_image_dimensions(frames[0])
@@ -185,12 +185,12 @@ def update_cleanplate_resolution(
     proc_height = (proc_height // 8) * 8
 
     if proc_width < source_width or proc_height < source_height:
-        print(f"  -> Source resolution: {source_width}x{source_height}")
-        print(f"  -> ProPainter internal processing: {proc_width}x{proc_height} (capped for VRAM)")
+        print(f"  → Source resolution: {source_width}x{source_height}")
+        print(f"  → ProPainter internal processing: {proc_width}x{proc_height} (capped for VRAM)")
     else:
-        print(f"  -> Setting cleanplate resolution to {proc_width}x{proc_height}")
+        print(f"  → Setting cleanplate resolution to {proc_width}x{proc_height}")
 
-    with open(workflow_path, encoding='utf-8') as f:
+    with open(workflow_path) as f:
         workflow = json.load(f)
 
     for node in workflow.get("nodes", []):
