@@ -118,7 +118,7 @@ body {
 .dashboard-grid {
     flex: 1;
     display: grid;
-    grid-template-columns: 400px 1fr;
+    grid-template-columns: 1fr 2fr;
     gap: 16px;
     padding: 16px;
     overflow: hidden;
@@ -238,30 +238,31 @@ body {
 
 /* Video Stats */
 .video-stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     margin-top: 20px;
 }
 
 .stat {
-    text-align: center;
-    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
     background: var(--bg);
-    border-radius: 8px;
+    border-radius: 6px;
 }
 
 .stat-label {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-dim);
-    margin-bottom: 8px;
     letter-spacing: 0.5px;
 }
 
 .stat-value {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
 }
 
 /* System Info */
@@ -531,10 +532,20 @@ body {
     color: var(--text);
 }
 
+.btn-action.btn-danger {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: var(--danger);
+}
+
 .btn-action.btn-danger:hover {
     background: var(--danger);
     border-color: var(--danger);
     color: white;
+}
+
+.detail-card .card-header > .btn-danger {
+    margin-right: 12px;
 }
 
 .detail-section {
