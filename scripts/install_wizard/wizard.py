@@ -750,6 +750,16 @@ class InstallationWizard:
                 print("  ! GVHMR checkpoints not downloaded - run wizard again or visit:")
                 print("    https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD")
 
+        # Blender status (for Alembic mesh export)
+        if status.get('blender', False):
+            blender_path = PlatformManager.find_tool("blender")
+            print("\n[Blender] (Alembic Export)")
+            if blender_path:
+                print(f"  OK Installed at {blender_path}")
+            else:
+                print("  OK Configured (using system Blender)")
+            print("  Export meshes: python scripts/export_alembic.py <mesh_dir>")
+
         # GS-IR status
         if status.get('gsir', False):
             gsir_path = self.install_dir / "GS-IR"
