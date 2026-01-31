@@ -150,6 +150,19 @@ class TestFindOrCreateVideo:
             result = find_or_create_video(project_dir)
             assert result is None
 
+    def test_find_uppercase_extension(self):
+        """Test that uppercase video extensions are found (e.g., .MP4)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            source_dir = project_dir / "source"
+            source_dir.mkdir()
+
+            video_path = source_dir / "footage.MP4"
+            video_path.touch()
+
+            result = find_or_create_video(project_dir)
+            assert result == video_path
+
 
 class TestGvhmrOutputConversion:
     def test_conversion_smpl_params_global(self):
@@ -199,6 +212,47 @@ class TestGvhmrOutputConversion:
         with tempfile.TemporaryDirectory() as tmpdir:
             gvhmr_dir = Path(tmpdir) / "gvhmr"
             gvhmr_dir.mkdir()
+
+            wham_output = Path(tmpdir) / "wham" / "motion.pkl"
+
+            success = convert_gvhmr_to_wham_format(gvhmr_dir, wham_output)
+            assert success is False
+
+    def test_conversion_nonexistent_dir(self):
+        """Test conversion when GVHMR output directory doesn't exist."""
+        from run_mocap import convert_gvhmr_to_wham_format
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir) / "nonexistent"
+            wham_output = Path(tmpdir) / "wham" / "motion.pkl"
+
+            success = convert_gvhmr_to_wham_format(gvhmr_dir, wham_output)
+            assert success is False
+
+    def test_conversion_empty_body_pose(self):
+        """Test conversion fails gracefully with empty body_pose."""
+        pytest.importorskip("numpy")
+        import numpy as np
+        import pickle
+
+        from run_mocap import convert_gvhmr_to_wham_format
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir) / "gvhmr"
+            gvhmr_dir.mkdir()
+
+            gvhmr_data = {
+                'smpl_params_global': {
+                    'body_pose': np.zeros((0, 63)),
+                    'global_orient': np.zeros((0, 3)),
+                    'transl': np.zeros((0, 3)),
+                    'betas': np.zeros(10),
+                }
+            }
+
+            gvhmr_output = gvhmr_dir / "output.pkl"
+            with open(gvhmr_output, 'wb') as f:
+                pickle.dump(gvhmr_data, f)
 
             wham_output = Path(tmpdir) / "wham" / "motion.pkl"
 
@@ -275,3 +329,87 @@ class TestGvhmrOutputConversion:
                 wham_data = pickle.load(f)
 
             assert wham_data['poses'].shape == (n_frames, 72)
+
+    def test_conversion_multi_person(self):
+        """Test conversion with multiple person directories."""
+        pytest.importorskip("numpy")
+        import numpy as np
+        import pickle
+
+        from run_mocap import convert_gvhmr_to_wham_format
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir) / "gvhmr"
+            gvhmr_dir.mkdir()
+
+            for person_idx in range(3):
+                person_dir = gvhmr_dir / f"person_{person_idx}"
+                person_dir.mkdir()
+
+                n_frames = 10 + person_idx
+                gvhmr_data = {
+                    'smpl_params_global': {
+                        'body_pose': np.ones((n_frames, 63)) * person_idx,
+                        'global_orient': np.zeros((n_frames, 3)),
+                        'transl': np.ones((n_frames, 3)) * person_idx,
+                        'betas': np.zeros(10),
+                    }
+                }
+
+                gvhmr_output = person_dir / "output.pkl"
+                with open(gvhmr_output, 'wb') as f:
+                    pickle.dump(gvhmr_data, f)
+
+            wham_output = Path(tmpdir) / "wham" / "motion.pkl"
+
+            success = convert_gvhmr_to_wham_format(gvhmr_dir, wham_output)
+            assert success is True
+
+            assert wham_output.exists()
+            assert (wham_output.parent / "motion_person_0.pkl").exists()
+            assert (wham_output.parent / "motion_person_1.pkl").exists()
+            assert (wham_output.parent / "motion_person_2.pkl").exists()
+
+            with open(wham_output, 'rb') as f:
+                wham_data = pickle.load(f)
+            assert wham_data['poses'].shape == (10, 72)
+
+            with open(wham_output.parent / "motion_person_2.pkl", 'rb') as f:
+                person2_data = pickle.load(f)
+            assert person2_data['poses'].shape == (12, 72)
+
+
+class TestRunGvhmrMotionTracking:
+    def test_gvhmr_not_installed(self):
+        """Test graceful failure when GVHMR is not installed."""
+        from run_mocap import run_gvhmr_motion_tracking
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            (project_dir / "source").mkdir()
+
+            result = run_gvhmr_motion_tracking(project_dir)
+            assert result is False
+
+
+class TestRunMocapPipeline:
+    def test_missing_dependencies(self):
+        """Test that pipeline handles missing dependencies gracefully."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            (project_dir / "source").mkdir()
+
+            from run_mocap import run_mocap_pipeline
+            result = run_mocap_pipeline(project_dir, method="auto")
+            assert result is False
+
+    def test_method_selection_auto(self):
+        """Test that auto method selection works."""
+        from run_mocap import run_mocap_pipeline
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            (project_dir / "source").mkdir()
+
+            result = run_mocap_pipeline(project_dir, method="auto")
+            assert result is False

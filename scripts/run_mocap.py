@@ -3,16 +3,24 @@
 
 Reconstructs people from monocular video with:
 - SMPL-X body model (standard topology + UVs)
-- World-space motion tracking via WHAM
+- World-space motion tracking via GVHMR (preferred) or WHAM (fallback)
 
 Pipeline:
-1. Motion tracking (WHAM) → skeleton animation in world space
+1. Motion tracking (GVHMR/WHAM) -> skeleton animation in world space
+2. Output conversion to WHAM-compatible format for downstream compatibility
+
+GVHMR provides improved accuracy over WHAM:
+- 7-10mm lower error on standard benchmarks
+- Better camera motion handling (SimpleVO)
+- Multi-person support (outputs per-person results)
+- Can leverage COLMAP focal length for improved accuracy
 
 Usage:
     python run_mocap.py <project_dir> [options]
 
 Example:
     python run_mocap.py /path/to/projects/My_Shot
+    python run_mocap.py /path/to/projects/My_Shot --method gvhmr
 """
 
 import argparse
@@ -123,14 +131,20 @@ def install_instructions():
     print("\nCore dependencies:")
     print("  pip install numpy torch smplx trimesh opencv-python pillow")
 
-    print("\nWHAM (world-grounded motion):")
+    print("\nGVHMR (world-grounded motion, preferred):")
+    print("  git clone https://github.com/zju3dv/GVHMR.git")
+    print("  cd GVHMR && pip install -e .")
+    print("  # Download checkpoints from Google Drive (see GVHMR repo)")
+    print("  # Provides 7-10mm better accuracy than WHAM")
+
+    print("\nWHAM (fallback, deprecated):")
     print("  git clone https://github.com/yohanshin/WHAM.git")
     print("  cd WHAM && pip install -e .")
     print("  # Download checkpoints from project page")
 
     print("\nSMPL-X body model:")
     print("  1. Register at https://smpl-x.is.tue.mpg.de/")
-    print(f"  2. Download models → place in {INSTALL_DIR}/smplx_models/")
+    print(f"  2. Download models -> place in {INSTALL_DIR}/smplx_models/")
     print()
 
 
@@ -289,7 +303,7 @@ def detect_static_camera(
         translations = np.array(translations)
         variance = np.var(translations, axis=0).sum()
 
-        return variance < threshold_meters
+        return bool(variance < threshold_meters)
 
     except Exception:
         return False
@@ -317,6 +331,9 @@ def find_or_create_video(
     video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".webm"]
     for ext in video_extensions:
         for video_file in source_dir.glob(f"*{ext}"):
+            if not video_file.name.startswith("_"):
+                return video_file
+        for video_file in source_dir.glob(f"*{ext.upper()}"):
             if not video_file.name.startswith("_"):
                 return video_file
 
@@ -470,42 +487,26 @@ def run_gvhmr_motion_tracking(
         return False
 
 
-def convert_gvhmr_to_wham_format(
-    gvhmr_output_dir: Path,
-    output_path: Path
+def _convert_single_gvhmr_file(
+    gvhmr_file_path: Path,
+    output_path: Path,
+    np_module
 ) -> bool:
-    """Convert GVHMR output to WHAM-compatible motion.pkl format.
+    """Convert a single GVHMR output file to WHAM format.
 
     Args:
-        gvhmr_output_dir: Directory containing GVHMR output
+        gvhmr_file_path: Path to GVHMR pickle file
         output_path: Path for WHAM-compatible output file
+        np_module: numpy module reference
 
     Returns:
         True if conversion successful
     """
     import pickle
+    np = np_module
 
     try:
-        import numpy as np
-    except ImportError:
-        print("Error: numpy required for format conversion", file=sys.stderr)
-        return False
-
-    gvhmr_files = list(gvhmr_output_dir.rglob("*.pkl"))
-    if not gvhmr_files:
-        print(f"Error: No GVHMR output files found in {gvhmr_output_dir}", file=sys.stderr)
-        return False
-
-    gvhmr_output_path = gvhmr_files[0]
-    for f in gvhmr_files:
-        if "gvhmr" in f.name.lower() or "global" in f.name.lower():
-            gvhmr_output_path = f
-            break
-
-    print(f"  → Converting {gvhmr_output_path.name} to WHAM format...")
-
-    try:
-        with open(gvhmr_output_path, 'rb') as f:
+        with open(gvhmr_file_path, 'rb') as f:
             gvhmr_data = pickle.load(f)
 
         if 'smpl_params_global' in gvhmr_data:
@@ -521,10 +522,14 @@ def convert_gvhmr_to_wham_format(
         betas = params.get('betas')
 
         if body_pose is None:
-            print("Error: Could not find body_pose in GVHMR output", file=sys.stderr)
+            print(f"Error: Could not find body_pose in {gvhmr_file_path.name}", file=sys.stderr)
             return False
 
         body_pose = np.array(body_pose)
+        if body_pose.ndim < 2 or body_pose.shape[0] == 0:
+            print(f"Error: Invalid body_pose shape in {gvhmr_file_path.name}", file=sys.stderr)
+            return False
+
         n_frames = len(body_pose)
 
         if global_orient is not None:
@@ -578,14 +583,108 @@ def convert_gvhmr_to_wham_format(
         with open(output_path, 'wb') as f:
             pickle.dump(wham_format, f)
 
-        print(f"  OK Converted {n_frames} frames to WHAM format")
-        print(f"    Output: {output_path}")
-
         return True
 
     except Exception as e:
-        print(f"Error converting GVHMR output: {e}", file=sys.stderr)
+        print(f"Error converting {gvhmr_file_path.name}: {e}", file=sys.stderr)
         return False
+
+
+def convert_gvhmr_to_wham_format(
+    gvhmr_output_dir: Path,
+    output_path: Path
+) -> bool:
+    """Convert GVHMR output to WHAM-compatible motion.pkl format.
+
+    Handles both single-person and multi-person GVHMR outputs:
+    - Single person: Creates motion.pkl
+    - Multi-person: Creates motion_person_0.pkl, motion_person_1.pkl, etc.
+                    Also creates motion.pkl as copy of person_0 for compatibility
+
+    Args:
+        gvhmr_output_dir: Directory containing GVHMR output
+        output_path: Path for WHAM-compatible output file (motion.pkl)
+
+    Returns:
+        True if conversion successful
+    """
+    import pickle
+    import shutil
+
+    try:
+        import numpy as np
+    except ImportError:
+        print("Error: numpy required for format conversion", file=sys.stderr)
+        return False
+
+    if not gvhmr_output_dir.exists():
+        print(f"Error: GVHMR output directory not found: {gvhmr_output_dir}", file=sys.stderr)
+        return False
+
+    person_dirs = sorted([d for d in gvhmr_output_dir.iterdir()
+                         if d.is_dir() and d.name.startswith("person_")])
+
+    if person_dirs:
+        print(f"  → Found {len(person_dirs)} person(s) in GVHMR output")
+        output_dir = output_path.parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        success_count = 0
+        first_person_output = None
+
+        for person_dir in person_dirs:
+            person_id = person_dir.name
+            person_pkl_files = list(person_dir.glob("*.pkl"))
+
+            if not person_pkl_files:
+                print(f"    Warning: No pkl files in {person_id}")
+                continue
+
+            person_pkl = person_pkl_files[0]
+            for f in person_pkl_files:
+                if "gvhmr" in f.name.lower() or "global" in f.name.lower():
+                    person_pkl = f
+                    break
+
+            person_output = output_dir / f"motion_{person_id}.pkl"
+            print(f"  → Converting {person_id}...")
+
+            if _convert_single_gvhmr_file(person_pkl, person_output, np):
+                success_count += 1
+                if first_person_output is None:
+                    first_person_output = person_output
+
+        if success_count > 0 and first_person_output:
+            shutil.copy2(first_person_output, output_path)
+            print(f"  OK Converted {success_count} person(s) to WHAM format")
+            print(f"    Primary output: {output_path}")
+            return True
+        else:
+            print("Error: No persons converted successfully", file=sys.stderr)
+            return False
+
+    gvhmr_files = list(gvhmr_output_dir.rglob("*.pkl"))
+    if not gvhmr_files:
+        print(f"Error: No GVHMR output files found in {gvhmr_output_dir}", file=sys.stderr)
+        return False
+
+    gvhmr_output_path = gvhmr_files[0]
+    for f in gvhmr_files:
+        if "gvhmr" in f.name.lower() or "global" in f.name.lower():
+            gvhmr_output_path = f
+            break
+
+    print(f"  → Converting {gvhmr_output_path.name} to WHAM format...")
+
+    if _convert_single_gvhmr_file(gvhmr_output_path, output_path, np):
+        with open(output_path, 'rb') as f:
+            data = pickle.load(f)
+        n_frames = len(data['poses'])
+        print(f"  OK Converted {n_frames} frames to WHAM format")
+        print(f"    Output: {output_path}")
+        return True
+
+    return False
 
 
 def run_mocap_pipeline(
@@ -622,6 +721,8 @@ def run_mocap_pipeline(
     gvhmr_checkpoint = gvhmr_dir / "inputs" / "checkpoints" / "gvhmr" / "gvhmr_siga24_release.ckpt"
     gvhmr_available = gvhmr_dir.exists() and gvhmr_checkpoint.exists()
     wham_available = deps.get("wham", False)
+
+    explicit_wham_request = method == "wham"
 
     if method == "auto":
         if gvhmr_available:
@@ -675,6 +776,11 @@ def run_mocap_pipeline(
             method = "wham"
 
     if method == "wham":
+        if explicit_wham_request:
+            print("Warning: WHAM is deprecated. Consider using GVHMR (--method auto or --method gvhmr)")
+            print("  GVHMR provides 7-10mm lower error and better camera motion handling.")
+            print()
+
         person_mask_dir = project_dir / "roto"
         if not person_mask_dir.exists():
             person_mask_dir = None
