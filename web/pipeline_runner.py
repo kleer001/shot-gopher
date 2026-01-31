@@ -147,6 +147,7 @@ def run_pipeline_thread(
     project_dir: str,
     stages: list,
     roto_prompt: str,
+    roto_start_frame: int | None,
     skip_existing: bool,
 ):
     """Run pipeline in a background thread."""
@@ -196,6 +197,9 @@ def run_pipeline_thread(
 
     if roto_prompt and "roto" in stages:
         cmd.extend(["--prompt", roto_prompt])
+
+    if roto_start_frame is not None and "roto" in stages:
+        cmd.extend(["--start-frame", str(roto_start_frame)])
 
     if skip_existing:
         cmd.append("--skip-existing")
@@ -307,12 +311,13 @@ def start_pipeline(
     project_dir: str,
     stages: list,
     roto_prompt: str = "person",
+    roto_start_frame: int | None = None,
     skip_existing: bool = False,
 ):
     """Start pipeline processing in a background thread."""
     thread = threading.Thread(
         target=run_pipeline_thread,
-        args=(project_id, project_dir, stages, roto_prompt, skip_existing),
+        args=(project_id, project_dir, stages, roto_prompt, roto_start_frame, skip_existing),
         daemon=True,
     )
     thread.start()

@@ -59,6 +59,7 @@ export const ELEMENTS = {
     // Config
     CONFIG_FORM: 'config-form',
     ROTO_PROMPT: 'roto-prompt',
+    ROTO_START_FRAME: 'roto-start-frame',
     SKIP_EXISTING: 'skip-existing',
 
     // Processing
