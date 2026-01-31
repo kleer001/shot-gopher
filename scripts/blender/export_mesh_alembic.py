@@ -28,10 +28,10 @@ def clear_scene():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
 
-    for collection in bpy.data.collections:
+    for collection in list(bpy.data.collections):
         bpy.data.collections.remove(collection)
 
-    for mesh in bpy.data.meshes:
+    for mesh in list(bpy.data.meshes):
         bpy.data.meshes.remove(mesh)
 
 
@@ -46,6 +46,20 @@ def find_obj_files(input_dir: Path) -> list[Path]:
     """
     obj_files = list(input_dir.glob("*.obj")) + list(input_dir.glob("*.OBJ"))
     return sorted(set(obj_files))
+
+
+def get_shape_key_frame(shape_key) -> int:
+    """Extract frame number from shape key name.
+
+    Shape keys are named 'frame_XXXX' where XXXX is the frame number.
+
+    Args:
+        shape_key: Blender shape key with name in 'frame_XXXX' format
+
+    Returns:
+        Frame number as integer
+    """
+    return int(shape_key.name.split("_")[1])
 
 
 def import_obj_sequence_as_shape_keys(
@@ -114,8 +128,8 @@ def import_obj_sequence_as_shape_keys(
         print("Note: Only 1 OBJ file - exporting static mesh (no animation)")
         return base_obj
 
-    for i, key in enumerate(base_obj.data.shape_keys.key_blocks[1:], start=1):
-        frame = start_frame + i
+    for key in base_obj.data.shape_keys.key_blocks[1:]:
+        frame = get_shape_key_frame(key)
         prev_frame = frame - 1
 
         key.value = 0.0
@@ -226,29 +240,39 @@ def main():
 
     clear_scene()
 
-    print("Importing mesh sequence...")
-    mesh_obj = import_obj_sequence_as_shape_keys(obj_files, args.start_frame)
+    try:
+        print("Importing mesh sequence...")
+        mesh_obj = import_obj_sequence_as_shape_keys(obj_files, args.start_frame)
+    except (ValueError, RuntimeError) as e:
+        print(f"Error importing mesh sequence: {e}", file=sys.stderr)
+        sys.exit(1)
 
     print(f"Created animated mesh: {mesh_obj.name}")
 
-    if mesh_obj.data.shape_keys:
-        num_shape_keys = len(mesh_obj.data.shape_keys.key_blocks) - 1
+    if mesh_obj.data.shape_keys and len(mesh_obj.data.shape_keys.key_blocks) > 1:
+        end_frame = max(
+            get_shape_key_frame(key)
+            for key in mesh_obj.data.shape_keys.key_blocks[1:]
+        )
     else:
-        num_shape_keys = 0
-    end_frame = args.start_frame + num_shape_keys
+        end_frame = args.start_frame
 
     print(f"Exporting Alembic...")
     print(f"  Output: {args.output}")
     print(f"  Frames: {args.start_frame}-{end_frame}")
     print(f"  FPS: {args.fps}")
 
-    export_alembic(
-        args.output,
-        args.start_frame,
-        end_frame,
-        args.fps,
-        apply_modifiers=True
-    )
+    try:
+        export_alembic(
+            args.output,
+            args.start_frame,
+            end_frame,
+            args.fps,
+            apply_modifiers=True
+        )
+    except Exception as e:
+        print(f"Error exporting Alembic: {e}", file=sys.stderr)
+        sys.exit(1)
 
     print(f"Successfully exported: {args.output}")
 
