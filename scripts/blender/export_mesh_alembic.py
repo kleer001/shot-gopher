@@ -48,7 +48,7 @@ def find_obj_files(input_dir: Path) -> list[Path]:
     return sorted(set(obj_files))
 
 
-def get_shape_key_frame(shape_key) -> int:
+def get_shape_key_frame(shape_key: bpy.types.ShapeKey) -> int:
     """Extract frame number from shape key name.
 
     Shape keys are named 'frame_XXXX' where XXXX is the frame number.
