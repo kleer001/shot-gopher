@@ -111,4 +111,6 @@ export const EVENTS = {
     UPLOAD_PROGRESS: 'uploadProgress',
     ERROR: 'error',
     CONFIG_LOADED: 'configLoaded',
+    PIPELINE_COMPLETE: 'pipelineComplete',
+    PIPELINE_FAILED: 'pipelineFailed',
 };

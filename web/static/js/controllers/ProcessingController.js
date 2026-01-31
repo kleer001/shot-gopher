@@ -53,6 +53,8 @@ export class ProcessingController {
         this._boundHandlers.onWsMessage = (e) => stateManager.updateProgress(e.detail);
         this._boundHandlers.onWsConnected = () => console.log('WebSocket connected');
         this._boundHandlers.onWsDisconnected = () => console.log('WebSocket disconnected');
+        this._boundHandlers.onPipelineComplete = (e) => this.handlePipelineComplete(e.detail);
+        this._boundHandlers.onPipelineFailed = (e) => this.handlePipelineFailed(e.detail);
 
         if (this.elements.cancelBtn) {
             this.elements.cancelBtn.addEventListener('click', this._boundHandlers.onCancelClick);
@@ -64,6 +66,8 @@ export class ProcessingController {
 
         stateManager.addEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
         stateManager.addEventListener(EVENTS.PROGRESS_UPDATE, this._boundHandlers.onProgressUpdate);
+        stateManager.addEventListener(EVENTS.PIPELINE_COMPLETE, this._boundHandlers.onPipelineComplete);
+        stateManager.addEventListener(EVENTS.PIPELINE_FAILED, this._boundHandlers.onPipelineFailed);
         stateManager.addEventListener('logMessage', this._boundHandlers.onLogMessage);
 
         wsService.addEventListener('message', this._boundHandlers.onWsMessage);
@@ -225,6 +229,77 @@ export class ProcessingController {
         });
     }
 
+    handlePipelineComplete(detail) {
+        this.stopTimer();
+        wsService.disconnect();
+
+        this.updateProgress(100);
+        dom.setText(this.elements.progressPercent, '100%');
+        dom.setText(this.elements.currentStageName, 'COMPLETE');
+        dom.setText(this.elements.currentStageLabel, 'FINISHED');
+
+        if (this.elements.cancelBtn) {
+            this.elements.cancelBtn.textContent = 'DONE';
+            this.elements.cancelBtn.classList.add('btn-success');
+            this.elements.cancelBtn.classList.remove('btn-danger');
+            this.elements.cancelBtn.onclick = () => this.hideProcessingPanel();
+        }
+
+        this.appendLog('\n=== Pipeline completed successfully ===');
+
+        const stageItems = this.elements.stagesListProgress?.querySelectorAll('.stage-item');
+        if (stageItems) {
+            stageItems.forEach(item => {
+                const icon = item.querySelector('.stage-icon');
+                const status = item.querySelector('.stage-status');
+                icon.className = 'stage-icon completed';
+                icon.innerHTML = '✓';
+                if (status) status.textContent = 'completed';
+                dom.addClass(item, 'completed');
+                dom.removeClass(item, 'processing');
+                dom.removeClass(item, 'pending');
+            });
+        }
+    }
+
+    handlePipelineFailed(detail) {
+        this.stopTimer();
+        wsService.disconnect();
+
+        const errorMsg = detail.error || 'Pipeline failed';
+
+        dom.setText(this.elements.currentStageName, 'FAILED');
+        dom.setText(this.elements.currentStageLabel, 'ERROR');
+
+        if (this.elements.progressRing) {
+            this.elements.progressRing.style.stroke = '#ef4444';
+        }
+
+        if (this.elements.cancelBtn) {
+            this.elements.cancelBtn.textContent = 'CLOSE';
+            this.elements.cancelBtn.classList.remove('btn-danger');
+            this.elements.cancelBtn.onclick = () => this.hideProcessingPanel();
+        }
+
+        this.appendLog('\n=== Pipeline failed ===');
+        this.appendLog(`Error: ${errorMsg}`);
+
+        const stageItems = this.elements.stagesListProgress?.querySelectorAll('.stage-item');
+        if (stageItems) {
+            stageItems.forEach(item => {
+                if (item.classList.contains('processing')) {
+                    const icon = item.querySelector('.stage-icon');
+                    const status = item.querySelector('.stage-status');
+                    icon.className = 'stage-icon failed';
+                    icon.innerHTML = '✕';
+                    if (status) status.textContent = 'failed';
+                    dom.addClass(item, 'failed');
+                    dom.removeClass(item, 'processing');
+                }
+            });
+        }
+    }
+
     appendLog(message) {
         if (!this.elements.logOutput) return;
 
@@ -303,6 +378,8 @@ export class ProcessingController {
 
         stateManager.removeEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
         stateManager.removeEventListener(EVENTS.PROGRESS_UPDATE, this._boundHandlers.onProgressUpdate);
+        stateManager.removeEventListener(EVENTS.PIPELINE_COMPLETE, this._boundHandlers.onPipelineComplete);
+        stateManager.removeEventListener(EVENTS.PIPELINE_FAILED, this._boundHandlers.onPipelineFailed);
         stateManager.removeEventListener('logMessage', this._boundHandlers.onLogMessage);
 
         wsService.removeEventListener('message', this._boundHandlers.onWsMessage);

@@ -1024,6 +1024,24 @@ body {
     color: var(--success);
 }
 
+.stage-item.failed {
+    background: var(--danger);
+    color: white;
+}
+
+.stage-icon.failed {
+    color: var(--danger);
+}
+
+.btn-success {
+    background: var(--success) !important;
+    border-color: var(--success) !important;
+}
+
+.btn-success:hover {
+    background: #059669 !important;
+}
+
 /* Metrics */
 .metrics {
     display: grid;
