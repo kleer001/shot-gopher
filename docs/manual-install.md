@@ -175,7 +175,19 @@ conda install -c conda-forge colmap
 
 Required only for the `mocap` stage.
 
-### WHAM
+### GVHMR (Preferred)
+
+```bash
+cd .vfx_pipeline
+git clone https://github.com/zju3dv/GVHMR.git
+cd GVHMR
+pip install -r requirements.txt
+
+# Download checkpoints from GVHMR project page
+cd ..
+```
+
+### WHAM (Fallback)
 
 ```bash
 cd .vfx_pipeline
@@ -204,6 +216,7 @@ Create `.vfx_pipeline/config.json`:
 {
   "install_dir": ".vfx_pipeline",
   "comfyui_dir": ".vfx_pipeline/ComfyUI",
+  "gvhmr_dir": ".vfx_pipeline/GVHMR",
   "wham_dir": ".vfx_pipeline/WHAM",
   "cuda_available": true
 }
@@ -233,6 +246,8 @@ shot-gopher/
 │   │   └── models/
 │   │       ├── sam3/
 │   │       └── depth/
+│   ├── GVHMR/
+│   │   └── checkpoints/
 │   ├── WHAM/
 │   │   └── checkpoints/
 │   └── config.json

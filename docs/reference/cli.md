@@ -67,6 +67,7 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | `--prompt` | Segmentation targets (default: `person`). Comma-separated: `person,bag,ball` |
 | `--separate-instances` | Split multi-person masks into `person_0/`, `person_1/`, etc. (default: on) |
 | `--no-separate-instances` | Combine all instances into single mask |
+| `--start-frame` | Frame to start segmentation from (enables bidirectional propagation). Use when subject isn't visible on first frame |
 
 ### COLMAP Options
 
@@ -190,8 +191,8 @@ Pipeline creates this directory structure:
 │   ├── dense/           # Dense point cloud (optional)
 │   └── meshed/          # Mesh (optional)
 ├── mocap/
-│   ├── wham/            # Pose estimates
-│   └── econ/            # 3D reconstructions
+│   ├── gvhmr/           # GVHMR pose estimates (preferred)
+│   └── wham/            # WHAM pose estimates (fallback)
 ├── gsir/
 │   ├── model/           # Checkpoints
 │   └── materials/       # Albedo, roughness, metallic
@@ -229,7 +230,7 @@ python scripts/run_pipeline.py footage.mp4 -c http://192.168.1.100:8188
 
 ```bash
 python scripts/run_colmap.py MyShot -q high
-python scripts/run_mocap.py MyShot
+python scripts/run_mocap.py MyShot --method auto  # auto, gvhmr, or wham
 python scripts/export_camera.py MyShot --fps 24
 ```
 

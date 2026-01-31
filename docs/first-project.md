@@ -53,10 +53,10 @@ python scripts/run_pipeline.py ~/Videos/shot001.mp4 \
   --name Shot001
 ```
 
-**Motion capture** (experimental - requires SMPL-X models):
+**Motion capture** (requires GVHMR or WHAM + SMPL-X models):
 ```bash
 python scripts/run_pipeline.py ~/Videos/person_walking.mp4 \
-  -s ingest,mocap \
+  -s ingest,colmap,mocap \
   --name WalkingTest
 ```
 
@@ -98,10 +98,6 @@ Configure output locations:
 # Custom projects directory
 export VFX_PROJECTS_DIR=/path/to/projects
 python scripts/run_pipeline.py video.mp4 -s depth
-
-# Custom models directory
-export VFX_MODELS_DIR=/path/to/models
-python scripts/run_pipeline.py video.mp4 -s depth
 ```
 
 **See [CLI Reference](reference/cli.md) for complete command-line options.**
@@ -117,7 +113,7 @@ Frames start at `0001` rather than the VFX industry standard `1001`:
 - `frame_0002.png` (second frame)
 - etc.
 
-This is due to ComfyUI and WHAM constraints.
+This is due to ComfyUI constraints.
 
 ### File Formats
 

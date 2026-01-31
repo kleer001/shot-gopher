@@ -42,7 +42,7 @@ python scripts/run_pipeline.py footage.mp4 -s ingest -f 24
 ```
 
 **Notes:**
-- Frame numbering starts at 0001 (ComfyUI/WHAM requirement)
+- Frame numbering starts at 0001 (ComfyUI requirement)
 - Zero-padded to 4 digits (supports up to 9999 frames)
 
 ---
@@ -277,27 +277,38 @@ python scripts/run_pipeline.py footage.mp4 -s colmap -q high -d
 
 ## mocap
 
-Human motion capture using WHAM + ECON.
+Human motion capture using GVHMR (preferred) or WHAM (fallback).
 
 | | |
 |---|---|
 | **VRAM** | ~12 GB |
 | **Input** | `source/frames/*.png`, `camera/extrinsics.json` |
-| **Output** | `mocap/wham/`, `mocap/econ/`, `mocap/mesh_sequence/` |
-| **Workflow** | None (WHAM/ECON binaries) |
+| **Output** | `mocap/gvhmr/` or `mocap/wham/`, `mocap/mesh_sequence/` |
+| **Workflow** | None (GVHMR/WHAM) |
 
 **Requirements:**
-- WHAM and ECON installed ([Installation guide](../installation.md))
+- GVHMR or WHAM installed ([Installation guide](../installation.md))
 - Camera data from `colmap` or `depth` stage
 
 ```bash
 python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
 ```
 
+**Method selection:**
+```bash
+# Auto (default): tries GVHMR first, falls back to WHAM
+python scripts/run_mocap.py MyShot --method auto
+
+# Force GVHMR
+python scripts/run_mocap.py MyShot --method gvhmr
+
+# Force WHAM
+python scripts/run_mocap.py MyShot --method wham
+```
+
 **Pipeline:**
-1. **WHAM** — Extracts world-grounded pose from video
-2. **ECON** — Reconstructs clothed 3D human (SMPL-X compatible)
-3. **Texture** — Projects video frames onto mesh
+1. **GVHMR/WHAM** — Extracts world-grounded pose from video (SMPL-X compatible)
+2. **Mesh Generation** — Creates animated SMPL-X mesh sequence
 
 **Troubleshooting:** See [Mocap issues](troubleshooting.md#motion-capture-requires-camera-data)
 
