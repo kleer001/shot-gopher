@@ -15,7 +15,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, PythonPackageInstaller, SystemPackageInstaller, VideoMaMaInstaller
+from .installers import CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VideoMaMaInstaller
 from .platform import PlatformManager
 from .state import InstallationStateManager
 from .utils import (
@@ -142,6 +142,15 @@ class InstallationWizard:
                     self.install_dir / "GVHMR",
                     size_gb=4.0  # Code + checkpoints (~3.5GB models)
                 )
+            ]
+        }
+
+        # Blender (for Alembic mesh export)
+        self.components['blender'] = {
+            'name': 'Blender',
+            'required': False,
+            'installers': [
+                ToolInstaller('Blender 4.2 LTS', 'blender', size_gb=0.35)
             ]
         }
 
@@ -602,7 +611,7 @@ class InstallationWizard:
         elif yolo:
             # YOLO mode: auto-select full stack (option 3)
             print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture + GS-IR)")
-            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'gsir']
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -623,7 +632,7 @@ class InstallationWizard:
                     to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'gsir']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
                     break
                 elif choice == '4':
                     to_install = []

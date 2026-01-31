@@ -170,6 +170,43 @@ class SystemPackageInstaller(ComponentInstaller):
         return False
 
 
+class ToolInstaller(ComponentInstaller):
+    """Installer for standalone tools (Blender, ffmpeg, etc.) via PlatformManager."""
+
+    def __init__(self, name: str, tool_name: str, size_gb: float = 0.0):
+        """Initialize tool installer.
+
+        Args:
+            name: Display name for the tool
+            tool_name: PlatformManager tool name (e.g., 'blender', 'ffmpeg')
+            size_gb: Approximate download size in GB
+        """
+        super().__init__(name, size_gb)
+        self.tool_name = tool_name
+
+    def check(self) -> bool:
+        """Check if tool is available."""
+        from .platform import PlatformManager
+        path = PlatformManager.find_tool(self.tool_name)
+        self.installed = path is not None
+        return self.installed
+
+    def install(self) -> bool:
+        """Install tool via PlatformManager."""
+        from .platform import PlatformManager
+
+        print(f"\nInstalling {self.name}...")
+        path = PlatformManager.install_tool(self.tool_name)
+
+        if path:
+            print_success(f"{self.name} installed at {path}")
+            self.installed = True
+            return True
+        else:
+            print_error(f"Failed to install {self.name}")
+            return False
+
+
 class GitRepoInstaller(ComponentInstaller):
     """Installer for Git repositories."""
 
