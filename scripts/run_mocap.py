@@ -526,6 +526,10 @@ def _convert_single_gvhmr_file(
             return False
 
         body_pose = np.array(body_pose)
+        if body_pose.ndim < 2 or body_pose.shape[0] == 0:
+            print(f"Error: Invalid body_pose shape in {gvhmr_file_path.name}", file=sys.stderr)
+            return False
+
         n_frames = len(body_pose)
 
         if global_orient is not None:

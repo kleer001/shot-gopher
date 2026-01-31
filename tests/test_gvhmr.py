@@ -229,6 +229,36 @@ class TestGvhmrOutputConversion:
             success = convert_gvhmr_to_wham_format(gvhmr_dir, wham_output)
             assert success is False
 
+    def test_conversion_empty_body_pose(self):
+        """Test conversion fails gracefully with empty body_pose."""
+        pytest.importorskip("numpy")
+        import numpy as np
+        import pickle
+
+        from run_mocap import convert_gvhmr_to_wham_format
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir) / "gvhmr"
+            gvhmr_dir.mkdir()
+
+            gvhmr_data = {
+                'smpl_params_global': {
+                    'body_pose': np.zeros((0, 63)),
+                    'global_orient': np.zeros((0, 3)),
+                    'transl': np.zeros((0, 3)),
+                    'betas': np.zeros(10),
+                }
+            }
+
+            gvhmr_output = gvhmr_dir / "output.pkl"
+            with open(gvhmr_output, 'wb') as f:
+                pickle.dump(gvhmr_data, f)
+
+            wham_output = Path(tmpdir) / "wham" / "motion.pkl"
+
+            success = convert_gvhmr_to_wham_format(gvhmr_dir, wham_output)
+            assert success is False
+
     def test_conversion_direct_global_orient(self):
         """Test conversion when global_orient is at top level (not under smpl_params_global)."""
         pytest.importorskip("numpy")
