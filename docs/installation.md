@@ -8,7 +8,7 @@ The installation wizard provides a guided, menu-driven interface for installing 
 
 - Conda environment management (automatic)
 - Dependency installation (PyTorch, COLMAP, etc.)
-- Git repository cloning (WHAM, ECON, ComfyUI)
+- Git repository cloning (GVHMR, ComfyUI)
 - Checkpoint downloading (automatic with progress bars)
 - Installation validation (smoke tests)
 - Configuration file generation
@@ -27,7 +27,7 @@ Follow the menu prompts to select components.
 ### One-Liner Bootstrap
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.sh | bash
 ```
 
 This clones the repository and runs the wizard automatically.
@@ -40,19 +40,15 @@ Before running the wizard, you should set up credentials for downloading license
 
 SAM3 downloads automatically from the public `1038lab/sam3` HuggingFace repository. No token or registration needed.
 
-### SMPL-X and ICON/ECON Credentials
+### SMPL-X Credentials
 
 Required for: Motion capture pipeline
-
-**IMPORTANT: Register at BOTH websites separately!**
 
 | Site | URL | Purpose |
 |------|-----|---------|
 | SMPL-X | https://smpl-x.is.tue.mpg.de/ | Parametric body model (skeleton, mesh topology, UVs) |
-| ICON | https://icon.is.tue.mpg.de/ | ECON clothed human reconstruction checkpoints |
 
-**SMPL-X** provides the deformable body mesh that gets animated.
-**ECON** reconstructs clothed humans from video using SMPL-X as the body prior.
+**SMPL-X** provides the deformable body mesh that gets animated by GVHMR motion data.
 
 Save credentials to `SMPL.login.dat`:
 
@@ -103,8 +99,7 @@ Output:
   ✗ PyTorch with CUDA
 
 [Motion Capture]
-  ✗ WHAM
-  ✗ ECON
+  ✗ GVHMR
 ```
 
 ### Validate Installation
@@ -136,7 +131,7 @@ The wizard detects incomplete components and offers to resume.
 Skip the menu and install directly:
 
 ```bash
-python scripts/install_wizard.py -C wham
+python scripts/install_wizard.py -C gvhmr
 python scripts/install_wizard.py -C comfyui
 python scripts/install_wizard.py -C pytorch
 ```
@@ -146,8 +141,7 @@ Valid components:
 - `pytorch` - PyTorch with CUDA
 - `colmap` - COLMAP (built from source)
 - `mocap_core` - All motion capture tools
-- `wham` - WHAM pose estimation
-- `econ` - ECON 3D reconstruction
+- `gvhmr` - GVHMR motion capture
 - `comfyui` - ComfyUI and custom nodes
 
 ## Installation Menus
@@ -175,8 +169,7 @@ What would you like to install?
 - SAM3 custom node
 
 **Option 3** adds:
-- WHAM (motion capture)
-- ECON (3D reconstruction)
+- GVHMR (motion capture)
 - All checkpoints (automatic download)
 
 **Option 4** shows a detailed component checklist.
@@ -200,8 +193,7 @@ Choose individual components:
   [ ] SAM3
 
 [Motion Capture]
-  [ ] WHAM (pose estimation)
-  [ ] ECON (3D reconstruction)
+  [ ] GVHMR (motion capture)
 ```
 
 Use spacebar to toggle, Enter to confirm.
@@ -241,7 +233,7 @@ Each component follows this pattern:
 Progress shown in real-time:
 
 ```
-[WHAM]
+[GVHMR]
   → Cloning repository...
   → Installing dependencies...
   → Downloading checkpoints...
@@ -254,12 +246,8 @@ Progress shown in real-time:
 
 Checkpoints are downloaded automatically:
 
-**WHAM:**
-- `wham_vit_w_3dpw.pth.tar` (1.2 GB)
-
-**ECON:**
-- `econ_model.tar` (500 MB)
-- `smplx_model.pkl` (100 MB)
+**GVHMR:**
+- GVHMR model checkpoints (~4.0 GB)
 
 Downloads include:
 - Progress bars with percentage and MB transferred
@@ -287,8 +275,7 @@ Generated configuration with all paths:
   "conda_env": "vfx-pipeline",
   "python_executable": "/home/user/miniconda3/envs/vfx-pipeline/bin/python",
   "install_dir": "/home/user/shot-gopher/.vfx_pipeline",
-  "wham_dir": "/home/user/shot-gopher/.vfx_pipeline/WHAM",
-  "econ_dir": "/home/user/shot-gopher/.vfx_pipeline/ECON",
+  "gvhmr_dir": "/home/user/shot-gopher/.vfx_pipeline/GVHMR",
   "comfyui_dir": "/home/user/shot-gopher/.vfx_pipeline/ComfyUI",
   "cuda_available": true,
   "cuda_version": "12.1"
@@ -307,12 +294,11 @@ Environment activation script:
 conda activate vfx-pipeline
 
 # Set up Python path
-export PYTHONPATH="${PYTHONPATH}:/path/to/.vfx_pipeline/WHAM:/path/to/.vfx_pipeline/ECON"
+export PYTHONPATH="${PYTHONPATH}:/path/to/.vfx_pipeline/GVHMR"
 
 # Set up environment variables
 export VFX_PIPELINE_BASE="/path/to/.vfx_pipeline"
-export WHAM_DIR="/path/to/.vfx_pipeline/WHAM"
-export ECON_DIR="/path/to/.vfx_pipeline/ECON"
+export GVHMR_DIR="/path/to/.vfx_pipeline/GVHMR"
 export SMPLX_MODEL_DIR="${VFX_PIPELINE_BASE}/smplx_models"
 
 echo "✓ VFX Pipeline environment activated"
@@ -333,8 +319,7 @@ Tracks installation progress:
   "components": {
     "pytorch": "completed",
     "colmap": "completed",
-    "wham": "in_progress",
-    "econ": "pending",
+    "gvhmr": "in_progress",
     "comfyui": "completed"
   },
   "last_updated": "2026-01-12 14:30:00",
@@ -366,8 +351,7 @@ Output:
 Previous installation detected (incomplete)
 
 Completed: pytorch, colmap, comfyui
-In progress: wham
-Pending: econ
+In progress: gvhmr
 
 Resume installation? [Y/n]: y
 ```
@@ -401,8 +385,7 @@ Verifies checkpoint files exist and have correct size:
 
 ```
 [Checkpoint Validation]
-  ✓ WHAM checkpoint found (1.2 GB)
-  ✗ ECON checkpoint missing
+  ✓ GVHMR checkpoint found (4.0 GB)
 ```
 
 ### Repository Tests
@@ -411,7 +394,7 @@ Checks git repositories are clean:
 
 ```
 [Repository Status]
-  ✓ WHAM: Clean working directory
+  ✓ GVHMR: Clean working directory
   ✓ ComfyUI: Clean working directory
 ```
 
@@ -454,8 +437,7 @@ Clean up space or choose a different installation directory.
 
 URLs may be outdated. Manually download and place in correct directories:
 
-- WHAM: `.vfx_pipeline/WHAM/checkpoints/`
-- ECON: `.vfx_pipeline/ECON/data/`
+- GVHMR: `.vfx_pipeline/GVHMR/checkpoints/`
 
 ### "Import errors after installation"
 
@@ -494,10 +476,10 @@ Each component can be installed separately:
 # PyTorch
 conda install pytorch pytorch-cuda=12.1 -c pytorch -c nvidia -y
 
-# WHAM
+# GVHMR
 cd .vfx_pipeline
-git clone https://github.com/yohanshin/WHAM.git
-cd WHAM
+git clone https://github.com/zju3dv/GVHMR.git
+cd GVHMR
 pip install -r requirements.txt
 ```
 

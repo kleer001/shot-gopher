@@ -29,7 +29,7 @@ STAGES = {
     "mama": "Refine mattes with VideoMaMa diffusion",
     "cleanplate": "Run clean plate generation (03_cleanplate.json)",
     "colmap": "Run COLMAP SfM reconstruction",
-    "mocap": "Run human motion capture (WHAM)",
+    "mocap": "Run human motion capture (GVHMR)",
     "gsir": "Run GS-IR material decomposition",
     "camera": "Export camera to Alembic",
 }

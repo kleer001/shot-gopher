@@ -34,7 +34,6 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 | SAM 2/3 (Segment Anything) | Apache-2.0 | ✅ Unrestricted |
 | COLMAP | BSD-3-Clause | ✅ Unrestricted (source); GPL when built with deps |
 | FFmpeg | LGPL-2.1+ (default) | ✅ Yes (with compliance requirements) |
-| WHAM | MIT | ✅ Unrestricted |
 | GS-IR | MIT | ✅ Unrestricted |
 | NumPy | BSD-3-Clause | ✅ Unrestricted |
 | SciPy | BSD-3-Clause | ✅ Unrestricted |
@@ -203,20 +202,6 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 
 ---
 
-### WHAM (Motion Capture)
-
-**License:** [MIT](https://github.com/yohanshin/WHAM/blob/main/LICENSE)
-**Source:** [yohanshin/WHAM](https://github.com/yohanshin/WHAM)
-
-**What you can do:**
-- Use commercially
-- Modify and distribute
-- Create derivative works
-
-**Note:** While WHAM itself is MIT-licensed, it depends on SMPL-X which has separate license requirements.
-
----
-
 ### GS-IR (Material Decomposition)
 
 **License:** [MIT](https://github.com/lzhnb/GS-IR)
@@ -357,7 +342,7 @@ Use only permissively-licensed components:
 | Clean plates | ❌ No permissive alternative (ProPainter restricted) |
 | Video matting | VideoMaMa (CC BY-NC 4.0 + Stability AI) ⚠️ |
 | Camera tracking | COLMAP (BSD, with care) ✅ |
-| Motion capture | WHAM (MIT) + SMPL-X (requires license) ⚠️ |
+| Motion capture | GVHMR + SMPL-X (requires license) ⚠️ |
 | Material decomposition | GS-IR (MIT, but base tech restricted) ⚠️ |
 
 ### Scenario C: Research/Academic Use
@@ -402,7 +387,7 @@ All components are freely available for:
 
 2. **For research teams:** All components are freely available; ensure proper citation in publications.
 
-3. **For indie developers:** Use the permissive stack (SAM, Depth Anything Large, COLMAP, WHAM) for commercial projects; VideoMaMa requires careful consideration of the dual-license (code is CC BY-NC 4.0, model weights are free only under $1M revenue); avoid ProPainter/ECON without licensing.
+3. **For indie developers:** Use the permissive stack (SAM, Depth Anything Large, COLMAP, GVHMR) for commercial projects; VideoMaMa requires careful consideration of the dual-license (code is CC BY-NC 4.0, model weights are free only under $1M revenue); avoid ProPainter/ECON without licensing.
 
 4. **For SaaS deployment:** ComfyUI's GPL-3.0 and component licenses may have specific implications; consult legal counsel.
 
@@ -416,7 +401,7 @@ All components are freely available for:
 - [ProPainter License](https://github.com/sczhou/ProPainter/blob/main/LICENSE)
 - [ECON License](https://github.com/YuliangXiu/ECON/blob/master/LICENSE)
 - [SMPL-X License](https://smpl-x.is.tue.mpg.de/modellicense.html)
-- [WHAM](https://github.com/yohanshin/WHAM)
+- [GVHMR](https://github.com/zju3dv/GVHMR)
 - [GS-IR](https://github.com/lzhnb/GS-IR)
 - [3D Gaussian Splatting License](https://github.com/graphdeco-inria/gaussian-splatting/blob/main/LICENSE.md)
 - [COLMAP License](https://colmap.github.io/license.html)

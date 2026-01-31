@@ -279,9 +279,9 @@ def process_chunk(
     )
 
     if success:
-        print(f"    ✓ Chunk {chunk.index} complete")
+        print(f"    OK Chunk {chunk.index} complete")
     else:
-        print(f"    ✗ Chunk {chunk.index} failed", file=sys.stderr)
+        print(f"    X Chunk {chunk.index} failed", file=sys.stderr)
 
     return success
 
@@ -410,7 +410,7 @@ def blend_overlaps(
             img_b.close()
 
     output_files = list(final_dir.glob("clean_*.png"))
-    print(f"    ✓ Blended {len(output_files)} frames to {final_dir}")
+    print(f"    OK Blended {len(output_files)} frames to {final_dir}")
 
     return True
 
@@ -543,7 +543,7 @@ def run_batched_cleanplate(
     elapsed_minutes = (elapsed_seconds % 3600) // 60
 
     print(f"\n{'='*60}")
-    print("✓ Batched cleanplate complete!")
+    print("OK Batched cleanplate complete!")
     print(f"{'='*60}")
     print(f"\nOutput: {project_dir}/cleanplate/final/")
     print(f"\nClean Plate Batch Time : {elapsed_hours:02d}:{elapsed_minutes:02d}")

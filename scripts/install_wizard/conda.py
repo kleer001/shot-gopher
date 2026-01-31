@@ -54,7 +54,7 @@ class CondaEnvironmentManager:
         home = Path.home()
 
         if _is_windows():
-            localappdata = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
+            localappdata = Path(os.environ.get("LOCALAPPDATA", str(home / "AppData" / "Local")))
             programdata = Path(os.environ.get("PROGRAMDATA", "C:/ProgramData"))
             common_paths = [
                 home / "miniconda3" / "Scripts" / "conda.exe",
@@ -122,7 +122,7 @@ class CondaEnvironmentManager:
 
         # Parse output
         envs = []
-        for line in output.split('\n'):
+        for line in output.splitlines():
             line = line.strip()
             if line and not line.startswith('#'):
                 # Format: "envname    /path/to/env"
@@ -186,7 +186,9 @@ class CondaEnvironmentManager:
         )
 
         if success and output.strip():
-            return Path(output.strip().split('\n')[0])
+            lines = output.strip().splitlines()
+            if lines:
+                return Path(lines[0])
         return None
 
     def install_package_conda(self, package: str, channel: Optional[str] = None) -> bool:

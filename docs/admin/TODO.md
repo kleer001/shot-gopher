@@ -10,12 +10,6 @@ Extracted from OS_SUPPORT_ANALYSIS.md
   - Would enable lightweight matchmove without COLMAP for simple shots
   - Requires: ComfyUI-DepthAnythingV3 custom nodes + updated workflow
 
-- [ ] **Implement GVHMR for improved motion capture**
-  - See [GVHMR Transition Roadmap](GVHMR_TRANSITION_ROADMAP.md)
-  - Replaces WHAM with more accurate world-grounded motion recovery
-  - 7-10mm lower error, better camera motion handling
-  - Supports COLMAP focal length input for improved accuracy
-
 ## Medium Priority
 
 - [ ] **Add which_wizard.py decision helper script**

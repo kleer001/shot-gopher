@@ -21,7 +21,7 @@ import sys
 import webbrowser
 from pathlib import Path
 
-from env_config import check_conda_env_or_warn, INSTALL_DIR
+from env_config import require_conda_env, INSTALL_DIR
 from workflow_utils import WORKFLOW_TEMPLATES_DIR
 from comfyui_manager import ensure_comfyui, stop_comfyui
 
@@ -157,7 +157,7 @@ def create_output_dirs(project_dir: Path) -> None:
 
 def run_local_mode(args) -> int:
     """Run interactive segmentation in local ComfyUI."""
-    check_conda_env_or_warn()
+    require_conda_env()
 
     project_dir = args.project_dir.resolve()
     if not project_dir.exists():

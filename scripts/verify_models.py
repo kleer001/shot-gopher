@@ -24,11 +24,11 @@ REQUIRED_MODELS = {
         "optional": False,
         "description": "Video Depth Anything - for depth map generation",
     },
-    "wham": {
-        "path": MODEL_DIR / "wham",
-        "files": ["wham_vit_w_3dpw.pth.tar"],
+    "gvhmr": {
+        "path": MODEL_DIR.parent / "GVHMR" / "inputs" / "checkpoints" / "gvhmr",
+        "files": ["gvhmr_siga24_release.ckpt"],
         "optional": False,
-        "description": "WHAM - for human motion capture",
+        "description": "GVHMR - for human motion capture (SIGGRAPH Asia 2024)",
     },
     "smplx": {
         "path": MODEL_DIR / "smplx",
@@ -88,14 +88,14 @@ def main():
 
         # Status symbol
         if ok:
-            status = "✓"
+            status = "OK"
             color = "\033[0;32m"  # Green
         elif is_optional:
-            status = "⚠"
+            status = "!"
             color = "\033[1;33m"  # Yellow
             optional_missing.append(name)
         else:
-            status = "✗"
+            status = "X"
             color = "\033[0;31m"  # Red
             all_required_ok = False
 
@@ -111,16 +111,16 @@ def main():
 
     # Summary
     if all_required_ok and not optional_missing:
-        print("\033[0;32m✓ All models present and valid!\033[0m")
+        print("\033[0;32mOK All models present and valid!\033[0m")
         return 0
     elif all_required_ok:
-        print("\033[1;33m⚠ Required models OK, but optional models missing:\033[0m")
+        print("\033[1;33m! Required models OK, but optional models missing:\033[0m")
         for name in optional_missing:
             print(f"   - {name}: {REQUIRED_MODELS[name]['description']}")
         print("\nOptional models can be downloaded later if needed.")
         return 0
     else:
-        print("\033[0;31m✗ Some required models are missing or invalid\033[0m")
+        print("\033[0;31mX Some required models are missing or invalid\033[0m")
         print("\nTo download models, run:")
         print("  ./scripts/download_models.sh")
         print("\nFor SMPL-X (manual download required):")

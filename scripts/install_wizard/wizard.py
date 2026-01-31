@@ -15,7 +15,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, PythonPackageInstaller, SystemPackageInstaller, VideoMaMaInstaller
+from .installers import CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VideoMaMaInstaller
 from .platform import PlatformManager
 from .state import InstallationStateManager
 from .utils import (
@@ -43,27 +43,15 @@ def print_setup_done_banner():
     """Print the celebratory SETUP DONE banner."""
     print(f"""
 {Colors.OKGREEN}
-    ╔══════════════════════════════════════════════════════════════════╗
-    ║                                                                  ║
-    ║    ███████╗███████╗████████╗██╗   ██╗██████╗                     ║
-    ║    ██╔════╝██╔════╝╚══██╔══╝██║   ██║██╔══██╗                    ║
-    ║    ███████╗█████╗     ██║   ██║   ██║██████╔╝                    ║
-    ║    ╚════██║██╔══╝     ██║   ██║   ██║██╔═══╝                     ║
-    ║    ███████║███████╗   ██║   ╚██████╔╝██║                         ║
-    ║    ╚══════╝╚══════╝   ╚═╝    ╚═════╝ ╚═╝                         ║
-    ║                                                                  ║
-    ║    ██████╗  ██████╗ ███╗   ██╗███████╗    ██╗                    ║
-    ║    ██╔══██╗██╔═══██╗████╗  ██║██╔════╝    ██║                    ║
-    ║    ██║  ██║██║   ██║██╔██╗ ██║█████╗      ██║                    ║
-    ║    ██║  ██║██║   ██║██║╚██╗██║██╔══╝                             ║
-    ║    ██████╔╝╚██████╔╝██║ ╚████║███████╗    ██╗                    ║
-    ║    ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚══════╝    ╚═╝                    ║
-    ║                                                                  ║
-    ╠══════════════════════════════════════════════════════════════════╣
-    ║{Colors.ENDC}                                                                  {Colors.OKGREEN}║
-    ║{Colors.ENDC}       {Colors.BOLD}* * *  SHOT {GOLD}G{Colors.ENDC}{Colors.BOLD}OPHER IS READY TO GO!  * * *{Colors.ENDC}               {Colors.OKGREEN}║
-    ║{Colors.ENDC}                                                                  {Colors.OKGREEN}║
-    ╚══════════════════════════════════════════════════════════════════╝
+    +====================================================================+
+    |                                                                    |
+    |     SETUP DONE!                                                    |
+    |                                                                    |
+    +====================================================================+
+    |                                                                    |
+    |       * * *  SHOT {GOLD}G{Colors.OKGREEN}OPHER IS READY TO GO!  * * *                |
+    |                                                                    |
+    +====================================================================+
 {Colors.ENDC}""")
 
 
@@ -142,19 +130,6 @@ class InstallationWizard:
             ]
         }
 
-        # WHAM (code ~0.1GB + checkpoints ~2.5GB)
-        self.components['wham'] = {
-            'name': 'WHAM',
-            'required': False,
-            'installers': [
-                GitRepoInstaller(
-                    'WHAM',
-                    'https://github.com/yohanshin/WHAM.git',
-                    self.install_dir / "WHAM",
-                    size_gb=3.0  # Code + checkpoints
-                )
-            ]
-        }
 
         # GVHMR (Gravity-View Human Motion Recovery - improved world-grounded mocap)
         self.components['gvhmr'] = {
@@ -167,6 +142,15 @@ class InstallationWizard:
                     self.install_dir / "GVHMR",
                     size_gb=4.0  # Code + checkpoints (~3.5GB models)
                 )
+            ]
+        }
+
+        # Blender (for Alembic mesh export)
+        self.components['blender'] = {
+            'name': 'Blender',
+            'required': False,
+            'installers': [
+                ToolInstaller('Blender 4.2 LTS', 'blender', size_gb=0.35)
             ]
         }
 
@@ -552,7 +536,8 @@ class InstallationWizard:
                     with open(smpl_creds_file, 'w', encoding='utf-8') as f:
                         f.write(email + '\n')
                         f.write(password + '\n')
-                    smpl_creds_file.chmod(0o600)
+                    if platform.system() != "Windows":
+                        smpl_creds_file.chmod(0o600)
                     print_success(f"Credentials saved to {smpl_creds_file}")
                 else:
                     print_info("Skipped - you can add SMPL.login.dat later")
@@ -626,7 +611,7 @@ class InstallationWizard:
         elif yolo:
             # YOLO mode: auto-select full stack (option 3)
             print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture + GS-IR)")
-            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'wham', 'gsir']
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -647,7 +632,7 @@ class InstallationWizard:
                     to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'wham', 'gsir']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
                     break
                 elif choice == '4':
                     to_install = []
@@ -692,7 +677,7 @@ class InstallationWizard:
             self.checkpoint_downloader.download_all_checkpoints(['sam3'], self.state_manager)
 
         # Download checkpoints for motion capture components
-        mocap_components = [cid for cid in to_install if cid in ['wham', 'gvhmr']]
+        mocap_components = [cid for cid in to_install if cid in ['gvhmr']]
         if mocap_components:
             print("\nDownloading checkpoints for motion capture components...")
             self.checkpoint_downloader.download_all_checkpoints(mocap_components, self.state_manager)
@@ -707,7 +692,7 @@ class InstallationWizard:
                 print("\nDownloading SMPL-X body models...")
                 self.checkpoint_downloader.download_all_checkpoints(['smplx'], self.state_manager)
             else:
-                print("\n⚠ SMPL-X credentials not found - skipping model download")
+                print("\n! SMPL-X credentials not found - skipping model download")
                 print("  Run wizard again after setting up credentials to download models")
 
         # Final status
@@ -743,71 +728,74 @@ class InstallationWizard:
                     if smplx_models:
                         break
             if smplx_models:
-                print("\n📦 SMPL-X Body Models:")
-                print(f"  ✓ Found {len(smplx_models)} SMPL-X model(s)")
+                print("\n[SMPL-X Body Models]")
+                print(f"  OK Found {len(smplx_models)} SMPL-X model(s)")
             else:
-                print("\n📦 SMPL-X Body Models (Not Found):")
+                print("\n[SMPL-X Body Models] (Not Found)")
                 if not Path("SMPL.login.dat").exists():
-                    print("  ⚠ Credentials not set up - run wizard to configure")
+                    print("  ! Credentials not set up - run wizard to configure")
                 else:
-                    print("  ⚠ Download may have failed - check credentials and re-run wizard")
+                    print("  ! Download may have failed - check credentials and re-run wizard")
                 print("  Or download manually:")
                 print("    1. Register at https://smpl-x.is.tue.mpg.de/")
                 print("    2. Download SMPL-X models")
                 print(f"    3. Place in {INSTALL_DIR}/smplx_models/")
 
         # Checkpoints status
-        if status.get('gvhmr', False) or status.get('wham', False):
-            print("\n📦 Motion Capture Checkpoints:")
-            if status.get('gvhmr', False):
-                if self.state_manager.is_checkpoint_downloaded('gvhmr'):
-                    print("  ✓ GVHMR checkpoints downloaded (preferred)")
-                else:
-                    print("  ⚠ GVHMR checkpoints not downloaded - run wizard again or visit:")
-                    print("    https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD")
-            if status.get('wham', False):
-                if self.state_manager.is_checkpoint_downloaded('wham'):
-                    print("  ✓ WHAM checkpoints downloaded (fallback)")
-                else:
-                    print("  ⚠ WHAM checkpoints not downloaded - run wizard again or visit:")
-                    print("    https://github.com/yohanshin/WHAM")
+        if status.get('gvhmr', False):
+            print("\n[Motion Capture Checkpoints]")
+            if self.state_manager.is_checkpoint_downloaded('gvhmr'):
+                print("  OK GVHMR checkpoints downloaded")
+            else:
+                print("  ! GVHMR checkpoints not downloaded - run wizard again or visit:")
+                print("    https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD")
+
+        # Blender status (for Alembic mesh export)
+        if status.get('blender', False):
+            blender_path = PlatformManager.find_tool("blender")
+            print("\n[Blender] (Alembic Export)")
+            if blender_path:
+                print(f"  OK Installed at {blender_path}")
+            else:
+                print("  OK Configured (using system Blender)")
+            print("  Export meshes: python scripts/export_alembic.py <mesh_dir>")
 
         # GS-IR status
         if status.get('gsir', False):
             gsir_path = self.install_dir / "GS-IR"
-            print("\n🎨 GS-IR (Material Decomposition):")
-            print(f"  ✓ Installed at {gsir_path}")
+            print("\n[GS-IR] (Material Decomposition)")
+            print(f"  OK Installed at {gsir_path}")
             print("  Use with pipeline: --stages gsir")
 
         # ComfyUI
         if status.get('comfyui', False):
             comfyui_path = self.install_dir / "ComfyUI"
-            print("\n🎨 ComfyUI:")
-            print(f"  ✓ Installed at {comfyui_path}")
-            print("  ✓ Custom nodes installed")
+            print("\n[ComfyUI]")
+            print(f"  OK Installed at {comfyui_path}")
+            print("  OK Custom nodes installed")
             print("\n  Start server:")
             print(f"    cd {comfyui_path}")
             print("    python main.py --listen")
         else:
-            print("\n🎨 ComfyUI (Optional):")
+            print("\n[ComfyUI] (Optional)")
             print("  Not installed. Run wizard again to add ComfyUI support.")
 
         # Web GUI
         if status.get('web_gui', False):
-            print("\n🌐 Web GUI:")
-            print("  ✓ FastAPI and dependencies installed")
+            print("\n[Web GUI]")
+            print("  OK FastAPI and dependencies installed")
             print("\n  Start web interface:")
             print("    ./start_web.py")
             print("  Or with custom port:")
             print("    ./start_web.py --port 8080")
 
         # Testing
-        print("\n✅ Test Installation:")
+        print("\n[Test Installation]")
         print("  python scripts/run_pipeline.py --help")
         print("  python scripts/run_mocap.py --check")
 
         # Documentation
-        print("\n📖 Documentation:")
+        print("\n[Documentation]")
         print("  README.md - Pipeline overview and usage")
         print("  TESTING.md - Testing and validation guide")
         print("  IMPLEMENTATION_NOTES.md - Developer notes")
@@ -831,14 +819,14 @@ class InstallationWizard:
             desc_line2 = "so you can launch it with a single click.               "
 
         print(f"""
-{Colors.OKCYAN}    ┌────────────────────────────────────────────────────────────┐
-    │                                                            │
-    │  {Colors.BOLD}        ★  One more step: Desktop shortcut?  ★{Colors.ENDC}{Colors.OKCYAN}          │
-    │                                                            │
-    │    {desc_line1}│
-    │    {desc_line2}│
-    │                                                            │
-    └────────────────────────────────────────────────────────────┘
+{Colors.OKCYAN}    +------------------------------------------------------------+
+    |                                                            |
+    |  {Colors.BOLD}        *  One more step: Desktop shortcut?  *{Colors.ENDC}{Colors.OKCYAN}          |
+    |                                                            |
+    |    {desc_line1}|
+    |    {desc_line2}|
+    |                                                            |
+    +------------------------------------------------------------+
 {Colors.ENDC}""")
 
         if ask_yes_no("    Create desktop shortcut?", default=True):
@@ -862,7 +850,8 @@ class InstallationWizard:
                 [sys.executable, str(create_shortcut_script), "--all", "--quiet"],
                 capture_output=True,
                 text=True,
-                cwd=str(self.repo_root)
+                cwd=str(self.repo_root),
+                timeout=60
             )
 
             if result.returncode == 0:

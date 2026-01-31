@@ -13,12 +13,12 @@ While `run_pipeline.py` orchestrates the full pipeline, each component can also 
 | `setup_project.py` | Initialize project structure | Project path | Directory tree |
 | `run_colmap.py` | COLMAP reconstruction | Frames | 3D model |
 | `run_segmentation.py` | Dynamic scene segmentation | Frames | Masks |
-| `run_mocap.py` | Human motion capture | Frames + camera | Mesh sequences |
+| `run_mocap.py` | Human motion capture (GVHMR) | Frames + camera | Mesh sequences |
 | `run_gsir.py` | Material decomposition | COLMAP model | PBR materials |
 | `export_camera.py` | Camera export | Camera JSON | Alembic/FBX |
 | `texture_projection.py` | Texture SMPL-X meshes | Meshes + frames | Textured meshes |
-| `smplx_from_motion.py` | Generate SMPL-X from WHAM | motion.pkl | Mesh sequence |
-| `mesh_deform.py` | Deform ECON with SMPL-X | SMPL-X + ECON meshes | Animated ECON |
+| `smplx_from_motion.py` | Generate SMPL-X from motion data | motion.pkl | Mesh sequence |
+| `mesh_deform.py` | Deform clothed mesh with SMPL-X | SMPL-X + clothed meshes | Animated mesh |
 
 ## setup_project.py
 
@@ -214,7 +214,7 @@ Scene boundaries prevent mask propagation across cuts.
 
 ## run_mocap.py
 
-Human motion capture pipeline using WHAM + ECON.
+Human motion capture pipeline using GVHMR.
 
 ### Usage
 
@@ -230,17 +230,13 @@ python scripts/run_mocap.py <project_dir> [options]
 **Options**:
 - `--skip-texture` - Skip texture projection (faster, kept for compatibility)
 - `--check` - Validate installation without processing
+- `--no-colmap-intrinsics` - Don't use COLMAP camera intrinsics
 
 ### Examples
 
 **Full motion capture**:
 ```bash
 python scripts/run_mocap.py ./projects/Actor01
-```
-
-**Skip texture projection** (faster):
-```bash
-python scripts/run_mocap.py ./projects/Actor01 --skip-texture
 ```
 
 **Check installation**:
@@ -256,27 +252,21 @@ python scripts/run_mocap.py ./projects/Actor01 --check
 
 ### Output
 
-- `mocap/wham/` - WHAM pose estimates
-  - `poses.pkl` - Per-frame poses
-  - `tracking.json` - Tracking metadata
-- `mocap/econ/` - ECON 3D reconstructions
-  - `mesh_*.obj` - Clothed mesh per keyframe
+- `mocap/motion.pkl` - Motion data (poses, translation, shape)
 - `mocap/mesh_sequence/` - Exported mesh sequence
   - `mesh_*.obj` - OBJ mesh files
 
 ### Pipeline
 
-1. **WHAM** extracts 3D pose from video (world-grounded motion)
-2. **ECON** reconstructs detailed clothed human with SMPL-X compatibility
-3. **Texture Projection** (optional) projects video texture onto meshes
+1. **GVHMR** extracts 3D pose from video (world-grounded motion)
+2. **SMPL-X mesh generation** creates animated body mesh sequence
 
 ### Tips
 
 - Requires good camera tracking (from COLMAP or Depth-Anything-V3)
 - Actor should be visible in majority of frames
 - Better results with frontal views
-- `--skip-texture` saves significant time
-- Higher `--keyframe-interval` processes fewer frames (faster, less detail)
+- GVHMR provides accurate world-grounded motion (SIGGRAPH Asia 2024)
 
 ---
 
@@ -443,7 +433,7 @@ Notes:
 ### Tips
 
 - Use `--format all` to export all formats at once (default behavior)
-- Alembic (.abc) requires: `conda install -c conda-forge alembic`
+- Alembic (.abc) requires Blender (auto-installed via wizard). Note: conda-forge "alembic" is a database tool, not VFX Alembic.
 - For Nuke, use .chan for simplest import
 - For After Effects, run the .jsx script via File → Scripts → Run Script File
 - For Houdini, use .cmd via File → Run Script, or .clip via File CHOP
@@ -480,29 +470,29 @@ python scripts/texture_projection.py <mesh_dir> <frames_dir> <camera_dir> <outpu
 **Basic texture projection**:
 ```bash
 python scripts/texture_projection.py \
-    mocap/econ/meshes \
+    mocap/mesh_sequence \
     source/frames \
     camera \
-    mocap/econ/textured_meshes
+    mocap/textured_meshes
 ```
 
 **High resolution textures**:
 ```bash
 python scripts/texture_projection.py \
-    mocap/econ/meshes \
+    mocap/mesh_sequence \
     source/frames \
     camera \
-    mocap/econ/textured_meshes \
+    mocap/textured_meshes \
     --resolution 4096
 ```
 
 **Different output format**:
 ```bash
 python scripts/texture_projection.py \
-    mocap/econ/meshes \
+    mocap/mesh_sequence \
     source/frames \
     camera \
-    mocap/econ/textured_meshes \
+    mocap/textured_meshes \
     --format fbx
 ```
 
@@ -537,7 +527,7 @@ python scripts/texture_projection.py \
 
 ## smplx_from_motion.py
 
-Generate animated SMPL-X mesh sequences from WHAM motion data.
+Generate animated SMPL-X mesh sequences from motion capture data.
 
 ### Usage
 
@@ -551,7 +541,7 @@ python scripts/smplx_from_motion.py <project_dir> [options]
 - `project_dir` - Project directory
 
 **Required**:
-- `--motion` - Path to WHAM motion.pkl file
+- `--motion` - Path to motion.pkl file (from GVHMR)
 - `--output` - Output directory for mesh sequence
 
 **Optional**:
@@ -565,14 +555,14 @@ python scripts/smplx_from_motion.py <project_dir> [options]
 **Basic mesh generation**:
 ```bash
 python scripts/smplx_from_motion.py ./projects/Actor01 \
-    --motion mocap/wham/motion.pkl \
+    --motion mocap/motion.pkl \
     --output mocap/smplx_animated/
 ```
 
 **With rest pose export**:
 ```bash
 python scripts/smplx_from_motion.py ./projects/Actor01 \
-    --motion mocap/wham/motion.pkl \
+    --motion mocap/motion.pkl \
     --output mocap/smplx_animated/ \
     --rest-pose mocap/smplx_rest.obj
 ```
@@ -580,17 +570,17 @@ python scripts/smplx_from_motion.py ./projects/Actor01 \
 **Specific gender model**:
 ```bash
 python scripts/smplx_from_motion.py ./projects/Actor01 \
-    --motion mocap/wham/motion.pkl \
+    --motion mocap/motion.pkl \
     --output mocap/smplx_animated/ \
     --gender female
 ```
 
 ### Input
 
-- `mocap/wham/motion.pkl` - WHAM motion data containing:
-  - `poses`: [N, 72] SMPL pose parameters
-  - `trans`: [N, 3] root translation
-  - `betas`: [10] or [N, 10] shape parameters
+- `mocap/motion.pkl` - Motion data containing:
+  - `poses`: SMPL pose parameters
+  - `trans`: Root translation
+  - `betas`: Shape parameters
 
 ### Output
 
@@ -613,7 +603,7 @@ python scripts/smplx_from_motion.py ./projects/Actor01 \
 
 ## mesh_deform.py
 
-Transfer animation from SMPL-X to ECON clothed meshes using UV-based correspondence.
+Transfer animation from SMPL-X to clothed meshes using UV-based correspondence.
 
 ### Usage
 
@@ -628,7 +618,7 @@ python scripts/mesh_deform.py <project_dir> [options]
 
 **Required**:
 - `--smplx-rest` - SMPL-X rest pose mesh (.obj)
-- `--econ-rest` - ECON rest pose mesh (.obj)
+- `--clothed-rest` - Clothed rest pose mesh (.obj)
 - `--smplx-sequence` - Directory with animated SMPL-X meshes
 - `--output` - Output directory for deformed meshes
 
@@ -644,18 +634,18 @@ python scripts/mesh_deform.py <project_dir> [options]
 ```bash
 python scripts/mesh_deform.py ./projects/Actor01 \
     --smplx-rest mocap/smplx_rest.obj \
-    --econ-rest mocap/econ/mesh_0001.obj \
+    --clothed-rest mocap/clothed/mesh_0001.obj \
     --smplx-sequence mocap/smplx_animated/ \
-    --output mocap/econ_animated/
+    --output mocap/clothed_animated/
 ```
 
 **With correspondence caching** (faster iteration):
 ```bash
 python scripts/mesh_deform.py ./projects/Actor01 \
     --smplx-rest mocap/smplx_rest.obj \
-    --econ-rest mocap/econ/mesh_0001.obj \
+    --clothed-rest mocap/clothed/mesh_0001.obj \
     --smplx-sequence mocap/smplx_animated/ \
-    --output mocap/econ_animated/ \
+    --output mocap/clothed_animated/ \
     --cache mocap/correspondence.npz
 ```
 
@@ -669,22 +659,22 @@ python scripts/mesh_deform.py ./projects/Actor01 \
 ```bash
 python scripts/mesh_deform.py ./projects/Actor01 \
     --smplx-rest mocap/smplx_rest.obj \
-    --econ-rest mocap/econ/mesh_0001.obj \
+    --clothed-rest mocap/clothed/mesh_0001.obj \
     --smplx-sequence mocap/smplx_animated/ \
-    --output mocap/econ_animated/ \
+    --output mocap/clothed_animated/ \
     --smoothing-map mocap/smoothing_weights.png
 ```
 
 ### Input
 
 - SMPL-X rest pose mesh with UV coordinates
-- ECON rest pose mesh with matching UV coordinates
+- Clothed rest pose mesh with matching UV coordinates
 - Animated SMPL-X mesh sequence (from smplx_from_motion.py)
 
 ### Output
 
-- Deformed ECON meshes (one per input SMPL-X frame)
-- Preserves ECON mesh topology and UV coordinates
+- Deformed clothed meshes (one per input SMPL-X frame)
+- Preserves mesh topology and UV coordinates
 
 ### Offset Modes
 
@@ -720,7 +710,7 @@ UV-based correspondence avoids this because:
 - Use `--cache` to speed up iteration (correspondence is expensive to compute)
 - Start with `smooth` mode, try `rigid` if clothing looks too damped
 - Low UV coverage (<90%) indicates UV mismatch between meshes
-- ECON and SMPL-X must have compatible UV layouts
+- Clothed mesh and SMPL-X must have compatible UV layouts
 
 ---
 

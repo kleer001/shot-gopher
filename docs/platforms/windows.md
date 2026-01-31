@@ -149,7 +149,7 @@ Large model downloads may be flagged. Add the repository directory to exclusions
 - `C:\path\to\shot-gopher`
 
 ### Case-Insensitive Filesystem
-Windows treats `WHAM` and `wham` as the same. Use consistent casing when cloning.
+Windows treats `GVHMR` and `gvhmr` as the same. Use consistent casing when cloning.
 
 ---
 

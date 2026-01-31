@@ -12,7 +12,7 @@ Detailed documentation for each processing stage.
 |-------|---------|------|----------------|
 | [ingest](#ingest) | Extract frames | CPU | Video → PNGs |
 | [interactive](#interactive) | Interactive segmentation | 4 GB | Browser-based point/box selection |
-| [depth](#depth) | Depth maps | 7 GB | Frames → Depth + camera |
+| [depth](#depth) | Depth maps | 7 GB | Frames → Depth |
 | [roto](#roto) | Segmentation | 4 GB | Frames → Masks |
 | [mama](#mama) | Matte refinement | 12 GB | Roto masks → Alpha mattes |
 | [cleanplate](#cleanplate) | Object removal | 6 GB | Frames + masks → Clean plates |
@@ -42,7 +42,7 @@ python scripts/run_pipeline.py footage.mp4 -s ingest -f 24
 ```
 
 **Notes:**
-- Frame numbering starts at 0001 (ComfyUI/WHAM requirement)
+- Frame numbering starts at 0001 (ComfyUI requirement)
 - Zero-padded to 4 digits (supports up to 9999 frames)
 
 ---
@@ -277,27 +277,26 @@ python scripts/run_pipeline.py footage.mp4 -s colmap -q high -d
 
 ## mocap
 
-Human motion capture using WHAM + ECON.
+Human motion capture using GVHMR.
 
 | | |
 |---|---|
 | **VRAM** | ~12 GB |
 | **Input** | `source/frames/*.png`, `camera/extrinsics.json` |
-| **Output** | `mocap/wham/`, `mocap/econ/`, `mocap/mesh_sequence/` |
-| **Workflow** | None (WHAM/ECON binaries) |
+| **Output** | `mocap/motion.pkl`, `mocap/mesh_sequence/` |
+| **Workflow** | None (GVHMR) |
 
 **Requirements:**
-- WHAM and ECON installed ([Installation guide](../installation.md))
-- Camera data from `colmap` or `depth` stage
+- GVHMR installed ([Installation guide](../installation.md))
+- Camera data from `colmap` stage
 
 ```bash
 python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
 ```
 
 **Pipeline:**
-1. **WHAM** — Extracts world-grounded pose from video
-2. **ECON** — Reconstructs clothed 3D human (SMPL-X compatible)
-3. **Texture** — Projects video frames onto mesh
+1. **GVHMR** — Extracts world-grounded pose from video (SMPL-X compatible)
+2. **Mesh Generation** — Creates animated SMPL-X mesh sequence
 
 **Troubleshooting:** See [Mocap issues](troubleshooting.md#motion-capture-requires-camera-data)
 

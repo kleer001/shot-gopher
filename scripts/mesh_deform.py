@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """UV-based mesh deformation for animating clothed ECON meshes with SMPL-X motion.
 
-This script transfers animation from SMPL-X (driven by WHAM motion data) to
+This script transfers animation from SMPL-X (driven by GVHMR motion data) to
 higher-resolution ECON clothed meshes using UV-space correspondence.
 
 Why UV-based (not distance-based):

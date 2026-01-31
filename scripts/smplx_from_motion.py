@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
-"""Generate SMPL-X mesh sequence from WHAM motion data.
+"""Generate SMPL-X mesh sequence from motion capture data.
 
-Converts WHAM motion.pkl (pose parameters) into animated SMPL-X OBJ meshes.
-This is required for the mesh_deform.py script which needs animated SMPL-X
-as the deformation driver.
+Converts motion.pkl (pose parameters from GVHMR) into animated
+SMPL-X OBJ meshes. This is required for the mesh_deform.py script which
+needs animated SMPL-X as the deformation driver.
 
 Usage:
     python smplx_from_motion.py <project_dir> [options]
 
 Example:
-    # Generate animated SMPL-X from WHAM motion
+    # Generate from GVHMR motion (preferred)
     python smplx_from_motion.py /path/to/project \\
-        --motion mocap/wham/motion.pkl \\
+        --motion mocap/motion.pkl \\
         --output mocap/smplx_animated/
 
     # Also export rest pose (frame 0)
     python smplx_from_motion.py /path/to/project \\
-        --motion mocap/wham/motion.pkl \\
+        --motion mocap/motion.pkl \\
         --output mocap/smplx_animated/ \\
         --rest-pose mocap/smplx_rest.obj
 """
 
 import argparse
 import pickle
+import re
 import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -30,6 +31,54 @@ from typing import Optional, Dict, Any
 import numpy as np
 
 from env_config import INSTALL_DIR
+
+
+def extract_frame_number(filename: str) -> int:
+    """Extract frame number from filename like 'frame_0001.png'.
+
+    Args:
+        filename: Filename to parse
+
+    Returns:
+        Frame number as integer, or -1 if not found
+    """
+    match = re.search(r'(\d+)', filename)
+    if match:
+        return int(match.group(1))
+    return -1
+
+
+def detect_source_start_frame(project_dir: Path) -> int:
+    """Detect the starting frame number from source/frames/ directory.
+
+    Scans the source frames directory to find the minimum frame number,
+    which serves as the base offset for output mesh numbering.
+
+    Args:
+        project_dir: Project root directory
+
+    Returns:
+        Starting frame number (e.g., 1 for frame_0001.png, 1001 for frame_1001.png)
+        Defaults to 1 if detection fails
+    """
+    frames_dir = project_dir / "source" / "frames"
+    if not frames_dir.exists():
+        return 1
+
+    frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+    if not frame_files:
+        return 1
+
+    frame_numbers = []
+    for f in frame_files:
+        num = extract_frame_number(f.stem)
+        if num >= 0:
+            frame_numbers.append(num)
+
+    if not frame_numbers:
+        return 1
+
+    return min(frame_numbers)
 
 
 def check_dependencies() -> bool:
@@ -82,10 +131,10 @@ def find_smplx_models() -> Optional[Path]:
 
 
 def load_motion_data(motion_path: Path) -> Dict[str, Any]:
-    """Load WHAM motion data from pickle file.
+    """Load motion data from pickle file.
 
     Args:
-        motion_path: Path to motion.pkl
+        motion_path: Path to motion.pkl (from GVHMR)
 
     Returns:
         Dictionary with motion data:
@@ -133,7 +182,8 @@ def generate_smplx_meshes(
     output_dir: Path,
     rest_pose_path: Optional[Path] = None,
     gender: str = "neutral",
-    device: str = "cuda"
+    device: str = "cuda",
+    start_frame: int = 1
 ) -> bool:
     """Generate SMPL-X mesh sequence from motion data.
 
@@ -144,6 +194,7 @@ def generate_smplx_meshes(
         rest_pose_path: Optional path to save rest pose mesh
         gender: Body model gender ("neutral", "male", "female")
         device: Torch device ("cuda" or "cpu")
+        start_frame: Starting frame number for output filenames (from source sequence)
 
     Returns:
         True if successful
@@ -210,7 +261,7 @@ def generate_smplx_meshes(
     print(f"\n  Generating {n_frames} SMPL-X meshes...")
 
     # Parse SMPL-X pose parameters
-    # WHAM outputs 72 values: 3 (global) + 23*3 (body joints) = 72 (SMPL format)
+    # GVHMR outputs 72 values: 3 (global) + 23*3 (body joints) = 72 (SMPL format)
     # SMPL-X uses 21 body joints (63 values), so we take pose[3:66]
 
     for frame_idx in range(n_frames):
@@ -251,8 +302,8 @@ def generate_smplx_meshes(
         if uvs is not None:
             mesh.visual = trimesh.visual.TextureVisuals(uv=uvs)
 
-        # Save mesh
-        output_path = output_dir / f"frame_{frame_idx:04d}.obj"
+        output_frame_num = start_frame + frame_idx
+        output_path = output_dir / f"frame_{output_frame_num:04d}.obj"
         mesh.export(output_path)
 
         # Save rest pose (frame 0) if requested
@@ -291,7 +342,7 @@ def run_generation_pipeline(
 
     Args:
         project_dir: Project root directory
-        motion_path: Path to WHAM motion.pkl
+        motion_path: Path to motion.pkl
         output_dir: Output directory for mesh sequence
         rest_pose_path: Optional path to save rest pose
         model_path: Path to SMPL-X models (auto-detected if None)
@@ -323,6 +374,9 @@ def run_generation_pipeline(
 
         print(f"  SMPL-X models: {model_path}")
 
+        start_frame = detect_source_start_frame(project_dir)
+        print(f"  Source start frame: {start_frame}")
+
         # Load motion data
         print("\nLoading motion data...")
         motion_data = load_motion_data(motion_path)
@@ -334,7 +388,8 @@ def run_generation_pipeline(
             output_dir=output_dir,
             rest_pose_path=rest_pose_path,
             gender=gender,
-            device=device
+            device=device,
+            start_frame=start_frame
         )
 
         if success:
@@ -351,7 +406,7 @@ def run_generation_pipeline(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate SMPL-X mesh sequence from WHAM motion data",
+        description="Generate SMPL-X mesh sequence from motion capture data",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
@@ -364,7 +419,7 @@ def main():
         "--motion",
         type=Path,
         required=True,
-        help="Path to WHAM motion.pkl"
+        help="Path to motion.pkl"
     )
     parser.add_argument(
         "--output",
