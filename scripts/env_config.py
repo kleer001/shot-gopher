@@ -21,6 +21,10 @@ import os
 import sys
 from pathlib import Path
 
+# Force UTF-8 encoding on Windows (prevents cp1252 default issues)
+if sys.platform == 'win32':
+    os.environ.setdefault('PYTHONUTF8', '1')
+
 
 # =============================================================================
 # ENVIRONMENT CONFIGURATION
