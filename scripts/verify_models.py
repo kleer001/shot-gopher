@@ -24,11 +24,11 @@ REQUIRED_MODELS = {
         "optional": False,
         "description": "Video Depth Anything - for depth map generation",
     },
-    "wham": {
-        "path": MODEL_DIR / "wham",
-        "files": ["wham_vit_w_3dpw.pth.tar"],
+    "gvhmr": {
+        "path": MODEL_DIR.parent / "GVHMR" / "inputs" / "checkpoints" / "gvhmr",
+        "files": ["gvhmr_siga24_release.ckpt"],
         "optional": False,
-        "description": "WHAM - for human motion capture",
+        "description": "GVHMR - for human motion capture (SIGGRAPH Asia 2024)",
     },
     "smplx": {
         "path": MODEL_DIR / "smplx",

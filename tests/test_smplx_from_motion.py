@@ -24,7 +24,7 @@ from smplx_from_motion import (
 
 
 class TestLoadMotionData:
-    """Test WHAM motion data loading and validation."""
+    """Test motion data loading and validation."""
 
     def test_load_valid_motion_data(self):
         """Test loading valid motion.pkl file."""
@@ -182,7 +182,7 @@ class TestPoseParameterExtraction:
 
     def test_smplx_pose_breakdown(self):
         """Test the expected breakdown of SMPL/SMPL-X pose parameters."""
-        # WHAM outputs SMPL format: 72 values = 3 (global) + 23*3 (body)
+        # GVHMR outputs SMPL format: 72 values = 3 (global) + 23*3 (body)
         pose_smpl = np.random.rand(72).astype(np.float32)
 
         # Extract as the code does

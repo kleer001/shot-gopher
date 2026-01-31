@@ -199,7 +199,7 @@ class DiskUsageAnalyzer:
             Dict mapping component name to (size_bytes, formatted_size)
         """
         components = {
-            "WHAM": self.install_dir / "WHAM",
+            "GVHMR": self.install_dir / "GVHMR",
             "ECON": self.install_dir / "ECON",
             "ComfyUI": self.install_dir / "ComfyUI",
             "State files": self.install_dir / "install_state.json",
@@ -233,7 +233,7 @@ class Janitor:
 
         # Git repos
         self.repos = {
-            'WHAM': GitRepoChecker(self.install_dir / "WHAM", "WHAM"),
+            'GVHMR': GitRepoChecker(self.install_dir / "GVHMR", "GVHMR"),
             'ECON': GitRepoChecker(self.install_dir / "ECON", "ECON"),
             'ComfyUI': GitRepoChecker(self.install_dir / "ComfyUI", "ComfyUI"),
         }

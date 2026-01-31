@@ -39,7 +39,7 @@ PYTHON_VERSION = "3.10"
 # Repo root directory (shot-gopher/)
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Installation directory for tools (ComfyUI, WHAM, ECON, models)
+# Installation directory for tools (ComfyUI, GVHMR, models)
 # This stays inside/near the repo as it's tooling, not project data
 # Allow environment variable override for custom installations
 INSTALL_DIR = Path(os.environ.get(

@@ -180,17 +180,13 @@ def export_camera_to_vfx_formats(
 
 def run_mocap(
     project_dir: Path,
-    method: str = "auto",
     use_colmap_intrinsics: bool = True,
-    skip_texture: bool = False,
 ) -> bool:
-    """Run human motion capture with GVHMR (preferred) or WHAM fallback.
+    """Run human motion capture with GVHMR.
 
     Args:
         project_dir: Project directory with frames and camera data
-        method: Motion capture method - "auto", "gvhmr", or "wham"
         use_colmap_intrinsics: Use COLMAP focal length for GVHMR
-        skip_texture: Skip texture projection (unused, kept for compatibility)
 
     Returns:
         True if mocap succeeded
@@ -204,14 +200,10 @@ def run_mocap(
     cmd = [
         sys.executable, str(script_path),
         str(project_dir),
-        "--method", method,
     ]
 
     if not use_colmap_intrinsics:
         cmd.append("--no-colmap-intrinsics")
-
-    if skip_texture:
-        cmd.append("--skip-texture")
 
     try:
         run_command(cmd, "Running motion capture")
@@ -723,25 +715,20 @@ def run_stage_mocap(
         True if successful
     """
     print("\n=== Stage: mocap ===")
-    mocap_output = ctx.project_dir / "mocap" / "wham"
+    mocap_output = ctx.project_dir / "mocap" / "motion.pkl"
     camera_dir = ctx.project_dir / "camera"
     has_camera = camera_dir.exists() and (camera_dir / "extrinsics.json").exists()
 
     if ctx.skip_existing and mocap_output.exists():
         print("  → Skipping (mocap data exists)")
     else:
-        if not has_camera and config.mocap_method == "wham":
-            print("  → Skipping WHAM (camera data required - run colmap stage first)")
-        else:
-            if has_camera:
-                print(f"  → Using COLMAP camera data for improved accuracy")
-            if not run_mocap(
-                ctx.project_dir,
-                method=config.mocap_method,
-                use_colmap_intrinsics=has_camera,
-                skip_texture=False,
-            ):
-                print("  → Motion capture failed", file=sys.stderr)
+        if has_camera:
+            print(f"  → Using COLMAP camera data for improved accuracy")
+        if not run_mocap(
+            ctx.project_dir,
+            use_colmap_intrinsics=has_camera,
+        ):
+            print("  → Motion capture failed", file=sys.stderr)
 
     clear_gpu_memory(ctx.comfyui_url)
     return True

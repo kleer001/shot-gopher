@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate SMPL-X mesh sequence from motion capture data.
 
-Converts motion.pkl (pose parameters from GVHMR or WHAM) into animated
+Converts motion.pkl (pose parameters from GVHMR) into animated
 SMPL-X OBJ meshes. This is required for the mesh_deform.py script which
 needs animated SMPL-X as the deformation driver.
 
@@ -11,12 +11,12 @@ Usage:
 Example:
     # Generate from GVHMR motion (preferred)
     python smplx_from_motion.py /path/to/project \\
-        --motion mocap/wham/motion.pkl \\
+        --motion mocap/motion.pkl \\
         --output mocap/smplx_animated/
 
     # Also export rest pose (frame 0)
     python smplx_from_motion.py /path/to/project \\
-        --motion mocap/wham/motion.pkl \\
+        --motion mocap/motion.pkl \\
         --output mocap/smplx_animated/ \\
         --rest-pose mocap/smplx_rest.obj
 """
@@ -131,10 +131,10 @@ def find_smplx_models() -> Optional[Path]:
 
 
 def load_motion_data(motion_path: Path) -> Dict[str, Any]:
-    """Load motion data from pickle file (GVHMR or WHAM format).
+    """Load motion data from pickle file.
 
     Args:
-        motion_path: Path to motion.pkl (from GVHMR or WHAM)
+        motion_path: Path to motion.pkl (from GVHMR)
 
     Returns:
         Dictionary with motion data:
@@ -261,7 +261,7 @@ def generate_smplx_meshes(
     print(f"\n  Generating {n_frames} SMPL-X meshes...")
 
     # Parse SMPL-X pose parameters
-    # WHAM outputs 72 values: 3 (global) + 23*3 (body joints) = 72 (SMPL format)
+    # GVHMR outputs 72 values: 3 (global) + 23*3 (body joints) = 72 (SMPL format)
     # SMPL-X uses 21 body joints (63 values), so we take pose[3:66]
 
     for frame_idx in range(n_frames):
@@ -342,7 +342,7 @@ def run_generation_pipeline(
 
     Args:
         project_dir: Project root directory
-        motion_path: Path to WHAM motion.pkl
+        motion_path: Path to motion.pkl
         output_dir: Output directory for mesh sequence
         rest_pose_path: Optional path to save rest pose
         model_path: Path to SMPL-X models (auto-detected if None)
@@ -406,7 +406,7 @@ def run_generation_pipeline(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate SMPL-X mesh sequence from WHAM motion data",
+        description="Generate SMPL-X mesh sequence from motion capture data",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
@@ -419,7 +419,7 @@ def main():
         "--motion",
         type=Path,
         required=True,
-        help="Path to WHAM motion.pkl"
+        help="Path to motion.pkl"
     )
     parser.add_argument(
         "--output",

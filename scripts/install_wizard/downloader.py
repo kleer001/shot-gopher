@@ -89,24 +89,6 @@ class CheckpointDownloader:
 
     # Checkpoint metadata
     CHECKPOINTS: Dict = {
-        'wham': {
-            'name': 'WHAM Checkpoints',
-            'use_gdown': True,  # Use gdown for Google Drive downloads
-            'files': [
-                {
-                    'url': 'https://drive.google.com/uc?id=1i7kt9RlCCCNEW2aYaDWVr-G778JkLNcB',
-                    'filename': 'wham_vit_w_3dpw.pth.tar',
-                    'size_mb': 1200,
-                    'sha256': None  # TODO: Add checksums
-                }
-            ],
-            'dest_dir_rel': 'WHAM/checkpoints',
-            'instructions': f'''WHAM checkpoints are hosted on Google Drive.
-If automatic download fails, manually download from:
-  https://drive.google.com/file/d/1i7kt9RlCCCNEW2aYaDWVr-G778JkLNcB/view
-Or run the fetch_demo_data.sh script from the WHAM repository:
-  cd {INSTALL_DIR}/WHAM && bash fetch_demo_data.sh'''
-        },
         'smplx': {
             'name': 'SMPL-X Models',
             'requires_auth': True,
@@ -1682,7 +1664,7 @@ Auto-downloads from Ultralytics releases.'''
         """Download checkpoints for a component.
 
         Args:
-            comp_id: Component ID (e.g., 'wham', 'econ', 'smplx')
+            comp_id: Component ID (e.g., 'gvhmr', 'econ', 'smplx')
             state_manager: Optional state manager for tracking
             repo_root: Repository root for finding credentials
 

@@ -257,12 +257,6 @@ def parse_arguments() -> argparse.Namespace:
         help="Path to GS-IR installation (default: auto-detect)"
     )
     parser.add_argument(
-        "--mocap-method",
-        choices=["auto", "gvhmr", "wham"],
-        default="auto",
-        help="Motion capture method: auto (GVHMR with WHAM fallback), gvhmr, wham (default: auto)"
-    )
-    parser.add_argument(
         "--no-auto-comfyui",
         action="store_true",
         help="Don't auto-start ComfyUI (assume it's already running)"
@@ -366,7 +360,6 @@ def main():
         colmap_max_size=args.colmap_max_size,
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
-        mocap_method=args.mocap_method,
         roto_prompt=args.prompt,
         roto_start_frame=args.start_frame,
         separate_instances=args.separate_instances,
