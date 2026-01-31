@@ -67,8 +67,6 @@ export const ELEMENTS = {
     STAGES_COUNTER: 'stages-counter',
     VRAM_INFO_SECTION: 'vram-info-section',
     VRAM_INFO: 'vram-info',
-    DETAIL_VIDEO_SECTION: 'detail-video-section',
-    DETAIL_VIDEO_INFO: 'detail-video-info',
     OPEN_FOLDER_BTN: 'open-folder-btn',
     DELETE_PROJECT_BTN: 'delete-project-btn',
     REPROCESS_BTN: 'reprocess-btn',

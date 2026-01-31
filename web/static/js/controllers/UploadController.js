@@ -5,7 +5,7 @@
  * - Handle drag-and-drop file uploads
  * - Manage upload progress display
  * - Validate file types
- * - Update video info after upload
+ * - Dispatch upload complete event for project selection
  *
  * Follows Single Responsibility Principle by only handling upload UI.
  */
@@ -25,11 +25,6 @@ export class UploadController {
             uploadFilename: dom.getElement('upload-filename'),
             uploadProgressFill: dom.getElement('upload-progress-fill'),
             uploadPercentText: dom.getElement('upload-percent-text'),
-            videoInfo: dom.getElement('video-info'),
-            videoName: dom.getElement('video-name'),
-            videoResolution: dom.getElement('video-resolution'),
-            videoFrames: dom.getElement('video-frames'),
-            videoFps: dom.getElement('video-fps'),
         };
 
         this._boundHandlers = {};
@@ -140,27 +135,6 @@ export class UploadController {
         }));
     }
 
-    displayVideoInfo(info, filename) {
-        if (!this.elements.videoInfo) return;
-
-        // Validate info has required properties
-        if (!info || !info.resolution || !info.fps || info.frame_count === undefined) {
-            // Show default values for missing info
-            dom.setText(this.elements.videoName, filename);
-            dom.setText(this.elements.videoResolution, 'Unknown');
-            dom.setText(this.elements.videoFrames, 'Unknown');
-            dom.setText(this.elements.videoFps, 'Unknown');
-            dom.show(this.elements.videoInfo);
-            return;
-        }
-
-        dom.setText(this.elements.videoName, filename);
-        dom.setText(this.elements.videoResolution, `${info.resolution[0]}x${info.resolution[1]}`);
-        dom.setText(this.elements.videoFrames, info.frame_count);
-        dom.setText(this.elements.videoFps, info.fps.toFixed(2));
-        dom.show(this.elements.videoInfo);
-    }
-
     handleUploadError(error) {
         dom.hide(this.elements.uploadProgress);
         stateManager.setState({
@@ -176,9 +150,8 @@ export class UploadController {
             this.elements.fileInput.value = '';
         }
 
-        // Hide upload progress and video info
+        // Hide upload progress
         dom.hide(this.elements.uploadProgress);
-        dom.hide(this.elements.videoInfo);
 
         // Reset progress
         if (this.elements.uploadProgressFill) {

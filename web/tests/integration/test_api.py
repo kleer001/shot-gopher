@@ -161,5 +161,5 @@ class TestSystemAPI:
         assert response.status_code == 200
         data = response.json()
         assert "comfyui" in data
-        assert "disk_space_gb" in data
+        assert "disk_free_gb" in data
         assert "projects_dir" in data

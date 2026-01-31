@@ -80,8 +80,6 @@ export class ProjectsController {
             stagesCounter: dom.getElement(ELEMENTS.STAGES_COUNTER),
             vramInfoSection: dom.getElement(ELEMENTS.VRAM_INFO_SECTION),
             vramInfo: dom.getElement(ELEMENTS.VRAM_INFO),
-            detailVideoSection: dom.getElement(ELEMENTS.DETAIL_VIDEO_SECTION),
-            detailVideoInfo: dom.getElement(ELEMENTS.DETAIL_VIDEO_INFO),
             openFolderBtn: dom.getElement(ELEMENTS.OPEN_FOLDER_BTN),
             deleteProjectBtn: dom.getElement(ELEMENTS.DELETE_PROJECT_BTN),
             reprocessBtn: dom.getElement(ELEMENTS.REPROCESS_BTN),
