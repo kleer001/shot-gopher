@@ -28,6 +28,28 @@ const STAGE_OUTPUT_DIRS = {
     camera: 'camera',
 };
 
+const STAGE_OPTIONS = {
+    ingest: [
+        { id: 'fps', label: 'FPS', type: 'number', default: '', placeholder: 'auto' },
+    ],
+    roto: [
+        { id: 'prompt', label: 'Prompt', type: 'text', default: 'person', placeholder: 'person,car,ball' },
+        { id: 'separate_instances', label: 'Separate Instances', type: 'checkbox', default: true },
+    ],
+    colmap: [
+        { id: 'quality', label: 'Quality', type: 'select', default: 'medium', options: ['low', 'medium', 'high', 'slow'] },
+        { id: 'dense', label: 'Dense', type: 'checkbox', default: false },
+        { id: 'mesh', label: 'Mesh', type: 'checkbox', default: false },
+        { id: 'no_masks', label: 'No Masks', type: 'checkbox', default: false },
+    ],
+    gsir: [
+        { id: 'iterations', label: 'Iterations', type: 'number', default: 35000, placeholder: '35000' },
+    ],
+    camera: [
+        { id: 'rotation_order', label: 'Rotation', type: 'select', default: 'zxy', options: ['xyz', 'zxy', 'zyx'] },
+    ],
+};
+
 function formatFileSize(bytes) {
     if (bytes === null || bytes === undefined || bytes === 0) {
         return '0 B';
@@ -70,6 +92,7 @@ export class ProjectsController {
 
         this.selectedProjectId = null;
         this.selectedStages = new Set();
+        this.stageOptions = {};
         this.refreshInterval = null;
         this.processingPollInterval = null;
 
@@ -142,6 +165,7 @@ export class ProjectsController {
 
         this.selectedProjectId = projectId;
         this.selectedStages.clear();
+        this.stageOptions = {};
 
         await this.showProjectDetails(projectId);
     }
@@ -232,13 +256,20 @@ export class ProjectsController {
             }
 
             const safeStage = dom.escapeHTML(stage);
+            const optionsHtml = this.renderStageOptionsHtml(stage);
+            const hasOptions = STAGE_OPTIONS[stage] && STAGE_OPTIONS[stage].length > 0;
+            const expandIcon = hasOptions ? '<span class="stage-expand-icon">▸</span>' : '';
             return `
-            <div class="stage-status-item selectable ${stageClass}" data-stage="${safeStage}">
-                <div class="stage-marker"></div>
-                <span class="stage-status-name">${dom.escapeHTML(label)}</span>
-                <span class="stage-vram ${vramStatusClass}" title="${dom.escapeHTML(vramTitle)}">${vramDisplay}</span>
-                <span class="stage-file-count">${fileCountDisplay}</span>
-                <span class="stage-file-size">${fileSizeDisplay}</span>
+            <div class="stage-wrapper" data-stage="${safeStage}">
+                <div class="stage-status-item selectable ${stageClass}" data-stage="${safeStage}">
+                    ${expandIcon}
+                    <div class="stage-marker"></div>
+                    <span class="stage-status-name">${dom.escapeHTML(label)}</span>
+                    <span class="stage-vram ${vramStatusClass}" title="${dom.escapeHTML(vramTitle)}">${vramDisplay}</span>
+                    <span class="stage-file-count">${fileCountDisplay}</span>
+                    <span class="stage-file-size">${fileSizeDisplay}</span>
+                </div>
+                ${optionsHtml}
             </div>
         `;
         }).join('');
@@ -257,16 +288,89 @@ export class ProjectsController {
 
     toggleStageSelection(item) {
         const stage = item.dataset.stage;
+        const wrapper = item.closest('.stage-wrapper');
+        const optionsPanel = wrapper?.querySelector('.stage-options-panel');
+        const expandIcon = item.querySelector('.stage-expand-icon');
 
         if (this.selectedStages.has(stage)) {
             this.selectedStages.delete(stage);
             item.classList.remove('selected');
+            if (optionsPanel) optionsPanel.classList.add('hidden');
+            if (expandIcon) expandIcon.textContent = '▸';
         } else {
             this.selectedStages.add(stage);
             item.classList.add('selected');
+            if (optionsPanel) {
+                optionsPanel.classList.remove('hidden');
+                this.bindStageOptionHandlers(stage, optionsPanel);
+            }
+            if (expandIcon) expandIcon.textContent = '▾';
         }
 
         this.updateProcessButton();
+    }
+
+    renderStageOptionsHtml(stage) {
+        const options = STAGE_OPTIONS[stage];
+        if (!options || options.length === 0) return '';
+
+        const optionInputs = options.map(opt => {
+            const currentValue = this.stageOptions[stage]?.[opt.id] ?? opt.default;
+            const safeId = dom.escapeHTML(`${stage}-${opt.id}`);
+            const safeLabel = dom.escapeHTML(opt.label);
+
+            if (opt.type === 'checkbox') {
+                const checked = currentValue ? 'checked' : '';
+                return `
+                    <label class="stage-option-item">
+                        <input type="checkbox" data-stage="${dom.escapeHTML(stage)}" data-option="${dom.escapeHTML(opt.id)}" ${checked}>
+                        <span>${safeLabel}</span>
+                    </label>`;
+            } else if (opt.type === 'select') {
+                const optionsHtml = opt.options.map(o => {
+                    const selected = o === currentValue ? 'selected' : '';
+                    return `<option value="${dom.escapeHTML(o)}" ${selected}>${dom.escapeHTML(o)}</option>`;
+                }).join('');
+                return `
+                    <label class="stage-option-item">
+                        <span>${safeLabel}</span>
+                        <select data-stage="${dom.escapeHTML(stage)}" data-option="${dom.escapeHTML(opt.id)}">${optionsHtml}</select>
+                    </label>`;
+            } else {
+                const placeholder = opt.placeholder ? `placeholder="${dom.escapeHTML(opt.placeholder)}"` : '';
+                const value = currentValue !== '' ? `value="${dom.escapeHTML(String(currentValue))}"` : '';
+                return `
+                    <label class="stage-option-item">
+                        <span>${safeLabel}</span>
+                        <input type="${opt.type}" data-stage="${dom.escapeHTML(stage)}" data-option="${dom.escapeHTML(opt.id)}" ${value} ${placeholder}>
+                    </label>`;
+            }
+        }).join('');
+
+        return `<div class="stage-options-panel hidden">${optionInputs}</div>`;
+    }
+
+    bindStageOptionHandlers(stage, panel) {
+        const inputs = panel.querySelectorAll('input, select');
+        inputs.forEach(input => {
+            if (input.dataset.bound) return;
+            input.dataset.bound = 'true';
+
+            input.addEventListener('change', () => {
+                if (!this.stageOptions[stage]) {
+                    this.stageOptions[stage] = {};
+                }
+                if (input.type === 'checkbox') {
+                    this.stageOptions[stage][input.dataset.option] = input.checked;
+                } else if (input.type === 'number') {
+                    this.stageOptions[stage][input.dataset.option] = input.value ? Number(input.value) : null;
+                } else {
+                    this.stageOptions[stage][input.dataset.option] = input.value;
+                }
+            });
+
+            input.addEventListener('click', (e) => e.stopPropagation());
+        });
     }
 
     updateProcessButton() {
@@ -368,9 +472,30 @@ export class ProjectsController {
         try {
             const config = {
                 stages: stages,
-                roto_prompt: 'person',
                 skip_existing: false,
+                stage_options: {},
             };
+
+            stages.forEach(stage => {
+                const opts = this.stageOptions[stage] || {};
+                const defaults = STAGE_OPTIONS[stage] || [];
+                const stageOpts = {};
+
+                defaults.forEach(def => {
+                    const value = opts[def.id] !== undefined ? opts[def.id] : def.default;
+                    if (value !== '' && value !== null) {
+                        stageOpts[def.id] = value;
+                    }
+                });
+
+                if (Object.keys(stageOpts).length > 0) {
+                    config.stage_options[stage] = stageOpts;
+                }
+            });
+
+            if (config.stage_options.roto?.prompt) {
+                config.roto_prompt = config.stage_options.roto.prompt;
+            }
 
             await apiService.startProcessing(this.selectedProjectId, config);
 

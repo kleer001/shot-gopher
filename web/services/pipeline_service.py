@@ -91,6 +91,7 @@ class PipelineService:
             stages=request.stages,
             roto_prompt=request.roto_prompt,
             skip_existing=request.skip_existing,
+            stage_options=request.stage_options,
         )
 
         return JobStartResponse(

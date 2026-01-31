@@ -69,6 +69,7 @@ def run_pipeline_thread(
     stages: list,
     roto_prompt: str,
     skip_existing: bool,
+    stage_options: dict = None,
 ):
     """Run pipeline in a background thread."""
     from .job_state import active_jobs, active_jobs_lock
@@ -127,6 +128,33 @@ def run_pipeline_thread(
 
     if skip_existing:
         cmd.append("--skip-existing")
+
+    if stage_options:
+        opts = stage_options.get("ingest", {})
+        if opts.get("fps"):
+            cmd.extend(["--fps", str(opts["fps"])])
+
+        opts = stage_options.get("roto", {})
+        if opts.get("separate_instances"):
+            cmd.append("--separate-instances")
+
+        opts = stage_options.get("colmap", {})
+        if opts.get("quality"):
+            cmd.extend(["-q", opts["quality"]])
+        if opts.get("dense"):
+            cmd.append("-d")
+        if opts.get("mesh"):
+            cmd.append("-m")
+        if opts.get("no_masks"):
+            cmd.append("-M")
+
+        opts = stage_options.get("gsir", {})
+        if opts.get("iterations"):
+            cmd.extend(["-i", str(opts["iterations"])])
+
+        opts = stage_options.get("camera", {})
+        if opts.get("rotation_order"):
+            cmd.extend(["--rotation-order", opts["rotation_order"]])
 
     # Start process
     try:
@@ -252,11 +280,12 @@ def start_pipeline(
     stages: list,
     roto_prompt: str = "person",
     skip_existing: bool = False,
+    stage_options: dict = None,
 ):
     """Start pipeline processing in a background thread."""
     thread = threading.Thread(
         target=run_pipeline_thread,
-        args=(project_id, project_dir, stages, roto_prompt, skip_existing),
+        args=(project_id, project_dir, stages, roto_prompt, skip_existing, stage_options),
         daemon=True,
     )
     thread.start()

@@ -584,6 +584,83 @@ body {
     background: rgba(59, 130, 246, 0.1);
 }
 
+/* Stage Options */
+.stage-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.stage-expand-icon {
+    font-size: 10px;
+    color: var(--text-dim);
+    width: 12px;
+    flex-shrink: 0;
+    transition: transform 0.2s;
+}
+
+.stage-options-panel {
+    margin-left: 22px;
+    padding: 8px 12px;
+    background: var(--bg-hover);
+    border-radius: 0 0 6px 6px;
+    border: 1px solid var(--border);
+    border-top: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: -1px;
+}
+
+.stage-options-panel.hidden {
+    display: none;
+}
+
+.stage-option-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.stage-option-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.stage-option-item input[type="text"],
+.stage-option-item input[type="number"] {
+    width: 80px;
+    padding: 4px 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 11px;
+}
+
+.stage-option-item input[type="text"]:focus,
+.stage-option-item input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.stage-option-item select {
+    padding: 4px 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.stage-option-item select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
 .stage-marker {
     width: 10px;
     height: 10px;

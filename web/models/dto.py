@@ -57,6 +57,7 @@ class JobStartRequest(BaseModel):
     stages: List[str] = Field(..., min_length=1)
     roto_prompt: str = "person"
     skip_existing: bool = False
+    stage_options: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
 
 class JobStartResponse(BaseModel):
