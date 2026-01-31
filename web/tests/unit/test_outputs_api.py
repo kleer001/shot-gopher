@@ -302,9 +302,9 @@ class TestProjectSizeBytes:
 
         assert dto.size_bytes == 1024000
 
-    def test_get_project_size_bytes_function(self, tmp_path):
-        """_get_project_size_bytes should calculate directory size."""
-        from web.api import _get_project_size_bytes
+    def test_get_dir_size_bytes_function(self, tmp_path):
+        """get_dir_size_bytes should calculate directory size."""
+        from web.utils.media import get_dir_size_bytes
 
         project_dir = tmp_path / "test_project"
         project_dir.mkdir()
@@ -314,28 +314,28 @@ class TestProjectSizeBytes:
         (project_dir / "subdir").mkdir()
         (project_dir / "subdir" / "file3.txt").write_text("Nested" * 50)
 
-        size = _get_project_size_bytes(project_dir)
+        size = get_dir_size_bytes(project_dir)
 
         assert size > 0
         expected_size = 500 + 1000 + 300
         assert size == expected_size
 
-    def test_get_project_size_bytes_empty_dir(self, tmp_path):
+    def test_get_dir_size_bytes_empty_dir(self, tmp_path):
         """Empty directory should return 0 bytes."""
-        from web.api import _get_project_size_bytes
+        from web.utils.media import get_dir_size_bytes
 
         project_dir = tmp_path / "empty_project"
         project_dir.mkdir()
 
-        size = _get_project_size_bytes(project_dir)
+        size = get_dir_size_bytes(project_dir)
         assert size == 0
 
-    def test_get_project_size_bytes_nonexistent_dir(self, tmp_path):
+    def test_get_dir_size_bytes_nonexistent_dir(self, tmp_path):
         """Non-existent directory should return 0 (graceful failure)."""
-        from web.api import _get_project_size_bytes
+        from web.utils.media import get_dir_size_bytes
 
         fake_path = tmp_path / "does_not_exist"
-        size = _get_project_size_bytes(fake_path)
+        size = get_dir_size_bytes(fake_path)
         assert size == 0
 
     def test_project_size_in_serialization(self):

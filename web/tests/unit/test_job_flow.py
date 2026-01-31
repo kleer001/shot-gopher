@@ -113,7 +113,7 @@ class TestJobStatusEndpoint:
 
     def test_active_jobs_dict_structure(self):
         """Verify active_jobs dict stores expected fields."""
-        from web.api import active_jobs, active_jobs_lock
+        from web.job_state import active_jobs, active_jobs_lock
 
         with active_jobs_lock:
             active_jobs["test_project"] = {
@@ -296,7 +296,7 @@ class TestAPIJobEndpoint:
         """Job endpoint should return idle status when no active job."""
         from fastapi.testclient import TestClient
         from web.server import app
-        from web.api import active_jobs, active_jobs_lock
+        from web.job_state import active_jobs, active_jobs_lock
 
         # Ensure no active job
         with active_jobs_lock:
@@ -314,7 +314,7 @@ class TestAPIJobEndpoint:
         """Job endpoint should return running status with details."""
         from fastapi.testclient import TestClient
         from web.server import app
-        from web.api import active_jobs, active_jobs_lock
+        from web.job_state import active_jobs, active_jobs_lock
 
         with active_jobs_lock:
             active_jobs["test_project"] = {

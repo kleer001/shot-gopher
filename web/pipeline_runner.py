@@ -1,22 +1,16 @@
-"""Pipeline execution wrapper for web interface.
+"""Pipeline execution wrapper for web interface."""
 
-Runs run_pipeline.py as a subprocess and parses output for progress updates.
-"""
-
-import asyncio
 import os
-import re
-import signal
 import subprocess
 import sys
 import threading
 from pathlib import Path
 from typing import Dict, Optional
 
-# Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-# Store active processes
+from web.utils.media import find_video_or_frames
+
 active_processes: Dict[str, subprocess.Popen] = {}
 
 
@@ -77,7 +71,7 @@ def run_pipeline_thread(
     skip_existing: bool,
 ):
     """Run pipeline in a background thread."""
-    from .api import active_jobs, active_jobs_lock
+    from .job_state import active_jobs, active_jobs_lock
     from .websocket import update_progress
 
     with active_jobs_lock:
@@ -88,40 +82,10 @@ def run_pipeline_thread(
             "error": None,
         }
 
-    # Build command
     script_path = get_run_pipeline_path()
     source_dir = Path(project_dir) / "source"
-    frames_dir = source_dir / "frames"
 
-    # Find the input - either a video file or existing frames
-    input_video = None
-    has_frames = False
-    video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]
-
-    # First check if we have frames already
-    if frames_dir.exists():
-        frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
-        if frame_files:
-            has_frames = True
-
-    # If no frames, look for a video file
-    if not has_frames:
-        # First try input.* naming convention
-        for ext in video_extensions:
-            candidate = source_dir / f"input{ext}"
-            if candidate.exists():
-                input_video = candidate
-                break
-
-        # If not found, look for any video file in source/
-        if not input_video and source_dir.exists():
-            for ext in video_extensions:
-                for video_file in source_dir.glob(f"*{ext}"):
-                    if video_file.is_file():
-                        input_video = video_file
-                        break
-                if input_video:
-                    break
+    input_video, has_frames, _ = find_video_or_frames(source_dir)
 
     if not input_video and not has_frames:
         error_msg = f"No input video or frames found in {source_dir}"
@@ -303,7 +267,7 @@ def stop_pipeline(project_id: str) -> bool:
 
     Returns True if process was stopped, False if not running.
     """
-    from .api import active_jobs, active_jobs_lock
+    from .job_state import active_jobs, active_jobs_lock
 
     if project_id not in active_processes:
         return False

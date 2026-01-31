@@ -13,20 +13,31 @@ import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
 import { ELEMENTS, CSS_CLASSES } from '../config/constants.js';
 
-const ALL_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
+function getStagesFromConfig() {
+    const config = stateManager.getState().config;
+    if (!config || !config.stages) {
+        return ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
+    }
+    return Object.keys(config.stages);
+}
 
-const STAGE_OUTPUT_DIRS = {
-    ingest: 'source',
-    depth: 'depth',
-    roto: 'roto',
-    cleanplate: 'cleanplate',
-    colmap: 'colmap',
-    interactive: 'roto',
-    mama: 'matte',
-    mocap: 'mocap',
-    gsir: 'gsir',
-    camera: 'camera',
-};
+function getStageOutputDir(stageId) {
+    const config = stateManager.getState().config;
+    if (!config || !config.stages || !config.stages[stageId]) {
+        const fallback = { ingest: 'source', depth: 'depth', roto: 'roto', cleanplate: 'cleanplate', colmap: 'colmap', interactive: 'roto', mama: 'matte', mocap: 'mocap', gsir: 'gsir', camera: 'camera' };
+        return fallback[stageId] || stageId;
+    }
+    const outputDir = config.stages[stageId].outputDir || stageId;
+    return outputDir.split('/')[0];
+}
+
+function getStageDisplayName(stageId) {
+    const config = stateManager.getState().config;
+    if (!config || !config.stages || !config.stages[stageId]) {
+        return stageId.toUpperCase();
+    }
+    return config.stages[stageId].displayName || config.stages[stageId].name || stageId;
+}
 
 function formatFileSize(bytes) {
     if (bytes === null || bytes === undefined || bytes === 0) {
@@ -174,24 +185,12 @@ export class ProjectsController {
 
         const outputs = outputsData?.outputs || {};
         const vramStages = vramData?.analysis?.stages || {};
-
-        const stageLabels = {
-            ingest: 'Ingest Video Frames',
-            depth: 'Zdepth Estimation',
-            roto: 'Auto Segmentation (Roto)',
-            cleanplate: 'Clean Plate',
-            colmap: 'Camera Tracking (COLMAP)',
-            interactive: 'Interactive Segmentation',
-            mama: 'Matte Refinement (VideoMaMa)',
-            mocap: 'Human MoCap (SMPL+)',
-            gsir: '3D Reconstruction (GS-IR)',
-            camera: 'Camera Export (Alembic)',
-        };
+        const allStages = getStagesFromConfig();
 
         let completedCount = 0;
 
-        const html = ALL_STAGES.map(stage => {
-            const outputDir = STAGE_OUTPUT_DIRS[stage];
+        const html = allStages.map(stage => {
+            const outputDir = getStageOutputDir(stage);
             const outputData = outputs[outputDir];
             const hasFiles = outputData && outputData.count > 0;
             const isCompleted = hasFiles;
@@ -200,7 +199,7 @@ export class ProjectsController {
 
             const stageClass = isCompleted ? 'completed' : '';
             const fileCount = outputData?.total_files || outputData?.count || 0;
-            const label = stageLabels[stage] || stage.toUpperCase();
+            const label = getStageDisplayName(stage);
 
             let fileCountDisplay = '';
             let fileSizeDisplay = '';
@@ -245,7 +244,7 @@ export class ProjectsController {
         dom.setHTML(this.elements.detailStages, html);
 
         if (this.elements.stagesCounter) {
-            dom.setText(this.elements.stagesCounter, `${completedCount}/${ALL_STAGES.length}`);
+            dom.setText(this.elements.stagesCounter, `${completedCount}/${allStages.length}`);
         }
 
         const stageItems = this.elements.detailStages.querySelectorAll('.stage-status-item');
