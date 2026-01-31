@@ -210,6 +210,229 @@ class TestBlenderExportScript:
         assert 'if __name__ == "__main__":' in content
 
 
+class TestScriptsPathContextManager:
+    """Test the _scripts_path context manager."""
+
+    def test_scripts_path_adds_and_removes(self):
+        """Context manager adds path and removes it after."""
+        from blender import _scripts_path
+        import sys
+
+        scripts_dir = str(Path(__file__).parent.parent / "scripts")
+        original_path = sys.path.copy()
+
+        with _scripts_path():
+            assert scripts_dir in sys.path
+
+        assert sys.path == original_path
+
+    def test_scripts_path_already_present(self):
+        """Context manager doesn't duplicate if path already present."""
+        from blender import _scripts_path
+        import sys
+
+        scripts_dir = str(Path(__file__).parent.parent / "scripts")
+
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+            added = True
+        else:
+            added = False
+
+        try:
+            initial_count = sys.path.count(scripts_dir)
+            with _scripts_path():
+                assert sys.path.count(scripts_dir) == initial_count
+            assert sys.path.count(scripts_dir) == initial_count
+        finally:
+            if added:
+                sys.path.remove(scripts_dir)
+
+
+class TestExportMeshSequenceValidation:
+    """Test input validation in export_mesh_sequence_to_alembic."""
+
+    def test_raises_on_nonexistent_input_dir(self):
+        """Raises FileNotFoundError for nonexistent input directory."""
+        from blender import export_mesh_sequence_to_alembic
+
+        with tempfile.TemporaryDirectory() as tmp:
+            nonexistent = Path(tmp) / "nonexistent"
+            output = Path(tmp) / "output.abc"
+
+            with pytest.raises(FileNotFoundError, match="Input directory not found"):
+                export_mesh_sequence_to_alembic(nonexistent, output)
+
+    def test_raises_on_file_not_directory(self):
+        """Raises ValueError when input is a file, not directory."""
+        from blender import export_mesh_sequence_to_alembic
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_file = Path(tmp) / "file.txt"
+            input_file.touch()
+            output = Path(tmp) / "output.abc"
+
+            with pytest.raises(ValueError, match="not a directory"):
+                export_mesh_sequence_to_alembic(input_file, output)
+
+    def test_raises_on_invalid_fps(self):
+        """Raises ValueError for non-positive FPS."""
+        from blender import export_mesh_sequence_to_alembic
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_dir = Path(tmp) / "meshes"
+            input_dir.mkdir()
+            output = Path(tmp) / "output.abc"
+
+            with pytest.raises(ValueError, match="FPS must be positive"):
+                export_mesh_sequence_to_alembic(input_dir, output, fps=0)
+
+            with pytest.raises(ValueError, match="FPS must be positive"):
+                export_mesh_sequence_to_alembic(input_dir, output, fps=-24)
+
+    def test_raises_on_negative_start_frame(self):
+        """Raises ValueError for negative start frame."""
+        from blender import export_mesh_sequence_to_alembic
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_dir = Path(tmp) / "meshes"
+            input_dir.mkdir()
+            output = Path(tmp) / "output.abc"
+
+            with pytest.raises(ValueError, match="Start frame must be non-negative"):
+                export_mesh_sequence_to_alembic(input_dir, output, start_frame=-1)
+
+
+class TestExportSubprocessBehavior:
+    """Test subprocess behavior in export_mesh_sequence_to_alembic."""
+
+    def test_raises_on_blender_not_found(self):
+        """Raises FileNotFoundError when Blender not found and install fails."""
+        from blender import export_mesh_sequence_to_alembic
+
+        with patch("blender.find_blender", return_value=None):
+            with patch("blender.install_blender", return_value=None):
+                with tempfile.TemporaryDirectory() as tmp:
+                    input_dir = Path(tmp) / "meshes"
+                    input_dir.mkdir()
+                    output = Path(tmp) / "output.abc"
+
+                    with pytest.raises(FileNotFoundError, match="Blender not found"):
+                        export_mesh_sequence_to_alembic(input_dir, output)
+
+    def test_raises_on_export_timeout(self):
+        """Raises RuntimeError on Blender subprocess timeout."""
+        from blender import export_mesh_sequence_to_alembic
+        import subprocess
+
+        with patch("blender.find_blender", return_value=Path("/usr/bin/blender")):
+            with patch("blender.subprocess.run", side_effect=subprocess.TimeoutExpired("blender", 3600)):
+                with tempfile.TemporaryDirectory() as tmp:
+                    input_dir = Path(tmp) / "meshes"
+                    input_dir.mkdir()
+                    output = Path(tmp) / "output.abc"
+
+                    with pytest.raises(RuntimeError, match="timed out"):
+                        export_mesh_sequence_to_alembic(input_dir, output)
+
+    def test_raises_on_blender_error(self):
+        """Raises RuntimeError when Blender returns non-zero exit code."""
+        from blender import export_mesh_sequence_to_alembic
+
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "Error: No OBJ files found"
+
+        with patch("blender.find_blender", return_value=Path("/usr/bin/blender")):
+            with patch("blender.subprocess.run", return_value=mock_result):
+                with tempfile.TemporaryDirectory() as tmp:
+                    input_dir = Path(tmp) / "meshes"
+                    input_dir.mkdir()
+                    output = Path(tmp) / "output.abc"
+
+                    with pytest.raises(RuntimeError, match="Blender export failed"):
+                        export_mesh_sequence_to_alembic(input_dir, output)
+
+    def test_raises_when_output_not_created(self):
+        """Raises RuntimeError when Blender succeeds but output not created."""
+        from blender import export_mesh_sequence_to_alembic
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Export complete"
+        mock_result.stderr = ""
+
+        with patch("blender.find_blender", return_value=Path("/usr/bin/blender")):
+            with patch("blender.subprocess.run", return_value=mock_result):
+                with tempfile.TemporaryDirectory() as tmp:
+                    input_dir = Path(tmp) / "meshes"
+                    input_dir.mkdir()
+                    output = Path(tmp) / "output.abc"
+
+                    with pytest.raises(RuntimeError, match="output file not created"):
+                        export_mesh_sequence_to_alembic(input_dir, output)
+
+    def test_auto_installs_blender_when_not_found(self):
+        """Attempts to install Blender when not found."""
+        from blender import export_mesh_sequence_to_alembic
+
+        install_mock = MagicMock(return_value=Path("/installed/blender"))
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        with patch("blender.find_blender", return_value=None):
+            with patch("blender.install_blender", install_mock):
+                with patch("blender.subprocess.run", return_value=mock_result):
+                    with tempfile.TemporaryDirectory() as tmp:
+                        input_dir = Path(tmp) / "meshes"
+                        input_dir.mkdir()
+                        output = Path(tmp) / "output.abc"
+                        output.touch()
+
+                        export_mesh_sequence_to_alembic(input_dir, output)
+                        install_mock.assert_called_once()
+
+
+class TestCheckBlenderAvailableEdgeCases:
+    """Test edge cases in check_blender_available."""
+
+    def test_handles_version_check_timeout(self):
+        """Returns False with message on version check timeout."""
+        from blender import check_blender_available
+        import subprocess
+
+        with patch("blender.find_blender", return_value=Path("/usr/bin/blender")):
+            with patch("blender.subprocess.run", side_effect=subprocess.TimeoutExpired("blender", 30)):
+                available, message = check_blender_available()
+                assert available is False
+                assert "timed out" in message.lower()
+
+    def test_handles_version_check_failure(self):
+        """Returns False with message on non-zero return code."""
+        from blender import check_blender_available
+
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = "Error: something went wrong"
+
+        with patch("blender.find_blender", return_value=Path("/usr/bin/blender")):
+            with patch("blender.subprocess.run", return_value=mock_result):
+                available, message = check_blender_available()
+                assert available is False
+                assert "failed" in message.lower()
+
+    def test_handles_unexpected_exception(self):
+        """Returns False with message on unexpected exception."""
+        from blender import check_blender_available
+
+        with patch("blender.find_blender", return_value=Path("/usr/bin/blender")):
+            with patch("blender.subprocess.run", side_effect=OSError("Permission denied")):
+                available, message = check_blender_available()
+                assert available is False
+                assert "Permission denied" in message
+
+
 class TestDMGExtraction:
     """Test macOS DMG extraction helper."""
 
@@ -247,3 +470,14 @@ class TestDMGExtraction:
                     dmg_path, dest_dir, "Blender.app"
                 )
                 assert result is False
+
+
+# NOTE: The following tests require Blender to be installed and would be
+# integration tests. They test the Blender-side script (export_mesh_alembic.py):
+#
+# - find_obj_files: mixed case handling, sorting, empty directory
+# - import_obj_sequence_as_shape_keys: vertex mismatch error, keyframe timing
+# - export_alembic: Alembic output parameters
+#
+# These would need to be run with: blender -b --python test_script.py
+# or marked with @pytest.mark.skipif(not BLENDER_AVAILABLE, ...)
