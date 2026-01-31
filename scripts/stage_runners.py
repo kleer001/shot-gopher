@@ -801,7 +801,7 @@ def run_stage_camera(
     camera_dir = ctx.project_dir / "camera"
 
     if not (camera_dir / "extrinsics.json").exists():
-        print("  → Skipping (no camera data - run depth or colmap stage first)")
+        print("  → Skipping (no camera data - run colmap stage first)")
         return True
 
     if ctx.skip_existing and (camera_dir / "camera.abc").exists():

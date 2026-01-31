@@ -77,15 +77,11 @@ cp workflow_templates/*.json MyShot/workflows/
 
 **Symptom:** `Skipping (camera data required)`
 
-**Cause:** Mocap needs `camera/extrinsics.json` from colmap or depth stage.
+**Cause:** Mocap needs `camera/extrinsics.json` from COLMAP stage.
 
 **Fix:**
 ```bash
-# Option 1: COLMAP (more accurate)
 python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
-
-# Option 2: Depth stage (faster)
-python scripts/run_pipeline.py footage.mp4 -s depth,mocap
 ```
 
 **Verify:** `ls MyShot/camera/` should show `extrinsics.json`

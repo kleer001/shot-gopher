@@ -12,7 +12,7 @@ Detailed documentation for each processing stage.
 |-------|---------|------|----------------|
 | [ingest](#ingest) | Extract frames | CPU | Video → PNGs |
 | [interactive](#interactive) | Interactive segmentation | 4 GB | Browser-based point/box selection |
-| [depth](#depth) | Depth maps | 7 GB | Frames → Depth + camera |
+| [depth](#depth) | Depth maps | 7 GB | Frames → Depth |
 | [roto](#roto) | Segmentation | 4 GB | Frames → Masks |
 | [mama](#mama) | Matte refinement | 12 GB | Roto masks → Alpha mattes |
 | [cleanplate](#cleanplate) | Object removal | 6 GB | Frames + masks → Clean plates |
@@ -288,7 +288,7 @@ Human motion capture using GVHMR (preferred) or WHAM (fallback).
 
 **Requirements:**
 - GVHMR or WHAM installed ([Installation guide](../installation.md))
-- Camera data from `colmap` or `depth` stage
+- Camera data from `colmap` stage
 
 ```bash
 python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
