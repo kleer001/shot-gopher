@@ -122,7 +122,7 @@ class CondaEnvironmentManager:
 
         # Parse output
         envs = []
-        for line in output.split('\n'):
+        for line in output.splitlines():
             line = line.strip()
             if line and not line.startswith('#'):
                 # Format: "envname    /path/to/env"
@@ -186,7 +186,7 @@ class CondaEnvironmentManager:
         )
 
         if success and output.strip():
-            return Path(output.strip().split('\n')[0])
+            return Path(output.strip().splitlines()[0])
         return None
 
     def install_package_conda(self, package: str, channel: Optional[str] = None) -> bool:

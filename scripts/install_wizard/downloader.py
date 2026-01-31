@@ -784,8 +784,8 @@ Auto-downloads from Ultralytics releases.'''
             return None
 
         try:
-            with open(cred_file, 'r') as f:
-                lines = f.read().strip().split('\n')
+            with open(cred_file, 'r', encoding='utf-8') as f:
+                lines = f.read().strip().splitlines()
                 if len(lines) >= 2:
                     username = lines[0].strip()
                     password = lines[1].strip()
@@ -812,7 +812,7 @@ Auto-downloads from Ultralytics releases.'''
             return None
 
         try:
-            with open(token_file, 'r') as f:
+            with open(token_file, 'r', encoding='utf-8') as f:
                 token = f.read().strip()
                 if token:
                     return token

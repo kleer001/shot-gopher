@@ -27,7 +27,7 @@ class InstallationStateManager:
             return self._create_initial_state()
 
         try:
-            with open(self.state_file, 'r') as f:
+            with open(self.state_file, 'r', encoding='utf-8') as f:
                 loaded_state = json.load(f)
             initial_state = self._create_initial_state()
             for key, value in initial_state.items():

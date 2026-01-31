@@ -93,7 +93,7 @@ class InstallationValidator:
             check=False, capture=True, shell=is_bat
         )
         if success and output:
-            version = output.strip().split('\n')[0] if output else "unknown"
+            version = output.strip().splitlines()[0] if output else "unknown"
             return True, f"COLMAP {version}"
 
         return True, f"COLMAP available at {colmap_path}"
