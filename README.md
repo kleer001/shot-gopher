@@ -31,7 +31,7 @@ This pipeline automates first-pass VFX prep work. Ingest a movie file, get produ
   - Normal maps (surface orientation)
   - Environment lighting (HDR environment map)
 - **Camera export** - Export to Alembic/JSON for Nuke, Maya, Houdini, Blender, After Effects
-- **Human motion capture** - World-grounded skeleton tracking and clothed mesh reconstruction (GVHMR preferred, WHAM fallback)
+- **Human motion capture** - World-grounded skeleton tracking and mesh reconstruction (GVHMR)
 - **Batch processing** - Automated multi-stage pipeline orchestration
 - **Web interface** - Browser-based GUI for drag-and-drop operation
 
@@ -51,8 +51,7 @@ This pipeline automates first-pass VFX prep work. Ingest a movie file, get produ
 
 ### Optional Components
 - [GS-IR](https://github.com/lzhnb/GS-IR) - Gaussian Splatting for PBR material decomposition
-- [GVHMR](https://github.com/zju3dv/GVHMR) - World-grounded human motion tracking (SIGGRAPH Asia 2024, preferred)
-- [WHAM](https://github.com/yohanshin/WHAM) - World-grounded human motion tracking (fallback)
+- [GVHMR](https://github.com/zju3dv/GVHMR) - World-grounded human motion tracking (SIGGRAPH Asia 2024)
 - [SMPL-X](https://smpl-x.is.tue.mpg.de/) - Parametric body model for motion capture
 
 ### ComfyUI Custom Nodes
@@ -193,12 +192,11 @@ Output follows VFX production conventions:
 **Core Total: ~14 GB**
 
 **Optional Components:**
-- GVHMR (motion capture, preferred): 4.0 GB
-- WHAM (motion capture, fallback): 3.0 GB
+- GVHMR (motion capture): 4.0 GB
 - COLMAP (camera tracking): 0.5 GB
 - GS-IR (material decomposition): ~1.5 GB
 
-**Full Installation Total: ~21 GB**
+**Full Installation Total: ~18 GB**
 
 ### Model Access Requirements
 
@@ -217,7 +215,7 @@ Output follows VFX production conventions:
 - VideoMaMa (matte refinement): 12+ GB
 - COLMAP: CPU-based (minimal GPU usage)
 - GS-IR (material decomposition): 12+ GB
-- GVHMR/WHAM (motion capture): 12+ GB
+- GVHMR (motion capture): 12+ GB
 
 **Minimum Recommendation: 12 GB VRAM** (covers core pipeline including VideoMaMa)
 **Comfortable Recommendation: 12 GB VRAM** (supports all features including motion capture and material decomposition)

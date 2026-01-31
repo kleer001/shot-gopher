@@ -55,6 +55,7 @@ class JobStartRequest(BaseModel):
     """Request to start a pipeline job."""
     stages: List[str] = Field(..., min_length=1)
     roto_prompt: str = "person"
+    roto_start_frame: Optional[int] = None
     skip_existing: bool = False
 
 

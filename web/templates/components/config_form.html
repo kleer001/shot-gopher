@@ -32,7 +32,7 @@ Parameters:
             <span class="checkbox-note">Detect and mask objects/people in frames</span>
         </label>
 
-        <!-- Roto Prompt (conditionally shown) -->
+        <!-- Roto Options (conditionally shown) -->
         <div id="roto-prompt-wrapper" class="roto-prompt-wrapper">
             <label for="roto-prompt">Segmentation Prompt</label>
             <input
@@ -41,6 +41,16 @@ Parameters:
                 name="roto-prompt"
                 placeholder="person, car, building..."
                 value="person"
+            >
+        </div>
+        <div id="roto-start-frame-wrapper" class="roto-prompt-wrapper">
+            <label for="roto-start-frame">Start Frame</label>
+            <input
+                type="number"
+                id="roto-start-frame"
+                name="roto-start-frame"
+                placeholder="optional"
+                min="1"
             >
         </div>
 

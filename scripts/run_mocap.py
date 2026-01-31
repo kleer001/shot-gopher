@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Human motion capture with SMPL-X topology.
+"""Human motion capture with SMPL-X topology using GVHMR.
 
 Reconstructs people from monocular video with:
 - SMPL-X body model (standard topology + UVs)
-- World-space motion tracking via GVHMR (preferred) or WHAM (fallback)
+- World-space motion tracking via GVHMR
 
 Pipeline:
-1. Motion tracking (GVHMR/WHAM) -> skeleton animation in world space
-2. Output conversion to WHAM-compatible format for downstream compatibility
+1. Motion tracking (GVHMR) -> skeleton animation in world space
+2. Output conversion to standardized motion.pkl format
 
-GVHMR provides improved accuracy over WHAM:
-- 7-10mm lower error on standard benchmarks
-- Better camera motion handling (SimpleVO)
+GVHMR features:
+- State-of-the-art accuracy (SIGGRAPH Asia 2024)
+- Robust camera motion handling (SimpleVO)
 - Multi-person support (outputs per-person results)
 - Can leverage COLMAP focal length for improved accuracy
 
@@ -20,7 +20,6 @@ Usage:
 
 Example:
     python run_mocap.py /path/to/projects/My_Shot
-    python run_mocap.py /path/to/projects/My_Shot --method gvhmr
 """
 
 import argparse
@@ -47,7 +46,7 @@ def check_dependency(name: str, import_path: str = None, command: str = None) ->
     Args:
         name: Dependency name for caching
         import_path: Python import path (e.g., "smplx")
-        command: Shell command to check (e.g., ["wham", "--help"])
+        command: Shell command to check (e.g., ["gvhmr", "--help"])
 
     Returns:
         True if dependency is available
@@ -94,9 +93,6 @@ def check_all_dependencies() -> Dict[str, bool]:
         "pillow": check_dependency("pillow", "PIL"),
     }
 
-    # Optional dependencies (for specific methods)
-    deps["wham"] = check_dependency("wham", command=["python", "-c", "import wham"])
-
     return deps
 
 
@@ -113,12 +109,6 @@ def print_dependency_status():
         status = "OK" if deps[name] else "X"
         print(f"  {status} {name}")
 
-    # Optional dependencies
-    print("\nOptional (for specific methods):")
-    for name in ["wham"]:
-        status = "OK" if deps[name] else "X"
-        print(f"  {status} {name}")
-
     print()
 
 
@@ -131,98 +121,15 @@ def install_instructions():
     print("\nCore dependencies:")
     print("  pip install numpy torch smplx trimesh opencv-python pillow")
 
-    print("\nGVHMR (world-grounded motion, preferred):")
+    print("\nGVHMR (world-grounded motion):")
     print("  git clone https://github.com/zju3dv/GVHMR.git")
     print("  cd GVHMR && pip install -e .")
     print("  # Download checkpoints from Google Drive (see GVHMR repo)")
-    print("  # Provides 7-10mm better accuracy than WHAM")
-
-    print("\nWHAM (fallback, deprecated):")
-    print("  git clone https://github.com/yohanshin/WHAM.git")
-    print("  cd WHAM && pip install -e .")
-    print("  # Download checkpoints from project page")
 
     print("\nSMPL-X body model:")
     print("  1. Register at https://smpl-x.is.tue.mpg.de/")
     print(f"  2. Download models -> place in {INSTALL_DIR}/smplx_models/")
     print()
-
-
-def run_wham_motion_tracking(
-    project_dir: Path,
-    person_mask_dir: Optional[Path] = None,
-    output_dir: Optional[Path] = None
-) -> bool:
-    """Run WHAM for world-grounded motion tracking.
-
-    Args:
-        project_dir: Project directory containing source/frames/
-        person_mask_dir: Optional person segmentation masks
-        output_dir: Output directory for results
-
-    Returns:
-        True if successful
-    """
-    if not check_dependency("wham"):
-        print("Error: WHAM not available", file=sys.stderr)
-        print("Run with --check to see installation instructions", file=sys.stderr)
-        return False
-
-    output_dir = output_dir or project_dir / "mocap" / "wham"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    frames_dir = project_dir / "source" / "frames"
-    if not frames_dir.exists():
-        print(f"Error: Frames directory not found: {frames_dir}", file=sys.stderr)
-        return False
-
-    print(f"\n{'=' * 60}")
-    print("WHAM Motion Tracking")
-    print("=" * 60)
-    print(f"Frames: {frames_dir}")
-    if person_mask_dir:
-        print(f"Masks: {person_mask_dir}")
-    print(f"Output: {output_dir}")
-    print()
-
-    try:
-        # WHAM command - adjust based on actual WHAM CLI
-        cmd = [
-            "python", "-m", "wham.run",
-            "--input", str(frames_dir),
-            "--output", str(output_dir),
-        ]
-
-        if person_mask_dir and person_mask_dir.exists():
-            cmd.extend(["--mask", str(person_mask_dir)])
-
-        print(f"  → Running WHAM...")
-        print(f"    $ {' '.join(cmd)}")
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
-
-        if result.returncode != 0:
-            print(f"Error: WHAM failed", file=sys.stderr)
-            print(result.stderr, file=sys.stderr)
-            return False
-
-        # Check output files
-        motion_file = output_dir / "motion.pkl"
-        if not motion_file.exists():
-            print(f"Error: WHAM output not found: {motion_file}", file=sys.stderr)
-            return False
-
-        print(f"  OK Motion tracking complete")
-        print(f"    Output: {motion_file}")
-
-        return True
-
-    except subprocess.TimeoutExpired:
-        print("Error: WHAM timed out", file=sys.stderr)
-        return False
-    except Exception as e:
-        print(f"Error running WHAM: {e}", file=sys.stderr)
-        return False
 
 
 def colmap_intrinsics_to_focal_mm(
@@ -492,11 +399,11 @@ def _convert_single_gvhmr_file(
     output_path: Path,
     np_module
 ) -> bool:
-    """Convert a single GVHMR output file to WHAM format.
+    """Convert a single GVHMR output file to motion format.
 
     Args:
         gvhmr_file_path: Path to GVHMR pickle file
-        output_path: Path for WHAM-compatible output file
+        output_path: Path for output file
         np_module: numpy module reference
 
     Returns:
@@ -573,7 +480,7 @@ def _convert_single_gvhmr_file(
         else:
             betas = np.zeros(10)
 
-        wham_format = {
+        motion_format = {
             'poses': poses,
             'trans': transl,
             'betas': betas
@@ -581,7 +488,7 @@ def _convert_single_gvhmr_file(
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, 'wb') as f:
-            pickle.dump(wham_format, f)
+            pickle.dump(motion_format, f)
 
         return True
 
@@ -590,11 +497,11 @@ def _convert_single_gvhmr_file(
         return False
 
 
-def convert_gvhmr_to_wham_format(
+def save_motion_output(
     gvhmr_output_dir: Path,
     output_path: Path
 ) -> bool:
-    """Convert GVHMR output to WHAM-compatible motion.pkl format.
+    """Convert GVHMR output to standardized motion.pkl format.
 
     Handles both single-person and multi-person GVHMR outputs:
     - Single person: Creates motion.pkl
@@ -603,7 +510,7 @@ def convert_gvhmr_to_wham_format(
 
     Args:
         gvhmr_output_dir: Directory containing GVHMR output
-        output_path: Path for WHAM-compatible output file (motion.pkl)
+        output_path: Path for output file (motion.pkl)
 
     Returns:
         True if conversion successful
@@ -656,7 +563,7 @@ def convert_gvhmr_to_wham_format(
 
         if success_count > 0 and first_person_output:
             shutil.copy2(first_person_output, output_path)
-            print(f"  OK Converted {success_count} person(s) to WHAM format")
+            print(f"  OK Converted {success_count} person(s) to motion format")
             print(f"    Primary output: {output_path}")
             return True
         else:
@@ -674,13 +581,13 @@ def convert_gvhmr_to_wham_format(
             gvhmr_output_path = f
             break
 
-    print(f"  → Converting {gvhmr_output_path.name} to WHAM format...")
+    print(f"  → Converting {gvhmr_output_path.name} to motion format...")
 
     if _convert_single_gvhmr_file(gvhmr_output_path, output_path, np):
         with open(output_path, 'rb') as f:
             data = pickle.load(f)
         n_frames = len(data['poses'])
-        print(f"  OK Converted {n_frames} frames to WHAM format")
+        print(f"  OK Converted {n_frames} frames to motion format")
         print(f"    Output: {output_path}")
         return True
 
@@ -689,17 +596,13 @@ def convert_gvhmr_to_wham_format(
 
 def run_mocap_pipeline(
     project_dir: Path,
-    method: str = "auto",
     use_colmap_intrinsics: bool = True,
-    skip_texture: bool = False,
 ) -> bool:
-    """Run motion capture pipeline with GVHMR (preferred) or WHAM fallback.
+    """Run motion capture pipeline with GVHMR.
 
     Args:
         project_dir: Project directory
-        method: Motion capture method - "auto", "gvhmr", or "wham"
         use_colmap_intrinsics: Use COLMAP focal length for GVHMR
-        skip_texture: Skip texture projection (unused, kept for API compatibility)
 
     Returns:
         True if successful
@@ -720,87 +623,54 @@ def run_mocap_pipeline(
     gvhmr_dir = INSTALL_DIR / "GVHMR"
     gvhmr_checkpoint = gvhmr_dir / "inputs" / "checkpoints" / "gvhmr" / "gvhmr_siga24_release.ckpt"
     gvhmr_available = gvhmr_dir.exists() and gvhmr_checkpoint.exists()
-    wham_available = deps.get("wham", False)
 
-    explicit_wham_request = method == "wham"
-
-    if method == "auto":
-        if gvhmr_available:
-            method = "gvhmr"
-        elif wham_available:
-            method = "wham"
-        else:
-            print("Error: No motion capture method available", file=sys.stderr)
-            print("Install GVHMR or WHAM using the installation wizard", file=sys.stderr)
-            return False
+    if not gvhmr_available:
+        print("Error: GVHMR not available", file=sys.stderr)
+        print("Install GVHMR using the installation wizard", file=sys.stderr)
+        return False
 
     print(f"\n{'=' * 60}")
-    print(f"Motion Capture Pipeline ({method.upper()})")
+    print("Motion Capture Pipeline (GVHMR)")
     print("=" * 60)
     print(f"Project: {project_dir}")
     print()
 
-    success = False
+    focal_mm = None
+    static_camera = False
 
-    if method == "gvhmr":
-        focal_mm = None
-        static_camera = False
+    intrinsics_path = project_dir / "camera" / "intrinsics.json"
+    if use_colmap_intrinsics and intrinsics_path.exists():
+        focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path)
+        if focal_mm:
+            print(f"Using COLMAP focal length: {focal_mm:.1f}mm")
 
-        intrinsics_path = project_dir / "camera" / "intrinsics.json"
-        if use_colmap_intrinsics and intrinsics_path.exists():
-            focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path)
-            if focal_mm:
-                print(f"Using COLMAP focal length: {focal_mm:.1f}mm")
+    extrinsics_path = project_dir / "camera" / "extrinsics.json"
+    if extrinsics_path.exists():
+        static_camera = detect_static_camera(extrinsics_path)
+        if static_camera:
+            print("Detected static camera, skipping visual odometry")
 
-        extrinsics_path = project_dir / "camera" / "extrinsics.json"
-        if extrinsics_path.exists():
-            static_camera = detect_static_camera(extrinsics_path)
-            if static_camera:
-                print("Detected static camera, skipping visual odometry")
-
-        success = run_gvhmr_motion_tracking(
-            project_dir,
-            focal_mm=focal_mm,
-            static_camera=static_camera,
-            output_dir=mocap_dir / "gvhmr"
-        )
-
-        if success:
-            gvhmr_output = mocap_dir / "gvhmr"
-            wham_compat = mocap_dir / "wham" / "motion.pkl"
-            if not convert_gvhmr_to_wham_format(gvhmr_output, wham_compat):
-                print("Warning: Could not create WHAM-compatible output", file=sys.stderr)
-
-        if not success and wham_available:
-            print("\n  → GVHMR failed, falling back to WHAM...")
-            method = "wham"
-
-    if method == "wham":
-        if explicit_wham_request:
-            print("Warning: WHAM is deprecated. Consider using GVHMR (--method auto or --method gvhmr)")
-            print("  GVHMR provides 7-10mm lower error and better camera motion handling.")
-            print()
-
-        person_mask_dir = project_dir / "roto"
-        if not person_mask_dir.exists():
-            person_mask_dir = None
-
-        success = run_wham_motion_tracking(
-            project_dir,
-            person_mask_dir=person_mask_dir,
-            output_dir=mocap_dir / "wham"
-        )
+    success = run_gvhmr_motion_tracking(
+        project_dir,
+        focal_mm=focal_mm,
+        static_camera=static_camera,
+        output_dir=mocap_dir / "gvhmr"
+    )
 
     if not success:
         print("Motion tracking failed", file=sys.stderr)
         return False
 
-    motion_file = mocap_dir / "wham" / "motion.pkl"
+    gvhmr_output = mocap_dir / "gvhmr"
+    motion_output = mocap_dir / "motion.pkl"
+    if not save_motion_output(gvhmr_output, motion_output):
+        print("Warning: Could not create motion output", file=sys.stderr)
+
     print(f"\n{'=' * 60}")
     print("Motion Capture Complete")
     print("=" * 60)
     print(f"Output directory: {mocap_dir}")
-    print(f"Motion data: {motion_file}")
+    print(f"Motion data: {motion_output}")
     print()
 
     return True
@@ -808,7 +678,7 @@ def run_mocap_pipeline(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Human motion capture with SMPL-X topology",
+        description="Human motion capture with SMPL-X topology using GVHMR",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
@@ -822,17 +692,6 @@ def main():
         "--check",
         action="store_true",
         help="Check dependencies and exit"
-    )
-    parser.add_argument(
-        "--skip-texture",
-        action="store_true",
-        help="Skip texture projection (unused, kept for compatibility)"
-    )
-    parser.add_argument(
-        "--method", "-m",
-        choices=["auto", "gvhmr", "wham"],
-        default="auto",
-        help="Motion capture method: auto (GVHMR with WHAM fallback), gvhmr, wham (default: auto)"
     )
     parser.add_argument(
         "--no-colmap-intrinsics",
@@ -861,9 +720,7 @@ def main():
 
     success = run_mocap_pipeline(
         project_dir=project_dir,
-        method=args.method,
         use_colmap_intrinsics=not args.no_colmap_intrinsics,
-        skip_texture=args.skip_texture,
     )
 
     sys.exit(0 if success else 1)

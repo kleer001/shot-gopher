@@ -67,6 +67,7 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | `--prompt` | Segmentation targets (default: `person`). Comma-separated: `person,bag,ball` |
 | `--separate-instances` | Split multi-person masks into `person_0/`, `person_1/`, etc. (default: on) |
 | `--no-separate-instances` | Combine all instances into single mask |
+| `--start-frame` | Frame to start segmentation from (enables bidirectional propagation). Use when subject isn't visible on first frame |
 
 ### COLMAP Options
 
@@ -190,8 +191,8 @@ Pipeline creates this directory structure:
 │   ├── dense/           # Dense point cloud (optional)
 │   └── meshed/          # Mesh (optional)
 ├── mocap/
-│   ├── wham/            # Pose estimates
-│   └── econ/            # 3D reconstructions
+│   ├── motion.pkl       # GVHMR pose estimates
+│   └── mesh_sequence/   # SMPL-X mesh sequence
 ├── gsir/
 │   ├── model/           # Checkpoints
 │   └── materials/       # Albedo, roughness, metallic

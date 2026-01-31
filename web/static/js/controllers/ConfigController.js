@@ -23,6 +23,8 @@ export class ConfigController {
             configForm: dom.getElement(ELEMENTS.CONFIG_FORM),
             rotoPrompt: dom.getElement(ELEMENTS.ROTO_PROMPT),
             rotoPromptWrapper: dom.getElement('roto-prompt-wrapper'),
+            rotoStartFrame: dom.getElement(ELEMENTS.ROTO_START_FRAME),
+            rotoStartFrameWrapper: dom.getElement('roto-start-frame-wrapper'),
             stageRoto: dom.getElement('stage-roto'),
             skipExisting: dom.getElement(ELEMENTS.SKIP_EXISTING),
             timeEstimate: dom.getElement('time-estimate'),
@@ -201,12 +203,20 @@ export class ConfigController {
     }
 
     toggleRotoPrompt() {
-        if (!this.elements.rotoPromptWrapper) return;
-
         if (this.elements.stageRoto?.checked) {
-            dom.show(this.elements.rotoPromptWrapper);
+            if (this.elements.rotoPromptWrapper) {
+                dom.show(this.elements.rotoPromptWrapper);
+            }
+            if (this.elements.rotoStartFrameWrapper) {
+                dom.show(this.elements.rotoStartFrameWrapper);
+            }
         } else {
-            dom.hide(this.elements.rotoPromptWrapper);
+            if (this.elements.rotoPromptWrapper) {
+                dom.hide(this.elements.rotoPromptWrapper);
+            }
+            if (this.elements.rotoStartFrameWrapper) {
+                dom.hide(this.elements.rotoStartFrameWrapper);
+            }
         }
     }
 
@@ -274,9 +284,11 @@ export class ConfigController {
             return;
         }
 
+        const startFrameValue = this.elements.rotoStartFrame?.value;
         const config = {
             stages: selectedStages,
             roto_prompt: this.elements.rotoPrompt?.value || 'person',
+            roto_start_frame: startFrameValue ? parseInt(startFrameValue, 10) : null,
             skip_existing: this.elements.skipExisting?.checked || false,
         };
 
@@ -310,6 +322,9 @@ export class ConfigController {
 
         if (this.elements.rotoPrompt) {
             this.elements.rotoPrompt.value = 'person';
+        }
+        if (this.elements.rotoStartFrame) {
+            this.elements.rotoStartFrame.value = '';
         }
         if (this.elements.skipExisting) {
             this.elements.skipExisting.checked = false;

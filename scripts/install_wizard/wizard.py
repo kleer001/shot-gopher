@@ -130,19 +130,6 @@ class InstallationWizard:
             ]
         }
 
-        # WHAM (code ~0.1GB + checkpoints ~2.5GB)
-        self.components['wham'] = {
-            'name': 'WHAM',
-            'required': False,
-            'installers': [
-                GitRepoInstaller(
-                    'WHAM',
-                    'https://github.com/yohanshin/WHAM.git',
-                    self.install_dir / "WHAM",
-                    size_gb=3.0  # Code + checkpoints
-                )
-            ]
-        }
 
         # GVHMR (Gravity-View Human Motion Recovery - improved world-grounded mocap)
         self.components['gvhmr'] = {
@@ -615,7 +602,7 @@ class InstallationWizard:
         elif yolo:
             # YOLO mode: auto-select full stack (option 3)
             print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture + GS-IR)")
-            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'wham', 'gsir']
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'gsir']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -636,7 +623,7 @@ class InstallationWizard:
                     to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'wham', 'gsir']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'gsir']
                     break
                 elif choice == '4':
                     to_install = []
@@ -681,7 +668,7 @@ class InstallationWizard:
             self.checkpoint_downloader.download_all_checkpoints(['sam3'], self.state_manager)
 
         # Download checkpoints for motion capture components
-        mocap_components = [cid for cid in to_install if cid in ['wham', 'gvhmr']]
+        mocap_components = [cid for cid in to_install if cid in ['gvhmr']]
         if mocap_components:
             print("\nDownloading checkpoints for motion capture components...")
             self.checkpoint_downloader.download_all_checkpoints(mocap_components, self.state_manager)
@@ -746,20 +733,13 @@ class InstallationWizard:
                 print(f"    3. Place in {INSTALL_DIR}/smplx_models/")
 
         # Checkpoints status
-        if status.get('gvhmr', False) or status.get('wham', False):
+        if status.get('gvhmr', False):
             print("\n[Motion Capture Checkpoints]")
-            if status.get('gvhmr', False):
-                if self.state_manager.is_checkpoint_downloaded('gvhmr'):
-                    print("  OK GVHMR checkpoints downloaded (preferred)")
-                else:
-                    print("  ! GVHMR checkpoints not downloaded - run wizard again or visit:")
-                    print("    https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD")
-            if status.get('wham', False):
-                if self.state_manager.is_checkpoint_downloaded('wham'):
-                    print("  OK WHAM checkpoints downloaded (fallback)")
-                else:
-                    print("  ! WHAM checkpoints not downloaded - run wizard again or visit:")
-                    print("    https://github.com/yohanshin/WHAM")
+            if self.state_manager.is_checkpoint_downloaded('gvhmr'):
+                print("  OK GVHMR checkpoints downloaded")
+            else:
+                print("  ! GVHMR checkpoints not downloaded - run wizard again or visit:")
+                print("    https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD")
 
         # GS-IR status
         if status.get('gsir', False):

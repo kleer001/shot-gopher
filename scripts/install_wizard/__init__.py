@@ -4,7 +4,7 @@ This package provides an interactive installation wizard for setting up
 all dependencies for the VFX pipeline including:
 - Core pipeline (ComfyUI workflows, COLMAP, etc.)
 - Dynamic scene segmentation (SAM3)
-- Human motion capture (WHAM, ECON)
+- Human motion capture (GVHMR)
 
 Usage:
     python -m scripts.install_wizard

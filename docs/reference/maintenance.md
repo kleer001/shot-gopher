@@ -93,7 +93,7 @@ python scripts/janitor.py -H
    - Verifies `vfx-pipeline` environment exists
 
 3. **Git Repositories**
-   - WHAM, ECON, ComfyUI
+   - GVHMR, ComfyUI
    - Checks working directory is clean
    - Shows current commit hash
 
@@ -121,19 +121,17 @@ HEALTH CHECK
 ✓ Environment 'vfx-pipeline' exists
 
 [Git Repositories]
-✓ WHAM: Clean (a3f2b4c)
-✓ ECON: Clean (2c9a6b3)
+✓ GVHMR: Clean (b4d2e1a)
 ⚠ ComfyUI: Uncommitted changes
 
 [Checkpoints]
-✓ WHAM: Found
-⚠ ECON: Missing
+✓ GVHMR: Found
 
 [Validation Tests]
 ✓ PyTorch with CUDA
 ✓ Core dependencies
 ✓ COLMAP installed
-⚠ ECON checkpoint missing
+✓ Motion capture ready
 
 ============================================================
 ⚠ HEALTH CHECK: Some issues detected
@@ -167,10 +165,7 @@ python scripts/janitor.py -u
 UPDATE CHECK
 ============================================================
 
-[WHAM] Checking for updates...
-✓ → Up to date
-
-[ECON] Checking for updates...
+[GVHMR] Checking for updates...
 ✓ → Up to date
 
 [ComfyUI] Checking for updates...
@@ -228,8 +223,8 @@ CLEANUP
 [Scanning for temporary files...]
 
 Found 47 temporary file(s) (234.56 MB):
-  - WHAM/__pycache__/utils.cpython-310.pyc
-  - ECON/temp_cache.tmp
+  - GVHMR/__pycache__/utils.cpython-310.pyc
+  - WHAM/__pycache__/tracker.cpython-310.pyc
   - ComfyUI/custom_nodes/__pycache__/
   ... and 44 more
 
@@ -252,7 +247,7 @@ CLEANUP (DRY RUN)
 ============================================================
 
 Found 47 temporary file(s) (234.56 MB):
-  - WHAM/__pycache__/utils.cpython-310.pyc
+  - GVHMR/__pycache__/utils.cpython-310.pyc
   ...
 
 ⚠ Dry run - no files deleted
@@ -282,13 +277,13 @@ REPAIR
 [Checking for issues...]
 
 Found 1 issue(s):
-  - ECON checkpoint missing
+  - GVHMR checkpoint missing
 
 Attempt repairs? [Y/n]: y
 
 [Applying repairs...]
 
-Repairing: ECON checkpoint missing
+Repairing: GVHMR checkpoint missing
   → Checkpoint downloaded
 ```
 
@@ -327,23 +322,20 @@ Install directory: /home/user/shot-gopher/.vfx_pipeline
 
 [Disk Usage]
   ComfyUI              8.45 GB
-  WHAM                 3.21 GB
-  ECON                 1.93 GB
+  GVHMR                4.00 GB
   State files         12.34 KB
   Config files         3.45 KB
   ----------------------------------
-  TOTAL               16.47 GB
+  TOTAL               12.45 GB
 
 [Components]
   pytorch              completed
   colmap               completed
-  wham                 completed
-  econ                 completed
+  gvhmr                completed
   comfyui              completed
 
 [Git Repositories]
-  WHAM                  a3f2b4c ✓
-  ECON                  2c9a6b3 ✓
+  GVHMR                 b4d2e1a ✓
   ComfyUI               f4d8a1b ✗
 
 [Conda Environment]
@@ -488,7 +480,7 @@ Update only specific repositories:
 Currently janitor updates all or none. For selective updates, use git directly:
 
 ```bash
-cd .vfx_pipeline/WHAM
+cd .vfx_pipeline/GVHMR
 git pull
 
 cd ../ComfyUI
@@ -517,12 +509,11 @@ Janitor tracks disk usage by component:
 
 | Component | Typical Size | Notes |
 |-----------|--------------|-------|
-| WHAM | 2-4 GB | Includes checkpoints (~1.2 GB) |
-| ECON | 1-2 GB | Includes checkpoints (~500 MB) |
+| GVHMR | 4-5 GB | Includes checkpoints (~4.0 GB) |
 | ComfyUI | 5-10 GB | Depends on custom nodes |
 | State/Config | < 1 MB | Negligible |
 
-**Total installation**: 10-20 GB
+**Total installation**: 10-15 GB
 
 **View breakdown**:
 
@@ -603,8 +594,7 @@ python scripts/janitor.py -r
 **Manual download**:
 
 If repair fails, manually download and place in:
-- WHAM: `.vfx_pipeline/WHAM/checkpoints/`
-- ECON: `.vfx_pipeline/ECON/data/`
+- GVHMR: `.vfx_pipeline/GVHMR/checkpoints/`
 
 ### "Permission denied" during cleanup
 
@@ -635,7 +625,7 @@ python scripts/janitor.py -H  # Verify installation
 
 ```bash
 python scripts/janitor.py -c  # Clean up first
-python scripts/install_wizard.py --component wham
+python scripts/install_wizard.py --component gvhmr
 ```
 
 ### With Pipeline

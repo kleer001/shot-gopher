@@ -40,8 +40,6 @@ class PipelineConfig:
     gsir_iterations: int = 35000
     gsir_path: Optional[str] = None
 
-    mocap_method: str = "auto"
-
     roto_prompt: Optional[str] = None
     roto_start_frame: Optional[int] = None
     separate_instances: bool = True
@@ -77,7 +75,6 @@ class PipelineConfig:
                 colmap_max_size=args.colmap_max_size,
                 gsir_iterations=args.gsir_iterations,
                 gsir_path=args.gsir_path,
-                mocap_method=args.mocap_method,
                 roto_prompt=args.prompt,
                 roto_start_frame=args.start_frame,
                 separate_instances=args.separate_instances,
@@ -101,7 +98,6 @@ class PipelineConfig:
             colmap_max_size=args.colmap_max_size,
             gsir_iterations=args.gsir_iterations,
             gsir_path=args.gsir_path,
-            mocap_method=args.mocap_method,
             roto_prompt=args.prompt,
             roto_start_frame=args.start_frame,
             separate_instances=args.separate_instances,

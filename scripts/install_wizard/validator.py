@@ -117,10 +117,6 @@ class InstallationValidator:
         gvhmr_ckpt = base_dir / "GVHMR" / "inputs" / "checkpoints" / "gvhmr" / "gvhmr_siga24_release.ckpt"
         results['gvhmr'] = gvhmr_ckpt.exists()
 
-        # WHAM: Check for the main checkpoint file
-        wham_ckpt = base_dir / "WHAM" / "checkpoints" / "wham_vit_w_3dpw.pth.tar"
-        results['wham'] = wham_ckpt.exists()
-
         # ECON: Check for extracted data from econ_data.zip
         econ_data_dir = base_dir / "ECON" / "data"
         if econ_data_dir.exists():

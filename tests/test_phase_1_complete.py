@@ -127,7 +127,7 @@ def test_model_verification_logic():
 
     assert "sam3" in verify_models.REQUIRED_MODELS
     assert "videodepthanything" in verify_models.REQUIRED_MODELS
-    assert "wham" in verify_models.REQUIRED_MODELS
+    assert "gvhmr" in verify_models.REQUIRED_MODELS
 
     for name, config in verify_models.REQUIRED_MODELS.items():
         assert "path" in config

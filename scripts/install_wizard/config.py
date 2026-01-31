@@ -42,7 +42,7 @@ class ConfigurationGenerator:
             "environment": self.conda_manager.env_name,
             "paths": {
                 "base": str(self.base_dir),
-                "wham": str(self.base_dir / "WHAM"),
+                "gvhmr": str(self.base_dir / "GVHMR"),
                 "econ": str(self.base_dir / "ECON"),
                 "smplx_models": str(self.base_dir / "smplx_models"),
             },
@@ -83,12 +83,11 @@ class ConfigurationGenerator:
 {self.conda_manager.get_activation_command()}
 
 # Set up Python path
-export PYTHONPATH="${{PYTHONPATH}}:{self.base_dir / "GVHMR"}:{self.base_dir / "WHAM"}:{self.base_dir / "ECON"}"
+export PYTHONPATH="${{PYTHONPATH}}:{self.base_dir / "GVHMR"}:{self.base_dir / "ECON"}"
 
 # Set up environment variables
 export VFX_PIPELINE_BASE="{self.base_dir}"
 export GVHMR_DIR="{self.base_dir / "GVHMR"}"
-export WHAM_DIR="{self.base_dir / "WHAM"}"
 export ECON_DIR="{self.base_dir / "ECON"}"
 export SMPLX_MODEL_DIR="{self.base_dir / "smplx_models"}"
 
@@ -110,7 +109,6 @@ echo "  python scripts/run_mocap.py --help"
         """
         base_dir_win = str(self.base_dir).replace('/', '\\')
         gvhmr_dir_win = str(self.base_dir / "GVHMR").replace('/', '\\')
-        wham_dir_win = str(self.base_dir / "WHAM").replace('/', '\\')
         econ_dir_win = str(self.base_dir / "ECON").replace('/', '\\')
         smplx_dir_win = str(self.base_dir / "smplx_models").replace('/', '\\')
 
@@ -132,15 +130,14 @@ conda activate {self.conda_manager.env_name}
 
 # Set up Python path (handle empty PYTHONPATH)
 if ($env:PYTHONPATH) {{
-    $env:PYTHONPATH = "$env:PYTHONPATH;{gvhmr_dir_win};{wham_dir_win};{econ_dir_win}"
+    $env:PYTHONPATH = "$env:PYTHONPATH;{gvhmr_dir_win};{econ_dir_win}"
 }} else {{
-    $env:PYTHONPATH = "{gvhmr_dir_win};{wham_dir_win};{econ_dir_win}"
+    $env:PYTHONPATH = "{gvhmr_dir_win};{econ_dir_win}"
 }}
 
 # Set up environment variables (quoted for paths with spaces)
 $env:VFX_PIPELINE_BASE = "{base_dir_win}"
 $env:GVHMR_DIR = "{gvhmr_dir_win}"
-$env:WHAM_DIR = "{wham_dir_win}"
 $env:ECON_DIR = "{econ_dir_win}"
 $env:SMPLX_MODEL_DIR = "{smplx_dir_win}"
 
@@ -162,7 +159,6 @@ Write-Host "  python scripts\\run_mocap.py --help"
         """
         base_dir_win = str(self.base_dir).replace('/', '\\')
         gvhmr_dir_win = str(self.base_dir / "GVHMR").replace('/', '\\')
-        wham_dir_win = str(self.base_dir / "WHAM").replace('/', '\\')
         econ_dir_win = str(self.base_dir / "ECON").replace('/', '\\')
         smplx_dir_win = str(self.base_dir / "smplx_models").replace('/', '\\')
 
@@ -176,15 +172,14 @@ call conda activate {self.conda_manager.env_name}
 
 REM Set up Python path (handle empty PYTHONPATH)
 if defined PYTHONPATH (
-    set "PYTHONPATH=%PYTHONPATH%;{gvhmr_dir_win};{wham_dir_win};{econ_dir_win}"
+    set "PYTHONPATH=%PYTHONPATH%;{gvhmr_dir_win};{econ_dir_win}"
 ) else (
-    set "PYTHONPATH={gvhmr_dir_win};{wham_dir_win};{econ_dir_win}"
+    set "PYTHONPATH={gvhmr_dir_win};{econ_dir_win}"
 )
 
 REM Set up environment variables (quoted for paths with spaces)
 set "VFX_PIPELINE_BASE={base_dir_win}"
 set "GVHMR_DIR={gvhmr_dir_win}"
-set "WHAM_DIR={wham_dir_win}"
 set "ECON_DIR={econ_dir_win}"
 set "SMPLX_MODEL_DIR={smplx_dir_win}"
 
