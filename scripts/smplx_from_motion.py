@@ -251,8 +251,8 @@ def generate_smplx_meshes(
         if uvs is not None:
             mesh.visual = trimesh.visual.TextureVisuals(uv=uvs)
 
-        # Save mesh
-        output_path = output_dir / f"frame_{frame_idx:04d}.obj"
+        # Save mesh (1-based numbering to match source frames)
+        output_path = output_dir / f"frame_{frame_idx + 1:04d}.obj"
         mesh.export(output_path)
 
         # Save rest pose (frame 0) if requested

@@ -156,9 +156,9 @@ python scripts/smplx_from_motion.py projects/Test_Shot \
 # Check output meshes
 ls projects/Test_Shot/mocap/smplx_animated/
 
-# Expected:
-# frame_0000.obj
+# Expected (1-based to match source frames):
 # frame_0001.obj
+# frame_0002.obj
 # ... (one per frame)
 
 # Validate mesh quality
