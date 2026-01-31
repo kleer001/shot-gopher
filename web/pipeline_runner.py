@@ -1,6 +1,7 @@
 """Pipeline execution wrapper for web interface."""
 
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -19,14 +20,40 @@ def get_run_pipeline_path() -> Path:
     return Path(__file__).parent.parent / "scripts" / "run_pipeline.py"
 
 
+FRAME_PATTERNS = [
+    re.compile(r'frame\s+(\d+)\s*/\s*(\d+)', re.IGNORECASE),
+    re.compile(r'(\d+)\s*/\s*(\d+)\s*frames', re.IGNORECASE),
+    re.compile(r'\[(\d+)/(\d+)\]'),
+    re.compile(r'Processing\s+(\d+)\s+of\s+(\d+)', re.IGNORECASE),
+]
+
+PROGRESS_PATTERN = re.compile(r'(\d+(?:\.\d+)?)\s*%')
+
+
 def parse_progress_line(line: str, current_stage: str, stages: list) -> Optional[dict]:
     """Parse a line of pipeline output for progress information.
 
-    Returns dict with the line as message, plus stage detection.
+    Returns dict with the line as message, plus stage/frame/progress detection.
     """
     result = {"message": line.strip()[:200]}
 
-    # Detect stage changes: "=== Stage: depth ===" or "=== ingest ==="
+    for pattern in FRAME_PATTERNS:
+        match = pattern.search(line)
+        if match:
+            current_frame = int(match.group(1))
+            total_frames = int(match.group(2))
+            if total_frames > 0:
+                result["frame"] = current_frame
+                result["total_frames"] = total_frames
+                result["progress"] = current_frame / total_frames
+            break
+
+    if "progress" not in result:
+        match = PROGRESS_PATTERN.search(line)
+        if match:
+            percent = float(match.group(1))
+            result["progress"] = percent / 100.0
+
     if "===" in line:
         for stage in stages:
             if stage.lower() in line.lower():
