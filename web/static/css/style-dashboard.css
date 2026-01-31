@@ -292,6 +292,17 @@ body {
     font-weight: 500;
 }
 
+.info-header {
+    font-weight: 600;
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+}
+
 /* Config Card */
 .stages-grid {
     display: grid;

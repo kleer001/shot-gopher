@@ -220,6 +220,14 @@ export class APIService {
     }
 
     /**
+     * Get project video info
+     * @param {string} projectId - Project ID
+     */
+    async getProjectVideoInfo(projectId) {
+        return this.get(API.PROJECT_VIDEO_INFO(projectId));
+    }
+
+    /**
      * Get job status for a project
      * @param {string} projectId - Project ID
      */

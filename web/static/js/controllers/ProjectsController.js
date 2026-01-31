@@ -83,6 +83,11 @@ export class ProjectsController {
             openFolderBtn: dom.getElement(ELEMENTS.OPEN_FOLDER_BTN),
             deleteProjectBtn: dom.getElement(ELEMENTS.DELETE_PROJECT_BTN),
             reprocessBtn: dom.getElement(ELEMENTS.REPROCESS_BTN),
+            videoInfoSection: dom.getElement('video-info-section'),
+            videoResolution: dom.getElement('video-resolution'),
+            videoFrames: dom.getElement('video-frames'),
+            videoFps: dom.getElement('video-fps'),
+            videoDuration: dom.getElement('video-duration'),
         };
 
         this.selectedProjectId = null;
@@ -205,16 +210,60 @@ export class ProjectsController {
         }
 
         try {
-            const [projectData, outputsData, vramData] = await Promise.all([
+            const [projectData, outputsData, vramData, videoInfoData] = await Promise.all([
                 apiService.getProject(projectId).catch(() => null),
                 apiService.getProjectOutputs(projectId).catch(() => null),
                 apiService.getProjectVram(projectId).catch(() => null),
+                apiService.getProjectVideoInfo(projectId).catch(() => null),
             ]);
 
             this.renderStagesStatus(projectData, outputsData, vramData);
             this.renderVramInfo(vramData);
+            this.renderVideoInfo(videoInfoData);
         } catch (error) {
             console.error('Failed to load project details:', error);
+        }
+    }
+
+    renderVideoInfo(videoInfoData) {
+        const videoInfo = videoInfoData?.video_info;
+
+        if (!videoInfo || Object.keys(videoInfo).length === 0) {
+            dom.addClass(this.elements.videoInfoSection, CSS_CLASSES.HIDDEN);
+            return;
+        }
+
+        dom.removeClass(this.elements.videoInfoSection, CSS_CLASSES.HIDDEN);
+
+        if (videoInfo.resolution && Array.isArray(videoInfo.resolution)) {
+            dom.setText(this.elements.videoResolution, `${videoInfo.resolution[0]}x${videoInfo.resolution[1]}`);
+        } else {
+            dom.setText(this.elements.videoResolution, '--');
+        }
+
+        if (videoInfo.frame_count !== undefined && videoInfo.frame_count > 0) {
+            dom.setText(this.elements.videoFrames, videoInfo.frame_count.toLocaleString());
+        } else {
+            dom.setText(this.elements.videoFrames, '--');
+        }
+
+        if (videoInfo.fps !== undefined && videoInfo.fps > 0) {
+            dom.setText(this.elements.videoFps, videoInfo.fps.toFixed(2));
+        } else {
+            dom.setText(this.elements.videoFps, '--');
+        }
+
+        if (videoInfo.duration !== undefined && videoInfo.duration > 0) {
+            const mins = Math.floor(videoInfo.duration / 60);
+            const secs = (videoInfo.duration % 60).toFixed(1);
+            dom.setText(this.elements.videoDuration, `${mins}:${secs.padStart(4, '0')}`);
+        } else if (videoInfo.frame_count && videoInfo.fps) {
+            const duration = videoInfo.frame_count / videoInfo.fps;
+            const mins = Math.floor(duration / 60);
+            const secs = (duration % 60).toFixed(1);
+            dom.setText(this.elements.videoDuration, `${mins}:${secs.padStart(4, '0')}`);
+        } else {
+            dom.setText(this.elements.videoDuration, '--');
         }
     }
 
@@ -636,6 +685,9 @@ export class ProjectsController {
     hideDetailPanel() {
         if (this.elements.detailPanel) {
             dom.addClass(this.elements.detailPanel, CSS_CLASSES.HIDDEN);
+        }
+        if (this.elements.videoInfoSection) {
+            dom.addClass(this.elements.videoInfoSection, CSS_CLASSES.HIDDEN);
         }
     }
 

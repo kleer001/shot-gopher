@@ -198,6 +198,49 @@ async def get_project(
     return project.model_dump()
 
 
+@router.get("/projects/{project_id}/video-info")
+async def get_project_video_info(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+):
+    """Get video information for a project."""
+    import asyncio
+
+    project = project_service.get_project(project_id)
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project_entity = get_project_repo().get(project_id)
+    source_dir = project_entity.path / "source"
+    video_path, has_frames, frame_count = find_video_or_frames(source_dir)
+
+    video_service = get_video_service()
+    video_info = {}
+
+    if has_frames:
+        frames_dir = source_dir / "frames"
+        resolution = await asyncio.to_thread(video_service.get_resolution_from_frames, frames_dir)
+        video_info = {
+            "source": "frames",
+            "frame_count": frame_count,
+            "resolution": list(resolution) if resolution else None,
+        }
+    elif video_path:
+        info = await asyncio.to_thread(video_service.get_video_info, video_path)
+        if info:
+            video_info = {
+                "source": "video",
+                "filename": video_path.name,
+                "frame_count": info.get("frame_count", 0),
+                "resolution": info.get("resolution"),
+                "fps": info.get("fps"),
+                "duration": info.get("duration"),
+            }
+
+    return {"project_id": project_id, "video_info": video_info}
+
+
 @router.delete("/projects/{project_id}")
 async def delete_project(
     project_id: str,

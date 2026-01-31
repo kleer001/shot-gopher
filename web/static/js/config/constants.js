@@ -19,6 +19,7 @@ export const API = {
     PROJECT_JOB: (id) => `/api/projects/${id}/job`,
     PROJECT_OPEN_FOLDER: (id) => `/api/projects/${id}/open-folder`,
     PROJECT_VRAM: (id) => `/api/projects/${id}/vram`,
+    PROJECT_VIDEO_INFO: (id) => `/api/projects/${id}/video-info`,
 };
 
 /**
