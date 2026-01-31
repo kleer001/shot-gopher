@@ -137,17 +137,31 @@ class PlatformManager:
         tool_dir = TOOLS_DIR / tool_name
 
         if _is_windows():
-            return [
+            paths = [
                 tool_dir / f"{tool_name}.exe",
                 tool_dir / f"{tool_name.upper()}.bat",
                 tool_dir / "bin" / f"{tool_name}.exe",
                 tool_dir / f"{tool_name.upper()}.exe",
             ]
-        else:
-            return [
+            if tool_name == "blender":
+                paths.insert(0, tool_dir / "blender.exe")
+            return paths
+        elif platform.system() == "Darwin":
+            paths = [
                 tool_dir / tool_name,
                 tool_dir / "bin" / tool_name,
             ]
+            if tool_name == "blender":
+                paths.insert(0, tool_dir / "Blender.app" / "Contents" / "MacOS" / "Blender")
+            return paths
+        else:
+            paths = [
+                tool_dir / tool_name,
+                tool_dir / "bin" / tool_name,
+            ]
+            if tool_name == "blender":
+                paths.insert(0, tool_dir / "blender")
+            return paths
 
     @staticmethod
     def _get_windows_tool_paths(tool_name: str) -> List[Path]:
@@ -192,6 +206,12 @@ class PlatformManager:
                 Path("C:/CUDA/bin/nvcc.exe"),
             ],
             "aria2c": [],
+            "blender": [
+                programfiles / "Blender Foundation" / "Blender 4.2" / "blender.exe",
+                programfiles / "Blender Foundation" / "Blender 4.1" / "blender.exe",
+                programfiles / "Blender Foundation" / "Blender 4.0" / "blender.exe",
+                programfiles / "Blender Foundation" / "Blender" / "blender.exe",
+            ],
         }
 
         return tool_paths.get(tool_name, [])
@@ -225,6 +245,12 @@ class PlatformManager:
             "aria2c": [
                 Path("/usr/bin/aria2c"),
                 Path("/usr/local/bin/aria2c"),
+            ],
+            "blender": [
+                Path("/usr/bin/blender"),
+                Path("/usr/local/bin/blender"),
+                Path("/opt/blender/blender"),
+                Path("/Applications/Blender.app/Contents/MacOS/Blender"),
             ],
         }
 
@@ -518,12 +544,120 @@ Run: python scripts/install_wizard.py
             "windows": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
             "linux": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz",
         },
+        "blender": {
+            "windows": "https://download.blender.org/release/Blender4.2/blender-4.2.5-windows-x64.zip",
+            "linux": "https://download.blender.org/release/Blender4.2/blender-4.2.5-linux-x64.tar.xz",
+            "macos_arm": "https://download.blender.org/release/Blender4.2/blender-4.2.5-macos-arm64.dmg",
+            "macos_intel": "https://download.blender.org/release/Blender4.2/blender-4.2.5-macos-x64.dmg",
+        },
     }
 
     @staticmethod
     def get_tools_dir() -> Path:
         """Get the repo-local tools directory."""
         return TOOLS_DIR
+
+    @staticmethod
+    def _get_platform_key(tool_name: str) -> str:
+        """Get the platform key for tool downloads.
+
+        Handles macOS ARM vs Intel distinction for tools that provide
+        separate builds.
+
+        Args:
+            tool_name: Name of the tool
+
+        Returns:
+            Platform key string ('windows', 'linux', 'macos_arm', 'macos_intel')
+        """
+        if _is_windows():
+            return "windows"
+        elif platform.system() == "Darwin":
+            tool_config = PlatformManager.TOOL_DOWNLOADS.get(tool_name, {})
+            if "macos_arm" in tool_config or "macos_intel" in tool_config:
+                is_arm = platform.machine() == "arm64"
+                return "macos_arm" if is_arm else "macos_intel"
+            return "macos" if "macos" in tool_config else "linux"
+        else:
+            return "linux"
+
+    @staticmethod
+    def _extract_dmg(dmg_path: Path, dest_dir: Path, app_name: str) -> bool:
+        """Extract .app from a macOS DMG file.
+
+        Uses hdiutil to mount the DMG, copies the .app bundle, then unmounts.
+
+        Args:
+            dmg_path: Path to the DMG file
+            dest_dir: Destination directory for the .app
+            app_name: Name of the .app bundle (e.g., 'Blender.app')
+
+        Returns:
+            True if extraction succeeded
+        """
+        import shutil
+
+        mount_point = Path("/tmp") / f"dmg_mount_{dmg_path.stem}"
+        mounted = False
+
+        try:
+            mount_point.mkdir(parents=True, exist_ok=True)
+
+            print(f"    Mounting DMG...")
+            result = subprocess.run(
+                ["hdiutil", "attach", str(dmg_path), "-mountpoint", str(mount_point), "-nobrowse"],
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+
+            if result.returncode != 0:
+                print(f"    Error mounting DMG: {result.stderr}")
+                return False
+
+            mounted = True
+
+            app_src = mount_point / app_name
+            if not app_src.exists():
+                for item in mount_point.iterdir():
+                    if item.name.endswith(".app"):
+                        app_src = item
+                        break
+
+            if not app_src.exists():
+                print(f"    Error: Could not find .app in DMG")
+                return False
+
+            print(f"    Copying {app_src.name}...")
+            app_dest = dest_dir / app_src.name
+            if app_dest.exists():
+                shutil.rmtree(app_dest)
+            shutil.copytree(app_src, app_dest, symlinks=True)
+
+            return True
+
+        except subprocess.TimeoutExpired:
+            print(f"    Error: DMG operation timed out")
+            return False
+        except Exception as e:
+            print(f"    Error extracting DMG: {e}")
+            return False
+        finally:
+            if mounted:
+                print(f"    Unmounting DMG...")
+                try:
+                    subprocess.run(
+                        ["hdiutil", "detach", str(mount_point)],
+                        capture_output=True,
+                        timeout=60
+                    )
+                except Exception:
+                    pass
+            if mount_point.exists() and not any(mount_point.iterdir()):
+                try:
+                    mount_point.rmdir()
+                except Exception:
+                    pass
 
     @staticmethod
     def install_tool(tool_name: str, force: bool = False) -> Optional[Path]:
@@ -534,7 +668,7 @@ Run: python scripts/install_wizard.py
         placed in the user's home directory.
 
         Args:
-            tool_name: Name of the tool to install ('colmap', 'ffmpeg')
+            tool_name: Name of the tool to install ('colmap', 'ffmpeg', 'blender')
             force: Re-download even if already installed
 
         Returns:
@@ -548,7 +682,7 @@ Run: python scripts/install_wizard.py
             print(f"    Error: No download URL configured for {tool_name}")
             return None
 
-        platform_key = "windows" if _is_windows() else "linux"
+        platform_key = PlatformManager._get_platform_key(tool_name)
         url = PlatformManager.TOOL_DOWNLOADS[tool_name].get(platform_key)
 
         if not url:
@@ -588,11 +722,18 @@ Run: python scripts/install_wizard.py
             if url.endswith('.zip'):
                 with zipfile.ZipFile(tmp_path, 'r') as zf:
                     zf.extractall(tool_dir)
+                PlatformManager._flatten_single_subdir(tool_dir)
             elif url.endswith('.tar.gz') or url.endswith('.tar.xz'):
                 with tarfile.open(tmp_path, 'r:*') as tf:
                     tf.extractall(tool_dir)
-
-            PlatformManager._flatten_single_subdir(tool_dir)
+                PlatformManager._flatten_single_subdir(tool_dir)
+            elif url.endswith('.dmg'):
+                app_names = {
+                    "blender": "Blender.app",
+                }
+                app_name = app_names.get(tool_name, f"{tool_name.title()}.app")
+                if not PlatformManager._extract_dmg(tmp_path, tool_dir, app_name):
+                    return None
 
             installed_path = PlatformManager.find_tool(tool_name)
             if installed_path:

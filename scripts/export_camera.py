@@ -8,7 +8,7 @@ Supported output formats:
   - Nuke .chan (text file with per-frame transforms)
   - CSV (spreadsheet-compatible camera data)
   - JSON (detailed per-frame transforms)
-  - Alembic .abc (requires: conda install -c conda-forge alembic)
+  - Alembic .abc (requires Blender, auto-installed via wizard)
   - After Effects .jsx (JavaScript script for camera import)
 
 Supports camera data from:
@@ -132,8 +132,7 @@ def export_alembic_camera(
     """
     if not HAS_ALEMBIC:
         raise ImportError(
-            "Alembic Python bindings not available. "
-            "Install with: conda install -c conda-forge alembic"
+            "Alembic camera export requires Blender. Run the installation wizard."
         )
 
     # Calculate time per frame
@@ -926,12 +925,10 @@ def main():
                     sys.exit(1)
         else:
             if fmt == "abc":
-                print("Error: Alembic not available", file=sys.stderr)
-                print("  Install with: conda install -c conda-forge alembic", file=sys.stderr)
+                print("Error: Alembic requires Blender. Run the installation wizard.", file=sys.stderr)
                 sys.exit(1)
             else:
-                print("Note: Alembic not available, skipping .abc")
-                print("  Install with: conda install -c conda-forge alembic")
+                print("Note: Alembic not available (requires Blender), skipping .abc")
 
     # After Effects JSX format (always available)
     if fmt in ("jsx", "all"):
