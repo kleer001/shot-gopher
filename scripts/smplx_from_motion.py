@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Generate SMPL-X mesh sequence from WHAM motion data.
+"""Generate SMPL-X mesh sequence from motion capture data.
 
-Converts WHAM motion.pkl (pose parameters) into animated SMPL-X OBJ meshes.
-This is required for the mesh_deform.py script which needs animated SMPL-X
-as the deformation driver.
+Converts motion.pkl (pose parameters from GVHMR or WHAM) into animated
+SMPL-X OBJ meshes. This is required for the mesh_deform.py script which
+needs animated SMPL-X as the deformation driver.
 
 Usage:
     python smplx_from_motion.py <project_dir> [options]
 
 Example:
-    # Generate animated SMPL-X from WHAM motion
+    # Generate from GVHMR motion (preferred)
     python smplx_from_motion.py /path/to/project \\
         --motion mocap/wham/motion.pkl \\
         --output mocap/smplx_animated/
@@ -131,10 +131,10 @@ def find_smplx_models() -> Optional[Path]:
 
 
 def load_motion_data(motion_path: Path) -> Dict[str, Any]:
-    """Load WHAM motion data from pickle file.
+    """Load motion data from pickle file (GVHMR or WHAM format).
 
     Args:
-        motion_path: Path to motion.pkl
+        motion_path: Path to motion.pkl (from GVHMR or WHAM)
 
     Returns:
         Dictionary with motion data:
