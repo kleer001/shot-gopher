@@ -54,7 +54,7 @@ class CondaEnvironmentManager:
         home = Path.home()
 
         if _is_windows():
-            localappdata = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
+            localappdata = Path(os.environ.get("LOCALAPPDATA", str(home / "AppData" / "Local")))
             programdata = Path(os.environ.get("PROGRAMDATA", "C:/ProgramData"))
             common_paths = [
                 home / "miniconda3" / "Scripts" / "conda.exe",

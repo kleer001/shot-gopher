@@ -568,6 +568,7 @@ Run: python scripts/install_wizard.py
 
         TOOLS_DIR.mkdir(parents=True, exist_ok=True)
 
+        tmp_path = None
         try:
             import urllib.request
 
@@ -591,8 +592,6 @@ Run: python scripts/install_wizard.py
                 with tarfile.open(tmp_path, 'r:*') as tf:
                     tf.extractall(tool_dir)
 
-            tmp_path.unlink()
-
             PlatformManager._flatten_single_subdir(tool_dir)
 
             installed_path = PlatformManager.find_tool(tool_name)
@@ -606,6 +605,12 @@ Run: python scripts/install_wizard.py
         except Exception as e:
             print(f"    Error installing {tool_name}: {e}")
             return None
+        finally:
+            if tmp_path and tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
 
     @staticmethod
     def _flatten_single_subdir(tool_dir: Path) -> None:

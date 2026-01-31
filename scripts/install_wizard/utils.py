@@ -146,6 +146,7 @@ def run_command(
             import sys
             process = subprocess.Popen(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -153,10 +154,11 @@ def run_command(
                 shell=shell
             )
             output_lines = []
-            for line in iter(process.stdout.readline, ''):
-                print(f"    {line.rstrip()}")
-                sys.stdout.flush()
-                output_lines.append(line)
+            if process.stdout:
+                for line in iter(process.stdout.readline, ''):
+                    print(f"    {line.rstrip()}")
+                    sys.stdout.flush()
+                    output_lines.append(line)
             process.wait()
             return process.returncode == 0, ''.join(output_lines)
         else:
