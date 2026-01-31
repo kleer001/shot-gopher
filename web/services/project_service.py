@@ -88,13 +88,16 @@ class ProjectService:
         stages: List[str] = None
     ) -> ProjectDTO:
         """Create project, appending timestamp if name exists."""
-        request = ProjectCreateRequest(name=base_name, stages=stages or [])
+        stages_list = stages or []
+        request = ProjectCreateRequest(name=base_name, stages=stages_list)
         try:
             return self.create_project(request, projects_dir)
-        except ValueError:
+        except ValueError as e:
+            if "already exists" not in str(e):
+                raise
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             unique_name = f"{base_name}_{timestamp}"
-            request = ProjectCreateRequest(name=unique_name, stages=stages or [])
+            request = ProjectCreateRequest(name=unique_name, stages=stages_list)
             return self.create_project(request, projects_dir)
 
     def save_uploaded_video(

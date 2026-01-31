@@ -211,3 +211,17 @@ class TestProjectService:
 
         assert result.name.startswith("myproject_")
         assert len(result.name) > len("myproject_")
+
+    def test_create_project_with_unique_name_raises_on_invalid_stages(self):
+        """Test unique name creation still raises for invalid stages."""
+        mock_repo = Mock()
+        mock_repo.get.return_value = None
+
+        service = ProjectService(mock_repo)
+
+        with pytest.raises(ValueError, match="Invalid stages"):
+            service.create_project_with_unique_name(
+                "myproject",
+                Path("/workspace"),
+                stages=["nonexistent_stage"]
+            )
