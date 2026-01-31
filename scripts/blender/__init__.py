@@ -4,12 +4,24 @@ This module provides functions to run Blender headless for various
 export operations, particularly Alembic mesh sequence export.
 """
 
+from contextlib import contextmanager
 from pathlib import Path
 import subprocess
 import sys
-from typing import Optional
+from typing import Optional, Generator
 
 SCRIPTS_DIR = Path(__file__).parent
+
+
+@contextmanager
+def _scripts_path() -> Generator[None, None, None]:
+    """Temporarily add scripts directory to sys.path."""
+    scripts_dir = str(Path(__file__).parent.parent)
+    sys.path.insert(0, scripts_dir)
+    try:
+        yield
+    finally:
+        sys.path.remove(scripts_dir)
 
 
 def find_blender() -> Optional[Path]:
@@ -23,12 +35,9 @@ def find_blender() -> Optional[Path]:
     Returns:
         Path to Blender executable, or None if not found
     """
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    try:
+    with _scripts_path():
         from install_wizard.platform import PlatformManager
         return PlatformManager.find_tool("blender")
-    finally:
-        sys.path.pop(0)
 
 
 def install_blender() -> Optional[Path]:
@@ -39,12 +48,9 @@ def install_blender() -> Optional[Path]:
     Returns:
         Path to installed Blender executable, or None if installation failed
     """
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    try:
+    with _scripts_path():
         from install_wizard.platform import PlatformManager
         return PlatformManager.install_tool("blender")
-    finally:
-        sys.path.pop(0)
 
 
 def export_mesh_sequence_to_alembic(

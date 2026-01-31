@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
-"""Export camera and mesh data to Alembic (.abc) format.
+"""Export OBJ mesh sequences to Alembic (.abc) format.
 
-Standalone script to convert camera JSON data or OBJ mesh sequences
-to Alembic format for import into Blender, Houdini, Maya, Nuke, etc.
+Standalone script to convert OBJ mesh sequences to Alembic format
+for import into Blender, Houdini, Maya, Nuke, etc.
 
-Camera export includes:
-  - Animated camera transform (position + rotation per frame)
-  - Camera intrinsics (focal length, aperture, near/far clip)
-  - Proper time sampling at specified FPS
-
-Mesh export includes:
+Features:
   - Animated mesh sequence from OBJ files
   - UV coordinates and normals preserved
   - Uses Blender headless for reliable cross-platform export
@@ -18,12 +13,11 @@ Requirements:
   - Blender 4.2+ (auto-installed via wizard)
 
 Usage:
-    python export_alembic.py <project_dir> [options]
-    python export_alembic.py camera_data.json --output camera.abc
+    python export_alembic.py <mesh_dir> [options]
     python export_alembic.py --mesh-dir meshes/ --output animated.abc
 
 Example:
-    python export_alembic.py /path/to/project --fps 24 --start-frame 1
+    python export_alembic.py mocap/smplx_animated --fps 24 --start-frame 1
     python export_alembic.py --mesh-dir mocap/smplx_animated --output body.abc
 """
 

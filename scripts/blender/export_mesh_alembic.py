@@ -134,28 +134,6 @@ def import_obj_sequence_as_shape_keys(
     return base_obj
 
 
-def import_obj_sequence_as_mesh_cache(
-    obj_files: list[Path],
-    start_frame: int = 1,
-    fps: float = 24.0
-) -> bpy.types.Object:
-    """Import OBJ sequence using Mesh Sequence Cache modifier.
-
-    This method is more memory efficient for long sequences but
-    requires the mesh cache add-on. Falls back to shape keys if
-    the add-on is not available.
-
-    Args:
-        obj_files: List of OBJ file paths
-        start_frame: Starting frame number
-        fps: Frames per second
-
-    Returns:
-        The imported mesh object
-    """
-    return import_obj_sequence_as_shape_keys(obj_files, start_frame)
-
-
 def export_alembic(
     output_path: Path,
     start_frame: int,
@@ -235,13 +213,6 @@ def main():
         default=1,
         help="Starting frame number (default: 1)"
     )
-    parser.add_argument(
-        "--method",
-        choices=["shape_keys", "mesh_cache"],
-        default="shape_keys",
-        help="Import method (default: shape_keys)"
-    )
-
     args = parser.parse_args(argv)
 
     if not args.input.exists():
@@ -260,12 +231,7 @@ def main():
     clear_scene()
 
     print("Importing mesh sequence...")
-    if args.method == "mesh_cache":
-        mesh_obj = import_obj_sequence_as_mesh_cache(
-            obj_files, args.start_frame, args.fps
-        )
-    else:
-        mesh_obj = import_obj_sequence_as_shape_keys(obj_files, args.start_frame)
+    mesh_obj = import_obj_sequence_as_shape_keys(obj_files, args.start_frame)
 
     print(f"Created animated mesh: {mesh_obj.name}")
 
