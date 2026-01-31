@@ -17,11 +17,8 @@ import { stateManager } from './managers/StateManager.js';
 import { apiService } from './services/APIService.js';
 import { wsService } from './services/WebSocketService.js';
 import { UploadController } from './controllers/UploadController.js';
-import { ConfigController } from './controllers/ConfigController.js';
-import { ProcessingController } from './controllers/ProcessingController.js';
 import { ProjectsController } from './controllers/ProjectsController.js';
 import { SystemController } from './controllers/SystemController.js';
-import { EVENTS } from './config/constants.js';
 
 /**
  * Application class - manages application lifecycle
@@ -93,13 +90,7 @@ class Application {
         // Upload controller (handles file uploads)
         this.controllers.upload = new UploadController();
 
-        // Config controller (handles pipeline configuration)
-        this.controllers.config = new ConfigController();
-
-        // Processing controller (handles progress display)
-        this.controllers.processing = new ProcessingController();
-
-        // Projects controller (handles projects list)
+        // Projects controller (handles projects list and detail view)
         this.controllers.projects = new ProjectsController();
 
         console.log('Controllers initialized');

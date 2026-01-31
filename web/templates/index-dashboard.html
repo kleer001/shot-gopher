@@ -95,35 +95,6 @@
                     </div>
                 </div>
 
-                <!-- Config Card -->
-                <form id="config-form" class="card config-card hidden">
-                    <div class="card-header">
-                        <h2>CONFIGURATION</h2>
-                        <span id="config-stages-counter" class="stages-counter">0/10</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="detail-section">
-                            <div class="section-label">SELECT STAGES</div>
-                            <div id="config-stages" class="stages-status">
-                                <!-- Populated by JS -->
-                            </div>
-                        </div>
-
-                        <div class="config-options">
-                            <label class="option-toggle">
-                                <input type="checkbox" id="skip-existing">
-                                <span>Skip existing outputs</span>
-                            </label>
-                        </div>
-
-                        <div class="est-time">
-                            <span>EST. TIME</span>
-                            <span id="time-estimate" class="est-value">--</span>
-                        </div>
-
-                        <button type="submit" class="btn-start">START PROCESSING</button>
-                    </div>
-                </form>
             </div>
 
             <!-- Right Column: Projects & Activity -->
@@ -182,66 +153,6 @@
                     </div>
                 </div>
 
-                <!-- Processing Card (hidden by default) -->
-                <div id="processing-panel" class="card processing-card hidden">
-                    <div class="card-header">
-                        <h2>PROCESSING: <span id="processing-project-name">--</span></h2>
-                        <button type="button" id="cancel-processing-btn" class="btn-stop">STOP</button>
-                    </div>
-                    <div class="card-body">
-                        <!-- Hidden progress bar for JavaScript compatibility -->
-                        <div style="display: none;">
-                            <div id="processing-progress-fill"></div>
-                        </div>
-
-                        <!-- Progress Ring -->
-                        <div class="progress-ring">
-                            <svg viewBox="0 0 120 120">
-                                <circle cx="60" cy="60" r="54" class="ring-bg"></circle>
-                                <circle cx="60" cy="60" r="54" class="ring-progress" id="progress-ring"></circle>
-                            </svg>
-                            <div class="ring-center">
-                                <div id="progress-percent" class="ring-percent">0%</div>
-                                <div id="current-stage-name" class="ring-stage">--</div>
-                            </div>
-                        </div>
-
-                        <!-- Stage Counter -->
-                        <div style="text-align: center; margin: 16px 0; font-size: 11px; color: var(--text-dim);">
-                            <span id="current-stage-label">STAGE 1/1</span>
-                        </div>
-
-                        <!-- Stage Pills -->
-                        <div id="stages-list-progress" class="stages-pills">
-                            <!-- Populated by JS -->
-                        </div>
-
-                        <!-- Metrics -->
-                        <div class="metrics">
-                            <div class="metric">
-                                <div class="metric-label">FRAMES</div>
-                                <div id="progress-frames" class="metric-value">0 / 0</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">ELAPSED</div>
-                                <div id="elapsed-time" class="metric-value">0s</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">REMAINING</div>
-                                <div id="remaining-time" class="metric-value">--</div>
-                            </div>
-                        </div>
-
-                        <!-- Console -->
-                        <div class="console">
-                            <div class="console-header">
-                                <span>CONSOLE</span>
-                                <button type="button" id="clear-logs-btn" class="btn-clear">CLEAR</button>
-                            </div>
-                            <div id="log-output" class="console-output"></div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
 
