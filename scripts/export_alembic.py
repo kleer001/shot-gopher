@@ -68,6 +68,9 @@ def export_mesh_alembic(
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
         return False
+    except ValueError as e:
+        print(f"Invalid parameter: {e}", file=sys.stderr)
+        return False
     except RuntimeError as e:
         print(f"Export failed: {e}", file=sys.stderr)
         return False
@@ -139,7 +142,7 @@ def main():
         print(f"Error: Input must be a directory: {input_dir}", file=sys.stderr)
         sys.exit(1)
 
-    obj_files = list(input_dir.glob("*.obj")) + list(input_dir.glob("*.OBJ"))
+    obj_files = list(set(input_dir.glob("*.obj")) | set(input_dir.glob("*.OBJ")))
     if not obj_files:
         print(f"Error: No OBJ files found in {input_dir}", file=sys.stderr)
         sys.exit(1)

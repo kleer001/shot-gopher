@@ -125,19 +125,21 @@ def export_mesh_sequence_to_alembic(
     print(f"  FPS: {fps}")
     print(f"  Start frame: {start_frame}")
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
 
-        if result.returncode != 0:
-            print(f"Blender export failed with code {result.returncode}")
-            print(f"stdout: {result.stdout}")
-            print(f"stderr: {result.stderr}")
-            raise RuntimeError(f"Blender export failed: {result.stderr}")
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+
+        if process.returncode != 0:
+            print(f"Blender export failed with code {process.returncode}")
+            print(f"stdout: {stdout}")
+            print(f"stderr: {stderr}")
+            raise RuntimeError(f"Blender export failed: {stderr}")
 
         if output_path.exists():
             print(f"Successfully exported: {output_path}")
@@ -146,6 +148,8 @@ def export_mesh_sequence_to_alembic(
             raise RuntimeError("Export completed but output file not created")
 
     except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
         raise RuntimeError(f"Blender export timed out after {timeout} seconds")
 
 

@@ -231,7 +231,11 @@ def main():
 
     print(f"Created animated mesh: {mesh_obj.name}")
 
-    end_frame = args.start_frame + len(obj_files) - 1
+    if mesh_obj.data.shape_keys:
+        num_shape_keys = len(mesh_obj.data.shape_keys.key_blocks) - 1
+    else:
+        num_shape_keys = 0
+    end_frame = args.start_frame + num_shape_keys
 
     print(f"Exporting Alembic...")
     print(f"  Output: {args.output}")

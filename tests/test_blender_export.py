@@ -325,8 +325,13 @@ class TestExportSubprocessBehavior:
         from blender import export_mesh_sequence_to_alembic
         import subprocess
 
+        mock_process = MagicMock()
+        mock_process.communicate.side_effect = subprocess.TimeoutExpired("blender", 3600)
+        mock_process.kill = MagicMock()
+        mock_process.wait = MagicMock()
+
         with patch("blender.find_blender", return_value=Path("/usr/bin/blender")):
-            with patch("blender.subprocess.run", side_effect=subprocess.TimeoutExpired("blender", 3600)):
+            with patch("blender.subprocess.Popen", return_value=mock_process):
                 with tempfile.TemporaryDirectory() as tmp:
                     input_dir = Path(tmp) / "meshes"
                     input_dir.mkdir()
@@ -334,18 +339,18 @@ class TestExportSubprocessBehavior:
 
                     with pytest.raises(RuntimeError, match="timed out"):
                         export_mesh_sequence_to_alembic(input_dir, output)
+                    mock_process.kill.assert_called_once()
 
     def test_raises_on_blender_error(self):
         """Raises RuntimeError when Blender returns non-zero exit code."""
         from blender import export_mesh_sequence_to_alembic
 
-        mock_result = MagicMock()
-        mock_result.returncode = 1
-        mock_result.stdout = ""
-        mock_result.stderr = "Error: No OBJ files found"
+        mock_process = MagicMock()
+        mock_process.communicate.return_value = ("", "Error: No OBJ files found")
+        mock_process.returncode = 1
 
         with patch("blender.find_blender", return_value=Path("/usr/bin/blender")):
-            with patch("blender.subprocess.run", return_value=mock_result):
+            with patch("blender.subprocess.Popen", return_value=mock_process):
                 with tempfile.TemporaryDirectory() as tmp:
                     input_dir = Path(tmp) / "meshes"
                     input_dir.mkdir()
@@ -358,13 +363,12 @@ class TestExportSubprocessBehavior:
         """Raises RuntimeError when Blender succeeds but output not created."""
         from blender import export_mesh_sequence_to_alembic
 
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "Export complete"
-        mock_result.stderr = ""
+        mock_process = MagicMock()
+        mock_process.communicate.return_value = ("Export complete", "")
+        mock_process.returncode = 0
 
         with patch("blender.find_blender", return_value=Path("/usr/bin/blender")):
-            with patch("blender.subprocess.run", return_value=mock_result):
+            with patch("blender.subprocess.Popen", return_value=mock_process):
                 with tempfile.TemporaryDirectory() as tmp:
                     input_dir = Path(tmp) / "meshes"
                     input_dir.mkdir()
@@ -378,12 +382,13 @@ class TestExportSubprocessBehavior:
         from blender import export_mesh_sequence_to_alembic
 
         install_mock = MagicMock(return_value=Path("/installed/blender"))
-        mock_result = MagicMock()
-        mock_result.returncode = 0
+        mock_process = MagicMock()
+        mock_process.communicate.return_value = ("Success", "")
+        mock_process.returncode = 0
 
         with patch("blender.find_blender", return_value=None):
             with patch("blender.install_blender", install_mock):
-                with patch("blender.subprocess.run", return_value=mock_result):
+                with patch("blender.subprocess.Popen", return_value=mock_process):
                     with tempfile.TemporaryDirectory() as tmp:
                         input_dir = Path(tmp) / "meshes"
                         input_dir.mkdir()
