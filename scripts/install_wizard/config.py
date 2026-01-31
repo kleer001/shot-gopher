@@ -92,7 +92,7 @@ export WHAM_DIR="{self.base_dir / "WHAM"}"
 export ECON_DIR="{self.base_dir / "ECON"}"
 export SMPLX_MODEL_DIR="{self.base_dir / "smplx_models"}"
 
-echo "✓ VFX Pipeline environment activated"
+echo "OK VFX Pipeline environment activated"
 echo "  Environment: {self.conda_manager.env_name}"
 echo "  Base directory: {self.base_dir}"
 echo ""

@@ -88,22 +88,22 @@ def print_header(text: str):
 
 def print_success(text: str):
     """Print success message."""
-    print(f"{Colors.OKGREEN}✓ {text}{Colors.ENDC}")
+    print(f"{Colors.OKGREEN}OK {text}{Colors.ENDC}")
 
 
 def print_warning(text: str):
     """Print warning message."""
-    print(f"{Colors.WARNING}⚠ {text}{Colors.ENDC}")
+    print(f"{Colors.WARNING}! {text}{Colors.ENDC}")
 
 
 def print_error(text: str):
     """Print error message."""
-    print(f"{Colors.FAIL}✗ {text}{Colors.ENDC}")
+    print(f"{Colors.FAIL}X {text}{Colors.ENDC}")
 
 
 def print_info(text: str):
     """Print info message."""
-    print(f"{Colors.OKCYAN}ℹ {text}{Colors.ENDC}")
+    print(f"{Colors.OKCYAN}> {text}{Colors.ENDC}")
 
 
 def ask_yes_no(question: str, default: bool = True) -> bool:

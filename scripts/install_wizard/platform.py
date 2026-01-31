@@ -456,47 +456,47 @@ Then install {dependency}:
         """
         if os_name == "macos":
             return """
-🍎 macOS Detected
+[macOS Detected]
 
 Run: python scripts/install_wizard.py
 
 Notes:
-  • All features available except GPU-accelerated processing
-  • macOS uses CPU fallback for ML models
+  - All features available except GPU-accelerated processing
+  - macOS uses CPU fallback for ML models
 """
 
         elif os_name == "linux" and environment == "native" and has_gpu:
             return """
-🐧 Linux + GPU Detected
+[Linux + GPU Detected]
 
 Run: python scripts/install_wizard.py
 
 Benefits:
-  ✓ Direct filesystem access
-  ✓ Full GPU acceleration
-  ✓ Optimal performance
+  + Direct filesystem access
+  + Full GPU acceleration
+  + Optimal performance
 """
 
         elif os_name == "linux" and environment == "wsl2" and has_gpu:
             return """
-🪟 WSL2 + GPU Detected
+[WSL2 + GPU Detected]
 
 Run: python scripts/install_wizard.py
 
 Notes:
-  • GPU passthrough works via NVIDIA WSL2 drivers
-  • Install from within WSL2 environment
+  - GPU passthrough works via NVIDIA WSL2 drivers
+  - Install from within WSL2 environment
 """
 
         elif not has_gpu:
             return """
-⚠️  No NVIDIA GPU Detected
+[!] No NVIDIA GPU Detected
 
 Run: python scripts/install_wizard.py
 
 Notes:
-  • Motion capture requires NVIDIA GPU (12GB+ VRAM)
-  • Without GPU, only segmentation/roto workflows are available
+  - Motion capture requires NVIDIA GPU (12GB+ VRAM)
+  - Without GPU, only segmentation/roto workflows are available
 """
 
         else:
