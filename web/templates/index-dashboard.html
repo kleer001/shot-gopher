@@ -99,55 +99,14 @@
                 <form id="config-form" class="card config-card hidden">
                     <div class="card-header">
                         <h2>CONFIGURATION</h2>
+                        <span id="config-stages-counter" class="stages-counter">0/10</span>
                     </div>
                     <div class="card-body">
-                        <div class="stages-grid">
-                            <label class="stage-toggle">
-                                <input type="checkbox" name="stage" value="depth" checked>
-                                <span>Depth</span>
-                            </label>
-                            <label class="stage-toggle">
-                                <input type="checkbox" name="stage" value="roto" checked id="stage-roto">
-                                <span>Roto</span>
-                            </label>
-                            <label class="stage-toggle">
-                                <input type="checkbox" name="stage" value="interactive">
-                                <span>Interactive</span>
-                            </label>
-                            <label class="stage-toggle">
-                                <input type="checkbox" name="stage" value="mama" disabled>
-                                <span>VideoMaMa</span>
-                            </label>
-                            <label class="stage-toggle">
-                                <input type="checkbox" name="stage" value="cleanplate" checked>
-                                <span>CleanPlate</span>
-                            </label>
-                            <label class="stage-toggle">
-                                <input type="checkbox" name="stage" value="colmap">
-                                <span>COLMAP</span>
-                            </label>
-                            <label class="stage-toggle">
-                                <input type="checkbox" name="stage" value="mocap" disabled>
-                                <span>MoCap</span>
-                            </label>
-                            <label class="stage-toggle">
-                                <input type="checkbox" name="stage" value="gsir" disabled>
-                                <span>GS-IR</span>
-                            </label>
-                            <label class="stage-toggle">
-                                <input type="checkbox" name="stage" value="camera" disabled>
-                                <span>Camera</span>
-                            </label>
-                        </div>
-
-                        <div id="roto-prompt-wrapper" class="prompt-field">
-                            <input type="text" id="roto-prompt" placeholder="Roto prompt: person" value="person">
-                        </div>
-
-                        <div class="presets">
-                            <button type="button" class="preset preset-btn" data-preset="quick">QUICK</button>
-                            <button type="button" class="preset preset-btn active" data-preset="full">FULL</button>
-                            <button type="button" class="preset preset-btn" data-preset="all">ALL</button>
+                        <div class="detail-section">
+                            <div class="section-label">SELECT STAGES</div>
+                            <div id="config-stages" class="stages-status">
+                                <!-- Populated by JS -->
+                            </div>
                         </div>
 
                         <div class="config-options">

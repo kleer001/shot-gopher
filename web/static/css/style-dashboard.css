@@ -607,6 +607,15 @@ body {
     background: transparent;
 }
 
+.stage-wrapper.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.stage-wrapper.disabled .stage-status-item {
+    cursor: not-allowed;
+}
+
 .stage-expand-icon {
     font-size: 10px;
     color: var(--text-dim);

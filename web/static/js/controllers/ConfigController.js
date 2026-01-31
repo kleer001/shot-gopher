@@ -2,13 +2,11 @@
  * ConfigController - Manages pipeline configuration UI
  *
  * Responsibilities:
- * - Handle stage checkbox changes
- * - Apply presets
+ * - Render stages panel matching project detail view
+ * - Handle stage selection with expandable options
  * - Manage stage dependencies (e.g., COLMAP enables GSIR/MoCap)
  * - Calculate time estimates
  * - Submit configuration to start processing
- *
- * Follows Single Responsibility Principle by only handling config UI.
  */
 
 import { stateManager } from '../managers/StateManager.js';
@@ -17,25 +15,65 @@ import * as dom from '../utils/dom.js';
 import { formatDuration } from '../utils/time.js';
 import { ELEMENTS, EVENTS } from '../config/constants.js';
 
+const ALL_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
+
+const STAGE_LABELS = {
+    ingest: 'Ingest Video Frames',
+    depth: 'Zdepth Estimation',
+    roto: 'Auto Segmentation (Roto)',
+    cleanplate: 'Clean Plate',
+    colmap: 'Camera Tracking (COLMAP)',
+    interactive: 'Interactive Segmentation',
+    mama: 'Matte Refinement (VideoMaMa)',
+    mocap: 'Human MoCap (SMPL+)',
+    gsir: '3D Reconstruction (GS-IR)',
+    camera: 'Camera Export (Alembic)',
+};
+
+const STAGE_OPTIONS = {
+    ingest: [
+        { id: 'fps', label: 'FPS', type: 'number', default: '', placeholder: 'auto' },
+    ],
+    roto: [
+        { id: 'prompt', label: 'Prompt', type: 'text', default: 'person', placeholder: 'person,car,ball' },
+        { id: 'separate_instances', label: 'Separate Instances', type: 'checkbox', default: true },
+    ],
+    colmap: [
+        { id: 'quality', label: 'Quality', type: 'select', default: 'medium', options: ['low', 'medium', 'high', 'slow'] },
+        { id: 'dense', label: 'Dense', type: 'checkbox', default: false },
+        { id: 'mesh', label: 'Mesh', type: 'checkbox', default: false },
+        { id: 'no_masks', label: 'No Masks', type: 'checkbox', default: false },
+    ],
+    gsir: [
+        { id: 'iterations', label: 'Iterations', type: 'number', default: 35000, placeholder: '35000' },
+    ],
+    camera: [
+        { id: 'rotation_order', label: 'Rotation', type: 'select', default: 'zxy', options: ['xyz', 'zxy', 'zyx'] },
+    ],
+};
+
+const STAGE_DEPENDENCIES = {
+    colmap: ['gsir', 'mocap', 'camera'],
+    roto: ['mama'],
+};
+
 export class ConfigController {
     constructor() {
         this.elements = {
             configForm: dom.getElement(ELEMENTS.CONFIG_FORM),
-            rotoPrompt: dom.getElement(ELEMENTS.ROTO_PROMPT),
-            rotoPromptWrapper: dom.getElement('roto-prompt-wrapper'),
-            stageRoto: dom.getElement('stage-roto'),
+            configStages: dom.getElement('config-stages'),
+            stagesCounter: dom.getElement('config-stages-counter'),
             skipExisting: dom.getElement(ELEMENTS.SKIP_EXISTING),
             timeEstimate: dom.getElement('time-estimate'),
-            presetButtons: dom.getElements('.preset-btn'),
-            stageCheckboxes: dom.getElements('input[name="stage"]'),
         };
 
-        this._boundHandlers = {
-            presetClicks: [],
-            checkboxChanges: [],
-        };
+        this.selectedStages = new Set();
+        this.stageOptions = {};
+        this.disabledStages = new Set(['mama', 'mocap', 'gsir', 'camera']);
+
+        this._boundHandlers = {};
         this.setupEventListeners();
-        this.applyDefaultPreset();
+        this.renderStagesPanel();
     }
 
     setupEventListeners() {
@@ -43,7 +81,6 @@ export class ConfigController {
             e.preventDefault();
             this.handleSubmit();
         };
-        this._boundHandlers.onRotoChange = () => this.toggleRotoPrompt();
         this._boundHandlers.onStateChange = (e) => {
             if (e.detail.updates?.vramAnalysis !== undefined) {
                 this.updateVramWarnings();
@@ -54,160 +91,226 @@ export class ConfigController {
             this.elements.configForm.addEventListener('submit', this._boundHandlers.onFormSubmit);
         }
 
-        this.elements.presetButtons.forEach(btn => {
-            const handler = () => this.applyPreset(btn.dataset.preset);
-            this._boundHandlers.presetClicks.push({ btn, handler });
-            btn.addEventListener('click', handler);
-        });
-
-        this.elements.stageCheckboxes.forEach(checkbox => {
-            const handler = () => {
-                this.handleStageChange(checkbox);
-                this.updateTimeEstimate();
-            };
-            this._boundHandlers.checkboxChanges.push({ checkbox, handler });
-            checkbox.addEventListener('change', handler);
-        });
-
-        if (this.elements.stageRoto) {
-            this.elements.stageRoto.addEventListener('change', this._boundHandlers.onRotoChange);
-        }
-
         stateManager.addEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
     }
 
-    applyDefaultPreset() {
-        // Apply "full" preset by default
-        this.applyPreset('full');
+    renderStagesPanel() {
+        if (!this.elements.configStages) return;
+
+        const vramAnalysis = stateManager.get('vramAnalysis');
+        const vramStages = vramAnalysis?.stages || {};
+
+        const html = ALL_STAGES.map(stage => {
+            const label = STAGE_LABELS[stage] || stage.toUpperCase();
+            const isDisabled = this.disabledStages.has(stage);
+            const disabledClass = isDisabled ? 'disabled' : '';
+
+            const vramInfo = vramStages[stage];
+            const vramStatus = vramInfo?.status || 'ok';
+            const vramMessage = vramInfo?.message || '';
+            const vramGb = vramInfo?.base_vram_gb;
+
+            let vramDisplay = '';
+            let vramStatusClass = '';
+            let vramTitle = vramMessage;
+
+            if (vramGb !== undefined && vramGb > 0) {
+                if (vramStatus === 'ok') {
+                    vramDisplay = `${vramGb} GB`;
+                } else if (vramStatus === 'warning' || vramStatus === 'insufficient') {
+                    vramDisplay = `⚠️ ${vramGb} GB`;
+                    vramStatusClass = `vram-${vramStatus}`;
+                } else if (vramStatus === 'chunked') {
+                    vramDisplay = `⏳ ${vramGb} GB`;
+                    vramStatusClass = 'vram-chunked';
+                }
+            }
+
+            const optionsHtml = this.renderStageOptionsHtml(stage);
+            const hasOptions = STAGE_OPTIONS[stage] && STAGE_OPTIONS[stage].length > 0;
+            const expandIcon = hasOptions ? '<span class="stage-expand-icon">▸</span>' : '';
+
+            const safeStage = dom.escapeHTML(stage);
+            return `
+            <div class="stage-wrapper ${disabledClass}" data-stage="${safeStage}">
+                <div class="stage-status-item selectable ${disabledClass}" data-stage="${safeStage}">
+                    ${expandIcon}
+                    <div class="stage-marker"></div>
+                    <span class="stage-status-name">${dom.escapeHTML(label)}</span>
+                    <span class="stage-vram ${vramStatusClass}" title="${dom.escapeHTML(vramTitle)}">${vramDisplay}</span>
+                </div>
+                ${optionsHtml}
+            </div>
+        `;
+        }).join('');
+
+        dom.setHTML(this.elements.configStages, html);
+        this.bindStageClickHandlers();
+        this.updateStagesCounter();
     }
 
-    applyPreset(presetName) {
-        const config = stateManager.get('config');
-        if (!config) return;
+    renderStageOptionsHtml(stage) {
+        const options = STAGE_OPTIONS[stage];
+        if (!options || options.length === 0) return '';
 
-        const preset = config.presets?.[presetName];
-        if (!preset) return;
+        const optionInputs = options.map(opt => {
+            const currentValue = this.stageOptions[stage]?.[opt.id] ?? opt.default;
+            const safeLabel = dom.escapeHTML(opt.label);
 
-        // Uncheck all checkboxes first
-        this.elements.stageCheckboxes.forEach(checkbox => {
-            checkbox.checked = false;
-        });
-
-        // Check stages in preset
-        preset.stages.forEach(stageId => {
-            const checkbox = document.querySelector(`input[name="stage"][value="${stageId}"]`);
-            if (checkbox && !checkbox.disabled) {
-                checkbox.checked = true;
-            }
-        });
-
-        // Update active preset button
-        this.elements.presetButtons.forEach(btn => {
-            if (btn.dataset.preset === presetName) {
-                dom.addClass(btn, 'active');
+            if (opt.type === 'checkbox') {
+                const checked = currentValue ? 'checked' : '';
+                return `
+                    <label class="stage-option-item">
+                        <input type="checkbox" data-stage="${dom.escapeHTML(stage)}" data-option="${dom.escapeHTML(opt.id)}" ${checked}>
+                        <span>${safeLabel}</span>
+                    </label>`;
+            } else if (opt.type === 'select') {
+                const optionsHtml = opt.options.map(o => {
+                    const selected = o === currentValue ? 'selected' : '';
+                    return `<option value="${dom.escapeHTML(o)}" ${selected}>${dom.escapeHTML(o)}</option>`;
+                }).join('');
+                return `
+                    <label class="stage-option-item">
+                        <span>${safeLabel}</span>
+                        <select data-stage="${dom.escapeHTML(stage)}" data-option="${dom.escapeHTML(opt.id)}">${optionsHtml}</select>
+                    </label>`;
             } else {
-                dom.removeClass(btn, 'active');
+                const placeholder = opt.placeholder ? `placeholder="${dom.escapeHTML(opt.placeholder)}"` : '';
+                const value = currentValue !== '' ? `value="${dom.escapeHTML(String(currentValue))}"` : '';
+                return `
+                    <label class="stage-option-item">
+                        <span>${safeLabel}</span>
+                        <input type="${opt.type}" data-stage="${dom.escapeHTML(stage)}" data-option="${dom.escapeHTML(opt.id)}" ${value} ${placeholder}>
+                    </label>`;
             }
-        });
+        }).join('');
 
-        // Update dependencies, time estimate, and VRAM warnings
-        this.updateStageDependencies();
-        this.updateTimeEstimate();
-        this.toggleRotoPrompt();
-        this.updateVramWarnings();
+        return `<div class="stage-options-panel hidden">${optionInputs}</div>`;
     }
 
-    setDependentStage(stageValue, enabled) {
-        const checkbox = document.querySelector(`input[value="${stageValue}"]`);
-        if (!checkbox) return;
+    bindStageClickHandlers() {
+        const stageItems = this.elements.configStages.querySelectorAll('.stage-status-item');
+        stageItems.forEach(item => {
+            item.addEventListener('click', () => this.toggleStageSelection(item));
+        });
+    }
 
-        if (enabled) {
-            checkbox.disabled = false;
+    toggleStageSelection(item) {
+        const stage = item.dataset.stage;
+        const wrapper = item.closest('.stage-wrapper');
+
+        if (this.disabledStages.has(stage)) {
+            return;
+        }
+
+        const optionsPanel = wrapper?.querySelector('.stage-options-panel');
+        const expandIcon = item.querySelector('.stage-expand-icon');
+
+        if (this.selectedStages.has(stage)) {
+            this.selectedStages.delete(stage);
+            item.classList.remove('selected');
+            if (wrapper) wrapper.classList.remove('selected');
+            if (optionsPanel) optionsPanel.classList.add('hidden');
+            if (expandIcon) expandIcon.textContent = '▸';
+
+            this.handleStageDeselected(stage);
         } else {
-            checkbox.disabled = true;
-            checkbox.checked = false;
+            this.selectedStages.add(stage);
+            item.classList.add('selected');
+            if (wrapper) wrapper.classList.add('selected');
+            if (optionsPanel) {
+                optionsPanel.classList.remove('hidden');
+                this.bindStageOptionHandlers(stage, optionsPanel);
+            }
+            if (expandIcon) expandIcon.textContent = '▾';
+
+            this.handleStageSelected(stage);
+        }
+
+        this.updateStagesCounter();
+        this.updateTimeEstimate();
+    }
+
+    handleStageSelected(stage) {
+        const dependents = STAGE_DEPENDENCIES[stage];
+        if (dependents) {
+            dependents.forEach(dep => {
+                this.disabledStages.delete(dep);
+                const wrapper = this.elements.configStages.querySelector(`.stage-wrapper[data-stage="${dep}"]`);
+                const item = wrapper?.querySelector('.stage-status-item');
+                if (wrapper) wrapper.classList.remove('disabled');
+                if (item) item.classList.remove('disabled');
+            });
         }
     }
 
-    handleStageChange(checkbox) {
-        const stage = checkbox.value;
-
-        if (stage === 'colmap') {
-            const enabled = checkbox.checked;
-            this.setDependentStage('gsir', enabled);
-            this.setDependentStage('mocap', enabled);
-            this.setDependentStage('camera', enabled);
+    handleStageDeselected(stage) {
+        const dependents = STAGE_DEPENDENCIES[stage];
+        if (dependents) {
+            dependents.forEach(dep => {
+                this.disabledStages.add(dep);
+                this.selectedStages.delete(dep);
+                const wrapper = this.elements.configStages.querySelector(`.stage-wrapper[data-stage="${dep}"]`);
+                const item = wrapper?.querySelector('.stage-status-item');
+                if (wrapper) {
+                    wrapper.classList.add('disabled');
+                    wrapper.classList.remove('selected');
+                }
+                if (item) {
+                    item.classList.add('disabled');
+                    item.classList.remove('selected');
+                }
+                const optionsPanel = wrapper?.querySelector('.stage-options-panel');
+                if (optionsPanel) optionsPanel.classList.add('hidden');
+            });
         }
+    }
 
-        if (stage === 'roto') {
-            this.setDependentStage('mama', checkbox.checked);
-        }
+    bindStageOptionHandlers(stage, panel) {
+        const inputs = panel.querySelectorAll('input, select');
+        inputs.forEach(input => {
+            if (input.dataset.bound) return;
+            input.dataset.bound = 'true';
 
-        this.elements.presetButtons.forEach(btn => {
-            dom.removeClass(btn, 'active');
+            input.addEventListener('change', () => {
+                if (!this.stageOptions[stage]) {
+                    this.stageOptions[stage] = {};
+                }
+                if (input.type === 'checkbox') {
+                    this.stageOptions[stage][input.dataset.option] = input.checked;
+                } else if (input.type === 'number') {
+                    this.stageOptions[stage][input.dataset.option] = input.value ? Number(input.value) : null;
+                } else {
+                    this.stageOptions[stage][input.dataset.option] = input.value;
+                }
+            });
+
+            input.addEventListener('click', (e) => e.stopPropagation());
         });
     }
 
-    updateStageDependencies() {
-        const colmapChecked = document.querySelector('input[value="colmap"]')?.checked;
-        this.setDependentStage('gsir', colmapChecked);
-        this.setDependentStage('mocap', colmapChecked);
-        this.setDependentStage('camera', colmapChecked);
-
-        const rotoChecked = document.querySelector('input[value="roto"]')?.checked;
-        this.setDependentStage('mama', rotoChecked);
+    updateStagesCounter() {
+        if (this.elements.stagesCounter) {
+            dom.setText(this.elements.stagesCounter, `${this.selectedStages.size}/${ALL_STAGES.length}`);
+        }
     }
 
     updateVramWarnings() {
-        const vramAnalysis = stateManager.get('vramAnalysis');
-        if (!vramAnalysis?.stages) return;
+        this.renderStagesPanel();
 
-        this.elements.stageCheckboxes.forEach(checkbox => {
-            const stage = checkbox.value;
-            const analysis = vramAnalysis.stages[stage];
-            if (!analysis) return;
-
-            const label = checkbox.closest('label');
-            if (!label) return;
-
-            let warningEl = label.querySelector('.vram-warning');
-
-            const appendWarning = (el) => {
-                const textEl = label.querySelector('.checkbox-text, .stage-title, span');
-                (textEl || label).appendChild(el);
-            };
-
-            if (analysis.status === 'warning' || analysis.status === 'insufficient') {
-                if (!warningEl) {
-                    warningEl = document.createElement('span');
-                    warningEl.textContent = ' \u26A0\uFE0F';
-                    appendWarning(warningEl);
-                }
-                const statusClass = analysis.status === 'insufficient' ? 'vram-insufficient' : 'vram-warning-status';
-                warningEl.className = `vram-warning ${statusClass}`;
-                warningEl.title = analysis.message;
-            } else if (analysis.status === 'chunked') {
-                if (!warningEl) {
-                    warningEl = document.createElement('span');
-                    warningEl.className = 'vram-warning vram-chunked';
-                    warningEl.textContent = ' \u23F3';
-                    appendWarning(warningEl);
-                }
-                warningEl.title = analysis.message;
-            } else if (warningEl) {
-                warningEl.remove();
+        this.selectedStages.forEach(stage => {
+            const wrapper = this.elements.configStages.querySelector(`.stage-wrapper[data-stage="${stage}"]`);
+            const item = wrapper?.querySelector('.stage-status-item');
+            if (wrapper) wrapper.classList.add('selected');
+            if (item) item.classList.add('selected');
+            const optionsPanel = wrapper?.querySelector('.stage-options-panel');
+            const expandIcon = item?.querySelector('.stage-expand-icon');
+            if (optionsPanel) {
+                optionsPanel.classList.remove('hidden');
+                this.bindStageOptionHandlers(stage, optionsPanel);
             }
+            if (expandIcon) expandIcon.textContent = '▾';
         });
-    }
-
-    toggleRotoPrompt() {
-        if (!this.elements.rotoPromptWrapper) return;
-
-        if (this.elements.stageRoto?.checked) {
-            dom.show(this.elements.rotoPromptWrapper);
-        } else {
-            dom.hide(this.elements.rotoPromptWrapper);
-        }
     }
 
     updateTimeEstimate() {
@@ -215,17 +318,14 @@ export class ConfigController {
         const videoInfo = stateManager.get('videoInfo');
 
         if (!config || !videoInfo) {
-            // No config or video info yet
             if (this.elements.timeEstimate) {
                 dom.setText(this.elements.timeEstimate, '--');
             }
             return;
         }
 
-        const selectedStages = this.getSelectedStages();
         const frameCount = videoInfo.frame_count;
 
-        // Validate frame count exists
         if (!frameCount || typeof frameCount !== 'number' || frameCount <= 0) {
             if (this.elements.timeEstimate) {
                 dom.setText(this.elements.timeEstimate, 'Unknown');
@@ -233,9 +333,8 @@ export class ConfigController {
             return;
         }
 
-        // Calculate estimate
         let totalSeconds = 0;
-        selectedStages.forEach(stageId => {
+        this.selectedStages.forEach(stageId => {
             const stage = config.stages?.[stageId];
             if (stage) {
                 const timePerFrame = stage.estimatedTimePerFrame || 0;
@@ -243,7 +342,6 @@ export class ConfigController {
             }
         });
 
-        // Display estimate
         if (this.elements.timeEstimate) {
             const formatted = totalSeconds > 0 ? `~${formatDuration(totalSeconds)}` : '--';
             dom.setText(this.elements.timeEstimate, formatted);
@@ -251,13 +349,7 @@ export class ConfigController {
     }
 
     getSelectedStages() {
-        const stages = [];
-        this.elements.stageCheckboxes.forEach(checkbox => {
-            if (checkbox.checked) {
-                stages.push(checkbox.value);
-            }
-        });
-        return stages;
+        return Array.from(this.selectedStages);
     }
 
     async handleSubmit() {
@@ -276,47 +368,49 @@ export class ConfigController {
 
         const config = {
             stages: selectedStages,
-            roto_prompt: this.elements.rotoPrompt?.value || 'person',
             skip_existing: this.elements.skipExisting?.checked || false,
+            stage_options: {},
         };
 
+        selectedStages.forEach(stage => {
+            const opts = this.stageOptions[stage] || {};
+            const defaults = STAGE_OPTIONS[stage] || [];
+            const stageOpts = {};
+
+            defaults.forEach(def => {
+                const value = opts[def.id] !== undefined ? opts[def.id] : def.default;
+                if (value !== '' && value !== null) {
+                    stageOpts[def.id] = value;
+                }
+            });
+
+            if (Object.keys(stageOpts).length > 0) {
+                config.stage_options[stage] = stageOpts;
+            }
+        });
+
+        if (config.stage_options.roto?.prompt) {
+            config.roto_prompt = config.stage_options.roto.prompt;
+        }
+
         try {
-            // Start processing
             await apiService.startProcessing(projectId, config);
 
-            // Update state
             const projectName = stateManager.get('projectName');
             stateManager.startProcessing(projectId, projectName, selectedStages);
 
-            // Hide config form
             dom.hide(this.elements.configForm);
-
-            // Processing panel will be shown by ProcessingController
         } catch (error) {
             stateManager.showError(error.message || 'Failed to start processing');
         }
     }
 
     reset() {
-        this.elements.stageCheckboxes.forEach(checkbox => {
-            checkbox.checked = false;
-            checkbox.disabled = false;
-        });
-
-        this.setDependentStage('gsir', false);
-        this.setDependentStage('mocap', false);
-        this.setDependentStage('camera', false);
-        this.setDependentStage('mama', false);
-
-        if (this.elements.rotoPrompt) {
-            this.elements.rotoPrompt.value = 'person';
-        }
-        if (this.elements.skipExisting) {
-            this.elements.skipExisting.checked = false;
-        }
-
+        this.selectedStages.clear();
+        this.stageOptions = {};
+        this.disabledStages = new Set(['mama', 'mocap', 'gsir', 'camera']);
         dom.hide(this.elements.configForm);
-        this.applyDefaultPreset();
+        this.renderStagesPanel();
     }
 
     destroy() {
@@ -324,22 +418,10 @@ export class ConfigController {
             this.elements.configForm.removeEventListener('submit', this._boundHandlers.onFormSubmit);
         }
 
-        this._boundHandlers.presetClicks.forEach(({ btn, handler }) => {
-            btn.removeEventListener('click', handler);
-        });
-
-        this._boundHandlers.checkboxChanges.forEach(({ checkbox, handler }) => {
-            checkbox.removeEventListener('change', handler);
-        });
-
-        if (this.elements.stageRoto && this._boundHandlers.onRotoChange) {
-            this.elements.stageRoto.removeEventListener('change', this._boundHandlers.onRotoChange);
-        }
-
         if (this._boundHandlers.onStateChange) {
             stateManager.removeEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
         }
 
-        this._boundHandlers = { presetClicks: [], checkboxChanges: [] };
+        this._boundHandlers = {};
     }
 }
