@@ -31,7 +31,7 @@ This pipeline automates first-pass VFX prep work. Ingest a movie file, get produ
   - Normal maps (surface orientation)
   - Environment lighting (HDR environment map)
 - **Camera export** - Export to Alembic/JSON for Nuke, Maya, Houdini, Blender, After Effects
-- **Human motion capture** - World-grounded skeleton tracking and clothed mesh reconstruction (WHAM + ECON, experimental)
+- **Human motion capture** - World-grounded skeleton tracking and clothed mesh reconstruction (GVHMR preferred, WHAM fallback)
 - **Batch processing** - Automated multi-stage pipeline orchestration
 - **Web interface** - Browser-based GUI for drag-and-drop operation
 
@@ -51,8 +51,8 @@ This pipeline automates first-pass VFX prep work. Ingest a movie file, get produ
 
 ### Optional Components
 - [GS-IR](https://github.com/lzhnb/GS-IR) - Gaussian Splatting for PBR material decomposition
-- [WHAM](https://github.com/yohanshin/WHAM) - World-grounded human motion tracking
-- [ECON](https://github.com/YuliangXiu/ECON) - Clothed human reconstruction from monocular video
+- [GVHMR](https://github.com/zju3dv/GVHMR) - World-grounded human motion tracking (SIGGRAPH Asia 2024, preferred)
+- [WHAM](https://github.com/yohanshin/WHAM) - World-grounded human motion tracking (fallback)
 - [SMPL-X](https://smpl-x.is.tue.mpg.de/) - Parametric body model for motion capture
 
 ### ComfyUI Custom Nodes
@@ -164,7 +164,7 @@ Output follows VFX production conventions:
 └── colmap/             # COLMAP reconstruction data
 ```
 
-**Note on frame numbering:** Frame sequences start at 0001 rather than the VFX industry standard of 1001. ComfyUI's SaveImage node and WHAM's output constraints make custom start frame numbering infeasible.
+**Note on frame numbering:** Frame sequences start at 0001 rather than the VFX industry standard of 1001. ComfyUI's SaveImage node output constraints make custom start frame numbering infeasible.
 
 </details>
 
@@ -193,9 +193,9 @@ Output follows VFX production conventions:
 **Core Total: ~14 GB**
 
 **Optional Components:**
-- WHAM (motion capture): 3.0 GB
+- GVHMR (motion capture, preferred): 4.0 GB
+- WHAM (motion capture, fallback): 3.0 GB
 - COLMAP (camera tracking): 0.5 GB
-- ECON (clothed reconstruction): ~2.0 GB
 - GS-IR (material decomposition): ~1.5 GB
 
 **Full Installation Total: ~21 GB**
@@ -217,7 +217,7 @@ Output follows VFX production conventions:
 - VideoMaMa (matte refinement): 12+ GB
 - COLMAP: CPU-based (minimal GPU usage)
 - GS-IR (material decomposition): 12+ GB
-- WHAM/ECON (motion capture): 12+ GB
+- GVHMR/WHAM (motion capture): 12+ GB
 
 **Minimum Recommendation: 12 GB VRAM** (covers core pipeline including VideoMaMa)
 **Comfortable Recommendation: 12 GB VRAM** (supports all features including motion capture and material decomposition)
@@ -230,7 +230,7 @@ Note: NVIDIA GPU with CUDA support required for all ML models.
 
 Different components perform best under specific conditions:
 
-| Shot Type | Depth (VDA) | Roto (SAM3) | Clean Plate | Camera (COLMAP) | Material (GS-IR) | MoCap (WHAM/ECON) |
+| Shot Type | Depth (VDA) | Roto (SAM3) | Clean Plate | Camera (COLMAP) | Material (GS-IR) | MoCap (GVHMR) |
 |-----------|-------------|-------------|-------------|-----------------|------------------|-------------------|
 | **Static camera** | ✅ | ✅ | ✅ | 🚫 | 🚫 | ⚠️ |
 | **Moving camera** | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ |
@@ -239,7 +239,7 @@ Different components perform best under specific conditions:
 | **Low texture** | ✅ | ✅ | ✅ | 🚫 | ⚠️ | ✅ |
 | **Full body person** | ✅ | ✅ | ✅ | ✅ | N/A | ✅ |
 | **Partial body/occluded** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ⚠️ |
-| **Multiple people** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | 🚫 |
+| **Multiple people** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ✅ |
 | **In-focus background** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
 | **Shallow DOF/bokeh** | ⚠️ | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ |
 | **High contrast lighting** | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
