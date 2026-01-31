@@ -230,7 +230,7 @@ def colmap_intrinsics_to_focal_mm(
         return None
 
     try:
-        with open(intrinsics_path) as f:
+        with open(intrinsics_path, encoding='utf-8') as f:
             intrinsics = json.load(f)
 
         fx = intrinsics.get("fx", intrinsics.get("focal_x"))
@@ -272,7 +272,7 @@ def detect_static_camera(
     try:
         import numpy as np
 
-        with open(extrinsics_path) as f:
+        with open(extrinsics_path, encoding='utf-8') as f:
             extrinsics = json.load(f)
 
         if not extrinsics or len(extrinsics) < 2:

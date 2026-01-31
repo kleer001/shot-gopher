@@ -22,7 +22,7 @@ class TestColmapIntrinsicsToFocalMm:
         with tempfile.TemporaryDirectory() as tmpdir:
             intrinsics_path = Path(tmpdir) / "intrinsics.json"
             intrinsics = {"fx": 1000, "fy": 1000, "width": 1920, "height": 1080}
-            with open(intrinsics_path, "w") as f:
+            with open(intrinsics_path, "w", encoding='utf-8') as f:
                 json.dump(intrinsics, f)
 
             focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path, sensor_width_mm=36.0)
@@ -39,7 +39,7 @@ class TestColmapIntrinsicsToFocalMm:
         with tempfile.TemporaryDirectory() as tmpdir:
             intrinsics_path = Path(tmpdir) / "intrinsics.json"
             intrinsics = {"fy": 1000, "width": 1920}
-            with open(intrinsics_path, "w") as f:
+            with open(intrinsics_path, "w", encoding='utf-8') as f:
                 json.dump(intrinsics, f)
 
             focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path)
@@ -49,7 +49,7 @@ class TestColmapIntrinsicsToFocalMm:
         with tempfile.TemporaryDirectory() as tmpdir:
             intrinsics_path = Path(tmpdir) / "intrinsics.json"
             intrinsics = {"fx": 1000, "width": 1920}
-            with open(intrinsics_path, "w") as f:
+            with open(intrinsics_path, "w", encoding='utf-8') as f:
                 json.dump(intrinsics, f)
 
             focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path)
@@ -70,7 +70,7 @@ class TestDetectStaticCamera:
                 [0, 0, 0, 1]
             ]
             extrinsics = [identity, identity, identity]
-            with open(extrinsics_path, "w") as f:
+            with open(extrinsics_path, "w", encoding='utf-8') as f:
                 json.dump(extrinsics, f)
 
             is_static = detect_static_camera(extrinsics_path)
@@ -92,7 +92,7 @@ class TestDetectStaticCamera:
                 [0, 0, 0, 1]
             ]
             extrinsics = [frame1, frame2]
-            with open(extrinsics_path, "w") as f:
+            with open(extrinsics_path, "w", encoding='utf-8') as f:
                 json.dump(extrinsics, f)
 
             is_static = detect_static_camera(extrinsics_path, threshold_meters=0.01)
@@ -107,7 +107,7 @@ class TestDetectStaticCamera:
             extrinsics_path = Path(tmpdir) / "extrinsics.json"
             identity = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
             extrinsics = [identity]
-            with open(extrinsics_path, "w") as f:
+            with open(extrinsics_path, "w", encoding='utf-8') as f:
                 json.dump(extrinsics, f)
 
             is_static = detect_static_camera(extrinsics_path)

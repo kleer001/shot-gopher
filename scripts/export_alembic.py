@@ -45,7 +45,7 @@ def load_project_metadata(project_dir: Path) -> dict:
     """Load project metadata (fps, resolution, etc.) from project.json."""
     metadata_path = project_dir / "project.json"
     if metadata_path.exists():
-        with open(metadata_path) as f:
+        with open(metadata_path, encoding='utf-8') as f:
             return json.load(f)
     return {}
 
@@ -78,12 +78,12 @@ def load_camera_data(input_path: Path) -> tuple[list[np.ndarray], dict, str, Pat
     if not extrinsics_path.exists():
         raise FileNotFoundError(f"Extrinsics not found: {extrinsics_path}")
 
-    with open(extrinsics_path) as f:
+    with open(extrinsics_path, encoding='utf-8') as f:
         extrinsics_data = json.load(f)
 
     intrinsics = {}
     if intrinsics_path.exists():
-        with open(intrinsics_path) as f:
+        with open(intrinsics_path, encoding='utf-8') as f:
             intrinsics = json.load(f)
 
     source = "colmap" if colmap_raw_path.exists() else "da3"

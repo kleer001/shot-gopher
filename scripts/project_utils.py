@@ -36,7 +36,7 @@ class ProjectMetadata:
         if not self.path.exists():
             return {}
         try:
-            with open(self.path) as f:
+            with open(self.path, encoding='utf-8') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return {}

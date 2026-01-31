@@ -176,11 +176,11 @@ class TestExportColmapToPipelineFormat:
             output_dir = Path(tmpdir) / "camera"
 
             # Create mock COLMAP text output files
-            with open(sparse_path / "cameras.txt", "w") as f:
+            with open(sparse_path / "cameras.txt", "w", encoding='utf-8') as f:
                 f.write("# Camera list\n")
                 f.write("1 PINHOLE 1920 1080 1000 1000 960 540\n")
 
-            with open(sparse_path / "images.txt", "w") as f:
+            with open(sparse_path / "images.txt", "w", encoding='utf-8') as f:
                 f.write("# Image list\n")
                 f.write("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n")
                 f.write("# POINTS2D[] as (X, Y, POINT3D_ID)\n")
@@ -197,12 +197,12 @@ class TestExportColmapToPipelineFormat:
             assert (output_dir / "colmap_raw.json").exists()
 
             # Verify extrinsics content
-            with open(output_dir / "extrinsics.json") as f:
+            with open(output_dir / "extrinsics.json", encoding='utf-8') as f:
                 extrinsics = json.load(f)
             assert len(extrinsics) == 2
 
             # Verify intrinsics content
-            with open(output_dir / "intrinsics.json") as f:
+            with open(output_dir / "intrinsics.json", encoding='utf-8') as f:
                 intrinsics = json.load(f)
             assert intrinsics["fx"] == 1000
 

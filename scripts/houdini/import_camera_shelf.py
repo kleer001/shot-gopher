@@ -48,19 +48,19 @@ if project_dir:
     camera_dir = os.path.join(project_dir, "camera")
 
     # Load JSON files
-    with open(os.path.join(camera_dir, "extrinsics.json")) as f:
+    with open(os.path.join(camera_dir, "extrinsics.json"), encoding='utf-8') as f:
         extrinsics = json.load(f)
 
     intrinsics = {}
     intrinsics_path = os.path.join(camera_dir, "intrinsics.json")
     if os.path.exists(intrinsics_path):
-        with open(intrinsics_path) as f:
+        with open(intrinsics_path, encoding='utf-8') as f:
             intrinsics = json.load(f)
 
     metadata = {}
     metadata_path = os.path.join(project_dir, "project.json")
     if os.path.exists(metadata_path):
-        with open(metadata_path) as f:
+        with open(metadata_path, encoding='utf-8') as f:
             metadata = json.load(f)
 
     fps = metadata.get("fps", 24.0)

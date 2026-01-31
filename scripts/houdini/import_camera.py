@@ -62,17 +62,17 @@ def load_camera_data(project_dir):
     if not os.path.exists(extrinsics_path):
         raise FileNotFoundError(f"Extrinsics not found: {extrinsics_path}")
 
-    with open(extrinsics_path) as f:
+    with open(extrinsics_path, encoding='utf-8') as f:
         extrinsics = json.load(f)
 
     intrinsics = {}
     if os.path.exists(intrinsics_path):
-        with open(intrinsics_path) as f:
+        with open(intrinsics_path, encoding='utf-8') as f:
             intrinsics = json.load(f)
 
     metadata = {}
     if os.path.exists(metadata_path):
-        with open(metadata_path) as f:
+        with open(metadata_path, encoding='utf-8') as f:
             metadata = json.load(f)
 
     return extrinsics, intrinsics, metadata

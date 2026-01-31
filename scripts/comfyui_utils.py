@@ -258,7 +258,7 @@ def queue_workflow(workflow_path: Path, comfyui_url: str = DEFAULT_COMFYUI_URL) 
     Returns:
         Prompt ID for tracking, or empty string on failure
     """
-    with open(workflow_path) as f:
+    with open(workflow_path, encoding='utf-8') as f:
         workflow = json.load(f)
 
     # Convert workflow format to API format if needed
@@ -325,8 +325,8 @@ def wait_for_completion(
     check_interval = 2  # seconds
     last_file_count = 0
 
-    # Braille spinner characters for visual feedback
-    spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    # ASCII spinner for cross-platform compatibility
+    spinner = ["|", "/", "-", "\\"]
     spin_idx = 0
 
     while time.time() - start_time < timeout:
@@ -400,7 +400,7 @@ def run_comfyui_workflow(
         print("    Start ComfyUI first: python main.py --listen", file=sys.stderr)
         return False
 
-    print(f"  → Queuing workflow: {workflow_path.name}")
+    print(f"  -> Queuing workflow: {workflow_path.name}")
     prompt_id = queue_workflow(workflow_path, comfyui_url)
 
     if not prompt_id:

@@ -491,7 +491,7 @@ class TestSaveChunkWorkflow:
 
             path = save_chunk_workflow(workflow, project_dir, chunk)
 
-            with open(path) as f:
+            with open(path, encoding='utf-8') as f:
                 loaded = json.load(f)
             assert loaded == workflow
 

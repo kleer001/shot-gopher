@@ -77,10 +77,10 @@ def load_camera_data(
     if not intrinsics_path.exists():
         raise FileNotFoundError(f"Intrinsics file not found: {intrinsics_path}")
 
-    with open(extrinsics_path) as f:
+    with open(extrinsics_path, encoding='utf-8') as f:
         extrinsics_data = json.load(f)
 
-    with open(intrinsics_path) as f:
+    with open(intrinsics_path, encoding='utf-8') as f:
         intrinsics_data = json.load(f)
 
     if colmap_raw_path.exists():
@@ -389,13 +389,13 @@ if not os.path.exists(extrinsics_path):
 print(f"Found: extrinsics.json")
 
 # Load data
-with open(extrinsics_path) as f:
+with open(extrinsics_path, encoding='utf-8') as f:
     extrinsics = json.load(f)
 print(f"Loaded {{len(extrinsics)}} camera frames")
 
 intrinsics = {{}}
 if os.path.exists(intrinsics_path):
-    with open(intrinsics_path) as f:
+    with open(intrinsics_path, encoding='utf-8') as f:
         intrinsics = json.load(f)
     print(f"Found: intrinsics.json")
 else:

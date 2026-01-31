@@ -70,7 +70,7 @@ def debug_images_bin(project_dir: Path) -> None:
         print(f"Converted images.txt size: {txt_file.stat().st_size} bytes")
         print()
 
-        with open(txt_file) as f:
+        with open(txt_file, encoding='utf-8') as f:
             all_lines = f.readlines()
 
         print(f"Total lines: {len(all_lines)}")
