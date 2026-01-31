@@ -57,7 +57,7 @@ def tty_input(prompt: str = "") -> str:
     else:
         if _tty_handle is None:
             try:
-                _tty_handle = open('/dev/tty', 'r')
+                _tty_handle = open('/dev/tty', 'r', encoding='utf-8')
             except OSError:
                 raise EOFError("No TTY available for input")
 
@@ -88,22 +88,22 @@ def print_header(text: str):
 
 def print_success(text: str):
     """Print success message."""
-    print(f"{Colors.OKGREEN}✓ {text}{Colors.ENDC}")
+    print(f"{Colors.OKGREEN}OK {text}{Colors.ENDC}")
 
 
 def print_warning(text: str):
     """Print warning message."""
-    print(f"{Colors.WARNING}⚠ {text}{Colors.ENDC}")
+    print(f"{Colors.WARNING}! {text}{Colors.ENDC}")
 
 
 def print_error(text: str):
     """Print error message."""
-    print(f"{Colors.FAIL}✗ {text}{Colors.ENDC}")
+    print(f"{Colors.FAIL}X {text}{Colors.ENDC}")
 
 
 def print_info(text: str):
     """Print info message."""
-    print(f"{Colors.OKCYAN}ℹ {text}{Colors.ENDC}")
+    print(f"{Colors.OKCYAN}> {text}{Colors.ENDC}")
 
 
 def ask_yes_no(question: str, default: bool = True) -> bool:
@@ -146,6 +146,7 @@ def run_command(
             import sys
             process = subprocess.Popen(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -153,10 +154,11 @@ def run_command(
                 shell=shell
             )
             output_lines = []
-            for line in iter(process.stdout.readline, ''):
-                print(f"    {line.rstrip()}")
-                sys.stdout.flush()
-                output_lines.append(line)
+            if process.stdout:
+                for line in iter(process.stdout.readline, ''):
+                    print(f"    {line.rstrip()}")
+                    sys.stdout.flush()
+                    output_lines.append(line)
             process.wait()
             return process.returncode == 0, ''.join(output_lines)
         else:

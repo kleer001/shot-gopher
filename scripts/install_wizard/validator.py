@@ -93,7 +93,7 @@ class InstallationValidator:
             check=False, capture=True, shell=is_bat
         )
         if success and output:
-            version = output.strip().split('\n')[0] if output else "unknown"
+            version = output.strip().splitlines()[0] if output else "unknown"
             return True, f"COLMAP {version}"
 
         return True, f"COLMAP available at {colmap_path}"
@@ -191,7 +191,7 @@ class InstallationValidator:
         print_header("Installation Validation")
 
         # Python packages
-        print("\n📦 Python Packages:")
+        print("\n[Python Packages]")
         for pkg, status in results['python_packages'].items():
             if status:
                 print_success(f"{pkg}")
@@ -199,7 +199,7 @@ class InstallationValidator:
                 print_error(f"{pkg} - not found")
 
         # PyTorch CUDA
-        print("\n🎮 GPU Support:")
+        print("\n[GPU Support]")
         cuda_success, cuda_msg = results['pytorch_cuda']
         if cuda_success:
             print_success(cuda_msg)
@@ -207,7 +207,7 @@ class InstallationValidator:
             print_warning(cuda_msg)
 
         # COLMAP
-        print("\n📐 COLMAP:")
+        print("\n[COLMAP]")
         colmap_success, colmap_msg = results['colmap']
         if colmap_success:
             print_success(colmap_msg)
@@ -215,7 +215,7 @@ class InstallationValidator:
             print_warning(colmap_msg)
 
         # Checkpoints
-        print("\n🎯 Motion Capture Checkpoints:")
+        print("\n[Motion Capture Checkpoints]")
         for comp, status in results['checkpoints'].items():
             if status:
                 print_success(f"{comp.upper()} checkpoint found")
@@ -223,7 +223,7 @@ class InstallationValidator:
                 print_info(f"{comp.upper()} checkpoint not found (install with wizard)")
 
         # SMPL-X models
-        print("\n🧍 SMPL-X Models:")
+        print("\n[SMPL-X Models]")
         smplx_success, smplx_msg = results['smplx_models']
         if smplx_success:
             print_success(smplx_msg)

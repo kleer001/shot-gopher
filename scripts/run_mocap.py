@@ -102,13 +102,13 @@ def print_dependency_status():
     # Core dependencies
     print("\nCore (required):")
     for name in ["numpy", "pytorch", "smplx", "trimesh", "opencv", "pillow"]:
-        status = "✓" if deps[name] else "✗"
+        status = "OK" if deps[name] else "X"
         print(f"  {status} {name}")
 
     # Optional dependencies
     print("\nOptional (for specific methods):")
     for name in ["wham"]:
-        status = "✓" if deps[name] else "✗"
+        status = "OK" if deps[name] else "X"
         print(f"  {status} {name}")
 
     print()
@@ -198,7 +198,7 @@ def run_wham_motion_tracking(
             print(f"Error: WHAM output not found: {motion_file}", file=sys.stderr)
             return False
 
-        print(f"  ✓ Motion tracking complete")
+        print(f"  OK Motion tracking complete")
         print(f"    Output: {motion_file}")
 
         return True
@@ -368,7 +368,7 @@ def find_or_create_video(
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         if result.returncode == 0 and video_path.exists():
-            print(f"  ✓ Created video: {video_path.name}")
+            print(f"  OK Created video: {video_path.name}")
             return video_path
     except Exception as e:
         print(f"  Error creating video: {e}", file=sys.stderr)
@@ -457,7 +457,7 @@ def run_gvhmr_motion_tracking(
             print(f"Error: No GVHMR output files found", file=sys.stderr)
             return False
 
-        print(f"  ✓ Motion tracking complete")
+        print(f"  OK Motion tracking complete")
         print(f"    Output files: {len(output_files)}")
 
         return True
@@ -578,7 +578,7 @@ def convert_gvhmr_to_wham_format(
         with open(output_path, 'wb') as f:
             pickle.dump(wham_format, f)
 
-        print(f"  ✓ Converted {n_frames} frames to WHAM format")
+        print(f"  OK Converted {n_frames} frames to WHAM format")
         print(f"    Output: {output_path}")
 
         return True

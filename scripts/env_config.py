@@ -21,6 +21,10 @@ import os
 import sys
 from pathlib import Path
 
+# Force UTF-8 encoding on Windows (prevents cp1252 default issues)
+if sys.platform == 'win32':
+    os.environ.setdefault('PYTHONUTF8', '1')
+
 
 # =============================================================================
 # ENVIRONMENT CONFIGURATION
@@ -188,11 +192,11 @@ def get_activation_instructions() -> str:
 
     lines = [
         "",
-        "⚠️  ╔══════════════════════════════════════════════════════════════╗  ⚠️",
-        "⚠️  ║                                                              ║  ⚠️",
-        "⚠️  ║              WRONG CONDA ENVIRONMENT ACTIVE                  ║  ⚠️",
-        "⚠️  ║                                                              ║  ⚠️",
-        "⚠️  ╚══════════════════════════════════════════════════════════════╝  ⚠️",
+        "!!! +==============================================================+ !!!",
+        "!!! |                                                              | !!!",
+        "!!! |              WRONG CONDA ENVIRONMENT ACTIVE                  | !!!",
+        "!!! |                                                              | !!!",
+        "!!! +==============================================================+ !!!",
         "",
     ]
 
@@ -204,12 +208,12 @@ def get_activation_instructions() -> str:
         lines.append(f"    Required: '{CONDA_ENV_NAME}'")
 
     lines.append("")
-    lines.append("    ┌────────────────────────────────────────────────────────┐")
-    lines.append("    │  To fix this, run:                                     │")
-    lines.append("    │                                                        │")
-    lines.append(f"    │      {cmd:<50} │")
-    lines.append("    │                                                        │")
-    lines.append("    └────────────────────────────────────────────────────────┘")
+    lines.append("    +----------------------------------------------------------+")
+    lines.append("    |  To fix this, run:                                     |")
+    lines.append("    |                                                        |")
+    lines.append(f"    |      {cmd:<50} |")
+    lines.append("    |                                                        |")
+    lines.append("    +----------------------------------------------------------+")
     lines.append("")
 
     if ACTIVATION_SCRIPT.exists():

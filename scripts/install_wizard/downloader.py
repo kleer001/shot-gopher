@@ -35,7 +35,7 @@ def _is_file_locked(filepath: Path) -> bool:
         return False
 
     try:
-        with open(filepath, 'a'):
+        with open(filepath, 'a', encoding='utf-8'):
             pass
         return False
     except (IOError, PermissionError):
@@ -308,7 +308,7 @@ Auto-downloads from Ultralytics releases.'''
             import requests
         except ImportError:
             print_warning("requests library not found, installing...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "requests"], check=True)
+            subprocess.run([sys.executable, "-m", "pip", "install", "requests"], check=True, timeout=120)
             import requests
 
         try:
@@ -421,19 +421,25 @@ Auto-downloads from Ultralytics releases.'''
                     check_result = subprocess.run(
                         method['check_cmd'],
                         capture_output=True,
-                        text=True
+                        text=True,
+                        timeout=30
                     )
                     if check_result.returncode != 0:
                         continue
-                except FileNotFoundError:
+                except (FileNotFoundError, subprocess.TimeoutExpired):
                     continue
 
             print_info(f"Trying to install gdown via {method['name']}...")
-            result = subprocess.run(
-                method['cmd'],
-                capture_output=True,
-                text=True
-            )
+            try:
+                result = subprocess.run(
+                    method['cmd'],
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+            except subprocess.TimeoutExpired:
+                print_warning(f"gdown installation via {method['name']} timed out")
+                continue
 
             if result.returncode == 0:
                 print_success(f"Installed gdown via {method['name']}")
@@ -445,11 +451,12 @@ Auto-downloads from Ultralytics releases.'''
                         gdown_check = subprocess.run(
                             ['gdown', '--version'],
                             capture_output=True,
-                            text=True
+                            text=True,
+                            timeout=30
                         )
                         if gdown_check.returncode == 0:
                             return self._create_gdown_cli_wrapper()
-                    except FileNotFoundError:
+                    except (FileNotFoundError, subprocess.TimeoutExpired):
                         pass
                     continue
             else:
@@ -494,7 +501,7 @@ Auto-downloads from Ultralytics releases.'''
                 cmd = ['gdown', url, '-O', output]
                 if quiet:
                     cmd.append('--quiet')
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
                 if result.returncode == 0:
                     return output
                 return None
@@ -534,13 +541,18 @@ Auto-downloads from Ultralytics releases.'''
                 confirm_url
             ]
 
-            result = subprocess.run(cmd, capture_output=False)
+            result = subprocess.run(cmd, capture_output=False, timeout=600)
 
             if result.returncode == 0 and dest.exists() and dest.stat().st_size > 1000:
                 print_success("Downloaded via wget")
                 return True
 
             # If file is too small, might be HTML error page
+            if dest.exists():
+                dest.unlink()
+            return False
+        except subprocess.TimeoutExpired:
+            print_warning("wget download timed out")
             if dest.exists():
                 dest.unlink()
             return False
@@ -581,12 +593,17 @@ Auto-downloads from Ultralytics releases.'''
                 confirm_url
             ]
 
-            result = subprocess.run(cmd)
+            result = subprocess.run(cmd, timeout=600)
 
             if result.returncode == 0 and dest.exists() and dest.stat().st_size > 1000:
                 print_success("Downloaded via curl")
                 return True
 
+            if dest.exists():
+                dest.unlink()
+            return False
+        except subprocess.TimeoutExpired:
+            print_warning("curl download timed out")
             if dest.exists():
                 dest.unlink()
             return False
@@ -627,7 +644,7 @@ Auto-downloads from Ultralytics releases.'''
                 url
             ]
 
-            result = subprocess.run(cmd)
+            result = subprocess.run(cmd, timeout=600)
 
             if result.returncode == 0 and dest.exists() and dest.stat().st_size > 1000:
                 print_success("Downloaded via wget")
@@ -637,6 +654,11 @@ Auto-downloads from Ultralytics releases.'''
                 dest.unlink()
             return False
 
+        except subprocess.TimeoutExpired:
+            print_warning("wget auth download timed out")
+            if dest.exists():
+                dest.unlink()
+            return False
         except Exception as e:
             print_warning(f"wget auth fallback failed: {e}")
             if dest.exists():
@@ -672,7 +694,7 @@ Auto-downloads from Ultralytics releases.'''
                 url
             ]
 
-            result = subprocess.run(cmd)
+            result = subprocess.run(cmd, timeout=600)
 
             if result.returncode == 0 and dest.exists() and dest.stat().st_size > 1000:
                 print_success("Downloaded via curl")
@@ -682,6 +704,11 @@ Auto-downloads from Ultralytics releases.'''
                 dest.unlink()
             return False
 
+        except subprocess.TimeoutExpired:
+            print_warning("curl auth download timed out")
+            if dest.exists():
+                dest.unlink()
+            return False
         except Exception as e:
             print_warning(f"curl auth fallback failed: {e}")
             if dest.exists():
@@ -784,8 +811,8 @@ Auto-downloads from Ultralytics releases.'''
             return None
 
         try:
-            with open(cred_file, 'r') as f:
-                lines = f.read().strip().split('\n')
+            with open(cred_file, 'r', encoding='utf-8') as f:
+                lines = f.read().strip().splitlines()
                 if len(lines) >= 2:
                     username = lines[0].strip()
                     password = lines[1].strip()
@@ -812,7 +839,7 @@ Auto-downloads from Ultralytics releases.'''
             return None
 
         try:
-            with open(token_file, 'r') as f:
+            with open(token_file, 'r', encoding='utf-8') as f:
                 token = f.read().strip()
                 if token:
                     return token
@@ -850,13 +877,13 @@ Auto-downloads from Ultralytics releases.'''
             # Try pip with --user to handle PEP 668 externally-managed environments
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--user", "requests"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=120
             )
             if result.returncode != 0:
                 # Fall back to --break-system-packages if --user fails
                 result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", "--break-system-packages", "requests"],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=120
                 )
                 if result.returncode != 0:
                     print_error(f"Failed to install requests: {result.stderr}")
@@ -978,12 +1005,12 @@ Auto-downloads from Ultralytics releases.'''
             print_warning("requests library not found, installing...")
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--user", "requests"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=120
             )
             if result.returncode != 0:
                 result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", "--break-system-packages", "requests"],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=120
                 )
                 if result.returncode != 0:
                     print_error(f"Failed to install requests: {result.stderr}")
@@ -1134,13 +1161,13 @@ Auto-downloads from Ultralytics releases.'''
             print_warning("Playwright not installed. Installing...")
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--user", "playwright"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=120
             )
             if result.returncode != 0:
                 print_info(f"pip --user failed, trying --break-system-packages...")
                 result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", "--break-system-packages", "playwright"],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=120
                 )
             if result.returncode != 0:
                 print_warning(f"Could not install playwright package: {result.stderr[:200] if result.stderr else 'unknown error'}")
@@ -1150,7 +1177,7 @@ Auto-downloads from Ultralytics releases.'''
             print_info("Installing Playwright browser (this may take a minute)...")
             browser_result = subprocess.run(
                 [sys.executable, "-m", "playwright", "install", "chromium"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=300
             )
             if browser_result.returncode != 0:
                 print_warning(f"Could not install Playwright browser: {browser_result.stderr[:300] if browser_result.stderr else 'unknown error'}")
@@ -1365,12 +1392,12 @@ Auto-downloads from Ultralytics releases.'''
             print_warning("requests library not found, installing...")
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--user", "requests"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=120
             )
             if result.returncode != 0:
                 subprocess.run(
                     [sys.executable, "-m", "pip", "install", "--break-system-packages", "requests"],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=120
                 )
             import requests
             from urllib.parse import urljoin
@@ -1626,7 +1653,7 @@ Auto-downloads from Ultralytics releases.'''
                 if size_kb < 100:
                     # Small file - likely an error page, show first few lines
                     try:
-                        with open(zip_path, 'r', errors='ignore') as f:
+                        with open(zip_path, 'r', encoding='utf-8', errors='ignore') as f:
                             preview = f.read(500)
                         print_info(f"File preview:\n{preview[:300]}...")
                     except Exception:

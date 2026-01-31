@@ -43,27 +43,15 @@ def print_setup_done_banner():
     """Print the celebratory SETUP DONE banner."""
     print(f"""
 {Colors.OKGREEN}
-    ╔══════════════════════════════════════════════════════════════════╗
-    ║                                                                  ║
-    ║    ███████╗███████╗████████╗██╗   ██╗██████╗                     ║
-    ║    ██╔════╝██╔════╝╚══██╔══╝██║   ██║██╔══██╗                    ║
-    ║    ███████╗█████╗     ██║   ██║   ██║██████╔╝                    ║
-    ║    ╚════██║██╔══╝     ██║   ██║   ██║██╔═══╝                     ║
-    ║    ███████║███████╗   ██║   ╚██████╔╝██║                         ║
-    ║    ╚══════╝╚══════╝   ╚═╝    ╚═════╝ ╚═╝                         ║
-    ║                                                                  ║
-    ║    ██████╗  ██████╗ ███╗   ██╗███████╗    ██╗                    ║
-    ║    ██╔══██╗██╔═══██╗████╗  ██║██╔════╝    ██║                    ║
-    ║    ██║  ██║██║   ██║██╔██╗ ██║█████╗      ██║                    ║
-    ║    ██║  ██║██║   ██║██║╚██╗██║██╔══╝                             ║
-    ║    ██████╔╝╚██████╔╝██║ ╚████║███████╗    ██╗                    ║
-    ║    ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚══════╝    ╚═╝                    ║
-    ║                                                                  ║
-    ╠══════════════════════════════════════════════════════════════════╣
-    ║{Colors.ENDC}                                                                  {Colors.OKGREEN}║
-    ║{Colors.ENDC}       {Colors.BOLD}* * *  SHOT {GOLD}G{Colors.ENDC}{Colors.BOLD}OPHER IS READY TO GO!  * * *{Colors.ENDC}               {Colors.OKGREEN}║
-    ║{Colors.ENDC}                                                                  {Colors.OKGREEN}║
-    ╚══════════════════════════════════════════════════════════════════╝
+    +====================================================================+
+    |                                                                    |
+    |     SETUP DONE!                                                    |
+    |                                                                    |
+    +====================================================================+
+    |                                                                    |
+    |       * * *  SHOT {GOLD}G{Colors.OKGREEN}OPHER IS READY TO GO!  * * *                |
+    |                                                                    |
+    +====================================================================+
 {Colors.ENDC}""")
 
 
@@ -552,7 +540,8 @@ class InstallationWizard:
                     with open(smpl_creds_file, 'w', encoding='utf-8') as f:
                         f.write(email + '\n')
                         f.write(password + '\n')
-                    smpl_creds_file.chmod(0o600)
+                    if platform.system() != "Windows":
+                        smpl_creds_file.chmod(0o600)
                     print_success(f"Credentials saved to {smpl_creds_file}")
                 else:
                     print_info("Skipped - you can add SMPL.login.dat later")
@@ -707,7 +696,7 @@ class InstallationWizard:
                 print("\nDownloading SMPL-X body models...")
                 self.checkpoint_downloader.download_all_checkpoints(['smplx'], self.state_manager)
             else:
-                print("\n⚠ SMPL-X credentials not found - skipping model download")
+                print("\n! SMPL-X credentials not found - skipping model download")
                 print("  Run wizard again after setting up credentials to download models")
 
         # Final status
@@ -743,14 +732,14 @@ class InstallationWizard:
                     if smplx_models:
                         break
             if smplx_models:
-                print("\n📦 SMPL-X Body Models:")
-                print(f"  ✓ Found {len(smplx_models)} SMPL-X model(s)")
+                print("\n[SMPL-X Body Models]")
+                print(f"  OK Found {len(smplx_models)} SMPL-X model(s)")
             else:
-                print("\n📦 SMPL-X Body Models (Not Found):")
+                print("\n[SMPL-X Body Models] (Not Found)")
                 if not Path("SMPL.login.dat").exists():
-                    print("  ⚠ Credentials not set up - run wizard to configure")
+                    print("  ! Credentials not set up - run wizard to configure")
                 else:
-                    print("  ⚠ Download may have failed - check credentials and re-run wizard")
+                    print("  ! Download may have failed - check credentials and re-run wizard")
                 print("  Or download manually:")
                 print("    1. Register at https://smpl-x.is.tue.mpg.de/")
                 print("    2. Download SMPL-X models")
@@ -758,56 +747,56 @@ class InstallationWizard:
 
         # Checkpoints status
         if status.get('gvhmr', False) or status.get('wham', False):
-            print("\n📦 Motion Capture Checkpoints:")
+            print("\n[Motion Capture Checkpoints]")
             if status.get('gvhmr', False):
                 if self.state_manager.is_checkpoint_downloaded('gvhmr'):
-                    print("  ✓ GVHMR checkpoints downloaded (preferred)")
+                    print("  OK GVHMR checkpoints downloaded (preferred)")
                 else:
-                    print("  ⚠ GVHMR checkpoints not downloaded - run wizard again or visit:")
+                    print("  ! GVHMR checkpoints not downloaded - run wizard again or visit:")
                     print("    https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD")
             if status.get('wham', False):
                 if self.state_manager.is_checkpoint_downloaded('wham'):
-                    print("  ✓ WHAM checkpoints downloaded (fallback)")
+                    print("  OK WHAM checkpoints downloaded (fallback)")
                 else:
-                    print("  ⚠ WHAM checkpoints not downloaded - run wizard again or visit:")
+                    print("  ! WHAM checkpoints not downloaded - run wizard again or visit:")
                     print("    https://github.com/yohanshin/WHAM")
 
         # GS-IR status
         if status.get('gsir', False):
             gsir_path = self.install_dir / "GS-IR"
-            print("\n🎨 GS-IR (Material Decomposition):")
-            print(f"  ✓ Installed at {gsir_path}")
+            print("\n[GS-IR] (Material Decomposition)")
+            print(f"  OK Installed at {gsir_path}")
             print("  Use with pipeline: --stages gsir")
 
         # ComfyUI
         if status.get('comfyui', False):
             comfyui_path = self.install_dir / "ComfyUI"
-            print("\n🎨 ComfyUI:")
-            print(f"  ✓ Installed at {comfyui_path}")
-            print("  ✓ Custom nodes installed")
+            print("\n[ComfyUI]")
+            print(f"  OK Installed at {comfyui_path}")
+            print("  OK Custom nodes installed")
             print("\n  Start server:")
             print(f"    cd {comfyui_path}")
             print("    python main.py --listen")
         else:
-            print("\n🎨 ComfyUI (Optional):")
+            print("\n[ComfyUI] (Optional)")
             print("  Not installed. Run wizard again to add ComfyUI support.")
 
         # Web GUI
         if status.get('web_gui', False):
-            print("\n🌐 Web GUI:")
-            print("  ✓ FastAPI and dependencies installed")
+            print("\n[Web GUI]")
+            print("  OK FastAPI and dependencies installed")
             print("\n  Start web interface:")
             print("    ./start_web.py")
             print("  Or with custom port:")
             print("    ./start_web.py --port 8080")
 
         # Testing
-        print("\n✅ Test Installation:")
+        print("\n[Test Installation]")
         print("  python scripts/run_pipeline.py --help")
         print("  python scripts/run_mocap.py --check")
 
         # Documentation
-        print("\n📖 Documentation:")
+        print("\n[Documentation]")
         print("  README.md - Pipeline overview and usage")
         print("  TESTING.md - Testing and validation guide")
         print("  IMPLEMENTATION_NOTES.md - Developer notes")
@@ -831,14 +820,14 @@ class InstallationWizard:
             desc_line2 = "so you can launch it with a single click.               "
 
         print(f"""
-{Colors.OKCYAN}    ┌────────────────────────────────────────────────────────────┐
-    │                                                            │
-    │  {Colors.BOLD}        ★  One more step: Desktop shortcut?  ★{Colors.ENDC}{Colors.OKCYAN}          │
-    │                                                            │
-    │    {desc_line1}│
-    │    {desc_line2}│
-    │                                                            │
-    └────────────────────────────────────────────────────────────┘
+{Colors.OKCYAN}    +------------------------------------------------------------+
+    |                                                            |
+    |  {Colors.BOLD}        *  One more step: Desktop shortcut?  *{Colors.ENDC}{Colors.OKCYAN}          |
+    |                                                            |
+    |    {desc_line1}|
+    |    {desc_line2}|
+    |                                                            |
+    +------------------------------------------------------------+
 {Colors.ENDC}""")
 
         if ask_yes_no("    Create desktop shortcut?", default=True):
@@ -862,7 +851,8 @@ class InstallationWizard:
                 [sys.executable, str(create_shortcut_script), "--all", "--quiet"],
                 capture_output=True,
                 text=True,
-                cwd=str(self.repo_root)
+                cwd=str(self.repo_root),
+                timeout=60
             )
 
             if result.returncode == 0:

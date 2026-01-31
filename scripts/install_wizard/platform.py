@@ -40,7 +40,7 @@ class PlatformManager:
 
         if system == "linux":
             try:
-                with open("/proc/version", "r") as f:
+                with open("/proc/version", "r", encoding='utf-8') as f:
                     version_info = f.read().lower()
                     if "microsoft" in version_info or "wsl" in version_info:
                         return "linux", "wsl2", PlatformManager._detect_linux_package_manager()
@@ -456,47 +456,47 @@ Then install {dependency}:
         """
         if os_name == "macos":
             return """
-🍎 macOS Detected
+[macOS Detected]
 
 Run: python scripts/install_wizard.py
 
 Notes:
-  • All features available except GPU-accelerated processing
-  • macOS uses CPU fallback for ML models
+  - All features available except GPU-accelerated processing
+  - macOS uses CPU fallback for ML models
 """
 
         elif os_name == "linux" and environment == "native" and has_gpu:
             return """
-🐧 Linux + GPU Detected
+[Linux + GPU Detected]
 
 Run: python scripts/install_wizard.py
 
 Benefits:
-  ✓ Direct filesystem access
-  ✓ Full GPU acceleration
-  ✓ Optimal performance
+  + Direct filesystem access
+  + Full GPU acceleration
+  + Optimal performance
 """
 
         elif os_name == "linux" and environment == "wsl2" and has_gpu:
             return """
-🪟 WSL2 + GPU Detected
+[WSL2 + GPU Detected]
 
 Run: python scripts/install_wizard.py
 
 Notes:
-  • GPU passthrough works via NVIDIA WSL2 drivers
-  • Install from within WSL2 environment
+  - GPU passthrough works via NVIDIA WSL2 drivers
+  - Install from within WSL2 environment
 """
 
         elif not has_gpu:
             return """
-⚠️  No NVIDIA GPU Detected
+[!] No NVIDIA GPU Detected
 
 Run: python scripts/install_wizard.py
 
 Notes:
-  • Motion capture requires NVIDIA GPU (12GB+ VRAM)
-  • Without GPU, only segmentation/roto workflows are available
+  - Motion capture requires NVIDIA GPU (12GB+ VRAM)
+  - Without GPU, only segmentation/roto workflows are available
 """
 
         else:
@@ -568,6 +568,7 @@ Run: python scripts/install_wizard.py
 
         TOOLS_DIR.mkdir(parents=True, exist_ok=True)
 
+        tmp_path = None
         try:
             import urllib.request
 
@@ -591,8 +592,6 @@ Run: python scripts/install_wizard.py
                 with tarfile.open(tmp_path, 'r:*') as tf:
                     tf.extractall(tool_dir)
 
-            tmp_path.unlink()
-
             PlatformManager._flatten_single_subdir(tool_dir)
 
             installed_path = PlatformManager.find_tool(tool_name)
@@ -606,6 +605,12 @@ Run: python scripts/install_wizard.py
         except Exception as e:
             print(f"    Error installing {tool_name}: {e}")
             return None
+        finally:
+            if tmp_path and tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
 
     @staticmethod
     def _flatten_single_subdir(tool_dir: Path) -> None:

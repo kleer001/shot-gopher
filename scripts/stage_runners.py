@@ -373,9 +373,9 @@ def run_stage_interactive(
     input("  Press Enter when done with interactive segmentation...")
 
     if list(roto_dir.glob("**/*.png")):
-        print(f"  ✓ Masks found in {roto_dir}")
+        print(f"  OK Masks found in {roto_dir}")
     else:
-        print(f"  → Warning: No masks found in {roto_dir}")
+        print(f"  -> Warning: No masks found in {roto_dir}")
 
     return True
 
