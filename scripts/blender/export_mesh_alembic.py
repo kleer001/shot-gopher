@@ -68,13 +68,21 @@ def import_obj_sequence_as_shape_keys(
 
     Returns:
         The imported mesh object
+
+    Raises:
+        ValueError: If no OBJ files provided or import fails
+        RuntimeError: If OBJ files have inconsistent vertex counts
     """
     if not obj_files:
         raise ValueError("No OBJ files provided")
 
     bpy.ops.wm.obj_import(filepath=str(obj_files[0]))
+    if not bpy.context.selected_objects:
+        raise ValueError(f"Failed to import base mesh: {obj_files[0]}")
+
     base_obj = bpy.context.selected_objects[0]
     base_obj.name = "animated_mesh"
+    base_vertex_count = len(base_obj.data.vertices)
 
     if not base_obj.data.shape_keys:
         base_obj.shape_key_add(name="Basis", from_mix=False)
@@ -83,26 +91,39 @@ def import_obj_sequence_as_shape_keys(
         frame = start_frame + i
 
         bpy.ops.wm.obj_import(filepath=str(obj_file))
+        if not bpy.context.selected_objects:
+            print(f"Warning: Failed to import {obj_file}, skipping")
+            continue
+
         temp_obj = bpy.context.selected_objects[0]
 
         base_obj.select_set(True)
         bpy.context.view_layer.objects.active = base_obj
 
         try:
-            sk = base_obj.shape_key_add(name=f"frame_{frame:04d}", from_mix=False)
+            temp_vertex_count = len(temp_obj.data.vertices)
+            if temp_vertex_count != base_vertex_count:
+                raise RuntimeError(
+                    f"Vertex count mismatch: {obj_file.name} has {temp_vertex_count} vertices, "
+                    f"expected {base_vertex_count}. All OBJ files must have identical topology."
+                )
 
-            if len(temp_obj.data.vertices) == len(base_obj.data.vertices):
-                for j, vert in enumerate(temp_obj.data.vertices):
-                    sk.data[j].co = vert.co
+            sk = base_obj.shape_key_add(name=f"frame_{frame:04d}", from_mix=False)
+            for j, vert in enumerate(temp_obj.data.vertices):
+                sk.data[j].co = vert.co
         finally:
             bpy.data.objects.remove(temp_obj, do_unlink=True)
 
-    num_frames = len(obj_files)
+    if len(obj_files) == 1:
+        print("Note: Only 1 OBJ file - exporting static mesh (no animation)")
+        return base_obj
+
     for i, key in enumerate(base_obj.data.shape_keys.key_blocks[1:], start=0):
         frame = start_frame + i
+        prev_frame = max(start_frame, frame - 1)
 
         key.value = 0.0
-        key.keyframe_insert(data_path="value", frame=frame - 1)
+        key.keyframe_insert(data_path="value", frame=prev_frame)
 
         key.value = 1.0
         key.keyframe_insert(data_path="value", frame=frame)

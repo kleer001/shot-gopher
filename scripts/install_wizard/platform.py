@@ -597,8 +597,10 @@ Run: python scripts/install_wizard.py
         """
         import shutil
 
+        mount_point = Path("/tmp") / f"dmg_mount_{dmg_path.stem}"
+        mounted = False
+
         try:
-            mount_point = Path("/tmp") / f"dmg_mount_{dmg_path.stem}"
             mount_point.mkdir(parents=True, exist_ok=True)
 
             print(f"    Mounting DMG...")
@@ -613,6 +615,8 @@ Run: python scripts/install_wizard.py
                 print(f"    Error mounting DMG: {result.stderr}")
                 return False
 
+            mounted = True
+
             app_src = mount_point / app_name
             if not app_src.exists():
                 for item in mount_point.iterdir():
@@ -622,7 +626,6 @@ Run: python scripts/install_wizard.py
 
             if not app_src.exists():
                 print(f"    Error: Could not find .app in DMG")
-                subprocess.run(["hdiutil", "detach", str(mount_point)], capture_output=True)
                 return False
 
             print(f"    Copying {app_src.name}...")
@@ -630,9 +633,6 @@ Run: python scripts/install_wizard.py
             if app_dest.exists():
                 shutil.rmtree(app_dest)
             shutil.copytree(app_src, app_dest, symlinks=True)
-
-            print(f"    Unmounting DMG...")
-            subprocess.run(["hdiutil", "detach", str(mount_point)], capture_output=True, timeout=60)
 
             return True
 
@@ -642,6 +642,22 @@ Run: python scripts/install_wizard.py
         except Exception as e:
             print(f"    Error extracting DMG: {e}")
             return False
+        finally:
+            if mounted:
+                print(f"    Unmounting DMG...")
+                try:
+                    subprocess.run(
+                        ["hdiutil", "detach", str(mount_point)],
+                        capture_output=True,
+                        timeout=60
+                    )
+                except Exception:
+                    pass
+            if mount_point.exists() and not any(mount_point.iterdir()):
+                try:
+                    mount_point.rmdir()
+                except Exception:
+                    pass
 
     @staticmethod
     def install_tool(tool_name: str, force: bool = False) -> Optional[Path]:
