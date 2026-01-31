@@ -406,7 +406,7 @@ def kill_all_comfyui_processes() -> int:
         print("  → No stale ComfyUI processes found")
         return 0
 
-    print(f"{BOLD_RED}  ⚠ FOUND STALE COMFYUI PROCESS(ES). KILLING THEM. SORRY!{RESET}")
+    print(f"{BOLD_RED}  ! FOUND STALE COMFYUI PROCESS(ES). KILLING THEM. SORRY!{RESET}")
 
     if _comfyui_process is not None:
         stop_comfyui()

@@ -360,7 +360,7 @@ def project_textures(
         output_texture.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(texture_uint8).save(output_texture)
 
-        print(f"\n  ✓ Texture saved: {output_texture}")
+        print(f"\n  OK Texture saved: {output_texture}")
         print(f"    Coverage: {(mask.sum() / mask.size) * 100:.1f}%")
 
         return True

@@ -188,11 +188,11 @@ def get_activation_instructions() -> str:
 
     lines = [
         "",
-        "⚠️  ╔══════════════════════════════════════════════════════════════╗  ⚠️",
-        "⚠️  ║                                                              ║  ⚠️",
-        "⚠️  ║              WRONG CONDA ENVIRONMENT ACTIVE                  ║  ⚠️",
-        "⚠️  ║                                                              ║  ⚠️",
-        "⚠️  ╚══════════════════════════════════════════════════════════════╝  ⚠️",
+        "!!! +==============================================================+ !!!",
+        "!!! |                                                              | !!!",
+        "!!! |              WRONG CONDA ENVIRONMENT ACTIVE                  | !!!",
+        "!!! |                                                              | !!!",
+        "!!! +==============================================================+ !!!",
         "",
     ]
 
@@ -204,12 +204,12 @@ def get_activation_instructions() -> str:
         lines.append(f"    Required: '{CONDA_ENV_NAME}'")
 
     lines.append("")
-    lines.append("    ┌────────────────────────────────────────────────────────┐")
-    lines.append("    │  To fix this, run:                                     │")
-    lines.append("    │                                                        │")
-    lines.append(f"    │      {cmd:<50} │")
-    lines.append("    │                                                        │")
-    lines.append("    └────────────────────────────────────────────────────────┘")
+    lines.append("    +----------------------------------------------------------+")
+    lines.append("    |  To fix this, run:                                     |")
+    lines.append("    |                                                        |")
+    lines.append(f"    |      {cmd:<50} |")
+    lines.append("    |                                                        |")
+    lines.append("    +----------------------------------------------------------+")
     lines.append("")
 
     if ACTIVATION_SCRIPT.exists():

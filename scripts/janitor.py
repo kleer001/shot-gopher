@@ -707,7 +707,7 @@ class Janitor:
             if repo.exists():
                 commit = repo.get_current_commit()
                 is_clean, status = repo.is_clean()
-                clean_marker = "✓" if is_clean else "✗"
+                clean_marker = "OK" if is_clean else "X"
                 print(f"  {name:20s} {commit:>10s} {clean_marker}")
             else:
                 print(f"  {name:20s} {'Not installed':>10s}")

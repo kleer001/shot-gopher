@@ -171,7 +171,7 @@ def run_segmentation(
             print(f"    Segmentation failed", file=sys.stderr)
             return False
 
-        print(f"    ✓ Complete")
+        print(f"    OK Complete")
 
     # Check output
     roto_dir = project_dir / "roto"
