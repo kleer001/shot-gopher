@@ -230,10 +230,11 @@ export class ProjectsController {
                 }
             }
 
+            const safeStage = dom.escapeHTML(stage);
             return `
-            <div class="stage-status-item selectable ${stageClass}" data-stage="${stage}">
+            <div class="stage-status-item selectable ${stageClass}" data-stage="${safeStage}">
                 <div class="stage-marker"></div>
-                <span class="stage-status-name">${label}</span>
+                <span class="stage-status-name">${dom.escapeHTML(label)}</span>
                 <span class="stage-vram ${vramStatusClass}" title="${dom.escapeHTML(vramTitle)}">${vramDisplay}</span>
                 <span class="stage-file-count">${fileCountDisplay}</span>
                 <span class="stage-file-size">${fileSizeDisplay}</span>

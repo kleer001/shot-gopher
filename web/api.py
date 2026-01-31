@@ -87,6 +87,9 @@ async def upload_video(
     project_service: ProjectService = Depends(get_project_service),
 ):
     """Upload a video file and create a new project."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
     config_service = get_config_service()
     allowed_extensions = set(config_service.get_supported_video_formats())
     file_ext = Path(file.filename).suffix.lower()
@@ -304,7 +307,8 @@ async def get_vram_analysis(
             if video_info:
                 frame_count = video_info.get("frame_count", 0)
                 res = video_info.get("resolution", [1920, 1080])
-                resolution = tuple(res) if res else (1920, 1080)
+                if res and len(res) >= 2:
+                    resolution = (res[0], res[1])
                 fps = video_info.get("fps", 24.0)
 
         if frame_count > 0:
@@ -350,11 +354,14 @@ async def get_outputs(
             files = []
             for f in sorted(all_files):
                 if f.is_file():
-                    files.append({
-                        "name": f.name,
-                        "size": f.stat().st_size,
-                        "path": str(f),
-                    })
+                    try:
+                        files.append({
+                            "name": f.name,
+                            "size": f.stat().st_size,
+                            "path": str(f),
+                        })
+                    except (OSError, IOError):
+                        pass
             if files:
                 output_key = dir_name.split("/")[0]
                 outputs[output_key] = {

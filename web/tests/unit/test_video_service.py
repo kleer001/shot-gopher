@@ -85,3 +85,39 @@ class TestVideoService:
 
         result = service.get_resolution_from_frames(tmp_path)
         assert result == (1280, 720)
+
+    def test_get_video_info_handles_missing_streams(self):
+        """Returns empty dict when no video stream in file."""
+        service = VideoService()
+        mock_output = '{"streams": [{"codec_type": "audio"}], "format": {"duration": "10.0"}}'
+
+        with patch("web.services.video_service.PlatformManager.find_tool", return_value="/usr/bin/ffprobe"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout=mock_output)
+                result = service.get_video_info(Path("/fake/video.mp4"))
+
+        assert result == {}
+
+    def test_get_video_info_handles_subprocess_timeout(self):
+        """Returns empty dict on subprocess timeout."""
+        import subprocess
+        service = VideoService()
+
+        with patch("web.services.video_service.PlatformManager.find_tool", return_value="/usr/bin/ffprobe"):
+            with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 30)):
+                result = service.get_video_info(Path("/fake/video.mp4"))
+
+        assert result == {}
+
+    def test_get_video_info_handles_zero_duration(self):
+        """Handles video with zero duration."""
+        service = VideoService()
+        mock_output = '{"streams": [{"codec_type": "video", "width": 1920, "height": 1080, "r_frame_rate": "24/1"}], "format": {"duration": "0"}}'
+
+        with patch("web.services.video_service.PlatformManager.find_tool", return_value="/usr/bin/ffprobe"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout=mock_output)
+                result = service.get_video_info(Path("/fake/video.mp4"))
+
+        assert result["frame_count"] == 0
+        assert result["duration"] == 0

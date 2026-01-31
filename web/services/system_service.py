@@ -45,6 +45,8 @@ class SystemService:
             target_dir = path if path.exists() else path.parent
             if target_dir.exists():
                 stat = shutil.disk_usage(target_dir)
+                if stat.total == 0:
+                    return None
                 return {
                     "free_gb": round(stat.free / (1024**3), 1),
                     "total_gb": round(stat.total / (1024**3), 1),

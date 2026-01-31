@@ -73,3 +73,36 @@ class TestSystemService:
         fake_path = Path("/nonexistent/path/that/does/not/exist")
         result = service.get_disk_usage(fake_path)
         assert result is None
+
+    def test_get_gpu_info_handles_malformed_output(self):
+        """Returns unknown for malformed nvidia-smi output."""
+        service = SystemService()
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout="malformed output without comma"
+            )
+            result = service.get_gpu_info()
+
+        assert result == {"name": "Unknown", "vram_gb": 0}
+
+    def test_get_gpu_info_handles_non_numeric_vram(self):
+        """Returns unknown when VRAM is not a number."""
+        service = SystemService()
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout="NVIDIA GPU, not_a_number"
+            )
+            result = service.get_gpu_info()
+
+        assert result == {"name": "Unknown", "vram_gb": 0}
+
+    def test_get_disk_usage_uses_parent_if_path_missing(self, tmp_path):
+        """Falls back to parent directory if path doesn't exist."""
+        service = SystemService()
+        missing_subdir = tmp_path / "missing_subdir"
+        result = service.get_disk_usage(missing_subdir)
+
+        assert result is not None
+        assert result["total_gb"] > 0
