@@ -1626,7 +1626,7 @@ Auto-downloads from Ultralytics releases.'''
                 if size_kb < 100:
                     # Small file - likely an error page, show first few lines
                     try:
-                        with open(zip_path, 'r', errors='ignore') as f:
+                        with open(zip_path, 'r', encoding='utf-8', errors='ignore') as f:
                             preview = f.read(500)
                         print_info(f"File preview:\n{preview[:300]}...")
                     except Exception:

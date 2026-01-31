@@ -57,7 +57,7 @@ def tty_input(prompt: str = "") -> str:
     else:
         if _tty_handle is None:
             try:
-                _tty_handle = open('/dev/tty', 'r')
+                _tty_handle = open('/dev/tty', 'r', encoding='utf-8')
             except OSError:
                 raise EOFError("No TTY available for input")
 

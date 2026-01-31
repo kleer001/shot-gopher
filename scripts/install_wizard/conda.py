@@ -186,7 +186,9 @@ class CondaEnvironmentManager:
         )
 
         if success and output.strip():
-            return Path(output.strip().splitlines()[0])
+            lines = output.strip().splitlines()
+            if lines:
+                return Path(lines[0])
         return None
 
     def install_package_conda(self, package: str, channel: Optional[str] = None) -> bool:

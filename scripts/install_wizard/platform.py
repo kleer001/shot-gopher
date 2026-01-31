@@ -40,7 +40,7 @@ class PlatformManager:
 
         if system == "linux":
             try:
-                with open("/proc/version", "r") as f:
+                with open("/proc/version", "r", encoding='utf-8') as f:
                     version_info = f.read().lower()
                     if "microsoft" in version_info or "wsl" in version_info:
                         return "linux", "wsl2", PlatformManager._detect_linux_package_manager()
