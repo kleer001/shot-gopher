@@ -150,6 +150,19 @@ class TestFindOrCreateVideo:
             result = find_or_create_video(project_dir)
             assert result is None
 
+    def test_find_uppercase_extension(self):
+        """Test that uppercase video extensions are found (e.g., .MP4)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            source_dir = project_dir / "source"
+            source_dir.mkdir()
+
+            video_path = source_dir / "footage.MP4"
+            video_path.touch()
+
+            result = find_or_create_video(project_dir)
+            assert result == video_path
+
 
 class TestGvhmrOutputConversion:
     def test_conversion_smpl_params_global(self):

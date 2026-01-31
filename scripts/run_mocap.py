@@ -333,6 +333,9 @@ def find_or_create_video(
         for video_file in source_dir.glob(f"*{ext}"):
             if not video_file.name.startswith("_"):
                 return video_file
+        for video_file in source_dir.glob(f"*{ext.upper()}"):
+            if not video_file.name.startswith("_"):
+                return video_file
 
     frames_dir = source_dir / "frames"
     if not frames_dir.exists():
