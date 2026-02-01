@@ -94,7 +94,7 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 
 🛠️ **Legend:**
 - ✅ Works well
-- ⚠️ Limited/challenging — may require parameter tuning or produce imperfect results
+- ⚠️ Limited/challenging — may require parameter tuning or produce imperfect results, excessive GPU RAM requirements 
 - 🚫 Not suitable/fails — tool requires different input (e.g., COLMAP needs camera motion)
 - N/A Not applicable
 
