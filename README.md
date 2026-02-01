@@ -77,20 +77,20 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 >
 > Different tools have different requirements. Not all footage works with all stages!
 
-| Shot Type | Depth (VDA) | Roto (SAM3) | Clean Plate | Camera (COLMAP) | Material (GS-IR) | MoCap (GVHMR) |
-|-----------|-------------|-------------|-------------|-----------------|------------------|-------------------|
-| **Static camera** | ✅ | ✅ | ✅ | 🚫 | 🚫 | ⚠️ |
-| **Moving camera** | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ |
-| **Handheld/shaky** | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| **Fast motion** | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| **Low texture** | ✅ | ✅ | ✅ | 🚫 | ⚠️ | ✅ |
-| **Full body person** | ✅ | ✅ | ✅ | ✅ | N/A | ✅ |
-| **Partial body/occluded** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ⚠️ |
-| **Multiple people** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ✅ |
-| **In-focus background** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
-| **Shallow DOF/bokeh** | ⚠️ | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ |
-| **High contrast lighting** | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
-| **150+ frames** | ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ |
+| Shot Type | Depth (VDA) | Roto (SAM3) | Interactive Roto | Matte (VideoMaMa) | Clean Plate | Camera (COLMAP) | Material (GS-IR) | MoCap (GVHMR) |
+|-----------|-------------|-------------|------------------|-------------------|-------------|-----------------|------------------|---------------|
+| **Static camera** | ✅ | ✅ | ✅ | ✅ | ✅ | 🚫 | 🚫 | ⚠️ |
+| **Moving camera** | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ |
+| **Handheld/shaky** | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| **Fast motion** | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| **Low texture** | ✅ | ✅ | ⚠️ | ✅ | ✅ | 🚫 | ⚠️ | ✅ |
+| **Full body person** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ✅ |
+| **Partial body/occluded** | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ⚠️ |
+| **Multiple people** | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ✅ |
+| **In-focus background** | ✅ | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | N/A |
+| **Shallow DOF/bokeh** | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ |
+| **High contrast lighting** | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ |
+| **150+ frames** | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ |
 
 🛠️ **Legend:**
 - ✅ Works well
@@ -101,6 +101,8 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 🦺 **Key Gotchas:**
 - **COLMAP** and **GS-IR** require camera movement — static tripod shots will fail
 - **GVHMR** needs full or mostly-visible human bodies
+- **VideoMaMa** is optimized for human subjects — uses chunked processing for long sequences
+- **Interactive Roto** excels where auto-roto fails (occluded objects, separating similar items)
 - **Long sequences (150+ frames)** may hit VRAM limits on 12GB cards
 
 ## Getting Started
