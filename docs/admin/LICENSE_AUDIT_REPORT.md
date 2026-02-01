@@ -31,7 +31,7 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 | **shot-gopher** (this project) | MIT | ✅ Unrestricted |
 | ComfyUI | GPL-3.0 | ✅ Yes (with copyleft obligations) |
 | PyTorch | BSD-3-Clause | ✅ Unrestricted |
-| SAM 2/3 (Segment Anything) | Apache-2.0 | ✅ Unrestricted |
+| SAM3 (Segment Anything) | Apache-2.0 | ✅ Unrestricted |
 | COLMAP | BSD-3-Clause | ✅ Unrestricted (source); GPL when built with deps |
 | FFmpeg | LGPL-2.1+ (default) | ✅ Yes (with compliance requirements) |
 | GS-IR | MIT | ✅ Unrestricted |
@@ -102,10 +102,10 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 
 ---
 
-### Segment Anything Model 2/3 (SAM)
+### Segment Anything Model 3 (SAM3)
 
-**License:** [Apache-2.0](https://github.com/facebookresearch/sam2/blob/main/LICENSE)
-**Source:** [facebookresearch/sam2](https://github.com/facebookresearch/sam2)
+**License:** [Apache-2.0](https://github.com/1038lab/ComfyUI-SAM3/blob/main/LICENSE)
+**Source:** [1038lab/ComfyUI-SAM3](https://github.com/1038lab/ComfyUI-SAM3)
 
 **What you can do:**
 - Use commercially without restriction
@@ -338,7 +338,7 @@ Use only permissively-licensed components:
 | Stage | Permissive Alternative |
 |-------|----------------------|
 | Depth estimation | Depth Anything V3 Large (Apache-2.0) ✅ |
-| Segmentation | SAM 2/3 (Apache-2.0) ✅ |
+| Segmentation | SAM3 (Apache-2.0) ✅ |
 | Clean plates | ❌ No permissive alternative (ProPainter restricted) |
 | Video matting | VideoMaMa (CC BY-NC 4.0 + Stability AI) ⚠️ |
 | Camera tracking | COLMAP (BSD, with care) ✅ |
@@ -396,7 +396,7 @@ All components are freely available for:
 ## Sources
 
 - [ComfyUI License](https://github.com/comfyanonymous/ComfyUI/blob/master/LICENSE)
-- [SAM 2 License](https://github.com/facebookresearch/sam2/blob/main/LICENSE)
+- [SAM3 License](https://github.com/1038lab/ComfyUI-SAM3/blob/main/LICENSE)
 - [Depth Anything V3](https://github.com/ByteDance-Seed/Depth-Anything-3)
 - [ProPainter License](https://github.com/sczhou/ProPainter/blob/main/LICENSE)
 - [ECON License](https://github.com/YuliangXiu/ECON/blob/master/LICENSE)

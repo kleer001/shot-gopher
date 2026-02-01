@@ -58,6 +58,10 @@ Browser-based interactive roto using SAM3 with point/box prompts.
 | **Output** | `roto/<label>/*.png` |
 | **Workflow** | `05_interactive_segmentation.json` |
 
+**📖 Tutorials:**
+- [**Interactive Roto Guide**](interactive-segmentation.md) — Full walkthrough with tips for multi-object selection
+- [ComfyUI-SAM3 GitHub](https://github.com/1038lab/ComfyUI-SAM3) — Node documentation and examples
+
 **Requirements:**
 - ComfyUI server running
 - SAM3 custom node
@@ -114,6 +118,10 @@ Creates roto masks using SAM3 (Segment Anything Model 3).
 | **Input** | `source/frames/*.png` |
 | **Output** | `roto/<prompt>/*.png` (per-prompt subdirectories) |
 | **Workflow** | `02_segmentation.json` |
+
+**📖 Tutorials:**
+- [ComfyUI-SAM3 GitHub](https://github.com/1038lab/ComfyUI-SAM3) — Node documentation and workflow examples
+- [1038lab/sam3 Model](https://huggingface.co/1038lab/sam3) — Model weights and usage info
 
 **Requirements:**
 - ComfyUI server running
@@ -190,6 +198,10 @@ Refines roto masks into production-quality alpha mattes using VideoMaMa diffusio
 | **Output** | `matte/<prompt>_00/*.png`, `matte/<prompt>_01/*.png`, etc. |
 | **Workflow** | None (VideoMaMa conda environment) |
 
+**📖 Tutorials:**
+- [VideoMaMa GitHub](https://github.com/hywang66/VideoMaMa) — Official repository with paper and examples
+- [Video Matting Explained (YouTube)](https://www.youtube.com/watch?v=PJgPrRRq9Cs) — Background on video matting techniques
+
 **Requirements:**
 - VideoMaMa installed via `python scripts/video_mama_install.py` (~12 GB disk space)
 - Separate conda environment (created automatically)
@@ -252,6 +264,11 @@ Structure-from-Motion camera tracking and 3D reconstruction.
 | **Output** | `colmap/sparse/0/`, optionally `colmap/dense/`, `colmap/meshed/` |
 | **Workflow** | None (COLMAP binary) |
 
+**📖 Tutorials:**
+- [COLMAP Documentation](https://colmap.github.io/tutorial.html) — Official tutorial and parameter reference
+- [COLMAP SfM Workflow (YouTube)](https://www.youtube.com/watch?v=P-EC0DzeVEU) — Visual walkthrough of the reconstruction process
+- [Understanding SfM for VFX](https://www.fxguide.com/fxfeatured/the-art-of-photogrammetry-introduction-to-structure-from-motion/) — FXGuide's photogrammetry guide
+
 **Options:**
 
 | Flag | Description |
@@ -285,6 +302,10 @@ Human motion capture using GVHMR.
 | **Input** | `source/frames/*.png`, `camera/extrinsics.json` |
 | **Output** | `mocap/motion.pkl`, `mocap/mesh_sequence/` |
 | **Workflow** | None (GVHMR) |
+
+**📖 Tutorials:**
+- [GVHMR Project Page](https://zju3dv.github.io/gvhmr/) — Official project with paper and demo videos
+- [SMPL-X Body Model](https://smpl-x.is.tue.mpg.de/) — Understanding the output body model format
 
 **Requirements:**
 - GVHMR installed ([Installation guide](../installation.md))

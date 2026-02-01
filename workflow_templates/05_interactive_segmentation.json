@@ -52,8 +52,8 @@
         {"name": "count", "type": "INT", "links": null, "slot_index": 1}
       ],
       "properties": {"Node name for S&R": "VHS_SelectEveryNthImage"},
-      "widgets_values": [9999, 0],
-      "title": "🎬 Select Frame (skip_first = frame number)"
+      "widgets_values": [99999, 0],
+      "title": "🎬 Select Frame (set skip_first to frame number)"
     },
     {
       "id": 10,

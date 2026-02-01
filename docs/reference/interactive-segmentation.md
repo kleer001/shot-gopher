@@ -1,77 +1,73 @@
 # Interactive Roto Guide
 
-For complex shots where automatic text-prompt roto doesn't work well (e.g., isolating individual legs, specific body parts, or objects that merge together), use the interactive roto workflow.
+For complex shots where automatic text-prompt roto doesn't work well, use the interactive roto workflow. This gives you precise control over exactly what gets segmented.
 
 ## When to Use This
 
-- Multiple similar objects that merge in automatic roto (e.g., two legs touching)
-- Body parts that need separate masks (left leg, right leg, each arm)
+- Multiple similar objects that merge in automatic roto
 - Objects partially occluded or overlapping
+- Anything text prompts can't reliably identify
 - Fine control over what gets included/excluded in a mask
 
 ## Prerequisites
 
 - VFX Pipeline installed (via `install_wizard.py`)
 - Project set up with source frames (`setup_project.py` or ingest stage complete)
+- ComfyUI installed via `install_wizard.py`
+- SAM3 extension (can install via ComfyUI Manager in browser if missing)
 
 ## Quick Start
-
-Just run:
 
 ```bash
 python scripts/launch_interactive_segmentation.py /path/to/your/project
 ```
 
-The script auto-detects your environment and handles everything:
-1. Starts ComfyUI
-2. Prepares the workflow with correct paths
-3. Opens your browser to ComfyUI
-4. Waits for you to finish (press Enter when done)
-5. Cleans up automatically
+This starts ComfyUI, loads the workflow, and opens your browser.
 
-### Requirements
+---
 
-- ComfyUI installed via `install_wizard.py`
-- SAM3 extension (can install via ComfyUI Manager in browser if missing)
+## Step-by-Step Workflow
 
-### Using the Workflow
+### Step 1: Choose Your Reference Frame
 
-Once ComfyUI opens in your browser:
-1. Click **Menu** > **Load**
-2. Navigate to: `your_project/workflows/05_interactive_segmentation.json`
+In the **"🎬 Select Frame"** node (`VHS_SelectEveryNthImage`):
 
-### 4. Select Objects
+- Set **`skip_first_images`** to the frame number you want to annotate
+- Frame 0 = first frame, Frame 50 = 50th frame, etc.
+- Choose a frame where your target object is clearly visible and unoccluded
 
-In the **Interactive Selector** node:
+### Step 2: Run the Interactive Selector
 
-| Action | What it does |
-|--------|--------------|
-| **Left-click** | Add positive point (include in mask) |
-| **Right-click** | Add negative point (exclude from mask) |
-| **Different object IDs** | Each ID becomes a separate mask sequence |
+1. Find the **"🎯 Interactive Selector"** node (`SAM3PointCollector`)
+2. Click the **Run** button on just this node (not Queue Prompt yet)
+3. Wait for the frame image to appear in the node's preview area
 
-### 5. Run the Workflow
+### Step 3: Click to Select Objects
 
-Click **Queue Prompt** to execute. SAM3 will:
-1. Segment objects based on your points on frame 0
-2. Propagate masks through the entire video sequence
-3. Save results to `roto/custom/`
+Click directly on the image preview in the Interactive Selector node:
 
-## Isolating Multiple Legs
+| Action | Result |
+|--------|--------|
+| **Left-click** | Positive point — include this area in mask |
+| **Right-click** (or Shift+Left) | Negative point — exclude this area from mask |
 
-For the running shot example with multiple people's legs:
+**Clicking Tips:**
 
-1. **Click once on each leg** you want to track
-2. **Use different object IDs** for each leg (the selector assigns these automatically)
-3. **Add negative points** between legs if they tend to merge
-4. **Add negative points** on shorts/clothing to exclude them from the leg mask
+- **Start simple**: One click in the center of your object is often enough
+- **Add more points** only if the initial mask is wrong
+- **Use negative points** to carve out areas that shouldn't be included
+- **Click on distinct features**: Choose areas with clear visual boundaries
+- **Separate objects**: Each object you want tracked separately needs its own selection
 
-### Tips for Clean Leg Masks
+### Step 4: Propagate Through Video
 
-- Click on the **middle of the calf** (most distinctive part)
-- If a leg includes the shoe, add a **negative point on the shoe**
-- If two adjacent legs merge, add a **negative point between them**
-- If the sock merges with skin, that's usually fine for roto purposes
+Once your points are set:
+
+1. Click **Queue Prompt** to run the full workflow
+2. SAM3 propagates your selection through all frames (forward and backward)
+3. Masks save to `roto/custom/`
+
+---
 
 ## Output Structure
 
