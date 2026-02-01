@@ -8,6 +8,7 @@ import shutil
 
 from web.models.domain import Project, ProjectStatus
 from web.repositories.base import Repository
+from web.utils.media import VIDEO_EXTENSIONS
 
 
 class ProjectRepository(Repository[Project]):
@@ -78,23 +79,20 @@ class ProjectRepository(Repository[Project]):
         """Load project from filesystem."""
         state_file = project_path / "project_state.json"
 
-        if state_file.exists():
-            try:
-                with open(state_file, encoding='utf-8') as f:
-                    state = json.load(f)
+        try:
+            with open(state_file, encoding='utf-8') as f:
+                state = json.load(f)
 
-                return Project(
-                    name=state.get("name", project_path.name),
-                    path=project_path,
-                    status=ProjectStatus(state.get("status", "unknown")),
-                    video_path=Path(state["video_path"]) if state.get("video_path") else None,
-                    stages=state.get("stages", []),
-                    created_at=datetime.fromisoformat(state["created_at"]),
-                    updated_at=datetime.fromisoformat(state["updated_at"]),
-                )
-            except (json.JSONDecodeError, KeyError, ValueError):
-                return self._create_and_persist_project(project_path)
-        else:
+            return Project(
+                name=state.get("name", project_path.name),
+                path=project_path,
+                status=ProjectStatus(state.get("status", "unknown")),
+                video_path=Path(state["video_path"]) if state.get("video_path") else None,
+                stages=state.get("stages", []),
+                created_at=datetime.fromisoformat(state["created_at"]),
+                updated_at=datetime.fromisoformat(state["updated_at"]),
+            )
+        except (json.JSONDecodeError, KeyError, ValueError, FileNotFoundError):
             return self._create_and_persist_project(project_path)
 
     def _create_and_persist_project(self, project_path: Path) -> Optional[Project]:
@@ -129,10 +127,9 @@ class ProjectRepository(Repository[Project]):
 
     def _find_video_in_directory(self, project_path: Path) -> Optional[Path]:
         """Look for a source video file in the project directory."""
-        video_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
         try:
             for item in project_path.iterdir():
-                if item.is_file() and item.suffix.lower() in video_extensions:
+                if item.is_file() and item.suffix.lower() in VIDEO_EXTENSIONS:
                     return item
         except OSError:
             pass
