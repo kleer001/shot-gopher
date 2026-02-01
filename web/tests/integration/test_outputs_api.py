@@ -4,6 +4,25 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 
+def reset_api_for_test(projects_dir):
+    """Reset API module state to use a new projects directory."""
+    import web.api as api_module
+    from pathlib import Path
+
+    # Reset singletons
+    api_module._project_repo = None
+    api_module._job_repo = None
+    api_module._project_service = None
+    api_module._pipeline_service = None
+
+    # Patch the DEFAULT_PROJECTS_DIR that was set at import time
+    import env_config
+    env_config.DEFAULT_PROJECTS_DIR = Path(projects_dir)
+
+    # Also patch it in web.api since it imported the value
+    api_module.DEFAULT_PROJECTS_DIR = Path(projects_dir)
+
+
 @pytest.fixture
 def test_project_with_outputs(tmp_path, monkeypatch):
     """Create a test project with sample output files."""
@@ -49,9 +68,10 @@ def test_project_with_outputs(tmp_path, monkeypatch):
     }
     (project_dir / "project_state.json").write_text(json.dumps(state))
 
-    monkeypatch.setenv("VFX_PROJECTS_DIR", str(projects_dir))
+    # Reset API to use the test projects directory
+    reset_api_for_test(projects_dir)
 
-    return {
+    yield {
         "projects_dir": projects_dir,
         "project_dir": project_dir,
         "project_name": "test_project",
@@ -103,7 +123,7 @@ class TestOutputsAPIEndpoint:
         # colmap should have 3 files (from colmap/sparse/)
         assert outputs["colmap"]["count"] == 3
 
-    def test_outputs_empty_project(self, tmp_path, monkeypatch):
+    def test_outputs_empty_project(self, tmp_path):
         """API should handle project with no outputs gracefully."""
         projects_dir = tmp_path / "projects"
         projects_dir.mkdir()
@@ -124,7 +144,7 @@ class TestOutputsAPIEndpoint:
         }
         (project_dir / "project_state.json").write_text(json.dumps(state))
 
-        monkeypatch.setenv("VFX_PROJECTS_DIR", str(projects_dir))
+        reset_api_for_test(projects_dir)
 
         from web.server import app
         client = TestClient(app)
