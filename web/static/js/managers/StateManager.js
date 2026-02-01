@@ -138,6 +138,31 @@ export class StateManager extends EventTarget {
      * @param {Object} data - Progress data from WebSocket
      */
     updateProgress(data) {
+        if (data.status === 'completed') {
+            this.setState({
+                isProcessing: false,
+                progress: 1.0,
+            });
+            this.dispatchEvent(new CustomEvent(EVENTS.PIPELINE_COMPLETE, {
+                detail: { projectId: this._state.projectId },
+            }));
+            return;
+        }
+
+        if (data.status === 'failed') {
+            this.setState({
+                isProcessing: false,
+                errorMessage: data.error || 'Pipeline failed',
+            });
+            this.dispatchEvent(new CustomEvent(EVENTS.PIPELINE_FAILED, {
+                detail: {
+                    projectId: this._state.projectId,
+                    error: data.error || 'Pipeline failed',
+                },
+            }));
+            return;
+        }
+
         const updates = {};
 
         if (data.progress !== undefined) {
@@ -162,7 +187,6 @@ export class StateManager extends EventTarget {
         }
 
         if (data.message) {
-            // Don't store in state, just emit event
             this.dispatchEvent(new CustomEvent('logMessage', {
                 detail: { message: data.message },
             }));
@@ -171,7 +195,6 @@ export class StateManager extends EventTarget {
         if (Object.keys(updates).length > 0) {
             this.setState(updates);
 
-            // Emit progress update event
             this.dispatchEvent(new CustomEvent(EVENTS.PROGRESS_UPDATE, {
                 detail: { ...updates },
             }));

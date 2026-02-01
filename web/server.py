@@ -107,31 +107,7 @@ app.include_router(ws_router)
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Serve the main web interface."""
-    return templates.TemplateResponse("index.html", {"request": request})
-
-
-@app.get("/compact", response_class=HTMLResponse)
-async def compact(request: Request):
-    """Serve the compact single-page interface."""
-    return templates.TemplateResponse("index-compact.html", {"request": request})
-
-
-@app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    """Serve the dashboard-style interface."""
     return templates.TemplateResponse("index-dashboard.html", {"request": request})
-
-
-@app.get("/split", response_class=HTMLResponse)
-async def split(request: Request):
-    """Serve the split-screen interface."""
-    return templates.TemplateResponse("index-split.html", {"request": request})
-
-
-@app.get("/cards", response_class=HTMLResponse)
-async def cards(request: Request):
-    """Serve the cards-based interface."""
-    return templates.TemplateResponse("index-cards.html", {"request": request})
 
 
 @app.get("/health")

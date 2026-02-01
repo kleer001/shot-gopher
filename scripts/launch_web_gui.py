@@ -13,6 +13,8 @@ Usage:
 """
 
 import argparse
+import os
+import select
 import subprocess
 import sys
 import time
@@ -25,26 +27,52 @@ STARTUP_TIMEOUT = 30
 POLL_INTERVAL = 0.5
 
 
-def wait_for_server(url: str, timeout: float = STARTUP_TIMEOUT) -> bool:
-    """Wait for the server to become responsive.
-
-    Args:
-        url: Base URL to check (will append /health)
-        timeout: Maximum seconds to wait
-
-    Returns:
-        True if server is ready, False if timeout
-    """
+def check_server_health(url: str) -> bool:
+    """Check if server health endpoint is responding."""
     health_url = f"{url}/health"
+    try:
+        with urlopen(health_url, timeout=2) as response:
+            return response.status == 200
+    except (URLError, OSError):
+        return False
+
+
+def stream_output_nonblocking(process: subprocess.Popen) -> None:
+    """Read and print any available output from process without blocking."""
+    if sys.platform == "win32":
+        return
+
+    if process.stdout is None:
+        return
+
+    fd = process.stdout.fileno()
+    readable, _, _ = select.select([fd], [], [], 0)
+    if readable:
+        line = process.stdout.readline()
+        if line:
+            print(line, end="", flush=True)
+
+
+def wait_for_server_with_output(
+    url: str, process: subprocess.Popen, timeout: float = STARTUP_TIMEOUT
+) -> bool:
+    """Wait for server while streaming its output."""
     start_time = time.time()
 
     while time.time() - start_time < timeout:
-        try:
-            with urlopen(health_url, timeout=2) as response:
-                if response.status == 200:
-                    return True
-        except (URLError, OSError):
-            pass
+        stream_output_nonblocking(process)
+
+        if process.poll() is not None:
+            print()
+            print(f"ERROR: Server process exited with code {process.returncode}")
+            remaining = process.stdout.read() if process.stdout else ""
+            if remaining:
+                print(remaining)
+            return False
+
+        if check_server_health(url):
+            return True
+
         time.sleep(POLL_INTERVAL)
 
     return False
@@ -60,7 +88,7 @@ def main():
     url = f"http://{args.host}:{args.port}"
     repo_root = Path(__file__).parent.parent
 
-    print("""
+    print(r"""
  ____  _           _      ____             _
 / ___|| |__   ___ | |_   / ___| ___  _ __ | |__   ___ _ __
 \___ \| '_ \ / _ \| __| | |  _ / _ \| '_ \| '_ \ / _ \ '__|
@@ -77,6 +105,11 @@ def main():
         print(f"ERROR: Server script not found: {start_web_script}")
         sys.exit(1)
 
+    use_pty = sys.platform != "win32"
+
+    if use_pty:
+        os.set_blocking(sys.stdout.fileno(), True)
+
     server_process = subprocess.Popen(
         [sys.executable, str(start_web_script), "--no-browser", "--port", str(args.port), "--host", args.host],
         cwd=str(repo_root),
@@ -87,8 +120,10 @@ def main():
     )
 
     print("Waiting for server to start...")
+    print("-" * 40)
 
-    if wait_for_server(url):
+    if wait_for_server_with_output(url, server_process):
+        print("-" * 40)
         print(f"Server is ready!")
         print()
 
@@ -108,7 +143,14 @@ def main():
             print()
             print("Shutting down...")
     else:
+        print("-" * 40)
         print(f"ERROR: Server failed to start within {STARTUP_TIMEOUT} seconds")
+        print()
+        if server_process.stdout:
+            remaining_output = server_process.stdout.read()
+            if remaining_output:
+                print("Remaining server output:")
+                print(remaining_output)
         server_process.terminate()
         sys.exit(1)
 

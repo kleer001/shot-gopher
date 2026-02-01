@@ -189,8 +189,11 @@ export function isVisible(element) {
  * @returns {string} Escaped HTML
  */
 export function escapeHTML(text) {
+    if (text === null || text === undefined) {
+        return '';
+    }
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = String(text);
     return div.innerHTML;
 }
 

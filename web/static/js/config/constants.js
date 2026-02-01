@@ -16,8 +16,10 @@ export const API = {
     PROJECT_OUTPUTS: (id) => `/api/projects/${id}/outputs`,
     PROJECT_CANCEL: (id) => `/api/projects/${id}/stop`,  // Backend uses /stop endpoint
     PROJECT_START: (id) => `/api/projects/${id}/start`,
+    PROJECT_JOB: (id) => `/api/projects/${id}/job`,
     PROJECT_OPEN_FOLDER: (id) => `/api/projects/${id}/open-folder`,
     PROJECT_VRAM: (id) => `/api/projects/${id}/vram`,
+    PROJECT_VIDEO_INFO: (id) => `/api/projects/${id}/video-info`,
 };
 
 /**
@@ -56,20 +58,19 @@ export const ELEMENTS = {
     BROWSE_BTN: 'browse-btn',
     UPLOAD_PROGRESS: 'upload-progress',
 
-    // Config
-    CONFIG_FORM: 'config-form',
-    ROTO_PROMPT: 'roto-prompt',
-    ROTO_START_FRAME: 'roto-start-frame',
-    SKIP_EXISTING: 'skip-existing',
-
-    // Processing
-    PROCESSING_PANEL: 'processing-panel',
-    PROGRESS_PERCENT: 'progress-percent',
-    CURRENT_STAGE_NAME: 'current-stage-name',
-    LOG_OUTPUT: 'log-output',
-
     // Projects
     PROJECTS_LIST: 'projects-list',
+
+    // Project Detail
+    PROJECT_DETAIL_PANEL: 'project-detail-panel',
+    DETAIL_PROJECT_NAME: 'detail-project-name',
+    DETAIL_STAGES: 'detail-stages',
+    STAGES_COUNTER: 'stages-counter',
+    VRAM_INFO_SECTION: 'vram-info-section',
+    VRAM_INFO: 'vram-info',
+    OPEN_FOLDER_BTN: 'open-folder-btn',
+    DELETE_PROJECT_BTN: 'delete-project-btn',
+    REPROCESS_BTN: 'reprocess-btn',
 
     // System
     SYSTEM_STATUS: 'system-status',
@@ -96,6 +97,9 @@ export const EVENTS = {
     STATE_CHANGED: 'stateChanged',
     PROGRESS_UPDATE: 'progressUpdate',
     UPLOAD_PROGRESS: 'uploadProgress',
+    UPLOAD_COMPLETE: 'uploadComplete',
     ERROR: 'error',
     CONFIG_LOADED: 'configLoaded',
+    PIPELINE_COMPLETE: 'pipelineComplete',
+    PIPELINE_FAILED: 'pipelineFailed',
 };

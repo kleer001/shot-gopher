@@ -56,14 +56,7 @@ class ProjectService:
         request: ProjectCreateRequest,
         projects_dir: Path
     ) -> ProjectDTO:
-        """
-        Create a new project.
-
-        Business rules:
-        - Project name must be unique
-        - Name must be valid (alphanumeric, dash, underscore only)
-        - Stages must be valid stage names
-        """
+        """Create a new project. Raises ValueError if name already exists."""
         existing = self.project_repo.get(request.name)
         if existing:
             raise ValueError(f"Project '{request.name}' already exists")
@@ -87,6 +80,25 @@ class ProjectService:
         project = self.project_repo.save(project)
 
         return self._to_dto(project)
+
+    def create_project_with_unique_name(
+        self,
+        base_name: str,
+        projects_dir: Path,
+        stages: List[str] = None
+    ) -> ProjectDTO:
+        """Create project, appending timestamp if name exists."""
+        stages_list = stages or []
+        request = ProjectCreateRequest(name=base_name, stages=stages_list)
+        try:
+            return self.create_project(request, projects_dir)
+        except ValueError as e:
+            if "already exists" not in str(e):
+                raise
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            unique_name = f"{base_name}_{timestamp}"
+            request = ProjectCreateRequest(name=unique_name, stages=stages_list)
+            return self.create_project(request, projects_dir)
 
     def save_uploaded_video(
         self,

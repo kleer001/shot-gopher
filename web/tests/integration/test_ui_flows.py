@@ -53,10 +53,10 @@ class TestDashboardFlow:
 
     def test_dashboard_loads(self, client):
         """Test that dashboard page loads successfully."""
-        response = client.get("/dashboard")
+        response = client.get("/")
 
         assert response.status_code == 200
-        assert b"VFX Pipeline" in response.content or b"VFX PIPELINE" in response.content
+        assert b"Shot Gopher" in response.content or b"VFX Pipeline" in response.content
         assert b"projects" in response.content.lower()
 
     def test_dashboard_loads_projects_from_api(self, client):
@@ -68,14 +68,12 @@ class TestDashboardFlow:
         assert "projects" in data
         assert isinstance(data["projects"], list)
 
-    def test_all_layout_variants_load(self, client):
-        """Test that all layout variants render successfully."""
-        layouts = ["/", "/compact", "/dashboard", "/split", "/cards"]
+    def test_main_page_loads(self, client):
+        """Test that main page loads successfully."""
+        response = client.get("/")
 
-        for layout in layouts:
-            response = client.get(layout)
-            assert response.status_code == 200, f"Layout {layout} failed to load"
-            assert b"VFX Pipeline" in response.content or b"VFX PIPELINE" in response.content
+        assert response.status_code == 200
+        assert b"Shot Gopher" in response.content or b"VFX Pipeline" in response.content
 
 
 class TestProjectCreationFlow:
@@ -253,9 +251,9 @@ class TestSystemStatusFlow:
         assert response.status_code == 200
         data = response.json()
         assert "comfyui" in data
-        assert "disk_space_gb" in data
+        assert "disk_free_gb" in data
         assert "projects_dir" in data
-        assert isinstance(data["disk_space_gb"], (int, float))
+        assert isinstance(data["disk_free_gb"], (int, float))
 
 
 class TestCompleteUserJourney:
@@ -385,19 +383,19 @@ class TestAccessibility:
 
     def test_html_has_lang_attribute(self, client):
         """Test that HTML pages have lang attribute for screen readers."""
-        response = client.get("/dashboard")
+        response = client.get("/")
         assert response.status_code == 200
         assert b'lang="en"' in response.content
 
     def test_html_has_viewport_meta(self, client):
         """Test that pages are mobile-responsive."""
-        response = client.get("/dashboard")
+        response = client.get("/")
         assert response.status_code == 200
         assert b'name="viewport"' in response.content
 
     def test_html_has_proper_structure(self, client):
         """Test that HTML has proper semantic structure."""
-        response = client.get("/dashboard")
+        response = client.get("/")
         assert response.status_code == 200
 
         content = response.content

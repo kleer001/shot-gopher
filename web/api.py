@@ -1,10 +1,7 @@
 """REST API endpoints for VFX Pipeline web interface."""
 
-import json
-import shutil
 import subprocess
 import sys
-import threading
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -13,14 +10,17 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from env_config import DEFAULT_PROJECTS_DIR, INSTALL_DIR
-from install_wizard.platform import PlatformManager
 from vram_analyzer import analyze_and_save, load_vram_analysis
 from web.services.config_service import get_config_service
 from web.services.project_service import ProjectService
 from web.services.pipeline_service import PipelineService
+from web.services.video_service import get_video_service
+from web.services.system_service import get_system_service
 from web.repositories.project_repository import ProjectRepository
 from web.repositories.job_repository import JobRepository
 from web.models.domain import JobStatus
+from web.utils.media import find_video_or_frames, get_dir_size_bytes, get_dir_size_gb, get_frame_range
+from web.job_state import active_jobs, active_jobs_lock
 from web.models.dto import (
     ProjectCreateRequest,
     JobStartRequest,
@@ -34,9 +34,6 @@ _project_repo = None
 _job_repo = None
 _project_service = None
 _pipeline_service = None
-
-active_jobs: Dict[str, dict] = {}
-active_jobs_lock = threading.Lock()
 
 
 def get_project_repo() -> ProjectRepository:
@@ -76,62 +73,6 @@ def get_pipeline_service(
     return _pipeline_service
 
 
-def get_video_info(video_path: Path) -> dict:
-    """Extract video metadata using ffprobe.
-
-    Uses PlatformManager.find_tool to locate ffprobe on Windows
-    even if it's not in PATH.
-    """
-    try:
-        ffprobe_path = PlatformManager.find_tool("ffprobe")
-        if not ffprobe_path:
-            return {}
-
-        cmd = [
-            str(ffprobe_path), "-v", "quiet",
-            "-print_format", "json",
-            "-show_format", "-show_streams",
-            str(video_path)
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode != 0:
-            return {}
-
-        data = json.loads(result.stdout)
-
-        video_stream = None
-        for stream in data.get("streams", []):
-            if stream.get("codec_type") == "video":
-                video_stream = stream
-                break
-
-        if not video_stream:
-            return {}
-
-        duration = float(data.get("format", {}).get("duration", 0))
-        width = int(video_stream.get("width", 0))
-        height = int(video_stream.get("height", 0))
-
-        fps_str = video_stream.get("r_frame_rate", "24/1")
-        if "/" in fps_str:
-            num, den = fps_str.split("/")
-            fps = float(num) / float(den) if float(den) != 0 else 24.0
-        else:
-            fps = float(fps_str)
-
-        frame_count = int(duration * fps) if duration > 0 else 0
-
-        return {
-            "duration": round(duration, 2),
-            "fps": round(fps, 2),
-            "resolution": [width, height],
-            "frame_count": frame_count,
-        }
-    except Exception as e:
-        print(f"Error getting video info: {e}")
-        return {}
-
-
 def sanitize_project_name(name: str) -> str:
     """Sanitize project name for filesystem use."""
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
@@ -146,6 +87,9 @@ async def upload_video(
     project_service: ProjectService = Depends(get_project_service),
 ):
     """Upload a video file and create a new project."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
     config_service = get_config_service()
     allowed_extensions = set(config_service.get_supported_video_formats())
     file_ext = Path(file.filename).suffix.lower()
@@ -159,19 +103,11 @@ async def upload_video(
     base_name = name or Path(file.filename).stem
     project_name = sanitize_project_name(base_name)
 
-    try:
-        project_dto = project_service.create_project(
-            ProjectCreateRequest(name=project_name, stages=[]),
-            Path(DEFAULT_PROJECTS_DIR)
-        )
-    except ValueError as e:
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        project_name = f"{project_name}_{timestamp}"
-        project_dto = project_service.create_project(
-            ProjectCreateRequest(name=project_name, stages=[]),
-            Path(DEFAULT_PROJECTS_DIR)
-        )
+    project_dto = project_service.create_project_with_unique_name(
+        project_name,
+        Path(DEFAULT_PROJECTS_DIR)
+    )
+    project_name = project_dto.name
 
     video_filename = f"input{file_ext}"
     try:
@@ -186,7 +122,8 @@ async def upload_video(
         raise HTTPException(status_code=500, detail=f"Failed to save video: {e}")
 
     project = get_project_repo().get(project_name)
-    video_info = get_video_info(project.video_path) if project.video_path else {}
+    video_service = get_video_service()
+    video_info = video_service.get_video_info(project.video_path) if project.video_path else {}
 
     vram_analysis = None
     if video_info:
@@ -226,9 +163,25 @@ async def create_project(
 async def list_projects(
     project_service: ProjectService = Depends(get_project_service)
 ):
-    """List all projects."""
+    """List all projects with sizes."""
+    import asyncio
+
     response = project_service.list_projects()
-    return {"projects": [p.model_dump() for p in response.projects[:20]]}
+    projects_data = []
+
+    for proj_dto in response.projects[:20]:
+        project_entity = get_project_repo().get(proj_dto.name)
+        if project_entity:
+            size_bytes = await asyncio.to_thread(
+                get_dir_size_bytes, project_entity.path
+            )
+            proj_dict = proj_dto.model_dump()
+            proj_dict["size_bytes"] = size_bytes
+            projects_data.append(proj_dict)
+        else:
+            projects_data.append(proj_dto.model_dump())
+
+    return {"projects": projects_data}
 
 
 @router.get("/projects/{project_id}")
@@ -243,6 +196,52 @@ async def get_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     return project.model_dump()
+
+
+@router.get("/projects/{project_id}/video-info")
+async def get_project_video_info(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+):
+    """Get video information for a project."""
+    import asyncio
+
+    project = project_service.get_project(project_id)
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project_entity = get_project_repo().get(project_id)
+    source_dir = project_entity.path / "source"
+    video_path, has_frames, frame_count = find_video_or_frames(source_dir)
+
+    video_service = get_video_service()
+    video_info = {}
+
+    if has_frames:
+        frames_dir = source_dir / "frames"
+        resolution = await asyncio.to_thread(video_service.get_resolution_from_frames, frames_dir)
+        first_frame, last_frame, count = await asyncio.to_thread(get_frame_range, frames_dir)
+        video_info = {
+            "source": "frames",
+            "frame_count": count,
+            "frame_start": first_frame,
+            "frame_end": last_frame,
+            "resolution": list(resolution) if resolution else None,
+        }
+    elif video_path:
+        info = await asyncio.to_thread(video_service.get_video_info, video_path)
+        if info:
+            video_info = {
+                "source": "video",
+                "filename": video_path.name,
+                "frame_count": info.get("frame_count", 0),
+                "resolution": info.get("resolution"),
+                "fps": info.get("fps"),
+                "duration": info.get("duration"),
+            }
+
+    return {"project_id": project_id, "video_info": video_info}
 
 
 @router.delete("/projects/{project_id}")
@@ -274,10 +273,12 @@ async def start_processing(
     pipeline_service: PipelineService = Depends(get_pipeline_service),
 ):
     """Start pipeline processing for a project."""
+    print(f"[START] project_id={project_id}, stages={config.stages}")
     try:
         response = pipeline_service.start_job(project_id, config)
         return response.model_dump()
     except ValueError as e:
+        print(f"[START ERROR] {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -295,12 +296,37 @@ async def stop_processing(
         return {"status": "not_running"}
 
 
+@router.get("/projects/{project_id}/job")
+async def get_job_status(project_id: str):
+    """Get current job status for a project."""
+    with active_jobs_lock:
+        job = active_jobs.get(project_id)
+
+    if not job:
+        return {
+            "project_id": project_id,
+            "status": "idle",
+            "message": "No active job"
+        }
+
+    return {
+        "project_id": project_id,
+        "status": job.get("status", "unknown"),
+        "current_stage": job.get("current_stage"),
+        "progress": job.get("progress", 0),
+        "error": job.get("error"),
+        "last_output": job.get("last_output", ""),
+    }
+
+
 @router.get("/projects/{project_id}/vram")
 async def get_vram_analysis(
     project_id: str,
     project_service: ProjectService = Depends(get_project_service),
 ):
-    """Get VRAM analysis for a project."""
+    """Get VRAM analysis for a project, generating it on-demand if missing."""
+    import asyncio
+
     project = project_service.get_project(project_id)
 
     if not project:
@@ -308,6 +334,40 @@ async def get_vram_analysis(
 
     project_entity = get_project_repo().get(project_id)
     analysis = load_vram_analysis(project_entity.path)
+
+    if not analysis:
+        resolution = (1920, 1080)
+        fps = 24.0
+
+        source_dir = project_entity.path / "source"
+        video_path, has_frames, frame_count = find_video_or_frames(source_dir)
+
+        video_service = get_video_service()
+        if has_frames:
+            frames_dir = source_dir / "frames"
+            res = await asyncio.to_thread(video_service.get_resolution_from_frames, frames_dir)
+            if res:
+                resolution = res
+        elif video_path:
+            video_info = await asyncio.to_thread(video_service.get_video_info, video_path)
+            if video_info:
+                frame_count = video_info.get("frame_count", 0)
+                res = video_info.get("resolution", [1920, 1080])
+                if res and len(res) >= 2:
+                    resolution = (res[0], res[1])
+                fps = video_info.get("fps", 24.0)
+
+        if frame_count > 0:
+            try:
+                analysis = await asyncio.to_thread(
+                    analyze_and_save,
+                    project_entity.path,
+                    frame_count,
+                    resolution,
+                    fps,
+                )
+            except Exception as e:
+                print(f"Failed to generate VRAM analysis: {e}")
 
     if not analysis:
         return {"project_id": project_id, "analysis": None, "message": "No VRAM analysis available"}
@@ -336,30 +396,25 @@ async def get_outputs(
     for dir_name in output_dirs:
         dir_path = project_dir / dir_name
         if dir_path.exists() and dir_path.is_dir():
+            all_files = list(dir_path.rglob("*"))
             files = []
-            for f in sorted(dir_path.iterdir()):
+            for f in sorted(all_files):
                 if f.is_file():
-                    files.append({
-                        "name": f.name,
-                        "size": f.stat().st_size,
-                        "path": str(f),
-                    })
+                    try:
+                        files.append({
+                            "name": f.name,
+                            "size": f.stat().st_size,
+                            "path": str(f),
+                        })
+                    except (OSError, IOError):
+                        pass
             if files:
-                outputs[dir_name] = {
+                output_key = dir_name.split("/")[0]
+                outputs[output_key] = {
                     "count": len(files),
                     "files": files[:10],
                     "total_files": len(files),
                 }
-
-    frames_dir = project_dir / "source" / "frames"
-    if frames_dir.exists() and frames_dir.is_dir():
-        frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
-        if frame_files:
-            outputs["source"] = {
-                "count": len(frame_files),
-                "files": [{"name": f.name, "path": str(f)} for f in sorted(frame_files)[:5]],
-                "total_files": len(frame_files),
-            }
 
     return {
         "project_id": project_id,
@@ -368,44 +423,49 @@ async def get_outputs(
     }
 
 
-def _check_comfyui_status() -> bool:
-    """Check if ComfyUI is running (blocking call)."""
-    import urllib.request
-    try:
-        req = urllib.request.Request("http://127.0.0.1:8188/system_stats", method="GET")
-        with urllib.request.urlopen(req, timeout=2) as resp:
-            return resp.status == 200
-    except Exception:
-        return False
-
-
 @router.get("/system/status")
 async def system_status():
-    """Check system status (ComfyUI, disk space, etc.)."""
+    """Check system status (ComfyUI, disk space, GPU, etc.)."""
     import asyncio
+    import platform
+
+    system_service = get_system_service()
+    projects_dir = Path(DEFAULT_PROJECTS_DIR)
 
     status = {
         "comfyui": False,
-        "disk_space_gb": 0,
+        "os": platform.system(),
+        "disk_free_gb": 0,
+        "disk_total_gb": 0,
+        "disk_used_percent": 0,
+        "projects_size_gb": 0,
         "projects_dir": str(DEFAULT_PROJECTS_DIR),
         "install_dir": str(INSTALL_DIR),
+        "gpu_name": "Unknown",
+        "gpu_vram_gb": 0,
     }
 
     try:
-        status["comfyui"] = await asyncio.to_thread(_check_comfyui_status)
+        status["comfyui"] = await asyncio.to_thread(system_service.check_comfyui_status)
     except Exception:
-        status["comfyui"] = False
+        pass
+
+    disk_usage = await asyncio.to_thread(system_service.get_disk_usage, projects_dir)
+    if disk_usage:
+        status["disk_free_gb"] = disk_usage["free_gb"]
+        status["disk_total_gb"] = disk_usage["total_gb"]
+        status["disk_used_percent"] = disk_usage["used_percent"]
+
+    if projects_dir.exists():
+        try:
+            status["projects_size_gb"] = await asyncio.to_thread(get_dir_size_gb, projects_dir)
+        except Exception:
+            pass
 
     try:
-        projects_dir = Path(DEFAULT_PROJECTS_DIR)
-        if projects_dir.exists():
-            stat = shutil.disk_usage(projects_dir)
-            status["disk_space_gb"] = round(stat.free / (1024**3), 1)
-        else:
-            parent = projects_dir.parent
-            if parent.exists():
-                stat = shutil.disk_usage(parent)
-                status["disk_space_gb"] = round(stat.free / (1024**3), 1)
+        gpu_info = await asyncio.to_thread(system_service.get_gpu_info)
+        status["gpu_name"] = gpu_info["name"]
+        status["gpu_vram_gb"] = gpu_info["vram_gb"]
     except Exception:
         pass
 

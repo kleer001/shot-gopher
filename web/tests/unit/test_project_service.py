@@ -166,3 +166,62 @@ class TestProjectService:
         assert result is not None
         assert result.status == ProjectStatus.PROCESSING
         mock_repo.save.assert_called_once()
+
+    def test_create_project_with_unique_name_no_conflict(self):
+        """Test unique name creation when no conflict exists."""
+        mock_repo = Mock()
+        mock_repo.get.return_value = None
+        mock_repo.save.return_value = Project(
+            name="myproject",
+            path=Path("/workspace/myproject"),
+            status=ProjectStatus.CREATED,
+            video_path=None,
+            stages=[],
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+
+        service = ProjectService(mock_repo)
+        result = service.create_project_with_unique_name("myproject", Path("/workspace"))
+
+        assert result.name == "myproject"
+
+    def test_create_project_with_unique_name_appends_timestamp(self):
+        """Test unique name creation adds timestamp on conflict."""
+        existing = Project(
+            name="myproject",
+            path=Path("/workspace/myproject"),
+            status=ProjectStatus.CREATED,
+            video_path=None,
+            stages=[],
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+
+        mock_repo = Mock()
+        mock_repo.get.side_effect = [existing, None]
+
+        def mock_save(project):
+            return project
+
+        mock_repo.save.side_effect = mock_save
+
+        service = ProjectService(mock_repo)
+        result = service.create_project_with_unique_name("myproject", Path("/workspace"))
+
+        assert result.name.startswith("myproject_")
+        assert len(result.name) > len("myproject_")
+
+    def test_create_project_with_unique_name_raises_on_invalid_stages(self):
+        """Test unique name creation still raises for invalid stages."""
+        mock_repo = Mock()
+        mock_repo.get.return_value = None
+
+        service = ProjectService(mock_repo)
+
+        with pytest.raises(ValueError, match="Invalid stages"):
+            service.create_project_with_unique_name(
+                "myproject",
+                Path("/workspace"),
+                stages=["nonexistent_stage"]
+            )

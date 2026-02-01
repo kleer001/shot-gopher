@@ -1,22 +1,17 @@
-"""Pipeline execution wrapper for web interface.
+"""Pipeline execution wrapper for web interface."""
 
-Runs run_pipeline.py as a subprocess and parses output for progress updates.
-"""
-
-import asyncio
 import os
 import re
-import signal
 import subprocess
 import sys
 import threading
 from pathlib import Path
 from typing import Dict, Optional
 
-# Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-# Store active processes
+from web.utils.media import find_video_or_frames
+
 active_processes: Dict[str, subprocess.Popen] = {}
 
 
@@ -25,121 +20,81 @@ def get_run_pipeline_path() -> Path:
     return Path(__file__).parent.parent / "scripts" / "run_pipeline.py"
 
 
+ANSI_ESCAPE_PATTERN = re.compile(r'\x1b\[[0-9;]*[mGKHF]|\x1b\].*?\x07')
+
+FRAME_PATTERNS = [
+    re.compile(r'frame\s+(\d+)\s*/\s*(\d+)', re.IGNORECASE),
+    re.compile(r'(\d+)\s*/\s*(\d+)\s*frames', re.IGNORECASE),
+    re.compile(r'\[(\d+)/(\d+)\]'),
+    re.compile(r'Processing\s+(\d+)\s+of\s+(\d+)', re.IGNORECASE),
+]
+
+PROGRESS_PATTERN = re.compile(r'(\d+(?:\.\d+)?)\s*%')
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Remove ANSI escape sequences from text."""
+    return ANSI_ESCAPE_PATTERN.sub('', text)
+
+
 def parse_progress_line(line: str, current_stage: str, stages: list) -> Optional[dict]:
     """Parse a line of pipeline output for progress information.
 
-    Returns dict with progress info or None if not a progress line.
+    Returns dict with the line as message, plus stage/frame/progress detection.
     """
-    # Patterns to match pipeline output
-    patterns = {
-        # Stage start: "=== Stage: depth ==="
-        "stage_start": r"===\s*(?:Stage:?\s*)?(\w+)\s*===",
-        # Frame progress: "Processing frame 42/200" or "Frame 42 of 200"
-        "frame_progress": r"(?:Processing\s+)?[Ff]rame\s+(\d+)\s*(?:/|of)\s*(\d+)",
-        # Percentage: "Progress: 42%" or "42% complete"
-        "percentage": r"(\d+(?:\.\d+)?)\s*%",
-        # ComfyUI progress: "ComfyUI: 42/100"
-        "comfyui_progress": r"ComfyUI:\s*(\d+)/(\d+)",
-        # Stage complete
-        "stage_complete": r"(?:Completed|Finished|Done):\s*(\w+)",
-        # COLMAP specific
-        "colmap_progress": r"Registered\s+(\d+)\s*/\s*(\d+)\s+images",
-        # FFmpeg progress: "frame=  142 fps=..." or "[FFmpeg] Extracting frame 42/200"
-        "ffmpeg_progress": r"\[FFmpeg\]\s*Extracting\s+frame\s+(\d+)\s*/\s*(\d+)",
-        # ComfyUI file-based progress: "[ComfyUI] depth frame 42/200"
-        "comfyui_file_progress": r"\[ComfyUI\]\s*(\w+)\s+frame\s+(\d+)/(\d+)",
-        # Mocap/ECON keyframe progress: "[1/5] Processing frame_0001.png"
-        "bracket_progress": r"\[(\d+)/(\d+)\]",
-        # GS-IR training: "Iteration 1000/30000"
-        "gsir_progress": r"[Ii]teration\s+(\d+)\s*/\s*(\d+)",
-    }
+    result = {"message": strip_ansi_codes(line.strip()[:200])}
 
-    result = {}
+    for pattern in FRAME_PATTERNS:
+        match = pattern.search(line)
+        if match:
+            current_frame = int(match.group(1))
+            total_frames = int(match.group(2))
+            if total_frames > 0:
+                result["frame"] = current_frame
+                result["total_frames"] = total_frames
+                result["progress"] = current_frame / total_frames
+            break
 
-    # Check for stage start
-    match = re.search(patterns["stage_start"], line, re.IGNORECASE)
-    if match:
-        stage = match.group(1).lower()
-        if stage in stages:
-            result["current_stage"] = stage
-            result["stage_index"] = stages.index(stage)
-            result["total_stages"] = len(stages)
+    if "progress" not in result:
+        match = PROGRESS_PATTERN.search(line)
+        if match:
+            percent = float(match.group(1))
+            result["progress"] = percent / 100.0
 
-    # Check for frame progress
-    match = re.search(patterns["frame_progress"], line)
-    if match:
-        frame = int(match.group(1))
-        total = int(match.group(2))
-        result["frame"] = frame
-        result["total_frames"] = total
-        result["progress"] = frame / total if total > 0 else 0
+    if "===" in line:
+        for stage in stages:
+            if stage.lower() in line.lower():
+                result["current_stage"] = stage
+                result["stage_index"] = stages.index(stage)
+                result["total_stages"] = len(stages)
+                break
 
-    # Check for ComfyUI progress
-    match = re.search(patterns["comfyui_progress"], line)
-    if match:
-        current = int(match.group(1))
-        total = int(match.group(2))
-        result["frame"] = current
-        result["total_frames"] = total
-        result["progress"] = current / total if total > 0 else 0
+    return result
 
-    # Check for COLMAP progress
-    match = re.search(patterns["colmap_progress"], line)
-    if match:
-        current = int(match.group(1))
-        total = int(match.group(2))
-        result["frame"] = current
-        result["total_frames"] = total
-        result["progress"] = current / total if total > 0 else 0
 
-    # Check for FFmpeg progress
-    match = re.search(patterns["ffmpeg_progress"], line)
-    if match:
-        current = int(match.group(1))
-        total = int(match.group(2))
-        result["frame"] = current
-        result["total_frames"] = total
-        result["progress"] = current / total if total > 0 else 0
+def update_job_repo_status(project_id: str, status: str, error: str = None):
+    """Update job status in the job repository."""
+    from .api import get_job_repo
+    from .models.domain import JobStatus
+    from datetime import datetime
 
-    # Check for ComfyUI file-based progress
-    match = re.search(patterns["comfyui_file_progress"], line)
-    if match:
-        stage = match.group(1).lower()
-        current = int(match.group(2))
-        total = int(match.group(3))
-        result["frame"] = current
-        result["total_frames"] = total
-        result["progress"] = current / total if total > 0 else 0
-        result["current_stage"] = stage  # Update stage if detected
+    job_repo = get_job_repo()
+    job = job_repo.get(project_id)
 
-    # Check for bracket progress [1/5] style
-    match = re.search(patterns["bracket_progress"], line)
-    if match and "progress" not in result:
-        current = int(match.group(1))
-        total = int(match.group(2))
-        result["frame"] = current
-        result["total_frames"] = total
-        result["progress"] = current / total if total > 0 else 0
+    if job:
+        if status == "completed":
+            job.status = JobStatus.COMPLETE
+            job.completed_at = datetime.now()
+            job.progress = 1.0
+        elif status == "failed":
+            job.status = JobStatus.FAILED
+            job.completed_at = datetime.now()
+            job.error = error
+        elif status == "cancelled":
+            job.status = JobStatus.CANCELLED
+            job.completed_at = datetime.now()
 
-    # Check for GS-IR training progress
-    match = re.search(patterns["gsir_progress"], line)
-    if match:
-        current = int(match.group(1))
-        total = int(match.group(2))
-        result["frame"] = current
-        result["total_frames"] = total
-        result["progress"] = current / total if total > 0 else 0
-
-    # Check for percentage
-    match = re.search(patterns["percentage"], line)
-    if match and "progress" not in result:
-        result["progress"] = float(match.group(1)) / 100.0
-
-    # Add message if we found something
-    if result:
-        result["message"] = line.strip()[:200]  # Truncate long messages
-
-    return result if result else None
+        job_repo.save(job)
 
 
 def run_pipeline_thread(
@@ -149,9 +104,10 @@ def run_pipeline_thread(
     roto_prompt: str,
     roto_start_frame: int | None,
     skip_existing: bool,
+    stage_options: dict = None,
 ):
     """Run pipeline in a background thread."""
-    from .api import active_jobs, active_jobs_lock
+    from .job_state import active_jobs, active_jobs_lock
     from .websocket import update_progress
 
     with active_jobs_lock:
@@ -162,38 +118,45 @@ def run_pipeline_thread(
             "error": None,
         }
 
-    # Build command
     script_path = get_run_pipeline_path()
-    video_path = Path(project_dir) / "source"
+    source_dir = Path(project_dir) / "source"
 
-    # Find the input video
-    input_video = None
-    for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mxf"]:
-        candidate = video_path / f"input{ext}"
-        if candidate.exists():
-            input_video = candidate
-            break
+    input_video, has_frames, _ = find_video_or_frames(source_dir)
 
-    if not input_video:
+    if not input_video and not has_frames:
+        error_msg = f"No input video or frames found in {source_dir}"
         with active_jobs_lock:
             if project_id in active_jobs:
                 active_jobs[project_id]["status"] = "failed"
-                active_jobs[project_id]["error"] = "No input video found"
+                active_jobs[project_id]["error"] = error_msg
+                active_jobs[project_id]["last_output"] = error_msg
+        update_job_repo_status(project_id, "failed", error_msg)
         update_progress(project_id, {
             "status": "failed",
-            "error": "No input video found",
+            "error": error_msg,
         })
         return
 
-    cmd = [
-        sys.executable,
-        str(script_path),
-        str(input_video),
-        "--name", Path(project_dir).name,
-        "--projects-dir", str(Path(project_dir).parent),
-        "--stages", ",".join(stages),
-        "--no-auto-comfyui",  # Web server already manages ComfyUI
-    ]
+    # Build command - use project dir if we have frames, video path otherwise
+    if has_frames:
+        # Pass the project directory - run_pipeline.py can work with existing frames
+        cmd = [
+            sys.executable,
+            str(script_path),
+            str(project_dir),
+            "--stages", ",".join(stages),
+            "--no-auto-comfyui",
+        ]
+    else:
+        cmd = [
+            sys.executable,
+            str(script_path),
+            str(input_video),
+            "--name", Path(project_dir).name,
+            "--projects-dir", str(Path(project_dir).parent),
+            "--stages", ",".join(stages),
+            "--no-auto-comfyui",
+        ]
 
     if roto_prompt and "roto" in stages:
         cmd.extend(["--prompt", roto_prompt])
@@ -203,6 +166,29 @@ def run_pipeline_thread(
 
     if skip_existing:
         cmd.append("--skip-existing")
+
+    if stage_options:
+        opts = stage_options.get("ingest", {})
+        if opts.get("fps"):
+            cmd.extend(["--fps", str(opts["fps"])])
+
+        opts = stage_options.get("roto", {})
+        if opts.get("separate_instances"):
+            cmd.append("--separate-instances")
+
+        opts = stage_options.get("colmap", {})
+        if opts.get("quality"):
+            cmd.extend(["-q", opts["quality"]])
+        if opts.get("dense"):
+            cmd.append("-d")
+        if opts.get("mesh"):
+            cmd.append("-m")
+        if opts.get("no_masks"):
+            cmd.append("-M")
+
+        opts = stage_options.get("gsir", {})
+        if opts.get("iterations"):
+            cmd.extend(["-i", str(opts["iterations"])])
 
     # Start process
     try:
@@ -234,6 +220,15 @@ def run_pipeline_thread(
             if not line:
                 continue
 
+            # Skip carriage-return spinner lines (they overwrite themselves)
+            if line.startswith("\r") or line.startswith("    \r"):
+                clean_line = strip_ansi_codes(line.lstrip("\r").strip())
+                if clean_line:
+                    with active_jobs_lock:
+                        if project_id in active_jobs:
+                            active_jobs[project_id]["last_output"] = clean_line
+                continue
+
             # Parse progress
             progress_info = parse_progress_line(line, current_stage, stages)
 
@@ -255,14 +250,17 @@ def run_pipeline_thread(
                 with active_jobs_lock:
                     if project_id in active_jobs:
                         active_jobs[project_id]["current_stage"] = current_stage
+                        active_jobs[project_id]["last_output"] = strip_ansi_codes(line[:100])
                         if "progress" in progress_info:
                             active_jobs[project_id]["progress"] = progress_info["progress"]
 
                 # Send WebSocket update
                 update_progress(project_id, update)
-
-            # Also send raw log line (for log viewer)
-            # update_progress(project_id, {"type": "log", "line": line})
+            else:
+                # Store any output line for display
+                with active_jobs_lock:
+                    if project_id in active_jobs:
+                        active_jobs[project_id]["last_output"] = strip_ansi_codes(line[:100])
 
         # Wait for process to complete
         process.wait()
@@ -278,6 +276,7 @@ def run_pipeline_thread(
                     active_jobs[project_id]["error"] = f"Pipeline exited with code {process.returncode}"
 
         if process.returncode == 0:
+            update_job_repo_status(project_id, "completed")
             update_progress(project_id, {
                 "status": "completed",
                 "progress": 1.0,
@@ -286,9 +285,11 @@ def run_pipeline_thread(
                 "total_stages": len(stages),
             })
         else:
+            error_msg = f"Pipeline exited with code {process.returncode}"
+            update_job_repo_status(project_id, "failed", error_msg)
             update_progress(project_id, {
                 "status": "failed",
-                "error": f"Pipeline exited with code {process.returncode}",
+                "error": error_msg,
             })
 
     except Exception as e:
@@ -296,6 +297,7 @@ def run_pipeline_thread(
             if project_id in active_jobs:
                 active_jobs[project_id]["status"] = "failed"
                 active_jobs[project_id]["error"] = str(e)
+        update_job_repo_status(project_id, "failed", str(e))
         update_progress(project_id, {
             "status": "failed",
             "error": str(e),
@@ -313,11 +315,12 @@ def start_pipeline(
     roto_prompt: str = "person",
     roto_start_frame: int | None = None,
     skip_existing: bool = False,
+    stage_options: dict = None,
 ):
     """Start pipeline processing in a background thread."""
     thread = threading.Thread(
         target=run_pipeline_thread,
-        args=(project_id, project_dir, stages, roto_prompt, roto_start_frame, skip_existing),
+        args=(project_id, project_dir, stages, roto_prompt, roto_start_frame, skip_existing, stage_options),
         daemon=True,
     )
     thread.start()
@@ -328,7 +331,7 @@ def stop_pipeline(project_id: str) -> bool:
 
     Returns True if process was stopped, False if not running.
     """
-    from .api import active_jobs, active_jobs_lock
+    from .job_state import active_jobs, active_jobs_lock
 
     if project_id not in active_processes:
         return False
@@ -347,6 +350,8 @@ def stop_pipeline(project_id: str) -> bool:
         with active_jobs_lock:
             if project_id in active_jobs:
                 active_jobs[project_id]["status"] = "cancelled"
+
+        update_job_repo_status(project_id, "cancelled")
 
         if project_id in active_processes:
             del active_processes[project_id]

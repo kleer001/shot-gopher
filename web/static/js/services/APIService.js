@@ -204,6 +204,46 @@ export class APIService {
     }
 
     /**
+     * Get project details
+     * @param {string} projectId - Project ID
+     */
+    async getProject(projectId) {
+        return this.get(`${API.PROJECTS}/${projectId}`);
+    }
+
+    /**
+     * Get project VRAM analysis
+     * @param {string} projectId - Project ID
+     */
+    async getProjectVram(projectId) {
+        return this.get(API.PROJECT_VRAM(projectId));
+    }
+
+    /**
+     * Get project video info
+     * @param {string} projectId - Project ID
+     */
+    async getProjectVideoInfo(projectId) {
+        return this.get(API.PROJECT_VIDEO_INFO(projectId));
+    }
+
+    /**
+     * Get job status for a project
+     * @param {string} projectId - Project ID
+     */
+    async getJobStatus(projectId) {
+        return this.get(API.PROJECT_JOB(projectId));
+    }
+
+    /**
+     * Delete a project
+     * @param {string} projectId - Project ID
+     */
+    async deleteProject(projectId) {
+        return this._request(`${API.PROJECTS}/${projectId}`, { method: 'DELETE' });
+    }
+
+    /**
      * Open project folder
      * @param {string} projectId - Project ID
      */

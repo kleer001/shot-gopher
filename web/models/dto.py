@@ -14,6 +14,7 @@ class ProjectDTO(BaseModel):
     stages: List[str] = []
     created_at: datetime
     updated_at: datetime
+    size_bytes: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -57,6 +58,7 @@ class JobStartRequest(BaseModel):
     roto_prompt: str = "person"
     roto_start_frame: Optional[int] = None
     skip_existing: bool = False
+    stage_options: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
 
 class JobStartResponse(BaseModel):
