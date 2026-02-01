@@ -22,7 +22,7 @@ import webbrowser
 from pathlib import Path
 
 from env_config import require_conda_env, INSTALL_DIR
-from workflow_utils import WORKFLOW_TEMPLATES_DIR
+from workflow_utils import WORKFLOW_TEMPLATES_DIR, get_comfyui_output_dir
 from comfyui_manager import ensure_comfyui, stop_comfyui
 
 
@@ -30,17 +30,11 @@ TEMPLATE_NAME = "05_interactive_segmentation.json"
 DEFAULT_COMFYUI_URL = "http://localhost:8188"
 COMFYUI_DIR = INSTALL_DIR / "ComfyUI"
 CUSTOM_NODES_DIR = COMFYUI_DIR / "custom_nodes"
-REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def check_comfyui_installed() -> bool:
     """Check if local ComfyUI installation exists."""
     return COMFYUI_DIR.exists() and (COMFYUI_DIR / "main.py").exists()
-
-
-def get_comfyui_output_dir() -> Path:
-    """Get the output directory that ComfyUI uses for SaveImage nodes."""
-    return INSTALL_DIR.parent.parent
 
 
 def populate_workflow(workflow_data: dict, project_dir: Path) -> dict:
@@ -50,7 +44,6 @@ def populate_workflow(workflow_data: dict, project_dir: Path) -> dict:
     Output nodes (SaveImage): Use paths relative to ComfyUI output directory
     """
     comfyui_output = get_comfyui_output_dir()
-    project_dir_str = str(project_dir)
 
     print(f"  Populating workflow paths:")
     print(f"    Project dir: {project_dir}")
@@ -74,7 +67,11 @@ def populate_workflow(workflow_data: dict, project_dir: Path) -> dict:
         elif node_type == "SaveImage":
             old_prefix = widgets[0]
             if isinstance(old_prefix, str) and "roto/custom" in old_prefix:
-                new_prefix = f"projects/{project_dir.name}/roto/custom/mask"
+                try:
+                    relative_path = project_dir.relative_to(comfyui_output)
+                except ValueError:
+                    relative_path = project_dir
+                new_prefix = str(relative_path / "roto" / "custom" / "mask")
                 widgets[0] = new_prefix
                 print(f"    SaveImage: '{old_prefix}' -> '{new_prefix}'")
 
@@ -188,7 +185,7 @@ def run_local_mode(args) -> int:
 
     create_output_dirs(project_dir)
 
-    sam3_installed, sam3_path = check_sam3_installed()
+    sam3_installed, _ = check_sam3_installed()
     if not sam3_installed:
         print(f"\n{'='*60}")
         print("WARNING: ComfyUI-SAM3 Extension Not Found")

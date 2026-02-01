@@ -19,13 +19,12 @@ Requirements:
 
 import argparse
 import json
-import os
 import shutil
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from PIL import Image
 
@@ -38,7 +37,7 @@ from comfyui_utils import (
     wait_for_completion,
 )
 from comfyui_manager import prepare_comfyui_for_processing
-from workflow_utils import WORKFLOW_TEMPLATES_DIR
+from workflow_utils import WORKFLOW_TEMPLATES_DIR, get_comfyui_output_dir
 from matte_utils import prepare_roto_for_cleanplate
 
 
@@ -254,7 +253,12 @@ def process_chunk(
     Returns:
         True if successful
     """
-    output_prefix = f"projects/{project_dir.name}/cleanplate/chunks/{chunk.name}/clean"
+    comfyui_output = get_comfyui_output_dir()
+    try:
+        relative_path = project_dir.relative_to(comfyui_output)
+    except ValueError:
+        relative_path = project_dir
+    output_prefix = str(relative_path / "cleanplate" / "chunks" / chunk.name / "clean")
 
     workflow = generate_chunk_workflow(template, chunk, project_dir, output_prefix)
 
