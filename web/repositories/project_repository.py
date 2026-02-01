@@ -92,23 +92,25 @@ class ProjectRepository(Repository[Project]):
                     created_at=datetime.fromisoformat(state["created_at"]),
                     updated_at=datetime.fromisoformat(state["updated_at"]),
                 )
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
+            except (json.JSONDecodeError, KeyError, ValueError):
+                dir_mtime = datetime.fromtimestamp(project_path.stat().st_mtime)
                 return Project(
                     name=project_path.name,
                     path=project_path,
                     status=ProjectStatus.UNKNOWN,
                     video_path=None,
                     stages=[],
-                    created_at=datetime.now(),
-                    updated_at=datetime.now(),
+                    created_at=dir_mtime,
+                    updated_at=dir_mtime,
                 )
         else:
+            dir_mtime = datetime.fromtimestamp(project_path.stat().st_mtime)
             return Project(
                 name=project_path.name,
                 path=project_path,
                 status=ProjectStatus.UNKNOWN,
                 video_path=None,
                 stages=[],
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
+                created_at=dir_mtime,
+                updated_at=dir_mtime,
             )
