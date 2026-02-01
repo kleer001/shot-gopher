@@ -84,6 +84,7 @@ def sanitize_project_name(name: str) -> str:
 async def upload_video(
     file: UploadFile = File(...),
     name: Optional[str] = Form(None),
+    overwrite: Optional[str] = Form(None),
     project_service: ProjectService = Depends(get_project_service),
 ):
     """Upload a video file and create a new project."""
@@ -103,11 +104,18 @@ async def upload_video(
     base_name = name or Path(file.filename).stem
     project_name = sanitize_project_name(base_name)
 
-    project_dto = project_service.create_project_with_unique_name(
-        project_name,
-        Path(DEFAULT_PROJECTS_DIR)
-    )
-    project_name = project_dto.name
+    existing_project = project_service.get_project(project_name)
+    if existing_project:
+        if overwrite == "true":
+            project_service.delete_project(project_name)
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Project '{project_name}' already exists"
+            )
+
+    request = ProjectCreateRequest(name=project_name, stages=[])
+    project_dto = project_service.create_project(request, Path(DEFAULT_PROJECTS_DIR))
 
     video_filename = f"input{file_ext}"
     try:

@@ -25,9 +25,16 @@ export class UploadController {
             uploadFilename: dom.getElement('upload-filename'),
             uploadProgressFill: dom.getElement('upload-progress-fill'),
             uploadPercentText: dom.getElement('upload-percent-text'),
+            overwriteDialog: dom.getElement(ELEMENTS.OVERWRITE_DIALOG),
+            overwriteProjectName: dom.getElement(ELEMENTS.OVERWRITE_PROJECT_NAME),
+            overwriteYes: dom.getElement(ELEMENTS.OVERWRITE_YES),
+            overwriteNo: dom.getElement(ELEMENTS.OVERWRITE_NO),
+            overwriteCancel: dom.getElement(ELEMENTS.OVERWRITE_CANCEL),
         };
 
         this._boundHandlers = {};
+        this._pendingFile = null;
+        this._pendingProjectName = null;
         this.setupEventListeners();
     }
 
@@ -54,6 +61,20 @@ export class UploadController {
             this.elements.dropZone.addEventListener('dragleave', this._boundHandlers.onDragLeave);
             this.elements.dropZone.addEventListener('drop', this._boundHandlers.onDrop);
         }
+
+        this._boundHandlers.onOverwriteYes = () => this.handleOverwriteChoice(true);
+        this._boundHandlers.onOverwriteNo = () => this.handleOverwriteChoice(false);
+        this._boundHandlers.onOverwriteCancel = () => this.handleOverwriteChoice(false);
+
+        if (this.elements.overwriteYes) {
+            this.elements.overwriteYes.addEventListener('click', this._boundHandlers.onOverwriteYes);
+        }
+        if (this.elements.overwriteNo) {
+            this.elements.overwriteNo.addEventListener('click', this._boundHandlers.onOverwriteNo);
+        }
+        if (this.elements.overwriteCancel) {
+            this.elements.overwriteCancel.addEventListener('click', this._boundHandlers.onOverwriteCancel);
+        }
     }
 
     handleDragOver(e) {
@@ -76,8 +97,7 @@ export class UploadController {
         }
     }
 
-    async handleFileSelected(file) {
-        // Validate file type - handle edge cases (no extension, trailing dot)
+    async handleFileSelected(file, overwrite = false) {
         const lastDotIndex = file.name.lastIndexOf('.');
         const ext = lastDotIndex > 0 ? file.name.slice(lastDotIndex).toLowerCase() : '';
         const config = stateManager.get('config');
@@ -89,21 +109,53 @@ export class UploadController {
             return;
         }
 
-        // Show upload progress
         dom.show(this.elements.uploadProgress);
         dom.setText(this.elements.uploadFilename, file.name);
         stateManager.setState({ uploadFilename: file.name, uploadProgress: 0 });
 
         try {
-            // Upload file
             const result = await apiService.uploadVideo(file, (progress) => {
                 this.updateUploadProgress(progress);
-            });
+            }, { overwrite });
 
-            // Upload successful
             this.handleUploadSuccess(result);
         } catch (error) {
-            this.handleUploadError(error);
+            if (error.status === 409) {
+                this.showOverwriteDialog(file, error.message);
+            } else {
+                this.handleUploadError(error);
+            }
+        }
+    }
+
+    showOverwriteDialog(file, errorMessage) {
+        dom.hide(this.elements.uploadProgress);
+        this._pendingFile = file;
+
+        const match = errorMessage.match(/Project '([^']+)' already exists/);
+        this._pendingProjectName = match ? match[1] : file.name.replace(/\.[^/.]+$/, '');
+
+        dom.setText(this.elements.overwriteProjectName, this._pendingProjectName);
+        dom.show(this.elements.overwriteDialog);
+    }
+
+    hideOverwriteDialog() {
+        dom.hide(this.elements.overwriteDialog);
+        this._pendingFile = null;
+        this._pendingProjectName = null;
+    }
+
+    handleOverwriteChoice(shouldOverwrite) {
+        const file = this._pendingFile;
+        this.hideOverwriteDialog();
+
+        if (shouldOverwrite && file) {
+            this.handleFileSelected(file, true);
+        } else {
+            stateManager.setState({
+                uploadProgress: 0,
+                uploadFilename: null,
+            });
         }
     }
 
@@ -172,6 +224,17 @@ export class UploadController {
             this.elements.dropZone.removeEventListener('dragleave', this._boundHandlers.onDragLeave);
             this.elements.dropZone.removeEventListener('drop', this._boundHandlers.onDrop);
         }
+        if (this.elements.overwriteYes && this._boundHandlers.onOverwriteYes) {
+            this.elements.overwriteYes.removeEventListener('click', this._boundHandlers.onOverwriteYes);
+        }
+        if (this.elements.overwriteNo && this._boundHandlers.onOverwriteNo) {
+            this.elements.overwriteNo.removeEventListener('click', this._boundHandlers.onOverwriteNo);
+        }
+        if (this.elements.overwriteCancel && this._boundHandlers.onOverwriteCancel) {
+            this.elements.overwriteCancel.removeEventListener('click', this._boundHandlers.onOverwriteCancel);
+        }
         this._boundHandlers = {};
+        this._pendingFile = null;
+        this._pendingProjectName = null;
     }
 }
