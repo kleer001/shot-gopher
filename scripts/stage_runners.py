@@ -5,9 +5,11 @@ and PipelineConfig, returning True on success.
 """
 
 import re
+import select
 import shutil
 import subprocess
 import sys
+import time
 import webbrowser
 from pathlib import Path
 from typing import Optional, Callable, TYPE_CHECKING
@@ -324,6 +326,44 @@ def _copy_source_preview(ctx: "StageContext", config: "PipelineConfig") -> None:
             print(f"  → Copied source to {source_preview.name}")
 
 
+INTERACTIVE_SIGNAL_FILE = ".interactive_done"
+
+
+def wait_for_interactive_signal(project_dir: Path, poll_interval: float = 0.5) -> None:
+    """Wait for interactive segmentation completion signal.
+
+    Checks for either:
+    1. A signal file (.interactive_done) in the project directory
+    2. User pressing Enter in the terminal (for backwards compatibility)
+
+    Args:
+        project_dir: Project directory to watch for signal file
+        poll_interval: How often to check for signal file (seconds)
+    """
+    signal_file = project_dir / INTERACTIVE_SIGNAL_FILE
+    signal_file.unlink(missing_ok=True)
+
+    print("  Waiting for interactive segmentation to complete...")
+    print("    - Click 'Complete Interactive Roto' in the web UI, OR")
+    print("    - Press Enter in this terminal")
+    print()
+
+    while True:
+        if signal_file.exists():
+            signal_file.unlink(missing_ok=True)
+            print("  → Signal received from web UI")
+            return
+
+        if sys.stdin.isatty():
+            ready, _, _ = select.select([sys.stdin], [], [], poll_interval)
+            if ready:
+                sys.stdin.readline()
+                print("  → Enter pressed")
+                return
+        else:
+            time.sleep(poll_interval)
+
+
 def run_stage_interactive(
     ctx: "StageContext",
     config: "PipelineConfig",
@@ -362,7 +402,7 @@ def run_stage_interactive(
     print()
 
     webbrowser.open(ctx.comfyui_url)
-    input("  Press Enter when done with interactive segmentation...")
+    wait_for_interactive_signal(ctx.project_dir)
 
     if list(roto_dir.glob("**/*.png")):
         print(f"  OK Masks found in {roto_dir}")

@@ -83,6 +83,7 @@ export class ProjectsController {
             openFolderBtn: dom.getElement(ELEMENTS.OPEN_FOLDER_BTN),
             deleteProjectBtn: dom.getElement(ELEMENTS.DELETE_PROJECT_BTN),
             reprocessBtn: dom.getElement(ELEMENTS.REPROCESS_BTN),
+            interactiveCompleteBtn: dom.getElement(ELEMENTS.INTERACTIVE_COMPLETE_BTN),
             videoInfoSection: dom.getElement('video-info-section'),
             videoResolution: dom.getElement('video-resolution'),
             videoFrames: dom.getElement('video-frames'),
@@ -140,6 +141,9 @@ export class ProjectsController {
         }
         if (this.elements.reprocessBtn) {
             this.elements.reprocessBtn.addEventListener('click', () => this.reprocessStages());
+        }
+        if (this.elements.interactiveCompleteBtn) {
+            this.elements.interactiveCompleteBtn.addEventListener('click', () => this.completeInteractive());
         }
     }
 
@@ -635,6 +639,12 @@ export class ProjectsController {
                 const progress = Math.round((jobData.progress || 0) * 100);
                 const lastOutput = jobData.last_output || '';
 
+                if (stage === 'interactive') {
+                    this.showInteractiveCompleteButton();
+                } else {
+                    this.hideInteractiveCompleteButton();
+                }
+
                 if (lastOutput && lastOutput.length > 0) {
                     btn.textContent = lastOutput;
                     btn.title = lastOutput;
@@ -685,6 +695,48 @@ export class ProjectsController {
         stateManager.setState({
             processingActive: false,
         });
+
+        this.hideInteractiveCompleteButton();
+    }
+
+    async completeInteractive() {
+        if (!this.selectedProjectId) return;
+
+        const btn = this.elements.interactiveCompleteBtn;
+        if (!btn) return;
+
+        btn.disabled = true;
+        btn.textContent = 'SIGNALING...';
+
+        try {
+            await apiService.completeInteractive(this.selectedProjectId);
+            btn.textContent = 'SIGNAL SENT';
+            setTimeout(() => {
+                this.hideInteractiveCompleteButton();
+            }, 1000);
+        } catch (error) {
+            console.error('Failed to signal interactive complete:', error);
+            btn.textContent = 'FAILED - TRY AGAIN';
+            btn.disabled = false;
+        }
+    }
+
+    showInteractiveCompleteButton() {
+        const btn = this.elements.interactiveCompleteBtn;
+        if (btn) {
+            btn.classList.remove(CSS_CLASSES.HIDDEN);
+            btn.disabled = false;
+            btn.textContent = 'COMPLETE INTERACTIVE ROTO';
+        }
+    }
+
+    hideInteractiveCompleteButton() {
+        const btn = this.elements.interactiveCompleteBtn;
+        if (btn) {
+            btn.classList.add(CSS_CLASSES.HIDDEN);
+            btn.disabled = false;
+            btn.textContent = 'COMPLETE INTERACTIVE ROTO';
+        }
     }
 
     hideDetailPanel() {

@@ -929,6 +929,37 @@ body {
     }
 }
 
+/* Interactive Complete Button */
+.btn-interactive-complete {
+    width: 100%;
+    padding: 16px;
+    margin-top: 12px;
+    background: var(--warning, #f59e0b);
+    border: 2px solid var(--warning, #f59e0b);
+    color: #000;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-interactive-complete:hover {
+    background: #fbbf24;
+    border-color: #fbbf24;
+    transform: scale(1.02);
+}
+
+.btn-interactive-complete:active {
+    transform: scale(0.98);
+}
+
+.btn-interactive-complete.hidden {
+    display: none;
+}
+
 /* Processing Card */
 .processing-card .card-body {
     display: flex;
