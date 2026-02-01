@@ -30,7 +30,6 @@ TEMPLATE_NAME = "05_interactive_segmentation.json"
 DEFAULT_COMFYUI_URL = "http://localhost:8188"
 COMFYUI_DIR = INSTALL_DIR / "ComfyUI"
 CUSTOM_NODES_DIR = COMFYUI_DIR / "custom_nodes"
-REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def check_comfyui_installed() -> bool:
@@ -186,7 +185,7 @@ def run_local_mode(args) -> int:
 
     create_output_dirs(project_dir)
 
-    sam3_installed, sam3_path = check_sam3_installed()
+    sam3_installed, _ = check_sam3_installed()
     if not sam3_installed:
         print(f"\n{'='*60}")
         print("WARNING: ComfyUI-SAM3 Extension Not Found")
