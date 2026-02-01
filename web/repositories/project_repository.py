@@ -32,7 +32,7 @@ class ProjectRepository(Repository[Project]):
         return self._load_project(project_path)
 
     def list(self) -> List[Project]:
-        """List all projects, sorted by most recently updated."""
+        """List all projects, sorted by creation date (newest first)."""
         projects = []
 
         if not self.projects_dir.exists():
@@ -44,7 +44,7 @@ class ProjectRepository(Repository[Project]):
                 if project:
                     projects.append(project)
 
-        return sorted(projects, key=lambda p: p.updated_at, reverse=True)
+        return sorted(projects, key=lambda p: p.created_at, reverse=True)
 
     def save(self, project: Project) -> Project:
         """Save project to filesystem."""
