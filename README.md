@@ -6,7 +6,7 @@
 ![GPU](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900?logo=nvidia)
 ![Tests](https://img.shields.io/github/actions/workflow/status/kleer001/shot-gopher/test.yml?label=tests)
 
-Automated VFX pipeline built on ComfyUI. Ingest footage, get production-ready depth maps, segmentation masks, clean plates, camera solves, and 3D reconstructions. Run overnight, refine downstream in Nuke/Fusion/Houdini.
+Automated VFX pipeline built on ComfyUI. Ingest footage, get first pass depth maps, segmentation mask, clean plates, camera solves, human matchmove, and 3D reconstructions. 
 
 <details>
 <summary><strong>Capabilities</strong></summary>
