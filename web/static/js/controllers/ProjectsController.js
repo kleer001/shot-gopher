@@ -94,6 +94,7 @@ export class ProjectsController {
         this.selectedProjectId = null;
         this.selectedStages = new Set();
         this.stageOptions = {};
+        this.currentVramData = null;
         this.refreshInterval = null;
         this.processingPollInterval = null;
 
@@ -221,8 +222,9 @@ export class ProjectsController {
                 apiService.getProjectVideoInfo(projectId).catch(() => null),
             ]);
 
+            this.currentVramData = vramData;
             this.renderStagesStatus(projectData, outputsData, vramData);
-            this.renderVramInfo(vramData);
+            this.updateVramDisplay();
             this.renderVideoInfo(videoInfoData);
         } catch (error) {
             console.error('Failed to load project details:', error);
@@ -283,16 +285,16 @@ export class ProjectsController {
         const vramStages = vramData?.analysis?.stages || {};
 
         const stageLabels = {
-            ingest: 'Ingest Video Frames',
-            depth: 'Zdepth Estimation',
+            ingest: 'Ingest',
+            depth: 'ZDepth',
             roto: 'Auto Roto',
             cleanplate: 'Clean Plate',
-            colmap: 'Camera Tracking (COLMAP)',
+            colmap: 'Camera Tracking',
             interactive: 'Interactive Roto',
-            mama: 'Matte Refinement (VideoMaMa)',
-            mocap: 'Human MoCap (SMPL+)',
-            gsir: '3D Reconstruction (GS-IR)',
-            camera: 'Camera Export (Alembic)',
+            mama: 'Roto Refinement',
+            mocap: 'Human Mocap',
+            gsir: 'Scene Capture',
+            camera: 'Camera Export',
         };
 
         let completedCount = 0;
@@ -340,12 +342,9 @@ export class ProjectsController {
 
             const safeStage = dom.escapeHTML(stage);
             const optionsHtml = this.renderStageOptionsHtml(stage);
-            const hasOptions = STAGE_OPTIONS[stage] && STAGE_OPTIONS[stage].length > 0;
-            const expandIcon = hasOptions ? '<span class="stage-expand-icon">▸</span>' : '';
             return `
             <div class="stage-wrapper" data-stage="${safeStage}">
                 <div class="stage-status-item selectable ${stageClass}" data-stage="${safeStage}">
-                    ${expandIcon}
                     <div class="stage-marker"></div>
                     <span class="stage-status-name">${dom.escapeHTML(label)}</span>
                     <span class="stage-vram ${vramStatusClass}" title="${dom.escapeHTML(vramTitle)}">${vramDisplay}</span>
@@ -373,14 +372,12 @@ export class ProjectsController {
         const stage = item.dataset.stage;
         const wrapper = item.closest('.stage-wrapper');
         const optionsPanel = wrapper?.querySelector('.stage-options-panel');
-        const expandIcon = item.querySelector('.stage-expand-icon');
 
         if (this.selectedStages.has(stage)) {
             this.selectedStages.delete(stage);
             item.classList.remove('selected');
             if (wrapper) wrapper.classList.remove('selected');
             if (optionsPanel) optionsPanel.classList.add('hidden');
-            if (expandIcon) expandIcon.textContent = '▸';
         } else {
             this.selectedStages.add(stage);
             item.classList.add('selected');
@@ -389,10 +386,10 @@ export class ProjectsController {
                 optionsPanel.classList.remove('hidden');
                 this.bindStageOptionHandlers(stage, optionsPanel);
             }
-            if (expandIcon) expandIcon.textContent = '▾';
         }
 
         this.updateProcessButton();
+        this.updateVramDisplay();
     }
 
     renderStageOptionsHtml(stage) {
@@ -471,26 +468,50 @@ export class ProjectsController {
         }
     }
 
-    renderVramInfo(vramData) {
+    updateVramDisplay() {
         if (!this.elements.vramInfoSection || !this.elements.vramInfo) return;
 
-        const analysis = vramData?.analysis;
+        const analysis = this.currentVramData?.analysis;
         if (!analysis) {
             dom.addClass(this.elements.vramInfoSection, CSS_CLASSES.HIDDEN);
             return;
         }
 
+        const stages = analysis.stages || {};
+        const availableGb = (analysis.available_vram_mb || 0) / 1024;
+
+        if (this.selectedStages.size === 0) {
+            dom.addClass(this.elements.vramInfoSection, CSS_CLASSES.HIDDEN);
+            return;
+        }
+
+        let maxVramGb = 0;
+        let maxStage = '';
+        let hasChunking = false;
+
+        this.selectedStages.forEach(stage => {
+            const stageInfo = stages[stage];
+            if (stageInfo) {
+                const stageVramGb = stageInfo.base_vram_gb || 0;
+                if (stageVramGb > maxVramGb) {
+                    maxVramGb = stageVramGb;
+                    maxStage = stage;
+                }
+                if (stageInfo.status === 'chunked') {
+                    hasChunking = true;
+                }
+            }
+        });
+
         dom.removeClass(this.elements.vramInfoSection, CSS_CLASSES.HIDDEN);
 
-        const requiredGb = (analysis.peak_vram_mb || 0) / 1024;
-        const availableGb = (analysis.available_vram_mb || 0) / 1024;
-        const hasWarning = analysis.warning || requiredGb > availableGb;
-        const valueClass = hasWarning ? (requiredGb > availableGb ? 'danger' : 'warning') : 'ok';
+        const hasWarning = maxVramGb > availableGb;
+        const valueClass = hasWarning ? 'danger' : 'ok';
 
         let html = `
             <div class="vram-row">
                 <span class="vram-label">Required</span>
-                <span class="vram-value ${valueClass}">${requiredGb.toFixed(1)} GB</span>
+                <span class="vram-value ${valueClass}">${maxVramGb.toFixed(1)} GB</span>
             </div>
             <div class="vram-row">
                 <span class="vram-label">Available</span>
@@ -498,18 +519,10 @@ export class ProjectsController {
             </div>
         `;
 
-        if (analysis.chunking_required) {
+        if (hasChunking) {
             html += `
             <div class="vram-note">
-                Chunked processing required (${analysis.chunks || 'multiple'} chunks)
-            </div>
-        `;
-        }
-
-        if (analysis.warning && !analysis.chunking_required) {
-            html += `
-            <div class="vram-note">
-                ${dom.escapeHTML(analysis.warning)}
+                Chunked processing may be required
             </div>
         `;
         }
