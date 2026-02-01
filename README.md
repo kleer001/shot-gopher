@@ -6,7 +6,7 @@
 ![GPU](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900?logo=nvidia)
 ![Tests](https://img.shields.io/github/actions/workflow/status/kleer001/shot-gopher/test.yml?label=tests)
 
-Automated VFX pipeline. Isngest footage, get first pass depth maps, roto, clean plates, camera solves, human matchmove, and 3D reconstructions. 
+Automated VFX pipeline. Ingest footage, get first pass depth maps, roto, clean plates, camera solves, human matchmove, and 3D reconstructions. 
 
 <details>
 <summary><strong>Capabilities</strong></summary>
