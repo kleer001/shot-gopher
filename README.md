@@ -179,7 +179,7 @@ Output follows VFX production conventions:
 | PyTorch + CUDA | — | 6.0 GB |
 | ComfyUI + nodes | — | 2.5 GB |
 | Video Depth Anything | ~7 GB | 1.5 GB |
-| SAM2/3 (roto) | ~4 GB | 0.9 GB |
+| SAM3 (roto) | ~4 GB | 0.9 GB |
 | ProPainter (clean plates) | ~6 GB | 0.5 GB |
 | Blender 4.2 LTS | — | 0.5 GB |
 | COLMAP (camera) | CPU | 0.2 GB |
