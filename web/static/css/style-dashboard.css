@@ -1199,3 +1199,87 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--bg-hover);
 }
+
+/* Dialog Overlay */
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.dialog-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.dialog-message {
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 24px;
+    text-align: center;
+    line-height: 1.5;
+}
+
+.dialog-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dialog-buttons-row {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.dialog-btn {
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-dim);
+    min-width: 80px;
+}
+
+.dialog-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+}
+
+.dialog-btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
+.dialog-btn-primary:hover {
+    background: #2563eb;
+}
+
+.dialog-btn-cancel {
+    width: 100%;
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-dim);
+}
+
+.dialog-btn-cancel:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+}

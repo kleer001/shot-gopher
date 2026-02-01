@@ -133,8 +133,10 @@ export class APIService {
      * Upload video file
      * @param {File} file - Video file
      * @param {Function} onProgress - Progress callback (0-1)
+     * @param {Object} options - Upload options
+     * @param {boolean} options.overwrite - Whether to overwrite existing project
      */
-    async uploadVideo(file, onProgress) {
+    async uploadVideo(file, onProgress, options = {}) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
 
@@ -151,6 +153,17 @@ export class APIService {
                         resolve(data);
                     } catch (error) {
                         reject(new Error('Invalid response format'));
+                    }
+                } else if (xhr.status === 409) {
+                    try {
+                        const error = JSON.parse(xhr.responseText);
+                        const conflictError = new Error(error.detail || 'Project already exists');
+                        conflictError.status = 409;
+                        reject(conflictError);
+                    } catch {
+                        const conflictError = new Error('Project already exists');
+                        conflictError.status = 409;
+                        reject(conflictError);
                     }
                 } else {
                     try {
@@ -172,6 +185,9 @@ export class APIService {
 
             const formData = new FormData();
             formData.append('file', file);
+            if (options.overwrite) {
+                formData.append('overwrite', 'true');
+            }
 
             xhr.open('POST', this.baseURL + API.UPLOAD);
             xhr.send(formData);

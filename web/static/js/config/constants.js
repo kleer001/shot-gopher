@@ -75,6 +75,13 @@ export const ELEMENTS = {
     // System
     SYSTEM_STATUS: 'system-status',
     ERROR_TOAST: 'error-toast',
+
+    // Overwrite Dialog
+    OVERWRITE_DIALOG: 'overwrite-dialog',
+    OVERWRITE_PROJECT_NAME: 'overwrite-project-name',
+    OVERWRITE_YES: 'overwrite-yes',
+    OVERWRITE_NO: 'overwrite-no',
+    OVERWRITE_CANCEL: 'overwrite-cancel',
 };
 
 /**

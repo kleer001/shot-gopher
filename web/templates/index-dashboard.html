@@ -155,6 +155,22 @@
             <span id="error-message" class="toast-message"></span>
             <button type="button" id="error-close" class="toast-close">×</button>
         </div>
+
+        <!-- Overwrite Confirmation Dialog -->
+        <div id="overwrite-dialog" class="dialog-overlay hidden">
+            <div class="dialog-box">
+                <div class="dialog-message">
+                    Project "<span id="overwrite-project-name"></span>" already exists. Would you like to write over it?
+                </div>
+                <div class="dialog-buttons">
+                    <div class="dialog-buttons-row">
+                        <button type="button" id="overwrite-yes" class="dialog-btn dialog-btn-primary">Yes</button>
+                        <button type="button" id="overwrite-no" class="dialog-btn">No</button>
+                    </div>
+                    <button type="button" id="overwrite-cancel" class="dialog-btn dialog-btn-cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="/static/js/main.js"></script>
