@@ -44,6 +44,7 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 - [FFmpeg](https://ffmpeg.org/) - Video/image processing
 
 ### Optional Components
+- [Blender 4.2 LTS](https://www.blender.org/) - Mesh-to-Alembic export for camera/geometry data
 - [GS-IR](https://github.com/lzhnb/GS-IR) - Gaussian Splatting for PBR material decomposition
 - [GVHMR](https://github.com/zju3dv/GVHMR) - World-grounded human motion tracking (SIGGRAPH Asia 2024)
 - [SMPL-X](https://smpl-x.is.tue.mpg.de/) - Parametric body model for motion capture
@@ -57,16 +58,73 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 - NumPy, OpenCV, Pillow - Image processing
 - trimesh, smplx - 3D geometry (motion capture only)
 
+---
+
+### ⚠️🚧 Tool Limitations by Shot Type 🚧⚠️
+
+> **🔦 READ THIS BEFORE RUNNING THE PIPELINE 🔦**
+>
+> Different tools have different requirements. Not all footage works with all stages!
+
+| Shot Type | Depth (VDA) | Roto (SAM3) | Clean Plate | Camera (COLMAP) | Material (GS-IR) | MoCap (GVHMR) |
+|-----------|-------------|-------------|-------------|-----------------|------------------|-------------------|
+| **Static camera** | ✅ | ✅ | ✅ | 🚫 | 🚫 | ⚠️ |
+| **Moving camera** | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ |
+| **Handheld/shaky** | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| **Fast motion** | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| **Low texture** | ✅ | ✅ | ✅ | 🚫 | ⚠️ | ✅ |
+| **Full body person** | ✅ | ✅ | ✅ | ✅ | N/A | ✅ |
+| **Partial body/occluded** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ⚠️ |
+| **Multiple people** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ✅ |
+| **In-focus background** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
+| **Shallow DOF/bokeh** | ⚠️ | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ |
+| **High contrast lighting** | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
+| **150+ frames** | ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ |
+
+🛠️ **Legend:**
+- ✅ Works well
+- ⚠️ Limited/challenging — may require parameter tuning or produce imperfect results
+- 🚫 Not suitable/fails — tool requires different input (e.g., COLMAP needs camera motion)
+- N/A Not applicable
+
+🦺 **Key Gotchas:**
+- **COLMAP** and **GS-IR** require camera movement — static tripod shots will fail
+- **GVHMR** needs full or mostly-visible human bodies
+- **Long sequences (150+ frames)** may hit VRAM limits on 12GB cards
+
 </details>
 
 ## Getting Started
 
-| Platform | Install Command |
-|----------|-----------------|
-| **Linux/macOS** | `curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.sh \| bash` |
-| **Windows** (PowerShell) | `irm https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.ps1 \| iex` |
+### Linux / macOS
 
-**Prerequisites:** NVIDIA GPU with driver, Conda/Miniconda. See [Manual Installation](docs/manual-install.md) for step-by-step setup.
+```bash
+curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.sh | bash
+```
+
+This script will:
+- Clone the repository
+- Set up a Conda environment
+- Install all required dependencies
+- Download ML models
+
+**Prerequisites:** Git, Conda/Miniconda, NVIDIA GPU with driver (CUDA)
+
+---
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.ps1 | iex
+```
+
+Run PowerShell as Administrator for best results.
+
+**Prerequisites:** Git, Conda/Miniconda, NVIDIA GPU with driver (CUDA)
+
+---
+
+See [Manual Installation](docs/manual-install.md) for step-by-step setup or troubleshooting.
 
 
 
@@ -100,50 +158,25 @@ Output follows VFX production conventions:
 
 **Platform:** Linux, macOS, Windows | **Python:** 3.10+ | **GPU:** NVIDIA with CUDA (12GB+ VRAM recommended)
 
-**Disk:** ~14 GB core, ~18 GB full install | **Dependencies:** Git, FFmpeg, Conda
+**Disk:** ~15 GB core, ~35 GB full install | **Dependencies:** Git, FFmpeg, Conda
 
 <details>
 <summary><strong>VRAM & Download Details</strong></summary>
 
 | Component | VRAM | Download |
 |-----------|------|----------|
-| Video Depth Anything | ~7 GB | 1.0 GB |
-| SAM3 (roto) | ~4 GB | incl. |
-| ProPainter (clean plates) | ~6 GB | incl. |
-| VideoMaMa (matte) | 12+ GB | incl. |
-| COLMAP (camera) | CPU | 0.5 GB |
-| GS-IR (materials) | 12+ GB | 1.5 GB |
+| PyTorch + CUDA | — | 6.0 GB |
+| ComfyUI + nodes | — | 2.5 GB |
+| Video Depth Anything | ~7 GB | 1.5 GB |
+| SAM2/3 (roto) | ~4 GB | 0.9 GB |
+| ProPainter (clean plates) | ~6 GB | 0.5 GB |
+| Blender 4.2 LTS | — | 0.5 GB |
+| COLMAP (camera) | CPU | 0.2 GB |
+| VideoMaMa (matte) | 12+ GB | 10.0 GB |
+| GS-IR (materials) | 12+ GB | 2.0 GB |
 | GVHMR (mocap) | 12+ GB | 4.0 GB |
 
 **Motion capture** requires [SMPL-X registration](https://smpl-x.is.tue.mpg.de/) (free academic license, 24-48h approval).
-
-</details>
-
-<details>
-<summary><strong>Tool Limitations by Shot Type</strong></summary>
-
-Different components perform best under specific conditions:
-
-| Shot Type | Depth (VDA) | Roto (SAM3) | Clean Plate | Camera (COLMAP) | Material (GS-IR) | MoCap (GVHMR) |
-|-----------|-------------|-------------|-------------|-----------------|------------------|-------------------|
-| **Static camera** | ✅ | ✅ | ✅ | 🚫 | 🚫 | ⚠️ |
-| **Moving camera** | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ |
-| **Handheld/shaky** | ✅ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| **Fast motion** | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| **Low texture** | ✅ | ✅ | ✅ | 🚫 | ⚠️ | ✅ |
-| **Full body person** | ✅ | ✅ | ✅ | ✅ | N/A | ✅ |
-| **Partial body/occluded** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ⚠️ |
-| **Multiple people** | ✅ | ⚠️ | ⚠️ | ✅ | N/A | ✅ |
-| **In-focus background** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
-| **Shallow DOF/bokeh** | ⚠️ | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ |
-| **High contrast lighting** | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
-| **150+ frames** | ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ |
-
-**Legend:**
-- ✅ Works well
-- ⚠️ Limited/challenging
-- 🚫 Not suitable/fails
-- N/A Not applicable
 
 </details>
 
