@@ -23,9 +23,9 @@ SUPPORTED_FORMATS = {
 
 STAGES = {
     "ingest": "Extract frames from movie",
-    "interactive": "Interactive segmentation (05_interactive_segmentation.json)",
+    "interactive": "Interactive roto (05_interactive_segmentation.json)",
     "depth": "Run depth analysis (01_analysis.json)",
-    "roto": "Run segmentation (02_segmentation.json)",
+    "roto": "Run roto (02_segmentation.json)",
     "mama": "Refine mattes with VideoMaMa diffusion",
     "cleanplate": "Run clean plate generation (03_cleanplate.json)",
     "colmap": "Run COLMAP SfM reconstruction",

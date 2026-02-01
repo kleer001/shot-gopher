@@ -150,7 +150,7 @@ Valid components:
 
 ```
 What would you like to install?
-1. Core pipeline only (COLMAP, segmentation)
+1. Core pipeline only (COLMAP, roto)
 2. Core + ComfyUI (workflows ready to use)
 3. Full stack (Core + ComfyUI + Motion capture)
 4. Custom selection

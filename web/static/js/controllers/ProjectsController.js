@@ -281,10 +281,10 @@ export class ProjectsController {
         const stageLabels = {
             ingest: 'Ingest Video Frames',
             depth: 'Zdepth Estimation',
-            roto: 'Auto Segmentation (Roto)',
+            roto: 'Auto Roto',
             cleanplate: 'Clean Plate',
             colmap: 'Camera Tracking (COLMAP)',
-            interactive: 'Interactive Segmentation',
+            interactive: 'Interactive Roto',
             mama: 'Matte Refinement (VideoMaMa)',
             mocap: 'Human MoCap (SMPL+)',
             gsir: '3D Reconstruction (GS-IR)',

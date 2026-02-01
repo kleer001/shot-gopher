@@ -12,7 +12,7 @@ While `run_pipeline.py` orchestrates the full pipeline, each component can also 
 |--------|---------|-------|--------|
 | `setup_project.py` | Initialize project structure | Project path | Directory tree |
 | `run_colmap.py` | COLMAP reconstruction | Frames | 3D model |
-| `run_segmentation.py` | Dynamic scene segmentation | Frames | Masks |
+| `run_segmentation.py` | Dynamic scene roto | Frames | Masks |
 | `run_mocap.py` | Human motion capture (GVHMR) | Frames + camera | Mesh sequences |
 | `run_gsir.py` | Material decomposition | COLMAP model | PBR materials |
 | `export_camera.py` | Camera export | Camera JSON | Alembic/FBX |
@@ -49,7 +49,7 @@ MyShot/
 │   └── frames/          # Place input frames here
 ├── workflows/           # ComfyUI workflows (copied from templates)
 ├── depth/               # Depth maps output
-├── roto/                # Segmentation masks output
+├── roto/                # Roto masks output
 ├── cleanplate/          # Clean plates output
 ├── colmap/              # COLMAP reconstruction output
 ├── mocap/               # Motion capture output
@@ -104,7 +104,7 @@ python scripts/run_colmap.py ./projects/Shot01
 python scripts/run_colmap.py ./projects/Shot01 -q high -d -m
 ```
 
-**Without segmentation masks**:
+**Without roto masks**:
 ```bash
 python scripts/run_colmap.py ./projects/Shot01 --no-masks
 ```
@@ -112,7 +112,7 @@ python scripts/run_colmap.py ./projects/Shot01 --no-masks
 ### Input
 
 - `source/frames/*.png` - Input frames (required)
-- `roto/*.png` - Segmentation masks (optional, used if available unless `--no-masks`)
+- `roto/*.png` - Roto masks (optional, used if available unless `--no-masks`)
 
 ### Output
 
@@ -144,7 +144,7 @@ python scripts/run_colmap.py ./projects/Shot01 --no-masks
 
 ## run_segmentation.py
 
-Dynamic scene segmentation with automatic shot boundary detection.
+Dynamic scene roto with automatic shot boundary detection.
 
 ### Usage
 
@@ -158,8 +158,8 @@ python scripts/run_segmentation.py <input_dir> <output_dir> [options]
 - `input_dir` - Directory with input frames
 - `output_dir` - Directory for output masks
 
-**Segmentation**:
-- `--model` - Segmentation model: `sam3`, `yolov8`, `detectron2` (default: `sam3`)
+**Roto**:
+- `--model` - Roto model: `sam3`, `yolov8`, `detectron2` (default: `sam3`)
 - `--classes` - Object classes to segment (comma-separated)
 - `--confidence` - Detection confidence threshold (default: 0.5)
 
@@ -169,7 +169,7 @@ python scripts/run_segmentation.py <input_dir> <output_dir> [options]
 
 ### Examples
 
-**Basic segmentation**:
+**Basic roto**:
 ```bash
 python scripts/run_segmentation.py source/frames roto
 ```

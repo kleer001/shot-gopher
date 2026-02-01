@@ -1,10 +1,10 @@
-# Interactive Segmentation Guide
+# Interactive Roto Guide
 
-For complex shots where automatic text-prompt segmentation doesn't work well (e.g., segmenting individual legs, specific body parts, or objects that merge together), use the interactive segmentation workflow.
+For complex shots where automatic text-prompt roto doesn't work well (e.g., isolating individual legs, specific body parts, or objects that merge together), use the interactive roto workflow.
 
 ## When to Use This
 
-- Multiple similar objects that merge in automatic segmentation (e.g., two legs touching)
+- Multiple similar objects that merge in automatic roto (e.g., two legs touching)
 - Body parts that need separate masks (left leg, right leg, each arm)
 - Objects partially occluded or overlapping
 - Fine control over what gets included/excluded in a mask
@@ -57,7 +57,7 @@ Click **Queue Prompt** to execute. SAM3 will:
 2. Propagate masks through the entire video sequence
 3. Save results to `roto/custom/`
 
-## Segmenting Multiple Legs
+## Isolating Multiple Legs
 
 For the running shot example with multiple people's legs:
 
@@ -108,7 +108,7 @@ This can happen with fast motion or heavy occlusion. Solutions:
 
 Make sure you're clicking in the **Interactive Selector** node's image preview area, not elsewhere in the UI.
 
-## Comparison with Automatic Segmentation
+## Comparison with Automatic Roto
 
 | Feature | Automatic (`02_segmentation.json`) | Interactive (`05_interactive_segmentation.json`) |
 |---------|-----------------------------------|------------------------------------------------|
@@ -121,7 +121,7 @@ Make sure you're clicking in the **Interactive Selector** node's image preview a
 ## Command Reference
 
 ```bash
-# Launch interactive segmentation
+# Launch interactive roto
 python scripts/launch_interactive_segmentation.py <project_dir>
 
 # Custom ComfyUI URL

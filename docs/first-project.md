@@ -39,7 +39,7 @@ python scripts/run_pipeline.py /path/to/video.mp4 -s depth --name DepthTest
 
 ### Common Workflows
 
-**Quick preview** (depth and segmentation):
+**Quick preview** (depth and roto):
 ```bash
 python scripts/run_pipeline.py ~/Videos/test_shot.mp4 \
   -s ingest,depth,roto \
@@ -83,7 +83,7 @@ python scripts/run_pipeline.py video.mp4 \
 |-------|-------------|--------|
 | `ingest` | Extract frames from video | PNG sequence in `source/frames/` |
 | `depth` | Monocular depth estimation | Depth maps in `depth/` |
-| `roto` | Text-prompted segmentation | Binary masks in `roto/` |
+| `roto` | Text-prompted roto | Binary masks in `roto/` |
 | `mama` | Alpha matte refinement (VideoMaMa) | Alpha mattes in `matte/` |
 | `cleanplate` | Video inpainting | Clean backgrounds in `cleanplate/` |
 | `colmap` | Structure-from-Motion camera solve | Point cloud, camera poses in `colmap/` |

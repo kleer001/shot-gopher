@@ -13,9 +13,9 @@ Run the VFX pipeline from a single command.
 | Stage | Purpose | VRAM |
 |-------|---------|------|
 | [ingest](stages.md#ingest) | Extract frames | CPU |
-| [interactive](stages.md#interactive) | Interactive segmentation | 4 GB |
+| [interactive](stages.md#interactive) | Interactive roto | 4 GB |
 | [depth](stages.md#depth) | Depth maps | 7 GB |
-| [roto](stages.md#roto) | Segmentation masks | 4 GB |
+| [roto](stages.md#roto) | Roto masks | 4 GB |
 | [mama](stages.md#mama) | Matte refinement | 12 GB |
 | [cleanplate](stages.md#cleanplate) | Object removal | 6 GB |
 | [colmap](stages.md#colmap) | Camera tracking | 2-4 GB |
@@ -60,14 +60,14 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | | `--list-stages` | List available stages and exit |
 | `-c` | `--comfyui-url` | ComfyUI URL (default: `http://127.0.0.1:8188`) |
 
-### Segmentation Options
+### Roto Options
 
 | Long | Description |
 |------|-------------|
-| `--prompt` | Segmentation targets (default: `person`). Comma-separated: `person,bag,ball` |
+| `--prompt` | Roto targets (default: `person`). Comma-separated: `person,bag,ball` |
 | `--separate-instances` | Split multi-person masks into `person_0/`, `person_1/`, etc. (default: on) |
 | `--no-separate-instances` | Combine all instances into single mask |
-| `--start-frame` | Frame to start segmentation from (enables bidirectional propagation). Use when subject isn't visible on first frame |
+| `--start-frame` | Frame to start roto from (enables bidirectional propagation). Use when subject isn't visible on first frame |
 
 ### COLMAP Options
 
@@ -98,7 +98,7 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 
 ## Examples
 
-### Interactive Segmentation (Recommended for Multiple People)
+### Interactive Roto (Recommended for Multiple People)
 
 ```bash
 python scripts/run_pipeline.py footage.mp4 -s interactive
@@ -106,7 +106,7 @@ python scripts/run_pipeline.py footage.mp4 -s interactive
 
 Opens ComfyUI in browser for manual point/box selection of objects.
 
-**⚠️ Use interactive segmentation when:**
+**⚠️ Use interactive roto when:**
 - Shot has multiple people (automatic roto may miss people or track inconsistently)
 - Objects can't be reliably identified by text prompts
 - You need precise control over what gets segmented
@@ -125,7 +125,7 @@ python scripts/run_pipeline.py footage.mp4 -s colmap,camera
 python scripts/run_pipeline.py footage.mp4 -s roto,cleanplate
 ```
 
-### Multi-Object Segmentation
+### Multi-Object Roto
 
 ```bash
 python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person,bag,ball"
@@ -140,13 +140,13 @@ python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person"
 ```
 
 **⚠️ Automatic multi-person roto is unreliable.** Common issues include:
-- **Dropped segmentation:** People vanish from masks when occluded or near frame edges
+- **Dropped roto:** People vanish from masks when occluded or near frame edges
 - **Identity swapping:** Masks switch between people after they cross paths
 - **Stuttering/flickering:** Erratic mask boundaries frame-to-frame
 - **Merged masks:** Nearby people combined into one mask
 - **Inconsistent detection:** Different person count across frames
 
-For production work with multiple people, use [interactive segmentation](#interactive-segmentation-recommended-for-multiple-people) instead.
+For production work with multiple people, use [interactive roto](#interactive-roto-recommended-for-multiple-people) instead.
 
 ### High-Quality COLMAP
 
@@ -177,7 +177,7 @@ Pipeline creates this directory structure:
 ├── source/frames/       # Extracted frames
 ├── workflows/           # ComfyUI workflow copies
 ├── depth/               # Depth maps
-├── roto/                # Segmentation masks
+├── roto/                # Roto masks
 │   ├── mask/            # Combined mask (all prompts)
 │   ├── person_00/       # First person instance
 │   ├── person_01/       # Second person instance

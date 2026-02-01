@@ -617,7 +617,7 @@ class InstallationWizard:
             print("\n" + "="*60)
             print("What would you like to install?")
             print("="*60)
-            print("1. Core pipeline only (COLMAP, segmentation)")
+            print("1. Core pipeline only (COLMAP, roto)")
             print("2. Core + ComfyUI (workflows ready to use)")
             print("3. Full stack (Core + ComfyUI + Motion capture + GS-IR)")
             print("4. Custom selection")
@@ -673,7 +673,7 @@ class InstallationWizard:
             self.checkpoint_downloader.download_all_checkpoints(['video_depth_anything'], self.state_manager)
 
             # Download SAM3 model for segmentation
-            print("\nDownloading SAM3 model (for segmentation/roto workflows)...")
+            print("\nDownloading SAM3 model (for roto workflows)...")
             self.checkpoint_downloader.download_all_checkpoints(['sam3'], self.state_manager)
 
         # Download checkpoints for motion capture components

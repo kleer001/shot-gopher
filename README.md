@@ -13,7 +13,7 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 
 - **Frame extraction** - Convert video files to PNG frame sequences
 - **Depth estimation** - Monocular depth maps with temporal consistency (Video Depth Anything)
-- **Segmentation/Rotoscoping** - Text-prompted video segmentation for dynamic object masking (SAM3)
+- **Rotoscoping** - Text-prompted roto for dynamic object masking (SAM3)
 - **Matte refinement** - Alpha matte generation for human subjects (VideoMaMa)
 - **Clean plate generation** - Automated inpainting to remove objects from footage (ProPainter)
 - **Camera tracking** - Structure-from-Motion camera solves with bundle adjustment (COLMAP)
@@ -37,7 +37,7 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 ### Core Pipeline
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) - Node-based workflow engine for ML inference
 - [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything) - Temporally consistent depth estimation
-- [Segment Anything Model 2/3](https://github.com/facebookresearch/segment-anything-2) - Text-prompted video segmentation
+- [Segment Anything Model 2/3](https://github.com/facebookresearch/segment-anything-2) - Text-prompted rotoscoping
 - [VideoMaMa](https://github.com/hywang66/VideoMaMa) - Video matting for human alpha mattes
 - [ProPainter](https://github.com/sczhou/ProPainter) - Video inpainting for clean plates
 - [COLMAP](https://colmap.github.io/) - Structure-from-Motion and Multi-View Stereo
@@ -82,7 +82,7 @@ Output follows VFX production conventions:
 ../vfx_projects/Shot_Name/
 ├── source/frames/      # Input frames (frame_0001.png, ...)
 ├── depth/              # Depth maps
-├── roto/               # Segmentation masks
+├── roto/               # Roto masks
 │   ├── mask/           # Combined mask
 │   ├── person_00/      # First person instance
 │   └── person_01/      # Second person instance
@@ -108,7 +108,7 @@ Output follows VFX production conventions:
 | Component | VRAM | Download |
 |-----------|------|----------|
 | Video Depth Anything | ~7 GB | 1.0 GB |
-| SAM3 (segmentation) | ~4 GB | incl. |
+| SAM3 (roto) | ~4 GB | incl. |
 | ProPainter (clean plates) | ~6 GB | incl. |
 | VideoMaMa (matte) | 12+ GB | incl. |
 | COLMAP (camera) | CPU | 0.5 GB |

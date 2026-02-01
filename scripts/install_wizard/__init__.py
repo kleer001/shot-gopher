@@ -3,7 +3,7 @@
 This package provides an interactive installation wizard for setting up
 all dependencies for the VFX pipeline including:
 - Core pipeline (ComfyUI workflows, COLMAP, etc.)
-- Dynamic scene segmentation (SAM3)
+- Dynamic roto (SAM3)
 - Human motion capture (GVHMR)
 
 Usage:
