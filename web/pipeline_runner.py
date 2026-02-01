@@ -22,7 +22,10 @@ def get_run_pipeline_path() -> Path:
 
 ANSI_ESCAPE_PATTERN = re.compile(r'\x1b\[[0-9;]*[mGKHF]|\x1b\].*?\x07')
 
-HTTP_LOG_PATTERN = re.compile(r'^\s*INFO:\s+\d+\.\d+\.\d+\.\d+:\d+\s+-\s+"(GET|POST|PUT|DELETE|PATCH)')
+HTTP_LOG_PATTERN = re.compile(
+    r'(INFO:\s+\d+\.\d+\.\d+\.\d+:\d+\s+-\s+"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS))|'
+    r'(INFO:[a-z._]+:\d+\.\d+\.\d+\.\d+:\d+\s+-\s+"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS))'
+)
 
 FRAME_PATTERNS = [
     re.compile(r'frame\s+(\d+)\s*/\s*(\d+)', re.IGNORECASE),
@@ -264,45 +267,47 @@ def run_pipeline_thread(
 
             progress_info = parse_progress_line(clean_line, current_stage, stages)
 
-            if progress_info:
-                if "current_stage" in progress_info:
-                    current_stage = progress_info["current_stage"]
-                    stage_index = progress_info.get("stage_index", stage_index)
+            if "current_stage" in progress_info:
+                current_stage = progress_info["current_stage"]
+                stage_index = progress_info.get("stage_index", stage_index)
 
-                update = {
-                    "stage": current_stage,
-                    "stage_index": stage_index,
-                    "total_stages": len(stages),
-                    **progress_info,
-                }
+            with active_jobs_lock:
+                if project_id in active_jobs:
+                    active_jobs[project_id]["current_stage"] = current_stage
+                    active_jobs[project_id]["last_output"] = clean_line[:200]
+                    if "progress" in progress_info:
+                        active_jobs[project_id]["progress"] = progress_info["progress"]
 
-                with active_jobs_lock:
-                    if project_id in active_jobs:
-                        active_jobs[project_id]["current_stage"] = current_stage
-                        active_jobs[project_id]["last_output"] = clean_line[:200]
-                        if "progress" in progress_info:
-                            active_jobs[project_id]["progress"] = progress_info["progress"]
-
-                update_progress(project_id, update)
-            else:
-                with active_jobs_lock:
-                    if project_id in active_jobs:
-                        active_jobs[project_id]["last_output"] = clean_line[:200]
+            update = {
+                "stage": current_stage,
+                "stage_index": stage_index,
+                "total_stages": len(stages),
+                **progress_info,
+            }
+            update_progress(project_id, update)
 
         # Wait for process to complete
         process.wait()
 
-        # Update final status
+        # Update final status (but don't overwrite "cancelled" status)
         with active_jobs_lock:
             if project_id in active_jobs:
-                if process.returncode == 0:
+                current_status = active_jobs[project_id].get("status")
+                if current_status == "cancelled":
+                    pass
+                elif process.returncode == 0:
                     active_jobs[project_id]["status"] = "completed"
                     active_jobs[project_id]["progress"] = 1.0
                 else:
                     active_jobs[project_id]["status"] = "failed"
                     active_jobs[project_id]["error"] = f"Pipeline exited with code {process.returncode}"
 
-        if process.returncode == 0:
+        with active_jobs_lock:
+            final_status = active_jobs.get(project_id, {}).get("status")
+
+        if final_status == "cancelled":
+            pass
+        elif process.returncode == 0:
             update_job_repo_status(project_id, "completed")
             update_progress(project_id, {
                 "status": "completed",
