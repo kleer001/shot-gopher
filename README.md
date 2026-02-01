@@ -5,6 +5,15 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-lightgrey)
 ![GPU](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900?logo=nvidia)
 ![Tests](https://img.shields.io/github/actions/workflow/status/kleer001/shot-gopher/test.yml?label=tests)
+![GitHub stars](https://img.shields.io/github/stars/kleer001/shot-gopher)
+![GitHub forks](https://img.shields.io/github/forks/kleer001/shot-gopher)
+![GitHub last commit](https://img.shields.io/github/last-commit/kleer001/shot-gopher)
+![GitHub repo size](https://img.shields.io/github/repo-size/kleer001/shot-gopher)
+![Contains Gophers](https://img.shields.io/badge/Contains-🐹%20Gophers-orange)
+![Works on my machine](https://img.shields.io/badge/Works%20on-my%20machine-success)
+![VFX Pipeline](https://img.shields.io/badge/🎬-VFX%20Pipeline-blue)
+![WIP](https://img.shields.io/badge/Status-WIP%20🚧-yellow)
+![Badges](https://img.shields.io/badge/Badges-14-ff69b4)
 
 Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, roto, clean plates, camera solves, human matchmove, and 3D reconstructions. 
 
