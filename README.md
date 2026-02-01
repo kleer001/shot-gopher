@@ -68,11 +68,7 @@ Automated VFX pipeline built on ComfyUI. Ingest footage, get production-ready de
 
 **Prerequisites:** NVIDIA GPU with driver, Conda/Miniconda. See [Manual Installation](docs/manual-install.md) for step-by-step setup.
 
-**Run:**
-```bash
-./shot-gopher                 # TUI (recommended)
-python scripts/run_pipeline.py video.mp4 -s ingest,interactive,depth,roto,mama,cleanplate,colmap,camera
-```
+
 
 ## Documentation
 
