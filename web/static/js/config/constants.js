@@ -20,6 +20,7 @@ export const API = {
     PROJECT_OPEN_FOLDER: (id) => `/api/projects/${id}/open-folder`,
     PROJECT_VRAM: (id) => `/api/projects/${id}/vram`,
     PROJECT_VIDEO_INFO: (id) => `/api/projects/${id}/video-info`,
+    PROJECT_INTERACTIVE_COMPLETE: (id) => `/api/projects/${id}/interactive-complete`,
 };
 
 /**
@@ -71,6 +72,7 @@ export const ELEMENTS = {
     OPEN_FOLDER_BTN: 'open-folder-btn',
     DELETE_PROJECT_BTN: 'delete-project-btn',
     REPROCESS_BTN: 'reprocess-btn',
+    INTERACTIVE_COMPLETE_BTN: 'interactive-complete-btn',
 
     // System
     SYSTEM_STATUS: 'system-status',

@@ -545,3 +545,30 @@ async def open_folder(
         return {"status": "opened", "path": str(project_dir)}
     except Exception as e:
         return {"status": "error", "error": str(e), "path": str(project_dir)}
+
+
+@router.post("/projects/{project_id}/interactive-complete")
+async def signal_interactive_complete(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+):
+    """Signal that interactive segmentation is complete.
+
+    Creates a signal file that the pipeline process watches for.
+    """
+    project = project_service.get_project(project_id)
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project_entity = get_project_repo().get(project_id)
+    signal_file = project_entity.path / ".interactive_done"
+
+    try:
+        signal_file.touch()
+        return {"status": "signaled", "project_id": project_id}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create signal file: {e}"
+        )

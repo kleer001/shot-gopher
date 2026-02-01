@@ -150,6 +150,32 @@ class TestProjectAPI:
 
         assert response.status_code == 404
 
+    def test_interactive_complete_creates_signal_file(self, client):
+        """Test that interactive-complete creates the signal file."""
+        client.post("/api/projects", json={"name": "interactive_test", "stages": []})
+
+        response = client.post("/api/projects/interactive_test/interactive-complete")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "signaled"
+        assert data["project_id"] == "interactive_test"
+
+    def test_interactive_complete_not_found(self, client):
+        """Test interactive-complete returns 404 for non-existent project."""
+        response = client.post("/api/projects/nonexistent/interactive-complete")
+
+        assert response.status_code == 404
+
+    def test_interactive_complete_signal_file_exists(self, client, temp_projects_dir):
+        """Test that signal file is actually created on disk."""
+        client.post("/api/projects", json={"name": "signal_test", "stages": []})
+
+        client.post("/api/projects/signal_test/interactive-complete")
+
+        signal_file = temp_projects_dir / "signal_test" / ".interactive_done"
+        assert signal_file.exists()
+
 
 class TestSystemAPI:
     """Test system status API endpoints."""

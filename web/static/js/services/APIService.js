@@ -266,6 +266,14 @@ export class APIService {
     async openProjectFolder(projectId) {
         return this.post(API.PROJECT_OPEN_FOLDER(projectId));
     }
+
+    /**
+     * Signal interactive segmentation complete
+     * @param {string} projectId - Project ID
+     */
+    async completeInteractive(projectId) {
+        return this.post(API.PROJECT_INTERACTIVE_COMPLETE(projectId));
+    }
 }
 
 // Export singleton instance

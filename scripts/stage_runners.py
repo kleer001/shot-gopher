@@ -8,8 +8,12 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import webbrowser
 from pathlib import Path
+
+if sys.platform != "win32":
+    import select
 from typing import Optional, Callable, TYPE_CHECKING
 
 from comfyui_utils import run_comfyui_workflow
@@ -324,6 +328,74 @@ def _copy_source_preview(ctx: "StageContext", config: "PipelineConfig") -> None:
             print(f"  → Copied source to {source_preview.name}")
 
 
+INTERACTIVE_SIGNAL_FILE = ".interactive_done"
+
+
+def _check_stdin_ready(timeout: float) -> bool:
+    """Check if stdin has input ready, cross-platform.
+
+    Args:
+        timeout: How long to wait for input (seconds)
+
+    Returns:
+        True if input is ready to be read
+    """
+    if sys.platform == "win32":
+        import msvcrt
+        start = time.time()
+        while (time.time() - start) < timeout:
+            if msvcrt.kbhit():
+                return True
+            time.sleep(0.05)
+        return False
+    else:
+        ready, _, _ = select.select([sys.stdin], [], [], timeout)
+        return bool(ready)
+
+
+def wait_for_interactive_signal(project_dir: Path, poll_interval: float = 0.5) -> None:
+    """Wait for interactive segmentation completion signal.
+
+    Checks for either:
+    1. A signal file (.interactive_done) in the project directory
+    2. User pressing Enter in the terminal (for backwards compatibility)
+
+    Args:
+        project_dir: Project directory to watch for signal file
+        poll_interval: How often to check for signal file (seconds)
+
+    Raises:
+        FileNotFoundError: If project directory is deleted while waiting
+    """
+    signal_file = project_dir / INTERACTIVE_SIGNAL_FILE
+    signal_file.unlink(missing_ok=True)
+
+    print("  Waiting for interactive segmentation to complete...")
+    print("    - Click 'Complete Interactive Roto' in the web UI, OR")
+    print("    - Press Enter in this terminal")
+    print()
+
+    while True:
+        if not project_dir.exists():
+            raise FileNotFoundError(f"Project directory deleted: {project_dir}")
+
+        try:
+            if signal_file.exists():
+                signal_file.unlink(missing_ok=True)
+                print("  → Signal received from web UI")
+                return
+        except OSError as e:
+            raise FileNotFoundError(f"Cannot access project directory: {e}") from e
+
+        if sys.stdin.isatty():
+            if _check_stdin_ready(poll_interval):
+                sys.stdin.readline()
+                print("  → Enter pressed")
+                return
+        else:
+            time.sleep(poll_interval)
+
+
 def run_stage_interactive(
     ctx: "StageContext",
     config: "PipelineConfig",
@@ -362,7 +434,7 @@ def run_stage_interactive(
     print()
 
     webbrowser.open(ctx.comfyui_url)
-    input("  Press Enter when done with interactive segmentation...")
+    wait_for_interactive_signal(ctx.project_dir)
 
     if list(roto_dir.glob("**/*.png")):
         print(f"  OK Masks found in {roto_dir}")
