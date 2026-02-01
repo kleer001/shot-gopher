@@ -4,7 +4,6 @@ Contains handlers for all pipeline stages. Each handler takes a StageContext
 and PipelineConfig, returning True on success.
 """
 
-import os
 import re
 import shutil
 import subprocess
