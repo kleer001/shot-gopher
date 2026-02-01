@@ -107,12 +107,6 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 
 ## Getting Started
 
-### Linux / macOS
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.sh | bash
-```
-
 This script will:
 - Clone the repository
 - Set up a Conda environment
@@ -120,6 +114,12 @@ This script will:
 - Download ML models
 
 **Prerequisites:** Git, Conda/Miniconda, NVIDIA GPU with driver (CUDA)
+
+### Linux / macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.sh | bash
+```
 
 ---
 
@@ -130,8 +130,6 @@ irm https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstra
 ```
 
 Run PowerShell as Administrator for best results.
-
-**Prerequisites:** Git, Conda/Miniconda, NVIDIA GPU with driver (CUDA)
 
 ---
 
