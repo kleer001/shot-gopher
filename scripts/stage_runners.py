@@ -4,14 +4,17 @@ Contains handlers for all pipeline stages. Each handler takes a StageContext
 and PipelineConfig, returning True on success.
 """
 
+import os
 import re
-import select
 import shutil
 import subprocess
 import sys
 import time
 import webbrowser
 from pathlib import Path
+
+if sys.platform != "win32":
+    import select
 from typing import Optional, Callable, TYPE_CHECKING
 
 from comfyui_utils import run_comfyui_workflow
@@ -329,6 +332,28 @@ def _copy_source_preview(ctx: "StageContext", config: "PipelineConfig") -> None:
 INTERACTIVE_SIGNAL_FILE = ".interactive_done"
 
 
+def _check_stdin_ready(timeout: float) -> bool:
+    """Check if stdin has input ready, cross-platform.
+
+    Args:
+        timeout: How long to wait for input (seconds)
+
+    Returns:
+        True if input is ready to be read
+    """
+    if sys.platform == "win32":
+        import msvcrt
+        start = time.time()
+        while (time.time() - start) < timeout:
+            if msvcrt.kbhit():
+                return True
+            time.sleep(0.05)
+        return False
+    else:
+        ready, _, _ = select.select([sys.stdin], [], [], timeout)
+        return bool(ready)
+
+
 def wait_for_interactive_signal(project_dir: Path, poll_interval: float = 0.5) -> None:
     """Wait for interactive segmentation completion signal.
 
@@ -355,8 +380,7 @@ def wait_for_interactive_signal(project_dir: Path, poll_interval: float = 0.5) -
             return
 
         if sys.stdin.isatty():
-            ready, _, _ = select.select([sys.stdin], [], [], poll_interval)
-            if ready:
+            if _check_stdin_ready(poll_interval):
                 sys.stdin.readline()
                 print("  → Enter pressed")
                 return

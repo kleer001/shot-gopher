@@ -486,7 +486,6 @@ export class ProjectsController {
         }
 
         let maxVramGb = 0;
-        let maxStage = '';
         let hasChunking = false;
 
         this.selectedStages.forEach(stage => {
@@ -495,7 +494,6 @@ export class ProjectsController {
                 const stageVramGb = stageInfo.base_vram_gb || 0;
                 if (stageVramGb > maxVramGb) {
                     maxVramGb = stageVramGb;
-                    maxStage = stage;
                 }
                 if (stageInfo.status === 'chunked') {
                     hasChunking = true;
