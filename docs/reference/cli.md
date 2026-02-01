@@ -1,5 +1,7 @@
 # Pipeline Usage
 
+> **Before you run:** Shot-Gopher uses destructive workflows. See [The Gopher's Rules](../RulesAndGotchas.md).
+
 Run the VFX pipeline from a single command.
 
 **Quick links**: [Stages](stages.md) | [Troubleshooting](../troubleshooting.md) | [Installation](../installation.md)

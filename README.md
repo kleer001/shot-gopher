@@ -141,6 +141,12 @@ See [Manual Installation](docs/manual-install.md) for step-by-step setup or trou
 
 [First Project](docs/first-project.md) · [CLI Reference](docs/reference/cli.md) · [Pipeline Stages](docs/reference/stages.md) · [Troubleshooting](docs/troubleshooting.md)
 
+## [The Gopher's Rules](docs/RulesAndGotchas.md)
+
+*Opinionated by design*
+
+Shot-Gopher uses **destructive workflows**: every stage run replaces previous output. No appending, no versioning, no "keep both." Read [The Gopher's Rules](docs/RulesAndGotchas.md) before running if you're used to non-destructive pipelines.
+
 <details>
 <summary><strong>Project Structure</strong></summary>
 
