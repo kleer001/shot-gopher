@@ -8,7 +8,6 @@ import shutil
 
 from web.models.domain import Project, ProjectStatus
 from web.repositories.base import Repository
-from web.utils.media import VIDEO_EXTENSIONS
 
 
 class ProjectRepository(Repository[Project]):
@@ -117,31 +116,17 @@ class ProjectRepository(Repository[Project]):
     def _create_project_from_directory(self, project_path: Path) -> Project:
         """Create a Project from directory metadata when no valid state file exists."""
         dir_mtime = datetime.fromtimestamp(project_path.stat().st_mtime)
-        video_path = self._find_video_in_directory(project_path)
         stages = self._detect_completed_stages(project_path)
 
         return Project(
             name=project_path.name,
             path=project_path,
             status=ProjectStatus.UNKNOWN,
-            video_path=video_path,
+            video_path=None,
             stages=stages,
             created_at=dir_mtime,
             updated_at=dir_mtime,
         )
-
-    def _find_video_in_directory(self, project_path: Path) -> Optional[Path]:
-        """Look for a source video file in the project's source directory."""
-        source_dir = project_path / "source"
-        try:
-            if not source_dir.exists():
-                return None
-            for item in source_dir.iterdir():
-                if item.is_file() and item.suffix.lower() in VIDEO_EXTENSIONS:
-                    return item
-        except OSError:
-            pass
-        return None
 
     def _detect_completed_stages(self, project_path: Path) -> List[str]:
         """Detect which pipeline stages have completed based on output directories."""
