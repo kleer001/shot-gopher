@@ -377,10 +377,10 @@ def wait_for_interactive_signal(project_dir: Path, poll_interval: float = 0.5) -
     print()
 
     while True:
-        try:
-            if not project_dir.exists():
-                raise FileNotFoundError(f"Project directory deleted: {project_dir}")
+        if not project_dir.exists():
+            raise FileNotFoundError(f"Project directory deleted: {project_dir}")
 
+        try:
             if signal_file.exists():
                 signal_file.unlink(missing_ok=True)
                 print("  → Signal received from web UI")
