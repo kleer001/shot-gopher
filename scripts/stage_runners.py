@@ -364,6 +364,9 @@ def wait_for_interactive_signal(project_dir: Path, poll_interval: float = 0.5) -
     Args:
         project_dir: Project directory to watch for signal file
         poll_interval: How often to check for signal file (seconds)
+
+    Raises:
+        FileNotFoundError: If project directory is deleted while waiting
     """
     signal_file = project_dir / INTERACTIVE_SIGNAL_FILE
     signal_file.unlink(missing_ok=True)
@@ -374,10 +377,16 @@ def wait_for_interactive_signal(project_dir: Path, poll_interval: float = 0.5) -
     print()
 
     while True:
-        if signal_file.exists():
-            signal_file.unlink(missing_ok=True)
-            print("  → Signal received from web UI")
-            return
+        try:
+            if not project_dir.exists():
+                raise FileNotFoundError(f"Project directory deleted: {project_dir}")
+
+            if signal_file.exists():
+                signal_file.unlink(missing_ok=True)
+                print("  → Signal received from web UI")
+                return
+        except OSError as e:
+            raise FileNotFoundError(f"Cannot access project directory: {e}") from e
 
         if sys.stdin.isatty():
             if _check_stdin_ready(poll_interval):

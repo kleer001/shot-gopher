@@ -757,6 +757,7 @@ export class ProjectsController {
         if (this.elements.videoInfoSection) {
             dom.addClass(this.elements.videoInfoSection, CSS_CLASSES.HIDDEN);
         }
+        this.hideInteractiveCompleteButton();
     }
 
     startAutoRefresh() {
