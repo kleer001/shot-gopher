@@ -1,5 +1,7 @@
 # Interactive Roto Guide
 
+> **Before you run:** Shot-Gopher uses destructive workflows. See [The Gopher's Rules](../RulesAndGotchas.md).
+
 For complex shots where automatic text-prompt roto doesn't work well, use the interactive roto workflow. This gives you precise control over exactly what gets segmented.
 
 ## When to Use This

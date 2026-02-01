@@ -1,5 +1,7 @@
 # Pipeline Stages
 
+> **Before you run:** Shot-Gopher uses destructive workflows. See [The Gopher's Rules](../RulesAndGotchas.md).
+
 Detailed documentation for each processing stage.
 
 **Quick links**: [CLI Reference](cli.md) | [Troubleshooting](../troubleshooting.md) | [Installation](../installation.md)

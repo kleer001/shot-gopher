@@ -1,5 +1,7 @@
 # Running Your First Project
 
+> **Before you run:** Shot-Gopher uses destructive workflows. See [The Gopher's Rules](RulesAndGotchas.md).
+
 This guide walks you through running your first VFX pipeline project after installation.
 
 ## Prerequisites

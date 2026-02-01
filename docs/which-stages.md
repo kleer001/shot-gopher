@@ -1,5 +1,7 @@
 # Which Stages Can I Use?
 
+> **Before you run:** Shot-Gopher uses destructive workflows. See [The Gopher's Rules](RulesAndGotchas.md).
+
 A dichotomous key to find the right pipeline stages for your footage.
 
 ---
