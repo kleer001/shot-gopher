@@ -54,34 +54,24 @@ def read_output_lines(stdout):
 
     Yields lines as they come, treating \\r (carriage return) as a line break.
     This allows capturing tqdm-style progress bars that use \\r for updates.
+
+    Uses character-by-character reading to ensure immediate processing
+    of output rather than blocking for a buffer to fill.
     """
     buffer = ""
     while True:
-        chunk = stdout.read(256)
-        if not chunk:
-            if buffer:
+        char = stdout.read(1)
+        if not char:
+            if buffer.strip():
                 yield buffer
             break
 
-        buffer += chunk
-
-        while True:
-            cr_pos = buffer.find('\r')
-            nl_pos = buffer.find('\n')
-
-            if cr_pos == -1 and nl_pos == -1:
-                break
-
-            if cr_pos != -1 and (nl_pos == -1 or cr_pos < nl_pos):
-                line = buffer[:cr_pos]
-                buffer = buffer[cr_pos + 1:]
-                if line.strip():
-                    yield line
-            else:
-                line = buffer[:nl_pos]
-                buffer = buffer[nl_pos + 1:]
-                if line.strip():
-                    yield line
+        if char in '\r\n':
+            if buffer.strip():
+                yield buffer
+            buffer = ""
+        else:
+            buffer += char
 
 
 def parse_progress_line(line: str, current_stage: str, stages: list) -> dict:
