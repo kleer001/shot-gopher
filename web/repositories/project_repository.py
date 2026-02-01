@@ -93,24 +93,48 @@ class ProjectRepository(Repository[Project]):
                     updated_at=datetime.fromisoformat(state["updated_at"]),
                 )
             except (json.JSONDecodeError, KeyError, ValueError):
-                dir_mtime = datetime.fromtimestamp(project_path.stat().st_mtime)
-                return Project(
-                    name=project_path.name,
-                    path=project_path,
-                    status=ProjectStatus.UNKNOWN,
-                    video_path=None,
-                    stages=[],
-                    created_at=dir_mtime,
-                    updated_at=dir_mtime,
-                )
+                project = self._create_project_from_directory(project_path)
+                self.save(project)
+                return project
         else:
-            dir_mtime = datetime.fromtimestamp(project_path.stat().st_mtime)
-            return Project(
-                name=project_path.name,
-                path=project_path,
-                status=ProjectStatus.UNKNOWN,
-                video_path=None,
-                stages=[],
-                created_at=dir_mtime,
-                updated_at=dir_mtime,
-            )
+            project = self._create_project_from_directory(project_path)
+            self.save(project)
+            return project
+
+    def _create_project_from_directory(self, project_path: Path) -> Project:
+        """Create a Project from directory metadata when no valid state file exists."""
+        dir_mtime = datetime.fromtimestamp(project_path.stat().st_mtime)
+        video_path = self._find_video_in_directory(project_path)
+        stages = self._detect_completed_stages(project_path)
+
+        return Project(
+            name=project_path.name,
+            path=project_path,
+            status=ProjectStatus.UNKNOWN,
+            video_path=video_path,
+            stages=stages,
+            created_at=dir_mtime,
+            updated_at=dir_mtime,
+        )
+
+    def _find_video_in_directory(self, project_path: Path) -> Optional[Path]:
+        """Look for a source video file in the project directory."""
+        video_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
+        for item in project_path.iterdir():
+            if item.is_file() and item.suffix.lower() in video_extensions:
+                return item
+        return None
+
+    def _detect_completed_stages(self, project_path: Path) -> List[str]:
+        """Detect which pipeline stages have completed based on output files."""
+        stages = []
+        stage_indicators = {
+            'frames': project_path / 'frames',
+            'depth': project_path / 'depth',
+            'segmentation': project_path / 'segmentation',
+            'output': project_path / 'output',
+        }
+        for stage_name, stage_path in stage_indicators.items():
+            if stage_path.exists() and any(stage_path.iterdir()):
+                stages.append(stage_name)
+        return stages
