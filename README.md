@@ -58,6 +58,8 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 - NumPy, OpenCV, Pillow - Image processing
 - trimesh, smplx - 3D geometry (motion capture only)
 
+</details>
+
 ---
 
 ### ⚠️🚧 Tool Limitations by Shot Type 🚧⚠️
@@ -91,8 +93,6 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 - **COLMAP** and **GS-IR** require camera movement — static tripod shots will fail
 - **GVHMR** needs full or mostly-visible human bodies
 - **Long sequences (150+ frames)** may hit VRAM limits on 12GB cards
-
-</details>
 
 ## Getting Started
 
