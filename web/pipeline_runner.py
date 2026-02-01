@@ -6,7 +6,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -22,9 +22,10 @@ def get_run_pipeline_path() -> Path:
 
 ANSI_ESCAPE_PATTERN = re.compile(r'\x1b\[[0-9;]*[mGKHF]|\x1b\].*?\x07')
 
+HTTP_METHODS = r'(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)'
 HTTP_LOG_PATTERN = re.compile(
-    r'(INFO:\s+\d+\.\d+\.\d+\.\d+:\d+\s+-\s+"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS))|'
-    r'(INFO:[a-z._]+:\d+\.\d+\.\d+\.\d+:\d+\s+-\s+"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS))'
+    rf'(INFO:\s+\d+\.\d+\.\d+\.\d+:\d+\s+-\s+"{HTTP_METHODS})|'
+    rf'(INFO:[a-z._]+:\d+\.\d+\.\d+\.\d+:\d+\s+-\s+"{HTTP_METHODS})'
 )
 
 FRAME_PATTERNS = [
@@ -32,7 +33,7 @@ FRAME_PATTERNS = [
     re.compile(r'(\d+)\s*/\s*(\d+)\s*frames', re.IGNORECASE),
     re.compile(r'\[(\d+)/(\d+)\]'),
     re.compile(r'Processing\s+(\d+)\s+of\s+(\d+)', re.IGNORECASE),
-    re.compile(r'\|\s*(\d+)/(\d+)\s*\['),
+    re.compile(r'\|\s*(\d+)/(\d+)\s*[\[\s]'),
 ]
 
 PROGRESS_PATTERN = re.compile(r'(\d+(?:\.\d+)?)\s*%')
@@ -83,7 +84,7 @@ def read_output_lines(stdout):
                     yield line
 
 
-def parse_progress_line(line: str, current_stage: str, stages: list) -> Optional[dict]:
+def parse_progress_line(line: str, current_stage: str, stages: list) -> dict:
     """Parse a line of pipeline output for progress information.
 
     Returns dict with the line as message, plus stage/frame/progress detection.
@@ -162,6 +163,7 @@ def run_pipeline_thread(
             "current_stage": stages[0] if stages else None,
             "progress": 0.0,
             "error": None,
+            "last_output": "",
         }
 
     script_path = get_run_pipeline_path()
@@ -313,7 +315,7 @@ def run_pipeline_thread(
                 "status": "completed",
                 "progress": 1.0,
                 "stage": stages[-1] if stages else None,
-                "stage_index": len(stages) - 1,
+                "stage_index": max(0, len(stages) - 1),
                 "total_stages": len(stages),
             })
         else:
