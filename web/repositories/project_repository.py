@@ -93,13 +93,23 @@ class ProjectRepository(Repository[Project]):
                     updated_at=datetime.fromisoformat(state["updated_at"]),
                 )
             except (json.JSONDecodeError, KeyError, ValueError):
-                project = self._create_project_from_directory(project_path)
-                self.save(project)
-                return project
+                return self._create_and_persist_project(project_path)
         else:
+            return self._create_and_persist_project(project_path)
+
+    def _create_and_persist_project(self, project_path: Path) -> Optional[Project]:
+        """Create project from directory and attempt to save state file."""
+        try:
             project = self._create_project_from_directory(project_path)
+        except OSError:
+            return None
+
+        try:
             self.save(project)
-            return project
+        except OSError:
+            pass
+
+        return project
 
     def _create_project_from_directory(self, project_path: Path) -> Project:
         """Create a Project from directory metadata when no valid state file exists."""
@@ -120,9 +130,12 @@ class ProjectRepository(Repository[Project]):
     def _find_video_in_directory(self, project_path: Path) -> Optional[Path]:
         """Look for a source video file in the project directory."""
         video_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
-        for item in project_path.iterdir():
-            if item.is_file() and item.suffix.lower() in video_extensions:
-                return item
+        try:
+            for item in project_path.iterdir():
+                if item.is_file() and item.suffix.lower() in video_extensions:
+                    return item
+        except OSError:
+            pass
         return None
 
     def _detect_completed_stages(self, project_path: Path) -> List[str]:
@@ -135,6 +148,9 @@ class ProjectRepository(Repository[Project]):
             'output': project_path / 'output',
         }
         for stage_name, stage_path in stage_indicators.items():
-            if stage_path.exists() and any(stage_path.iterdir()):
-                stages.append(stage_name)
+            try:
+                if stage_path.exists() and any(stage_path.iterdir()):
+                    stages.append(stage_name)
+            except OSError:
+                pass
         return stages
