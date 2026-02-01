@@ -522,7 +522,7 @@ Run: python scripts/install_wizard.py
 
 Notes:
   - Motion capture requires NVIDIA GPU (12GB+ VRAM)
-  - Without GPU, only segmentation/roto workflows are available
+  - Without GPU, only roto workflows are available
 """
 
         else:

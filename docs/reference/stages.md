@@ -11,9 +11,9 @@ Detailed documentation for each processing stage.
 | Stage | Purpose | VRAM | Input → Output |
 |-------|---------|------|----------------|
 | [ingest](#ingest) | Extract frames | CPU | Video → PNGs |
-| [interactive](#interactive) | Interactive segmentation | 4 GB | Browser-based point/box selection |
+| [interactive](#interactive) | Interactive roto | 4 GB | Browser-based point/box selection |
 | [depth](#depth) | Depth maps | 7 GB | Frames → Depth |
-| [roto](#roto) | Segmentation | 4 GB | Frames → Masks |
+| [roto](#roto) | Roto masks | 4 GB | Frames → Masks |
 | [mama](#mama) | Matte refinement | 12 GB | Roto masks → Alpha mattes |
 | [cleanplate](#cleanplate) | Object removal | 6 GB | Frames + masks → Clean plates |
 | [colmap](#colmap) | Camera tracking | 2-4 GB | Frames → 3D reconstruction |
@@ -49,7 +49,7 @@ python scripts/run_pipeline.py footage.mp4 -s ingest -f 24
 
 ## interactive
 
-Browser-based interactive segmentation using SAM3 with point/box prompts.
+Browser-based interactive roto using SAM3 with point/box prompts.
 
 | | |
 |---|---|
@@ -67,14 +67,14 @@ python scripts/run_pipeline.py footage.mp4 -s interactive
 ```
 
 **How it works:**
-1. Opens ComfyUI in browser with interactive segmentation workflow
+1. Opens ComfyUI in browser with interactive roto workflow
 2. You manually select objects using point/box prompts
 3. Name each selection (e.g., "car", "building")
 4. Press Enter in terminal when done to continue pipeline
 
 **Use cases:**
 - Objects that text prompts can't identify reliably
-- Precise control over segmentation boundaries
+- Precise control over roto boundaries
 - One-off objects that don't need automation
 
 ---
@@ -106,7 +106,7 @@ python scripts/run_pipeline.py footage.mp4 -s depth
 
 ## roto
 
-Creates segmentation masks using SAM3 (Segment Anything Model 3).
+Creates roto masks using SAM3 (Segment Anything Model 3).
 
 | | |
 |---|---|
@@ -119,13 +119,13 @@ Creates segmentation masks using SAM3 (Segment Anything Model 3).
 - ComfyUI server running
 - SAM3 custom node (~3.2 GB model, auto-downloads from public repo)
 
-**⚠️ When to use automatic vs interactive segmentation:**
+**⚠️ When to use automatic vs interactive roto:**
 - **Single person/object:** Automatic roto works well
-- **Multiple people:** Use [interactive](#interactive) segmentation instead
+- **Multiple people:** Use [interactive](#interactive) roto instead
 - **Non-standard objects:** Use [interactive](#interactive) for objects that text prompts can't reliably identify (specific props, partial views, unusual angles)
 
 **Common issues with automatic multi-person roto:**
-- **Dropped segmentation:** People disappear from masks mid-shot when occluded or at frame edges
+- **Dropped roto:** People disappear from masks mid-shot when occluded or at frame edges
 - **Identity swapping:** Person A's mask suddenly contains Person B after they cross paths
 - **Stuttering/flickering:** Mask boundaries jump erratically frame-to-frame
 - **Merged masks:** Two people combined into one mask when standing close together
@@ -140,7 +140,7 @@ These issues compound in downstream stages (mama, cleanplate) and are difficult 
 python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person"
 ```
 
-### Multi-Object Segmentation
+### Multi-Object Roto
 
 Segment multiple objects in one run:
 
@@ -228,7 +228,7 @@ Removes masked objects using ProPainter video inpainting.
 
 **Requirements:**
 - ComfyUI server running
-- Segmentation masks from roto stage
+- Roto masks from roto stage
 
 ```bash
 python scripts/run_pipeline.py footage.mp4 -s roto,cleanplate

@@ -6,7 +6,7 @@ The actual implementation is in scripts/install_wizard/.
 
 Guides users through installing all dependencies for:
 - Core pipeline (ComfyUI workflows, COLMAP, etc.)
-- Dynamic scene segmentation (SAM3)
+- Dynamic roto (SAM3)
 - Human motion capture (GVHMR)
 
 Usage:

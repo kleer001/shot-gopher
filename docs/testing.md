@@ -38,7 +38,7 @@ For testing, you need a project with:
 ```
 projects/Test_Shot/
 ├── source/frames/          # PNG sequence (frame_0001.png, frame_0002.png, ...)
-├── roto/                   # Optional: person segmentation masks
+├── roto/                   # Optional: person roto masks
 └── camera/                 # Required for mocap
     ├── extrinsics.json     # Camera matrices [N, 4, 4]
     └── intrinsics.json     # Camera parameters (fx, fy, cx, cy)
@@ -115,7 +115,7 @@ if 'transl' in data:
 
 **Motion looks wrong:**
 - Verify person is visible and upright in frames
-- Check segmentation masks if using roto/ (should tightly bound person)
+- Check roto masks if using roto/ (should tightly bound person)
 
 ## Stage 2: Mesh Generation
 

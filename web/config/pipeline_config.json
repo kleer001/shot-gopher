@@ -12,8 +12,8 @@
     },
     "interactive": {
       "name": "Interactive",
-      "displayName": "Interactive Segmentation",
-      "description": "Manual point-based segmentation workflow",
+      "displayName": "Interactive Roto",
+      "description": "Manual point-based roto workflow",
       "outputDir": "roto",
       "estimatedTimePerFrame": 1.0,
       "required": false,
@@ -32,8 +32,8 @@
       "defaultEnabled": true
     },
     "roto": {
-      "name": "Segmentation",
-      "displayName": "Segment Objects (Roto)",
+      "name": "Roto",
+      "displayName": "Roto (Mask Objects)",
       "description": "Detect and mask objects/people",
       "outputDir": "roto",
       "estimatedTimePerFrame": 0.8,
@@ -41,7 +41,7 @@
       "dependencies": [],
       "defaultEnabled": true,
       "hasPrompt": true,
-      "promptLabel": "Segmentation Prompt",
+      "promptLabel": "Roto Prompt",
       "promptPlaceholder": "person, car, building..."
     },
     "mama": {
@@ -110,7 +110,7 @@
   "presets": {
     "quick": {
       "name": "Quick Preview",
-      "description": "Fast preview with depth and segmentation",
+      "description": "Fast preview with depth and roto",
       "stages": ["depth", "roto"]
     },
     "full": {
