@@ -6,7 +6,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -22,18 +22,11 @@ def get_run_pipeline_path() -> Path:
 
 ANSI_ESCAPE_PATTERN = re.compile(r'\x1b\[[0-9;]*[mGKHF]|\x1b\].*?\x07')
 
-HTTP_METHODS = r'(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)'
-HTTP_LOG_PATTERN = re.compile(
-    rf'(INFO:\s+\d+\.\d+\.\d+\.\d+:\d+\s+-\s+"{HTTP_METHODS})|'
-    rf'(INFO:[a-z._]+:\d+\.\d+\.\d+\.\d+:\d+\s+-\s+"{HTTP_METHODS})'
-)
-
 FRAME_PATTERNS = [
     re.compile(r'frame\s+(\d+)\s*/\s*(\d+)', re.IGNORECASE),
     re.compile(r'(\d+)\s*/\s*(\d+)\s*frames', re.IGNORECASE),
     re.compile(r'\[(\d+)/(\d+)\]'),
     re.compile(r'Processing\s+(\d+)\s+of\s+(\d+)', re.IGNORECASE),
-    re.compile(r'\|\s*(\d+)/(\d+)\s*[\[\s]'),
 ]
 
 PROGRESS_PATTERN = re.compile(r'(\d+(?:\.\d+)?)\s*%')
@@ -44,47 +37,7 @@ def strip_ansi_codes(text: str) -> str:
     return ANSI_ESCAPE_PATTERN.sub('', text)
 
 
-def is_http_traffic(line: str) -> bool:
-    """Check if line is HTTP traffic log (should be hidden from UI)."""
-    return bool(HTTP_LOG_PATTERN.search(line))
-
-
-def read_output_lines(stdout):
-    """Read output handling both \\n and \\r as line delimiters.
-
-    Yields lines as they come, treating \\r (carriage return) as a line break.
-    This allows capturing tqdm-style progress bars that use \\r for updates.
-    """
-    buffer = ""
-    while True:
-        chunk = stdout.read(256)
-        if not chunk:
-            if buffer:
-                yield buffer
-            break
-
-        buffer += chunk
-
-        while True:
-            cr_pos = buffer.find('\r')
-            nl_pos = buffer.find('\n')
-
-            if cr_pos == -1 and nl_pos == -1:
-                break
-
-            if cr_pos != -1 and (nl_pos == -1 or cr_pos < nl_pos):
-                line = buffer[:cr_pos]
-                buffer = buffer[cr_pos + 1:]
-                if line.strip():
-                    yield line
-            else:
-                line = buffer[:nl_pos]
-                buffer = buffer[nl_pos + 1:]
-                if line.strip():
-                    yield line
-
-
-def parse_progress_line(line: str, current_stage: str, stages: list) -> dict:
+def parse_progress_line(line: str, current_stage: str, stages: list) -> Optional[dict]:
     """Parse a line of pipeline output for progress information.
 
     Returns dict with the line as message, plus stage/frame/progress detection.
@@ -163,7 +116,6 @@ def run_pipeline_thread(
             "current_stage": stages[0] if stages else None,
             "progress": 0.0,
             "error": None,
-            "last_output": "",
         }
 
     script_path = get_run_pipeline_path()
@@ -259,63 +211,77 @@ def run_pipeline_thread(
         current_stage = stages[0] if stages else None
         stage_index = 0
 
-        for line in read_output_lines(process.stdout):
-            clean_line = strip_ansi_codes(line.strip())
-            if not clean_line:
+        # Read output line by line
+        for line in iter(process.stdout.readline, ""):
+            if not line:
+                break
+
+            line = line.rstrip()
+            if not line:
                 continue
 
-            if is_http_traffic(clean_line):
+            # Skip carriage-return spinner lines (they overwrite themselves)
+            if line.startswith("\r") or line.startswith("    \r"):
+                clean_line = strip_ansi_codes(line.lstrip("\r").strip())
+                if clean_line:
+                    with active_jobs_lock:
+                        if project_id in active_jobs:
+                            active_jobs[project_id]["last_output"] = clean_line
                 continue
 
-            progress_info = parse_progress_line(clean_line, current_stage, stages)
+            # Parse progress
+            progress_info = parse_progress_line(line, current_stage, stages)
 
-            if "current_stage" in progress_info:
-                current_stage = progress_info["current_stage"]
-                stage_index = progress_info.get("stage_index", stage_index)
+            if progress_info:
+                # Update current stage tracking
+                if "current_stage" in progress_info:
+                    current_stage = progress_info["current_stage"]
+                    stage_index = progress_info.get("stage_index", stage_index)
 
-            with active_jobs_lock:
-                if project_id in active_jobs:
-                    active_jobs[project_id]["current_stage"] = current_stage
-                    active_jobs[project_id]["last_output"] = clean_line[:200]
-                    if "progress" in progress_info:
-                        active_jobs[project_id]["progress"] = progress_info["progress"]
+                # Build update
+                update = {
+                    "stage": current_stage,
+                    "stage_index": stage_index,
+                    "total_stages": len(stages),
+                    **progress_info,
+                }
 
-            update = {
-                "stage": current_stage,
-                "stage_index": stage_index,
-                "total_stages": len(stages),
-                **progress_info,
-            }
-            update_progress(project_id, update)
+                # Update stored state
+                with active_jobs_lock:
+                    if project_id in active_jobs:
+                        active_jobs[project_id]["current_stage"] = current_stage
+                        active_jobs[project_id]["last_output"] = strip_ansi_codes(line[:100])
+                        if "progress" in progress_info:
+                            active_jobs[project_id]["progress"] = progress_info["progress"]
+
+                # Send WebSocket update
+                update_progress(project_id, update)
+            else:
+                # Store any output line for display
+                with active_jobs_lock:
+                    if project_id in active_jobs:
+                        active_jobs[project_id]["last_output"] = strip_ansi_codes(line[:100])
 
         # Wait for process to complete
         process.wait()
 
-        # Update final status (but don't overwrite "cancelled" status)
+        # Update final status
         with active_jobs_lock:
             if project_id in active_jobs:
-                current_status = active_jobs[project_id].get("status")
-                if current_status == "cancelled":
-                    pass
-                elif process.returncode == 0:
+                if process.returncode == 0:
                     active_jobs[project_id]["status"] = "completed"
                     active_jobs[project_id]["progress"] = 1.0
                 else:
                     active_jobs[project_id]["status"] = "failed"
                     active_jobs[project_id]["error"] = f"Pipeline exited with code {process.returncode}"
 
-        with active_jobs_lock:
-            final_status = active_jobs.get(project_id, {}).get("status")
-
-        if final_status == "cancelled":
-            pass
-        elif process.returncode == 0:
+        if process.returncode == 0:
             update_job_repo_status(project_id, "completed")
             update_progress(project_id, {
                 "status": "completed",
                 "progress": 1.0,
                 "stage": stages[-1] if stages else None,
-                "stage_index": max(0, len(stages) - 1),
+                "stage_index": len(stages) - 1,
                 "total_stages": len(stages),
             })
         else:
