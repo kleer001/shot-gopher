@@ -17,7 +17,7 @@ Shot-Gopher is built for VFX artists who need fast, consistent first-pass result
 - Multiple video files in one run
 - Mixing formats
 
-The gopher expects you to hand it a movie. It extracts frames internally. If you already have frames, create a video from them first, or manually place them in `source/frames/` and skip the `ingest` stage.
+The gopher expects you to hand it a movie. It extracts frames internally. If you already have an image sequence, convert it to a video first (your compositor or DaVinci can do this), then feed that to the gopher.
 
 ### 2. Every Run Replaces Previous Output
 
@@ -25,36 +25,22 @@ The gopher expects you to hand it a movie. It extracts frames internally. If you
 
 When you run a stage, Shot-Gopher **deletes** the previous output for that stage and creates fresh results. There is no append, no versioning, no "keep both."
 
-```bash
-# First run - creates depth maps
-python scripts/run_pipeline.py shot.mp4 -s depth
-
-# Second run - DESTROYS previous depth maps, creates new ones
-python scripts/run_pipeline.py shot.mp4 -s depth
-```
+Run depth once, you get depth maps. Run depth again with different settings, the old depth maps are **gone** and replaced with new ones.
 
 **Why?** VFX iteration is messy. Artists tweak parameters, re-run, compare. Accumulating old outputs creates confusion about which version is current. The gopher keeps it simple: one stage, one output, always current.
 
-**How to preserve previous attempts:**
+**Want to preserve previous attempts?**
 
-```bash
-# Option 1: Copy before re-running
-cp -r ../vfx_projects/MyShot/depth ../vfx_projects/MyShot/depth_v1
-
-# Option 2: Use --no-overwrite (keeps existing, skips stage if output exists)
-python scripts/run_pipeline.py shot.mp4 -s depth --no-overwrite
-
-# Option 3: Different project names for different versions
-python scripts/run_pipeline.py shot.mp4 -s depth --name MyShot_v1
-python scripts/run_pipeline.py shot.mp4 -s depth --name MyShot_v2
-```
+- **Copy before re-running:** Use your file browser to copy the output folder before hitting run again
+- **Use different project names:** Create `Shot_v1`, `Shot_v2`, etc. as separate projects
+- **Enable "Skip Existing":** Check this option to prevent overwriting (stage will be skipped if output exists)
 
 ### 3. Trust the Project Structure
 
-The gopher creates a specific directory layout:
+The gopher creates a specific directory layout for each project:
 
 ```
-../vfx_projects/MyShot/
+MyShot/
 ├── source/frames/      # Extracted frames (ingest)
 ├── depth/              # Depth maps
 ├── roto/               # Roto masks
@@ -66,12 +52,12 @@ The gopher creates a specific directory layout:
 ```
 
 **Don't:**
-- Manually add files to stage output directories (they'll be deleted on next run)
-- Rename or restructure directories (stages expect specific paths)
+- Manually add files to stage output folders (they'll be deleted on next run)
+- Rename or restructure folders (stages expect specific paths)
 - Mix outputs from different shots in one project
 
 **Do:**
-- Add custom data to new subdirectories (e.g., `../vfx_projects/MyShot/reference/`)
+- Add custom data to new subfolders (e.g., `MyShot/reference/`)
 - Copy outputs elsewhere before modifying them
 - Use the project as a **source** for your downstream work, not a workspace
 
@@ -81,98 +67,50 @@ The gopher creates a specific directory layout:
 
 ### "I gave it an image sequence and nothing happened"
 
-Shot-Gopher expects a video file. If you have frames:
-
-```bash
-# Convert frames to video first
-ffmpeg -framerate 24 -i frame_%04d.png -c:v libx264 -pix_fmt yuv420p temp_input.mp4
-
-# Then run the pipeline
-python scripts/run_pipeline.py temp_input.mp4 -s depth,roto
-```
-
-Or skip ingest and work with existing frames:
-
-```bash
-# Manually place frames in the project
-mkdir -p ../vfx_projects/MyShot/source/frames
-cp /path/to/frames/*.png ../vfx_projects/MyShot/source/frames/
-
-# Run stages that don't need ingest
-python scripts/run_pipeline.py --name MyShot -s depth,roto
-```
+Shot-Gopher expects a video file. Convert your frames to a video first using your preferred tool (After Effects, Nuke, DaVinci, ffmpeg).
 
 ### "My previous roto is gone!"
 
 You re-ran the roto stage. By design, this replaces the previous output.
 
-**Prevention:** Copy outputs you want to keep before re-running:
-
-```bash
-cp -r ../vfx_projects/MyShot/roto ../vfx_projects/MyShot/roto_backup
-```
+**Prevention:** Copy the output folder you want to keep before re-running the stage.
 
 ### "I want to compare two different settings"
 
-Use separate project names:
+Create separate projects with different names. Each project maintains its own independent outputs.
 
-```bash
-python scripts/run_pipeline.py shot.mp4 -s roto --prompt "person" --name Shot_PersonOnly
-python scripts/run_pipeline.py shot.mp4 -s roto --prompt "person,car" --name Shot_PersonAndCar
-```
+### "The stage didn't run"
 
-### "The stage didn't run because output already exists"
-
-If you used `--no-overwrite` or `-e` (skip-existing), the stage was skipped.
-
-To force re-run:
-
-```bash
-# Remove --no-overwrite flag (default behavior is to overwrite)
-python scripts/run_pipeline.py shot.mp4 -s depth
-```
+If "Skip Existing" is enabled and output already exists, the stage will be skipped. Disable this option or delete the existing output to force a fresh run.
 
 ### "I added files to the output folder and they disappeared"
 
-Stage output directories are cleared on each run. Store custom files elsewhere:
-
-```bash
-# Bad - will be deleted
-../vfx_projects/MyShot/roto/my_custom_mask.png
-
-# Good - safe location
-../vfx_projects/MyShot/custom/my_custom_mask.png
-```
+Stage output folders are cleared on each run. Store custom files in a separate folder within the project.
 
 ### "First run of a stage is slow"
 
-First run downloads ML models. This is normal:
-- SAM3: ~3.2 GB
-- Depth Anything: ~1.5 GB
-- VideoMaMa: ~10 GB
-- GVHMR: ~4 GB
+First run downloads ML models. This is normal and only happens once:
+- Depth models: ~1.5 GB
+- Roto models: ~3 GB
+- Matte refinement: ~10 GB
+- Motion capture: ~4 GB
 
 Subsequent runs use cached models.
 
-### "Stage X requires stage Y to run first"
+### "Stage X says it needs something from stage Y"
 
 Some stages have dependencies:
 
 | Stage | Requires |
 |-------|----------|
-| `depth` | `ingest` (frames must exist) |
-| `roto` | `ingest` |
-| `mama` | `roto` (needs masks to refine) |
-| `cleanplate` | `roto` (needs masks for inpainting) |
-| `camera` | `colmap` (needs reconstruction data) |
-| `mocap` | `colmap` (needs camera data) |
-| `gsir` | `colmap` (needs reconstruction data) |
+| Depth | Ingest (frames must exist) |
+| Roto | Ingest |
+| Matte | Roto (needs masks to refine) |
+| Cleanplate | Roto (needs masks for inpainting) |
+| Camera | Colmap (needs reconstruction data) |
+| Mocap | Colmap (needs camera data) |
 
-Run stages in order, or use `all`:
-
-```bash
-python scripts/run_pipeline.py shot.mp4 -s ingest,roto,mama,cleanplate
-```
+The interface will guide you, but generally: run stages in order from top to bottom.
 
 ---
 
@@ -186,8 +124,8 @@ VFX pipelines often accumulate cruft:
 Shot-Gopher takes a different approach: **the output is always the current version**. If you need history, that's what version control and manual backups are for.
 
 This isn't the right approach for everyone. If you need non-destructive workflows:
-- Use `--no-overwrite` to prevent accidental deletion
-- Create versioned project names (`Shot_v1`, `Shot_v2`)
+- Enable "Skip Existing" to prevent accidental deletion
+- Create versioned project names
 - Copy outputs before re-running stages
 - Integrate with your studio's asset management system
 
@@ -207,5 +145,4 @@ The gopher is a tool, not a prison. Work with it, not against it.
 
 ---
 
-**Version:** 1.0
-**Last Updated:** 2026-02-01
+*For command-line usage, see the [CLI Reference](reference/cli.md).*
