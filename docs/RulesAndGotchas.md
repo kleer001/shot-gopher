@@ -33,7 +33,6 @@ Run depth once, you get depth maps. Run depth again with different settings, the
 
 - **Copy before re-running:** Use your file browser to copy the output folder before hitting run again
 - **Use different project names:** Create `Shot_v1`, `Shot_v2`, etc. as separate projects
-- **Enable "Skip Existing":** Check this option to prevent overwriting (stage will be skipped if output exists)
 
 ### 3. Trust the Project Structure
 
@@ -79,10 +78,6 @@ You re-ran the roto stage. By design, this replaces the previous output.
 
 Create separate projects with different names. Each project maintains its own independent outputs.
 
-### "The stage didn't run"
-
-If "Skip Existing" is enabled and output already exists, the stage will be skipped. Disable this option or delete the existing output to force a fresh run.
-
 ### "I added files to the output folder and they disappeared"
 
 Stage output folders are cleared on each run. Store custom files in a separate folder within the project.
@@ -110,7 +105,7 @@ Some stages have dependencies:
 | Camera | Colmap (needs reconstruction data) |
 | Mocap | Colmap (needs camera data) |
 
-The interface will guide you, but generally: run stages in order from top to bottom.
+Run stages in order from top to bottom.
 
 ---
 
@@ -124,8 +119,7 @@ VFX pipelines often accumulate cruft:
 Shot-Gopher takes a different approach: **the output is always the current version**. If you need history, that's what version control and manual backups are for.
 
 This isn't the right approach for everyone. If you need non-destructive workflows:
-- Enable "Skip Existing" to prevent accidental deletion
-- Create versioned project names
+- Create versioned project names (`Shot_v1`, `Shot_v2`)
 - Copy outputs before re-running stages
 - Integrate with your studio's asset management system
 
