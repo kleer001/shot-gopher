@@ -60,8 +60,7 @@ Browser-based interactive roto using SAM3 with point/box prompts.
 
 **📖 Tutorials:**
 - [**Interactive Roto Guide**](interactive-segmentation.md) — Full walkthrough with tips for multi-object selection
-- [SAM2 Point Prompts (YouTube)](https://www.youtube.com/watch?v=SLrleF3k9zM) — Visual guide to point/box selection
-- [ComfyUI SAM2 Node Tutorial (YouTube)](https://www.youtube.com/watch?v=bEjilHNsKGc) — ComfyUI-specific workflow demo
+- [ComfyUI-SAM3 GitHub](https://github.com/1038lab/ComfyUI-SAM3) — Node documentation and examples
 
 **Requirements:**
 - ComfyUI server running
@@ -121,8 +120,8 @@ Creates roto masks using SAM3 (Segment Anything Model 3).
 | **Workflow** | `02_segmentation.json` |
 
 **📖 Tutorials:**
-- [Segment Anything 2 Paper (Meta)](https://ai.meta.com/sam2/) — Official SAM2 documentation and capabilities
-- [SAM2 Video Segmentation (YouTube)](https://www.youtube.com/watch?v=Dv003fTyO-Y) — Understanding SAM2's video propagation
+- [ComfyUI-SAM3 GitHub](https://github.com/1038lab/ComfyUI-SAM3) — Node documentation and workflow examples
+- [1038lab/sam3 Model](https://huggingface.co/1038lab/sam3) — Model weights and usage info
 
 **Requirements:**
 - ComfyUI server running
