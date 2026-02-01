@@ -209,6 +209,7 @@ export class ProjectsController {
         if (!this.elements.detailPanel) return;
 
         dom.removeClass(this.elements.detailPanel, CSS_CLASSES.HIDDEN);
+        this.hideInteractiveCompleteButton();
 
         if (this.elements.detailProjectName) {
             this.elements.detailProjectName.textContent = projectId;
@@ -647,7 +648,6 @@ export class ProjectsController {
 
             if (status === 'running') {
                 const stage = jobData.current_stage || 'processing';
-                const progress = Math.round((jobData.progress || 0) * 100);
                 const lastOutput = jobData.last_output || '';
 
                 if (stage === 'interactive') {

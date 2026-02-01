@@ -956,6 +956,12 @@ body {
     transform: scale(0.98);
 }
 
+.btn-interactive-complete:disabled {
+    opacity: 0.7;
+    cursor: wait;
+    transform: none;
+}
+
 .btn-interactive-complete.hidden {
     display: none;
 }
