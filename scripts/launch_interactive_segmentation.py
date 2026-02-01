@@ -45,7 +45,6 @@ def populate_workflow(workflow_data: dict, project_dir: Path) -> dict:
     Output nodes (SaveImage): Use paths relative to ComfyUI output directory
     """
     comfyui_output = get_comfyui_output_dir()
-    project_dir_str = str(project_dir)
 
     print(f"  Populating workflow paths:")
     print(f"    Project dir: {project_dir}")
@@ -72,7 +71,7 @@ def populate_workflow(workflow_data: dict, project_dir: Path) -> dict:
                 try:
                     relative_path = project_dir.relative_to(comfyui_output)
                 except ValueError:
-                    relative_path = Path(project_dir.name)
+                    relative_path = project_dir
                 new_prefix = str(relative_path / "roto" / "custom" / "mask")
                 widgets[0] = new_prefix
                 print(f"    SaveImage: '{old_prefix}' -> '{new_prefix}'")

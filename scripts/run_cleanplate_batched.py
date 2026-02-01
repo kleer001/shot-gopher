@@ -258,7 +258,7 @@ def process_chunk(
     try:
         relative_path = project_dir.relative_to(comfyui_output)
     except ValueError:
-        relative_path = Path(project_dir.name)
+        relative_path = project_dir
     output_prefix = str(relative_path / "cleanplate" / "chunks" / chunk.name / "clean")
 
     workflow = generate_chunk_workflow(template, chunk, project_dir, output_prefix)
