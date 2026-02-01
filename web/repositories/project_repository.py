@@ -39,7 +39,12 @@ class ProjectRepository(Repository[Project]):
         if not self.projects_dir.exists():
             return projects
 
-        for project_path in self.projects_dir.iterdir():
+        try:
+            entries = list(self.projects_dir.iterdir())
+        except OSError:
+            return projects
+
+        for project_path in entries:
             if project_path.is_dir():
                 project = self._load_project(project_path)
                 if project:
@@ -126,9 +131,12 @@ class ProjectRepository(Repository[Project]):
         )
 
     def _find_video_in_directory(self, project_path: Path) -> Optional[Path]:
-        """Look for a source video file in the project directory."""
+        """Look for a source video file in the project's source directory."""
+        source_dir = project_path / "source"
         try:
-            for item in project_path.iterdir():
+            if not source_dir.exists():
+                return None
+            for item in source_dir.iterdir():
                 if item.is_file() and item.suffix.lower() in VIDEO_EXTENSIONS:
                     return item
         except OSError:
@@ -136,15 +144,19 @@ class ProjectRepository(Repository[Project]):
         return None
 
     def _detect_completed_stages(self, project_path: Path) -> List[str]:
-        """Detect which pipeline stages have completed based on output files."""
+        """Detect which pipeline stages have completed based on output directories."""
         stages = []
-        stage_indicators = {
-            'frames': project_path / 'frames',
+        stage_output_dirs = {
+            'ingest': project_path / 'source' / 'frames',
             'depth': project_path / 'depth',
-            'segmentation': project_path / 'segmentation',
-            'output': project_path / 'output',
+            'roto': project_path / 'roto',
+            'matte': project_path / 'matte',
+            'cleanplate': project_path / 'cleanplate',
+            'colmap': project_path / 'colmap',
+            'mocap': project_path / 'mocap',
+            'camera': project_path / 'camera',
         }
-        for stage_name, stage_path in stage_indicators.items():
+        for stage_name, stage_path in stage_output_dirs.items():
             try:
                 if stage_path.exists() and any(stage_path.iterdir()):
                     stages.append(stage_name)
