@@ -78,6 +78,39 @@ def get_frame_files(frames_dir: Path) -> List[Path]:
     return sorted(frames)
 
 
+def get_frame_range(frames_dir: Path) -> Tuple[Optional[int], Optional[int], int]:
+    """Extract frame number range from frame filenames.
+
+    Parses frame numbers from filenames like 'frame_0001.png' or '1001.png'.
+
+    Args:
+        frames_dir: Directory containing frames
+
+    Returns:
+        Tuple of (first_frame, last_frame, count)
+    """
+    import re
+
+    if not frames_dir.exists():
+        return None, None, 0
+
+    frames = get_frame_files(frames_dir)
+    if not frames:
+        return None, None, 0
+
+    frame_numbers = []
+    for frame_path in frames:
+        numbers = re.findall(r'\d+', frame_path.stem)
+        if numbers:
+            frame_numbers.append(int(numbers[-1]))
+
+    if not frame_numbers:
+        return None, None, len(frames)
+
+    frame_numbers.sort()
+    return frame_numbers[0], frame_numbers[-1], len(frames)
+
+
 def get_dir_size_bytes(directory: Path) -> int:
     """Calculate total size of all files in a directory recursively.
 

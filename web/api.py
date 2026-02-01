@@ -19,7 +19,7 @@ from web.services.system_service import get_system_service
 from web.repositories.project_repository import ProjectRepository
 from web.repositories.job_repository import JobRepository
 from web.models.domain import JobStatus
-from web.utils.media import find_video_or_frames, get_dir_size_bytes, get_dir_size_gb
+from web.utils.media import find_video_or_frames, get_dir_size_bytes, get_dir_size_gb, get_frame_range
 from web.job_state import active_jobs, active_jobs_lock
 from web.models.dto import (
     ProjectCreateRequest,
@@ -221,9 +221,12 @@ async def get_project_video_info(
     if has_frames:
         frames_dir = source_dir / "frames"
         resolution = await asyncio.to_thread(video_service.get_resolution_from_frames, frames_dir)
+        first_frame, last_frame, count = await asyncio.to_thread(get_frame_range, frames_dir)
         video_info = {
             "source": "frames",
-            "frame_count": frame_count,
+            "frame_count": count,
+            "frame_start": first_frame,
+            "frame_end": last_frame,
             "resolution": list(resolution) if resolution else None,
         }
     elif video_path:

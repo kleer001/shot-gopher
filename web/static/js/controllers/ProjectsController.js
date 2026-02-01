@@ -242,7 +242,12 @@ export class ProjectsController {
         }
 
         if (videoInfo.frame_count !== undefined && videoInfo.frame_count > 0) {
-            dom.setText(this.elements.videoFrames, videoInfo.frame_count.toLocaleString());
+            if (videoInfo.frame_start !== undefined && videoInfo.frame_end !== undefined) {
+                dom.setText(this.elements.videoFrames,
+                    `${videoInfo.frame_start} - ${videoInfo.frame_end} (${videoInfo.frame_count.toLocaleString()})`);
+            } else {
+                dom.setText(this.elements.videoFrames, videoInfo.frame_count.toLocaleString());
+            }
         } else {
             dom.setText(this.elements.videoFrames, '--');
         }
