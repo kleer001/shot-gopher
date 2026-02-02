@@ -1,10 +1,13 @@
 # Core dependencies
 numpy>=1.20.0
 
+# Image processing (separate_instances.py, texture_projection.py)
+opencv-python>=4.5.0
+Pillow>=8.0.0
+
 # Mesh processing (mesh_deform.py)
 scipy>=1.7.0
 trimesh>=3.9.0
-Pillow>=8.0.0
 
 # ComfyUI database migrations (required by ComfyUI)
 alembic>=1.13.0
