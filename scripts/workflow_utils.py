@@ -29,13 +29,13 @@ def _get_max_processing_dimensions() -> tuple[int, int]:
 def _get_propainter_internal_scale() -> float:
     """Get ProPainter internal resolution scale factor from environment.
 
-    ProPainter works better at lower resolutions for clean plate generation.
-    Default is 0.75 to balance quality and memory usage.
+    ProPainter processes at reduced resolution internally, then upscales.
+    Default is 0.5 (half resolution) for stable VRAM usage.
 
     Returns:
         Scale factor between 0.1 and 1.0
     """
-    scale = float(os.environ.get("PROPAINTER_INTERNAL_SCALE", "0.75"))
+    scale = float(os.environ.get("PROPAINTER_INTERNAL_SCALE", "0.5"))
     return max(0.1, min(1.0, scale))
 
 
