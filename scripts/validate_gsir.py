@@ -21,7 +21,6 @@ import struct
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from env_config import check_conda_env_or_warn
 
@@ -91,8 +90,11 @@ def count_colmap_images(sparse_model: Path) -> int:
     if images_bin.exists():
         try:
             with open(images_bin, "rb") as f:
-                return struct.unpack("<Q", f.read(8))[0]
-        except (IOError, struct.error):
+                data = f.read(8)
+                if len(data) < 8:
+                    return 0
+                return struct.unpack("<Q", data)[0]
+        except (IOError, struct.error, ValueError):
             pass
     return 0
 
@@ -234,6 +236,13 @@ def check_image_validity(output_dir: Path, sample_size: int = 5) -> ValidationRe
             details=invalid_files[:10],
         )
 
+    if checked_count == 0:
+        return ValidationResult(
+            valid=True,
+            message="Skipped (no images found to check)",
+            details=["Output directories may be empty or missing"],
+        )
+
     details = [f"Checked {checked_count} images"]
     for name, size in dimensions.items():
         details.append(f"{name}: {size[0]}x{size[1]}")
@@ -321,6 +330,13 @@ def check_content_quality(
             valid=False,
             message=f"Degenerate images detected ({len(degenerate_files)} issues)",
             details=degenerate_files,
+        )
+
+    if checked_count == 0:
+        return ValidationResult(
+            valid=True,
+            message="Skipped (no images found to check)",
+            details=["Output directories may be empty or missing"],
         )
 
     return ValidationResult(
