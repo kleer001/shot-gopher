@@ -26,7 +26,7 @@ class ProjectRepository(Repository[Project]):
         """Get project by name."""
         project_path = self.projects_dir / name
 
-        if not project_path.exists():
+        if not project_path.is_dir():
             return None
 
         return self._load_project(project_path)
@@ -44,10 +44,14 @@ class ProjectRepository(Repository[Project]):
             return projects
 
         for project_path in entries:
-            if project_path.is_dir():
+            try:
+                if not project_path.is_dir():
+                    continue
                 project = self._load_project(project_path)
                 if project:
                     projects.append(project)
+            except OSError:
+                continue
 
         return sorted(projects, key=lambda p: p.created_at, reverse=True)
 
@@ -73,7 +77,7 @@ class ProjectRepository(Repository[Project]):
         """Delete project directory."""
         project_path = self.projects_dir / name
 
-        if project_path.exists():
+        if project_path.is_dir():
             shutil.rmtree(project_path)
             return True
 
@@ -96,7 +100,7 @@ class ProjectRepository(Repository[Project]):
                 created_at=datetime.fromisoformat(state["created_at"]),
                 updated_at=datetime.fromisoformat(state["updated_at"]),
             )
-        except (json.JSONDecodeError, KeyError, ValueError, FileNotFoundError):
+        except (json.JSONDecodeError, KeyError, ValueError, OSError):
             return self._create_and_persist_project(project_path)
 
     def _create_and_persist_project(self, project_path: Path) -> Optional[Project]:
@@ -138,6 +142,7 @@ class ProjectRepository(Repository[Project]):
             'matte': project_path / 'matte',
             'cleanplate': project_path / 'cleanplate',
             'colmap': project_path / 'colmap',
+            'gsir': project_path / 'gsir',
             'mocap': project_path / 'mocap',
             'camera': project_path / 'camera',
         }
