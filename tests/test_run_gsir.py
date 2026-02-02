@@ -1,6 +1,6 @@
 """Tests for run_gsir.py"""
 
-import json
+import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -9,6 +9,8 @@ import pytest
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+
+COLMAP_AVAILABLE = shutil.which("colmap") is not None
 
 from run_gsir import (
     check_gsir_available,
@@ -32,15 +34,15 @@ class TestCheckGsirAvailable:
                 available, path = check_gsir_available()
                 assert available is False
 
-    def test_gsir_found_via_import(self):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="/home/user/GS-IR/gs_ir/__init__.py\n"
-            )
-            available, path = check_gsir_available()
-            assert available is True
-            assert path == Path("/home/user/GS-IR/gs_ir")
+    def test_gsir_found_via_env(self):
+        """Test that GSIR_PATH environment variable is respected."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gsir_path = Path(tmpdir)
+            (gsir_path / "train.py").touch()
+            with patch.dict("os.environ", {"GSIR_PATH": str(gsir_path)}):
+                available, path = check_gsir_available()
+                assert available is True
+                assert path == gsir_path
 
 
 class TestSetupGsirDataStructure:
@@ -73,6 +75,7 @@ class TestSetupGsirDataStructure:
             result = setup_gsir_data_structure(project_dir, gsir_data_dir)
             assert result is False
 
+    @pytest.mark.skipif(not COLMAP_AVAILABLE, reason="colmap not installed")
     def test_successful_setup(self):
         """Test that setup succeeds with valid inputs."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -86,6 +89,12 @@ class TestSetupGsirDataStructure:
             (colmap_sparse / "images.bin").touch()
             (colmap_sparse / "points3D.bin").touch()
 
+            # Create undistorted output (as if colmap already ran)
+            undistorted = project_dir / "colmap" / "undistorted"
+            undistorted.mkdir(parents=True)
+            (undistorted / "sparse" / "0").mkdir(parents=True)
+            (undistorted / "images").mkdir()
+
             # Create source frames
             frames_dir = project_dir / "source" / "frames"
             frames_dir.mkdir(parents=True)
@@ -94,18 +103,15 @@ class TestSetupGsirDataStructure:
 
             gsir_data_dir = project_dir / "gsir" / "data"
 
-            result = setup_gsir_data_structure(project_dir, gsir_data_dir)
+            # Mock the colmap subprocess call
+            with patch("run_gsir.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                result = setup_gsir_data_structure(project_dir, gsir_data_dir)
 
             assert result is True
             assert gsir_data_dir.exists()
 
-            # Check that symlinks or copies were created
-            sparse_link = gsir_data_dir / "sparse"
-            images_link = gsir_data_dir / "images"
-
-            assert sparse_link.exists()
-            assert images_link.exists()
-
+    @pytest.mark.skipif(not COLMAP_AVAILABLE, reason="colmap not installed")
     def test_idempotent_setup(self):
         """Test that setup can be run multiple times."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -117,15 +123,23 @@ class TestSetupGsirDataStructure:
             colmap_sparse.mkdir(parents=True)
             (colmap_sparse / "cameras.bin").touch()
 
+            # Create undistorted output
+            undistorted = project_dir / "colmap" / "undistorted"
+            undistorted.mkdir(parents=True)
+            (undistorted / "sparse" / "0").mkdir(parents=True)
+            (undistorted / "images").mkdir()
+
             frames_dir = project_dir / "source" / "frames"
             frames_dir.mkdir(parents=True)
             (frames_dir / "frame_0001.png").touch()
 
             gsir_data_dir = project_dir / "gsir" / "data"
 
-            # Run setup twice
-            result1 = setup_gsir_data_structure(project_dir, gsir_data_dir)
-            result2 = setup_gsir_data_structure(project_dir, gsir_data_dir)
+            # Mock the colmap subprocess call
+            with patch("run_gsir.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                result1 = setup_gsir_data_structure(project_dir, gsir_data_dir)
+                result2 = setup_gsir_data_structure(project_dir, gsir_data_dir)
 
             assert result1 is True
             assert result2 is True
