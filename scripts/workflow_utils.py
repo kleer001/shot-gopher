@@ -26,6 +26,19 @@ def _get_max_processing_dimensions() -> tuple[int, int]:
     return max_width, max_height
 
 
+def _get_propainter_internal_scale() -> float:
+    """Get ProPainter internal resolution scale factor from environment.
+
+    ProPainter works better at lower resolutions for clean plate generation.
+    Default is 0.5 (half resolution) to balance quality and memory usage.
+
+    Returns:
+        Scale factor between 0.1 and 1.0
+    """
+    scale = float(os.environ.get("PROPAINTER_INTERNAL_SCALE", "0.5"))
+    return max(0.1, min(1.0, scale))
+
+
 def _calculate_processing_resolution(
     source_width: int,
     source_height: int,
@@ -269,6 +282,10 @@ def update_workflow_resolution(
         width, height, max_processing_width, max_processing_height
     )
 
+    propainter_scale = _get_propainter_internal_scale()
+    propainter_width = _align_to_8(int(proc_width * propainter_scale))
+    propainter_height = _align_to_8(int(proc_height * propainter_scale))
+
     width_8 = _align_to_8(width)
     height_8 = _align_to_8(height)
 
@@ -298,10 +315,13 @@ def update_workflow_resolution(
 
         elif update_propainter and node_type == "ProPainterInpaint":
             if len(widgets) >= 2:
-                widgets[0] = proc_width
-                widgets[1] = proc_height
+                widgets[0] = propainter_width
+                widgets[1] = propainter_height
                 node["widgets_values"] = widgets
-                nodes_updated.append(f"ProPainterInpaint (internal: {proc_width}x{proc_height})")
+                scale_pct = int(propainter_scale * 100)
+                nodes_updated.append(
+                    f"ProPainterInpaint (internal: {propainter_width}x{propainter_height} @ {scale_pct}%)"
+                )
 
     with open(workflow_path, 'w', encoding='utf-8') as f:
         json.dump(workflow, f, indent=2)
