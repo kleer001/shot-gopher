@@ -146,7 +146,7 @@ class TestGenerateChunkWorkflow:
 
     def test_updates_load_images_frame_count(self, sample_template):
         chunk = ChunkInfo(index=0, start_frame=0, end_frame=9, frame_count=10)
-        result = generate_chunk_workflow(sample_template, chunk, "output/clean")
+        result = generate_chunk_workflow(sample_template, chunk, Path("output"), "clean")
 
         for node in result["nodes"]:
             if node["type"] == "VHS_LoadImagesPath":
@@ -154,7 +154,7 @@ class TestGenerateChunkWorkflow:
 
     def test_updates_load_images_skip_frames(self, sample_template):
         chunk = ChunkInfo(index=1, start_frame=8, end_frame=17, frame_count=10)
-        result = generate_chunk_workflow(sample_template, chunk, "output/clean")
+        result = generate_chunk_workflow(sample_template, chunk, Path("output"), "clean")
 
         for node in result["nodes"]:
             if node["type"] == "VHS_LoadImagesPath":
@@ -162,7 +162,7 @@ class TestGenerateChunkWorkflow:
 
     def test_updates_both_load_nodes(self, sample_template):
         chunk = ChunkInfo(index=2, start_frame=16, end_frame=25, frame_count=10)
-        result = generate_chunk_workflow(sample_template, chunk, "output/clean")
+        result = generate_chunk_workflow(sample_template, chunk, Path("output"), "clean")
 
         load_nodes = [n for n in result["nodes"] if n["type"] == "VHS_LoadImagesPath"]
         assert len(load_nodes) == 2
@@ -172,22 +172,22 @@ class TestGenerateChunkWorkflow:
 
     def test_updates_save_image_prefix(self, sample_template):
         chunk = ChunkInfo(index=0, start_frame=0, end_frame=9, frame_count=10)
-        result = generate_chunk_workflow(sample_template, chunk, "cleanplate/chunks/000_009/clean")
+        result = generate_chunk_workflow(sample_template, chunk, Path("cleanplate/chunks/000_009"), "clean")
 
         save_node = next(n for n in result["nodes"] if n["type"] == "SaveImage")
-        assert save_node["widgets_values"][0] == "cleanplate/chunks/000_009/clean"
+        assert save_node["widgets_values"][0] == "clean"
 
     def test_does_not_mutate_template(self, sample_template):
         original_value = sample_template["nodes"][0]["widgets_values"][1]
         chunk = ChunkInfo(index=0, start_frame=50, end_frame=59, frame_count=10)
 
-        generate_chunk_workflow(sample_template, chunk, "output/clean")
+        generate_chunk_workflow(sample_template, chunk, Path("output"), "clean")
 
         assert sample_template["nodes"][0]["widgets_values"][1] == original_value
 
     def test_preserves_other_nodes(self, sample_template):
         chunk = ChunkInfo(index=0, start_frame=0, end_frame=9, frame_count=10)
-        result = generate_chunk_workflow(sample_template, chunk, "output/clean")
+        result = generate_chunk_workflow(sample_template, chunk, Path("output"), "clean")
 
         propainter = next(n for n in result["nodes"] if n["type"] == "ProPainterInpaint")
         assert propainter["widgets_values"] == [1280, 720, 5, 8, 10, 2, 10, 5, "enable"]
@@ -200,7 +200,7 @@ class TestGenerateChunkWorkflow:
             ]
         }
         chunk = ChunkInfo(index=0, start_frame=0, end_frame=9, frame_count=10)
-        result = generate_chunk_workflow(template, chunk, "output/clean")
+        result = generate_chunk_workflow(template, chunk, Path("output"), "clean")
         assert result is not None
 
     def test_handles_short_widgets(self):
@@ -211,7 +211,7 @@ class TestGenerateChunkWorkflow:
             ]
         }
         chunk = ChunkInfo(index=0, start_frame=0, end_frame=9, frame_count=10)
-        result = generate_chunk_workflow(template, chunk, "output/clean")
+        result = generate_chunk_workflow(template, chunk, Path("output"), "clean")
         load_node = next(n for n in result["nodes"] if n["type"] == "VHS_LoadImagesPath")
         assert load_node["widgets_values"] == ["path", 5]
 
