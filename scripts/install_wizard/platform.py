@@ -707,18 +707,22 @@ Run: python scripts/install_wizard.py
         tmp_path = None
         try:
             import urllib.request
+            import urllib.parse
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(url).suffix) as tmp:
+            url_path = urllib.parse.urlparse(url).path
+            suffix = Path(url_path).suffix
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 tmp_path = Path(tmp.name)
 
             request = urllib.request.Request(
                 url,
                 headers={"User-Agent": BROWSER_USER_AGENT}
             )
-            with urllib.request.urlopen(request) as response:
+            with urllib.request.urlopen(request, timeout=300) as response:
                 total_size = int(response.headers.get('Content-Length', 0))
                 downloaded = 0
                 chunk_size = 8192
+                last_print_len = 0
 
                 with open(tmp_path, "wb") as out_file:
                     while True:
@@ -728,14 +732,18 @@ Run: python scripts/install_wizard.py
                         out_file.write(chunk)
                         downloaded += len(chunk)
 
+                        mb_downloaded = downloaded / (1024 * 1024)
                         if total_size > 0:
                             pct = (downloaded / total_size) * 100
-                            mb_downloaded = downloaded / (1024 * 1024)
                             mb_total = total_size / (1024 * 1024)
-                            print(f"\r    Progress: {pct:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end='', flush=True)
+                            msg = f"\r    Progress: {pct:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)"
+                        else:
+                            msg = f"\r    Downloaded: {mb_downloaded:.1f} MB"
+                        padding = " " * max(0, last_print_len - len(msg))
+                        print(msg + padding, end='', flush=True)
+                        last_print_len = len(msg)
 
-                if total_size > 0:
-                    print()
+                print()
             print(f"    Downloaded to {tmp_path}")
 
             if tool_dir.exists():
@@ -770,6 +778,7 @@ Run: python scripts/install_wizard.py
                 return None
 
         except Exception as e:
+            print()
             print(f"    Error installing {tool_name}: {e}")
             return None
         finally:
