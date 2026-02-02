@@ -598,8 +598,9 @@ Run: python scripts/install_wizard.py
             True if extraction succeeded
         """
         import shutil
+        import tempfile
 
-        mount_point = Path("/tmp") / f"dmg_mount_{dmg_path.stem}"
+        mount_point = Path(tempfile.gettempdir()) / f"dmg_mount_{dmg_path.stem}"
         mounted = False
 
         try:

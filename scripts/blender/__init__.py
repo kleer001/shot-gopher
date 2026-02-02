@@ -279,7 +279,7 @@ def check_blender_available() -> tuple[bool, str]:
         )
 
         if result.returncode == 0:
-            version_line = result.stdout.strip().split("\n")[0]
+            version_line = result.stdout.strip().splitlines()[0]
             return True, f"Blender available: {version_line}"
         else:
             return False, f"Blender found but version check failed: {result.stderr}"
