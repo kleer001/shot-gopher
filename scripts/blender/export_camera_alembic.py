@@ -54,12 +54,12 @@ def load_camera_data(camera_dir: Path) -> tuple[list, dict, str]:
     if not extrinsics_path.exists():
         raise FileNotFoundError(f"Extrinsics file not found: {extrinsics_path}")
 
-    with open(extrinsics_path) as f:
+    with open(extrinsics_path, encoding='utf-8') as f:
         extrinsics_data = json.load(f)
 
     intrinsics_data = {}
     if intrinsics_path.exists():
-        with open(intrinsics_path) as f:
+        with open(intrinsics_path, encoding='utf-8') as f:
             intrinsics_data = json.load(f)
 
     source = "colmap" if colmap_raw_path.exists() else "vda"
@@ -85,12 +85,15 @@ def matrix_to_blender(matrix_data: list) -> tuple[tuple, tuple]:
     Returns:
         Tuple of (location, euler_rotation_radians) for Blender
     """
+    if not matrix_data:
+        raise ValueError("Empty matrix data")
+
     if len(matrix_data) == 16:
         m = [matrix_data[i:i+4] for i in range(0, 16, 4)]
-    elif len(matrix_data) == 4 and len(matrix_data[0]) == 4:
+    elif len(matrix_data) == 4 and isinstance(matrix_data[0], list) and len(matrix_data[0]) == 4:
         m = matrix_data
     else:
-        raise ValueError(f"Invalid matrix shape: {len(matrix_data)}")
+        raise ValueError(f"Invalid matrix shape: expected 16 elements or 4x4 nested list")
 
     flip = [
         [1.0, 0.0, 0.0, 0.0],
@@ -163,12 +166,14 @@ def create_animated_camera(
     bpy.context.scene.render.resolution_x = width
     bpy.context.scene.render.resolution_y = height
 
-    if fps == int(fps):
-        bpy.context.scene.render.fps = int(fps)
+    if abs(fps - round(fps)) < 0.001:
+        bpy.context.scene.render.fps = int(round(fps))
         bpy.context.scene.render.fps_base = 1.0
     else:
         bpy.context.scene.render.fps = 1000
         bpy.context.scene.render.fps_base = 1000.0 / fps
+
+    cam_obj.rotation_mode = 'XYZ'
 
     for i, matrix_data in enumerate(extrinsics):
         frame = start_frame + i
@@ -268,6 +273,10 @@ def main():
 
     if not args.input.exists():
         print(f"Error: Input directory not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+
+    if not args.input.is_dir():
+        print(f"Error: Input must be a directory: {args.input}", file=sys.stderr)
         sys.exit(1)
 
     print(f"Loading camera data from {args.input}")
