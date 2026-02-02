@@ -11,7 +11,7 @@
 import { stateManager } from '../managers/StateManager.js';
 import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
-import { ELEMENTS, EVENTS, CSS_CLASSES } from '../config/constants.js';
+import { ELEMENTS, EVENTS, CSS_CLASSES, UI } from '../config/constants.js';
 
 const ALL_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
 
@@ -614,7 +614,7 @@ export class ProjectsController {
 
             setTimeout(() => {
                 this.updateProcessButton();
-            }, 3000);
+            }, UI.BUTTON_FAILURE_DELAY);
         }
     }
 
@@ -625,7 +625,7 @@ export class ProjectsController {
 
         this.processingPollInterval = setInterval(async () => {
             await this.checkProcessingStatus();
-        }, 2000);
+        }, UI.PROCESSING_POLL_INTERVAL);
     }
 
     stopProcessingStatusPoll() {
@@ -699,7 +699,7 @@ export class ProjectsController {
             this.selectedStages.clear();
             this.updateProcessButton();
             this.showProjectDetails(this.selectedProjectId);
-        }, 2000);
+        }, UI.BUTTON_RESET_DELAY);
 
         this.loadProjects();
 
@@ -724,7 +724,7 @@ export class ProjectsController {
             btn.textContent = 'SIGNAL SENT';
             setTimeout(() => {
                 this.hideInteractiveCompleteButton();
-            }, 1000);
+            }, UI.SIGNAL_SENT_DELAY);
         } catch (error) {
             console.error('Failed to signal interactive complete:', error);
             btn.textContent = 'FAILED - TRY AGAIN';
@@ -763,7 +763,7 @@ export class ProjectsController {
     startAutoRefresh() {
         this.refreshInterval = setInterval(() => {
             this.loadProjects();
-        }, 10000);
+        }, UI.PROJECTS_REFRESH_INTERVAL);
     }
 
     stopAutoRefresh() {
