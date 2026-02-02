@@ -629,6 +629,14 @@ class GVHMRInstaller(ComponentInstaller):
         print("  Installing OpenCV and core dependencies...")
         self._run_in_env(["pip", "install", "opencv-python", "numpy", "scipy", "tqdm"])
 
+        print("  Installing chumpy (legacy SMPL dependency)...")
+        success = self._run_in_env(["pip", "install", "--no-build-isolation", "chumpy"])
+        if not success:
+            print_warning("chumpy failed to install - trying from git...")
+            success = self._run_in_env(["pip", "install", "git+https://github.com/mattloper/chumpy.git"])
+            if not success:
+                print_warning("chumpy installation failed - some SMPL features may not work")
+
         requirements_txt = self.install_dir / "requirements.txt"
         if requirements_txt.exists():
             print("  Installing requirements.txt...")
