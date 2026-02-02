@@ -130,6 +130,8 @@ def export_mesh_sequence_to_alembic(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding='utf-8',
+        errors='replace',
     )
 
     try:
@@ -236,6 +238,8 @@ def export_camera_to_alembic(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding='utf-8',
+        errors='replace',
     )
 
     try:
@@ -377,6 +381,8 @@ def export_gsir_materials_to_usd(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding='utf-8',
+        errors='replace',
     )
 
     try:

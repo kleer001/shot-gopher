@@ -12,7 +12,7 @@ Usage:
     python validate_gsir.py <project_dir> [options]
 
 Example:
-    python validate_gsir.py /path/to/projects/My_Shot --strict
+    python validate_gsir.py /path/to/projects/My_Shot
 """
 
 import argparse
@@ -360,17 +360,24 @@ def check_environment_map(output_dir: Path) -> ValidationResult:
                 details=[],
             )
     except ImportError:
-        if env_map.stat().st_size > 0:
+        try:
+            if env_map.stat().st_size > 0:
+                return ValidationResult(
+                    valid=True,
+                    message="Environment map exists (validity not checked)",
+                    details=["Install Pillow to enable image validation"],
+                )
             return ValidationResult(
-                valid=True,
-                message="Environment map exists (validity not checked)",
-                details=["Install Pillow to enable image validation"],
+                valid=False,
+                message="Environment map is empty",
+                details=[],
             )
-        return ValidationResult(
-            valid=False,
-            message="Environment map is empty",
-            details=[],
-        )
+        except OSError as e:
+            return ValidationResult(
+                valid=False,
+                message=f"Cannot read environment map: {e}",
+                details=[],
+            )
     except Exception as e:
         return ValidationResult(
             valid=False,
