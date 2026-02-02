@@ -30,13 +30,28 @@ def _get_propainter_internal_scale() -> float:
     """Get ProPainter internal resolution scale factor from environment.
 
     ProPainter works better at lower resolutions for clean plate generation.
-    Default is 0.5 (half resolution) to balance quality and memory usage.
+    Default is 0.75 to balance quality and memory usage.
 
     Returns:
         Scale factor between 0.1 and 1.0
     """
-    scale = float(os.environ.get("PROPAINTER_INTERNAL_SCALE", "0.5"))
+    scale = float(os.environ.get("PROPAINTER_INTERNAL_SCALE", "0.75"))
     return max(0.1, min(1.0, scale))
+
+
+def _get_propainter_quality_params() -> tuple[int, int]:
+    """Get ProPainter quality parameters from environment.
+
+    These parameters improve inpainting quality with minimal VRAM impact:
+    - num_refine_iters: Refinement iterations (compute-bound, not VRAM)
+    - num_flows: Optical flow frames for temporal consistency (minor VRAM)
+
+    Returns:
+        Tuple of (num_refine_iters, num_flows)
+    """
+    num_refine_iters = int(os.environ.get("PROPAINTER_REFINE_ITERS", "12"))
+    num_flows = int(os.environ.get("PROPAINTER_NUM_FLOWS", "15"))
+    return num_refine_iters, num_flows
 
 
 def _calculate_processing_resolution(
@@ -314,13 +329,17 @@ def update_workflow_resolution(
                 nodes_updated.append(f"{title} ({width_8}x{height_8})")
 
         elif update_propainter and node_type == "ProPainterInpaint":
-            if len(widgets) >= 2:
+            if len(widgets) >= 5:
+                num_refine_iters, num_flows = _get_propainter_quality_params()
                 widgets[0] = propainter_width
                 widgets[1] = propainter_height
+                widgets[3] = num_refine_iters
+                widgets[4] = num_flows
                 node["widgets_values"] = widgets
                 scale_pct = int(propainter_scale * 100)
                 nodes_updated.append(
-                    f"ProPainterInpaint (internal: {propainter_width}x{propainter_height} @ {scale_pct}%)"
+                    f"ProPainterInpaint (internal: {propainter_width}x{propainter_height} @ {scale_pct}%, "
+                    f"refine={num_refine_iters}, flows={num_flows})"
                 )
 
     with open(workflow_path, 'w', encoding='utf-8') as f:
