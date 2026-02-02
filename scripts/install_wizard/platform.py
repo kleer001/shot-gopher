@@ -709,7 +709,15 @@ Run: python scripts/install_wizard.py
             with tempfile.NamedTemporaryFile(delete=False, suffix=Path(url).suffix) as tmp:
                 tmp_path = Path(tmp.name)
 
-            urllib.request.urlretrieve(url, tmp_path)
+            request = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                }
+            )
+            with urllib.request.urlopen(request) as response:
+                with open(tmp_path, "wb") as out_file:
+                    out_file.write(response.read())
             print(f"    Downloaded to {tmp_path}")
 
             if tool_dir.exists():
