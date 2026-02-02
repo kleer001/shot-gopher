@@ -77,57 +77,53 @@ def matrix_to_blender(matrix_data: list) -> tuple[tuple, tuple]:
     """Convert 4x4 matrix to Blender location and rotation.
 
     Converts from OpenCV convention (Y-down, Z-forward) to
-    Blender convention (Y-forward, Z-up).
+    OpenGL/Blender convention (Y-up, Z-back) via matrix @ flip.
 
     Args:
         matrix_data: 4x4 matrix as nested list or flat list
 
     Returns:
-        Tuple of (location, euler_rotation) for Blender
+        Tuple of (location, euler_rotation_radians) for Blender
     """
     if len(matrix_data) == 16:
         m = [matrix_data[i:i+4] for i in range(0, 16, 4)]
-    else:
+    elif len(matrix_data) == 4 and len(matrix_data[0]) == 4:
         m = matrix_data
+    else:
+        raise ValueError(f"Invalid matrix shape: {len(matrix_data)}")
 
-    tx, ty, tz = m[0][3], m[1][3], m[2][3]
-
-    r00, r01, r02 = m[0][0], m[0][1], m[0][2]
-    r10, r11, r12 = m[1][0], m[1][1], m[1][2]
-    r20, r21, r22 = m[2][0], m[2][1], m[2][2]
-
-    opencv_to_opengl = [
-        [1, 0, 0, 0],
-        [0, -1, 0, 0],
-        [0, 0, -1, 0],
-        [0, 0, 0, 1]
+    flip = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0]
     ]
 
-    new_r00 = r00
-    new_r01 = -r01
-    new_r02 = -r02
-    new_r10 = -r10
-    new_r11 = r11
-    new_r12 = r12
-    new_r20 = -r20
-    new_r21 = r21
-    new_r22 = r22
-    new_ty = -ty
-    new_tz = -tz
+    result = [[0.0] * 4 for _ in range(4)]
+    for i in range(4):
+        for j in range(4):
+            for k in range(4):
+                result[i][j] += m[i][k] * flip[k][j]
 
-    sy = math.sqrt(new_r00**2 + new_r10**2)
+    tx, ty, tz = result[0][3], result[1][3], result[2][3]
+
+    r00, r01, r02 = result[0][0], result[0][1], result[0][2]
+    r10, r11, r12 = result[1][0], result[1][1], result[1][2]
+    r20, r21, r22 = result[2][0], result[2][1], result[2][2]
+
+    sy = math.sqrt(r00**2 + r10**2)
     singular = sy < 1e-6
 
     if not singular:
-        rx = math.atan2(new_r21, new_r22)
-        ry = math.atan2(-new_r20, sy)
-        rz = math.atan2(new_r10, new_r00)
+        rx = math.atan2(r21, r22)
+        ry = math.atan2(-r20, sy)
+        rz = math.atan2(r10, r00)
     else:
-        rx = math.atan2(-new_r12, new_r11)
-        ry = math.atan2(-new_r20, sy)
+        rx = math.atan2(-r12, r11)
+        ry = math.atan2(-r20, sy)
         rz = 0
 
-    return (tx, new_ty, new_tz), (rx, ry, rz)
+    return (tx, ty, tz), (rx, ry, rz)
 
 
 def create_animated_camera(
@@ -166,7 +162,13 @@ def create_animated_camera(
 
     bpy.context.scene.render.resolution_x = width
     bpy.context.scene.render.resolution_y = height
-    bpy.context.scene.render.fps = int(fps)
+
+    if fps == int(fps):
+        bpy.context.scene.render.fps = int(fps)
+        bpy.context.scene.render.fps_base = 1.0
+    else:
+        bpy.context.scene.render.fps = 1000
+        bpy.context.scene.render.fps_base = 1000.0 / fps
 
     for i, matrix_data in enumerate(extrinsics):
         frame = start_frame + i
