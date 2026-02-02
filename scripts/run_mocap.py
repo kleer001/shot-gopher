@@ -423,7 +423,8 @@ def run_gvhmr_motion_tracking(
 def _convert_single_gvhmr_file(
     gvhmr_file_path: Path,
     output_path: Path,
-    np_module
+    np_module,
+    gender: str = "neutral"
 ) -> bool:
     """Convert a single GVHMR output file to motion format.
 
@@ -431,6 +432,7 @@ def _convert_single_gvhmr_file(
         gvhmr_file_path: Path to GVHMR pickle file
         output_path: Path for output file
         np_module: numpy module reference
+        gender: Body model gender (neutral, male, female)
 
     Returns:
         True if conversion successful
@@ -509,7 +511,8 @@ def _convert_single_gvhmr_file(
         motion_format = {
             'poses': poses,
             'trans': transl,
-            'betas': betas
+            'betas': betas,
+            'gender': gender
         }
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -525,7 +528,8 @@ def _convert_single_gvhmr_file(
 
 def save_motion_output(
     gvhmr_output_dir: Path,
-    output_path: Path
+    output_path: Path,
+    gender: str = "neutral"
 ) -> bool:
     """Convert GVHMR output to standardized motion.pkl format.
 
@@ -537,6 +541,7 @@ def save_motion_output(
     Args:
         gvhmr_output_dir: Directory containing GVHMR output
         output_path: Path for output file (motion.pkl)
+        gender: Body model gender (neutral, male, female)
 
     Returns:
         True if conversion successful
@@ -582,7 +587,7 @@ def save_motion_output(
             person_output = output_dir / f"motion_{person_id}.pkl"
             print(f"  → Converting {person_id}...")
 
-            if _convert_single_gvhmr_file(person_pkl, person_output, np):
+            if _convert_single_gvhmr_file(person_pkl, person_output, np, gender):
                 success_count += 1
                 if first_person_output is None:
                     first_person_output = person_output
@@ -609,7 +614,7 @@ def save_motion_output(
 
     print(f"  → Converting {gvhmr_output_path.name} to motion format...")
 
-    if _convert_single_gvhmr_file(gvhmr_output_path, output_path, np):
+    if _convert_single_gvhmr_file(gvhmr_output_path, output_path, np, gender):
         with open(output_path, 'rb') as f:
             data = pickle.load(f)
         n_frames = len(data['poses'])
@@ -623,12 +628,14 @@ def save_motion_output(
 def run_mocap_pipeline(
     project_dir: Path,
     use_colmap_intrinsics: bool = True,
+    gender: str = "neutral",
 ) -> bool:
     """Run motion capture pipeline with GVHMR.
 
     Args:
         project_dir: Project directory
         use_colmap_intrinsics: Use COLMAP focal length for GVHMR
+        gender: Body model gender (neutral, male, female)
 
     Returns:
         True if successful
@@ -689,7 +696,7 @@ def run_mocap_pipeline(
 
     gvhmr_output = mocap_dir / "gvhmr"
     motion_output = mocap_dir / "motion.pkl"
-    if not save_motion_output(gvhmr_output, motion_output):
+    if not save_motion_output(gvhmr_output, motion_output, gender=gender):
         print("Warning: Could not create motion output", file=sys.stderr)
 
     print(f"\n{'=' * 60}")
@@ -724,6 +731,12 @@ def main():
         action="store_true",
         help="Don't use COLMAP intrinsics for GVHMR focal length"
     )
+    parser.add_argument(
+        "--gender",
+        choices=["neutral", "male", "female"],
+        default="neutral",
+        help="Body model gender (default: neutral)"
+    )
 
     args = parser.parse_args()
 
@@ -747,6 +760,7 @@ def main():
     success = run_mocap_pipeline(
         project_dir=project_dir,
         use_colmap_intrinsics=not args.no_colmap_intrinsics,
+        gender=args.gender,
     )
 
     sys.exit(0 if success else 1)
