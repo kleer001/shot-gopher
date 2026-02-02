@@ -626,6 +626,9 @@ class GVHMRInstaller(ComponentInstaller):
         if not success:
             print_warning("PyTorch installation may have failed - continuing anyway")
 
+        print("  Installing OpenCV and core dependencies...")
+        self._run_in_env(["pip", "install", "opencv-python", "numpy", "scipy", "tqdm"])
+
         requirements_txt = self.install_dir / "requirements.txt"
         if requirements_txt.exists():
             print("  Installing requirements.txt...")
