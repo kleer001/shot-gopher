@@ -489,6 +489,11 @@ export class ProjectsController {
 
         const stages = analysis.stages || {};
         const availableGb = stateManager.get('gpuAvailableVramGb') || 0;
+        const frameCount = analysis.frame_count || 0;
+        const resolution = analysis.resolution || [0, 0];
+        const resolutionStr = resolution[0] && resolution[1]
+            ? `${resolution[0]}×${resolution[1]}`
+            : 'Unknown';
 
         if (this.selectedStages.size === 0) {
             dom.addClass(this.elements.vramInfoSection, CSS_CLASSES.HIDDEN);
@@ -517,6 +522,9 @@ export class ProjectsController {
         const valueClass = hasWarning ? 'danger' : 'ok';
 
         let html = `
+            <div class="vram-row vram-project-info">
+                <span class="vram-label">${frameCount} frames @ ${resolutionStr}</span>
+            </div>
             <div class="vram-row">
                 <span class="vram-label">Required</span>
                 <span class="vram-value ${valueClass}">${maxVramGb.toFixed(1)} GB</span>

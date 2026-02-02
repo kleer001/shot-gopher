@@ -828,6 +828,18 @@ body {
     color: var(--danger);
 }
 
+.vram-row.vram-project-info {
+    justify-content: center;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+}
+
+.vram-row.vram-project-info .vram-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    opacity: 0.8;
+}
+
 .vram-note {
     margin-top: 8px;
     padding: 8px;
