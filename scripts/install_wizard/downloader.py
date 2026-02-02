@@ -327,18 +327,6 @@ Auto-downloads from Ultralytics releases.'''
                             print(progress_msg, end='', flush=True)
 
             print()  # New line after progress
-
-            if dest.exists():
-                actual_size = dest.stat().st_size
-                min_valid_size = (expected_size_mb * 1024 * 1024 * 0.9) if expected_size_mb else 10000
-                if actual_size >= min_valid_size:
-                    print_success(f"Downloaded {dest.name} ({actual_size / (1024*1024):.1f} MB)")
-                    return True
-                else:
-                    print_error(f"Download incomplete: {actual_size} bytes (expected ~{expected_size_mb} MB)")
-                    dest.unlink()
-                    return False
-
             print_success(f"Downloaded {dest.name}")
             return True
 
@@ -1839,17 +1827,10 @@ Auto-downloads from Ultralytics releases.'''
         success = True
         for file_info in checkpoint_info['files']:
             dest_path = dest_dir / file_info['filename']
-            expected_size_mb = file_info.get('size_mb', 0)
 
             if dest_path.exists() and not file_info.get('extract'):
-                actual_size = dest_path.stat().st_size
-                min_valid_size = expected_size_mb * 1024 * 1024 * 0.9 if expected_size_mb else 10000
-                if actual_size >= min_valid_size:
-                    print_success(f"{file_info['filename']} already exists ({actual_size / (1024*1024):.1f} MB)")
-                    continue
-                else:
-                    print_warning(f"{file_info['filename']} exists but is too small ({actual_size} bytes), re-downloading...")
-                    dest_path.unlink()
+                print_success(f"{file_info['filename']} already exists")
+                continue
 
             dest_path.parent.mkdir(parents=True, exist_ok=True)
 
