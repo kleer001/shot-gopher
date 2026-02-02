@@ -753,15 +753,15 @@ Run: python scripts/install_wizard.py
 
             print(f"    Extracting to {tool_dir}...")
 
-            if url.endswith('.zip'):
+            if url_path.endswith('.zip'):
                 with zipfile.ZipFile(tmp_path, 'r') as zf:
                     zf.extractall(tool_dir)
                 PlatformManager._flatten_single_subdir(tool_dir)
-            elif url.endswith('.tar.gz') or url.endswith('.tar.xz'):
+            elif url_path.endswith('.tar.gz') or url_path.endswith('.tar.xz'):
                 with tarfile.open(tmp_path, 'r:*') as tf:
                     tf.extractall(tool_dir)
                 PlatformManager._flatten_single_subdir(tool_dir)
-            elif url.endswith('.dmg'):
+            elif url_path.endswith('.dmg'):
                 app_names = {
                     "blender": "Blender.app",
                 }
