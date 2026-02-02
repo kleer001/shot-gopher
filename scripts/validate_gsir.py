@@ -216,8 +216,8 @@ def check_image_validity(output_dir: Path, sample_size: int = 5) -> ValidationRe
             checked_count += 1
             try:
                 with Image.open(png_file) as img:
-                    img.verify()
                     size = img.size
+                    img.load()
                     if name not in dimensions:
                         dimensions[name] = size
                     elif dimensions[name] != size:
@@ -250,7 +250,6 @@ def check_content_quality(
     sample_size: int = 3,
     black_threshold: float = 0.01,
     white_threshold: float = 0.99,
-    uniformity_threshold: float = 0.95,
 ) -> ValidationResult:
     """Check that output images contain meaningful content (not degenerate).
 
@@ -264,7 +263,6 @@ def check_content_quality(
         sample_size: Number of images to sample
         black_threshold: Fraction below which image is considered black
         white_threshold: Fraction above which image is considered white
-        uniformity_threshold: Fraction of pixels that must differ for non-uniform
 
     Returns:
         ValidationResult with content quality status
@@ -354,8 +352,8 @@ def check_environment_map(output_dir: Path) -> ValidationResult:
         from PIL import Image
 
         with Image.open(env_map) as img:
-            img.verify()
             size = img.size
+            img.load()
             return ValidationResult(
                 valid=True,
                 message=f"Environment map valid ({size[0]}x{size[1]})",
@@ -460,15 +458,11 @@ def check_metadata(output_dir: Path) -> ValidationResult:
     )
 
 
-def validate_gsir_output(
-    project_dir: Path,
-    strict: bool = False,
-) -> GsirValidationReport:
+def validate_gsir_output(project_dir: Path) -> GsirValidationReport:
     """Run full validation on GS-IR outputs.
 
     Args:
         project_dir: Project directory
-        strict: If True, treat warnings as errors
 
     Returns:
         GsirValidationReport with all check results
@@ -515,11 +509,6 @@ def main() -> int:
         help="Project directory with GS-IR outputs",
     )
     parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Treat all validation failures as errors",
-    )
-    parser.add_argument(
         "--json",
         action="store_true",
         help="Output results as JSON",
@@ -537,7 +526,7 @@ def main() -> int:
         print(f"Error: Project directory not found: {project_dir}", file=sys.stderr)
         return 1
 
-    report = validate_gsir_output(project_dir, strict=args.strict)
+    report = validate_gsir_output(project_dir)
 
     if args.json:
         result = {

@@ -38,7 +38,7 @@ from subprocess_utils import (
     ProgressTracker,
     create_training_patterns,
 )
-from validate_gsir import validate_gsir_output, GsirValidationReport
+from validate_gsir import validate_gsir_output
 
 
 # Default training parameters
