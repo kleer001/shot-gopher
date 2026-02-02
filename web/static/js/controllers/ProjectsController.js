@@ -614,7 +614,7 @@ export class ProjectsController {
 
             setTimeout(() => {
                 this.updateProcessButton();
-            }, 3000);
+            }, UI.BUTTON_FAILURE_DELAY);
         }
     }
 
@@ -699,7 +699,7 @@ export class ProjectsController {
             this.selectedStages.clear();
             this.updateProcessButton();
             this.showProjectDetails(this.selectedProjectId);
-        }, 2000);
+        }, UI.BUTTON_RESET_DELAY);
 
         this.loadProjects();
 
@@ -724,7 +724,7 @@ export class ProjectsController {
             btn.textContent = 'SIGNAL SENT';
             setTimeout(() => {
                 this.hideInteractiveCompleteButton();
-            }, 1000);
+            }, UI.SIGNAL_SENT_DELAY);
         } catch (error) {
             console.error('Failed to signal interactive complete:', error);
             btn.textContent = 'FAILED - TRY AGAIN';
@@ -763,7 +763,7 @@ export class ProjectsController {
     startAutoRefresh() {
         this.refreshInterval = setInterval(() => {
             this.loadProjects();
-        }, 10000);
+        }, UI.PROJECTS_REFRESH_INTERVAL);
     }
 
     stopAutoRefresh() {
