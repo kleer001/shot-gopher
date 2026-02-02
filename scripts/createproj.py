@@ -34,9 +34,28 @@ def create_shot_directories(team: str, shot: str, base_path: Path | None = None)
     return shot_path
 
 
+EXAMPLE_TEXT = """\
+Example:
+  $ createproj.py Team5 Shot001
+  Created: /projects/Team5/Shot001
+
+  Directory structure created:
+    Team5/
+    └── Shot001/
+        ├── blend/
+        ├── geo/
+        ├── textures/
+        ├── vdb/
+        ├── renders/
+        └── submit.json
+"""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Create shot directory structure for a team project."
+        description="Create shot directory structure for a team project.",
+        epilog=EXAMPLE_TEXT,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("team", help="Team name (e.g., Team5)")
     parser.add_argument("shot", help="Shot name (e.g., Shot001)")
