@@ -140,7 +140,8 @@ class InstallationWizard:
                     'GVHMR',
                     'https://github.com/zju3dv/GVHMR.git',
                     self.install_dir / "GVHMR",
-                    size_gb=4.0  # Code + checkpoints (~3.5GB models)
+                    size_gb=4.0,  # Code + checkpoints (~3.5GB models)
+                    extra_packages=['pytorch_lightning']
                 )
             ]
         }
