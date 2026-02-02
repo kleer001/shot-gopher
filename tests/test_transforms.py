@@ -148,21 +148,29 @@ class TestEulerRotation:
         recovered = rotation_matrix_to_euler(rotation, "xyz")
         np.testing.assert_array_almost_equal(original, recovered, decimal=3)
 
-    @pytest.mark.skip(reason="Known issue: zxy Euler extraction doesn't match composition")
     def test_euler_roundtrip_zxy(self):
         original = np.array([15, 20, 25])
         rotation = euler_to_rotation_matrix(original, "zxy")
         recovered = rotation_matrix_to_euler(rotation, "zxy")
-        recovered_rotation = euler_to_rotation_matrix(recovered, "zxy")
-        np.testing.assert_array_almost_equal(rotation, recovered_rotation, decimal=5)
+        np.testing.assert_array_almost_equal(original, recovered, decimal=3)
 
-    @pytest.mark.skip(reason="Known issue: zyx Euler extraction doesn't match composition")
     def test_euler_roundtrip_zyx(self):
         original = np.array([15, 20, 25])
         rotation = euler_to_rotation_matrix(original, "zyx")
         recovered = rotation_matrix_to_euler(rotation, "zyx")
-        recovered_rotation = euler_to_rotation_matrix(recovered, "zyx")
-        np.testing.assert_array_almost_equal(rotation, recovered_rotation, decimal=5)
+        np.testing.assert_array_almost_equal(original, recovered, decimal=3)
+
+    def test_euler_roundtrip_zxy_larger_angles(self):
+        original = np.array([30, 45, 60])
+        rotation = euler_to_rotation_matrix(original, "zxy")
+        recovered = rotation_matrix_to_euler(rotation, "zxy")
+        np.testing.assert_array_almost_equal(original, recovered, decimal=3)
+
+    def test_euler_roundtrip_zyx_larger_angles(self):
+        original = np.array([30, 45, 60])
+        rotation = euler_to_rotation_matrix(original, "zyx")
+        recovered = rotation_matrix_to_euler(rotation, "zyx")
+        np.testing.assert_array_almost_equal(original, recovered, decimal=3)
 
     def test_unsupported_order_raises(self):
         euler = np.array([0, 0, 0])
