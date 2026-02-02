@@ -11,7 +11,7 @@
 import { stateManager } from '../managers/StateManager.js';
 import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
-import { ELEMENTS, EVENTS, CSS_CLASSES } from '../config/constants.js';
+import { ELEMENTS, EVENTS, CSS_CLASSES, UI } from '../config/constants.js';
 
 const ALL_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
 
@@ -625,7 +625,7 @@ export class ProjectsController {
 
         this.processingPollInterval = setInterval(async () => {
             await this.checkProcessingStatus();
-        }, 2000);
+        }, UI.PROCESSING_POLL_INTERVAL);
     }
 
     stopProcessingStatusPoll() {
