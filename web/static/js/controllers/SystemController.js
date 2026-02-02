@@ -13,7 +13,7 @@
 import { stateManager } from '../managers/StateManager.js';
 import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
-import { ELEMENTS, EVENTS, CSS_CLASSES } from '../config/constants.js';
+import { ELEMENTS, EVENTS, CSS_CLASSES, UI } from '../config/constants.js';
 
 export class SystemController {
     constructor() {
@@ -130,10 +130,9 @@ export class SystemController {
         dom.setText(this.elements.errorMessage, message);
         dom.show(this.elements.errorToast);
 
-        // Auto-hide after 5 seconds
         setTimeout(() => {
             this.hideError();
-        }, 5000);
+        }, UI.ERROR_TOAST_DURATION);
     }
 
     hideError() {
@@ -170,7 +169,6 @@ export class SystemController {
             // Stop auto-refresh
             this.stopAutoRefresh();
 
-            // After a brief delay, show final message
             setTimeout(() => {
                 document.body.innerHTML = `
                     <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
@@ -182,7 +180,7 @@ export class SystemController {
                         </div>
                     </div>
                 `;
-            }, 2000);
+            }, UI.SHUTDOWN_MESSAGE_DELAY);
 
         } catch (error) {
             console.error('Failed to shutdown system:', error);
@@ -197,10 +195,9 @@ export class SystemController {
     }
 
     startAutoRefresh() {
-        // Check system status every 30 seconds
         this.statusInterval = setInterval(() => {
             this.checkSystemStatus();
-        }, 30000);
+        }, UI.SYSTEM_STATUS_INTERVAL);
     }
 
     stopAutoRefresh() {
