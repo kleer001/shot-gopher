@@ -406,7 +406,7 @@ def get_image_dimensions(image_path: Path) -> tuple[int, int]:
         image_path: Path to image file
 
     Returns:
-        Tuple of (width, height), defaults to (1920, 1080) on error
+        Tuple of (width, height), or (0, 0) if dimensions cannot be determined
     """
     cmd = [
         _get_ffprobe(), "-v", "error",
@@ -420,4 +420,5 @@ def get_image_dimensions(image_path: Path) -> tuple[int, int]:
         width, height = result.stdout.strip().split("x")
         return int(width), int(height)
     except (ValueError, AttributeError):
-        return 1920, 1080
+        print(f"  → Warning: Could not determine dimensions for {image_path.name}")
+        return 0, 0

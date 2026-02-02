@@ -124,6 +124,7 @@ def run_pipeline(config: PipelineConfig) -> bool:
         return False
 
     total_frames = len(list(source_frames.glob("*.png")))
+    width, height = 0, 0
 
     if "ingest" in config.stages:
         ctx = StageContext.from_config(config, project_dir, total_frames, fps)
@@ -135,9 +136,13 @@ def run_pipeline(config: PipelineConfig) -> bool:
     if total_frames > 0:
         first_frame = sorted(source_frames.glob("*.png"))[0]
         width, height = get_image_dimensions(first_frame)
-        metadata.set_frame_info(total_frames, width, height)
+        if width > 0 and height > 0:
+            metadata.set_frame_info(total_frames, width, height)
+            print(f"Source resolution: {width}x{height}")
+        else:
+            print("Warning: Could not determine source resolution")
 
-    ctx = StageContext.from_config(config, project_dir, total_frames, fps)
+    ctx = StageContext.from_config(config, project_dir, total_frames, fps, width, height)
 
     for stage in config.stages:
         if stage == "ingest":

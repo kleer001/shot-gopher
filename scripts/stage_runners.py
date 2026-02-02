@@ -30,6 +30,7 @@ from workflow_utils import (
     refresh_workflow_from_template,
     update_segmentation_prompt,
     update_cleanplate_resolution,
+    update_workflow_resolution,
 )
 
 if TYPE_CHECKING:
@@ -421,6 +422,16 @@ def run_stage_interactive(
         print("  → Skipping (workflow not found)")
         return True
 
+    if ctx.source_width > 0 and ctx.source_height > 0:
+        update_workflow_resolution(
+            workflow_path,
+            ctx.source_width,
+            ctx.source_height,
+            update_loaders=True,
+            update_scales=False,
+            update_propainter=False,
+        )
+
     print("  → Opening interactive segmentation in ComfyUI")
     print(f"    Workflow: {workflow_path}")
     print(f"    ComfyUI: {ctx.comfyui_url}")
@@ -472,6 +483,16 @@ def run_stage_depth(
     if ctx.overwrite:
         clear_output_directory(depth_dir)
 
+    if ctx.source_width > 0 and ctx.source_height > 0:
+        update_workflow_resolution(
+            workflow_path,
+            ctx.source_width,
+            ctx.source_height,
+            update_loaders=True,
+            update_scales=False,
+            update_propainter=False,
+        )
+
     if not run_comfyui_workflow(
         workflow_path, ctx.comfyui_url,
         output_dir=depth_dir,
@@ -513,6 +534,16 @@ def run_stage_roto(
     if not workflow_path.exists():
         print("  → Skipping (workflow not found)")
         return True
+
+    if ctx.source_width > 0 and ctx.source_height > 0:
+        update_workflow_resolution(
+            workflow_path,
+            ctx.source_width,
+            ctx.source_height,
+            update_loaders=True,
+            update_scales=False,
+            update_propainter=False,
+        )
 
     if ctx.skip_existing and (list(roto_dir.glob("*.png")) or list(roto_dir.glob("*/*.png"))):
         print("  → Skipping (masks exist)")
@@ -714,7 +745,17 @@ def run_stage_cleanplate(
 
     print(f"  → {roto_message}")
 
-    update_cleanplate_resolution(workflow_path, ctx.source_frames)
+    if ctx.source_width > 0 and ctx.source_height > 0:
+        update_workflow_resolution(
+            workflow_path,
+            ctx.source_width,
+            ctx.source_height,
+            update_loaders=True,
+            update_scales=True,
+            update_propainter=True,
+        )
+    else:
+        update_cleanplate_resolution(workflow_path, ctx.source_frames)
 
     if not run_comfyui_workflow(
         workflow_path, ctx.comfyui_url,
