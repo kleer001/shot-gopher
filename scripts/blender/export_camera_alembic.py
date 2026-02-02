@@ -156,6 +156,11 @@ def create_animated_camera(
     width = intrinsics.get("width", 1920)
     height = intrinsics.get("height", 1080)
 
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Invalid image dimensions: {width}x{height}")
+    if fx <= 0:
+        raise ValueError(f"Invalid focal length: {fx}")
+
     sensor_width_mm = 36.0
     focal_length_mm = fx * sensor_width_mm / width
 
@@ -282,7 +287,7 @@ def main():
     print(f"Loading camera data from {args.input}")
     try:
         extrinsics, intrinsics, source = load_camera_data(args.input)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
+    except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
         print(f"Error loading camera data: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -296,13 +301,17 @@ def main():
     clear_scene()
 
     print("Creating animated camera...")
-    cam_obj = create_animated_camera(
-        extrinsics=extrinsics,
-        intrinsics=intrinsics,
-        start_frame=args.start_frame,
-        fps=args.fps,
-        camera_name=camera_name
-    )
+    try:
+        create_animated_camera(
+            extrinsics=extrinsics,
+            intrinsics=intrinsics,
+            start_frame=args.start_frame,
+            fps=args.fps,
+            camera_name=camera_name
+        )
+    except ValueError as e:
+        print(f"Error creating camera: {e}", file=sys.stderr)
+        sys.exit(1)
 
     end_frame = args.start_frame + len(extrinsics) - 1
 
