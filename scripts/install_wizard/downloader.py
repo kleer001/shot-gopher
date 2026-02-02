@@ -105,7 +105,7 @@ class CheckpointDownloader:
                     'extract': True
                 }
             ],
-            'dest_dir_rel': 'smplx_models',
+            'dest_dir_rel': 'GVHMR/inputs/checkpoints/body_models',
             'use_home_dir': False,
             'instructions': '''SMPL-X models require registration:
 1. Register at https://smpl-x.is.tue.mpg.de/register.php
@@ -113,7 +113,12 @@ class CheckpointDownloader:
 3. Create SMPL.login.dat in repository root with:
    Line 1: your email
    Line 2: your password
-4. Re-run the wizard to download models'''
+4. Re-run the wizard to download models
+
+Manual setup:
+1. Download models_smplx_v1_1.zip from SMPL-X website
+2. Extract to: GVHMR/inputs/checkpoints/body_models/
+3. Rename 'models/smplx' to 'smplx' (remove 'models' parent folder)'''
         },
         'sam3': {
             'name': 'SAM3 Model',
