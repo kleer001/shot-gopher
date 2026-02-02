@@ -408,17 +408,17 @@ def get_image_dimensions(image_path: Path) -> tuple[int, int]:
     Returns:
         Tuple of (width, height), or (0, 0) if dimensions cannot be determined
     """
-    cmd = [
-        _get_ffprobe(), "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=width,height",
-        "-of", "csv=p=0:s=x",
-        str(image_path)
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
     try:
+        cmd = [
+            _get_ffprobe(), "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "csv=p=0:s=x",
+            str(image_path)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
         width, height = result.stdout.strip().split("x")
         return int(width), int(height)
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, FileNotFoundError, OSError):
         print(f"  → Warning: Could not determine dimensions for {image_path.name}")
         return 0, 0
