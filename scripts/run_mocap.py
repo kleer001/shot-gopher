@@ -300,6 +300,22 @@ def find_or_create_video(
     return None
 
 
+def _find_conda() -> Optional[str]:
+    """Find conda or mamba executable.
+
+    Returns:
+        Path to conda/mamba executable, or None if not found
+    """
+    import os
+    for cmd in ["conda", "mamba"]:
+        if shutil.which(cmd):
+            return cmd
+    conda_exe = os.environ.get("CONDA_EXE")
+    if conda_exe and Path(conda_exe).exists():
+        return str(conda_exe)
+    return None
+
+
 def run_gvhmr_motion_tracking(
     project_dir: Path,
     focal_mm: Optional[float] = None,
@@ -307,6 +323,9 @@ def run_gvhmr_motion_tracking(
     output_dir: Optional[Path] = None
 ) -> bool:
     """Run GVHMR for world-grounded motion tracking.
+
+    GVHMR runs in its own dedicated conda environment 'gvhmr' with
+    Python 3.10 and specific PyTorch/CUDA versions.
 
     Args:
         project_dir: Project directory
@@ -321,6 +340,11 @@ def run_gvhmr_motion_tracking(
     if not gvhmr_dir.exists():
         print("Error: GVHMR not installed", file=sys.stderr)
         print("Run the installation wizard to install GVHMR", file=sys.stderr)
+        return False
+
+    conda_exe = _find_conda()
+    if not conda_exe:
+        print("Error: Conda not found - required for GVHMR", file=sys.stderr)
         return False
 
     output_dir = output_dir or project_dir / "mocap" / "gvhmr"
@@ -347,20 +371,22 @@ def run_gvhmr_motion_tracking(
         if not demo_script.exists():
             demo_script = gvhmr_dir / "demo.py"
 
-        cmd = [
+        gvhmr_args = [
             "python", str(demo_script),
             "--video", str(video_path),
             "--output_root", str(output_dir),
         ]
 
         if static_camera:
-            cmd.append("--static_cam")
+            gvhmr_args.append("--static_cam")
 
         if focal_mm:
-            cmd.extend(["--f_mm", str(focal_mm)])
+            gvhmr_args.extend(["--f_mm", str(focal_mm)])
 
-        print(f"  → Running GVHMR...")
-        print(f"    $ {' '.join(cmd)}")
+        cmd = [conda_exe, "run", "-n", "gvhmr", "--no-capture-output"] + gvhmr_args
+
+        print(f"  → Running GVHMR in 'gvhmr' conda environment...")
+        print(f"    $ {' '.join(gvhmr_args)}")
 
         result = subprocess.run(
             cmd,
