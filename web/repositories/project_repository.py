@@ -24,7 +24,9 @@ class ProjectRepository(Repository[Project]):
 
     def get(self, name: str) -> Optional[Project]:
         """Get project by name."""
-        project_path = self.projects_dir / name
+        project_path = self._safe_project_path(name)
+        if project_path is None:
+            return None
 
         if not project_path.is_dir():
             return None
@@ -75,13 +77,30 @@ class ProjectRepository(Repository[Project]):
 
     def delete(self, name: str) -> bool:
         """Delete project directory."""
-        project_path = self.projects_dir / name
+        project_path = self._safe_project_path(name)
+        if project_path is None:
+            return False
 
-        if project_path.is_dir():
+        if not project_path.is_dir():
+            return False
+
+        try:
             shutil.rmtree(project_path)
             return True
+        except OSError:
+            return False
 
-        return False
+    def _safe_project_path(self, name: str) -> Optional[Path]:
+        """Validate and return safe project path, preventing directory traversal."""
+        if not name or '\x00' in name or '/' in name or '\\' in name or name in ('.', '..'):
+            return None
+        project_path = (self.projects_dir / name).resolve()
+        try:
+            if not project_path.parent.samefile(self.projects_dir):
+                return None
+        except OSError:
+            return None
+        return project_path
 
     def _load_project(self, project_path: Path) -> Optional[Project]:
         """Load project from filesystem."""
