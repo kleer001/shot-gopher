@@ -683,6 +683,8 @@ class InstallationWizard:
             if 'gvhmr' in mocap_components:
                 print("\nDownloading YOLO model for GVHMR person detection...")
                 self.checkpoint_downloader.download_all_checkpoints(['yolo_gvhmr'], self.state_manager)
+                print("\nDownloading SMPL body models for GVHMR rendering...")
+                self.checkpoint_downloader.download_all_checkpoints(['smpl'], self.state_manager)
 
         # Download SMPL-X models if mocap_core was installed and credentials exist
         if 'mocap_core' in to_install:

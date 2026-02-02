@@ -120,6 +120,33 @@ Manual setup:
 2. Extract to: GVHMR/inputs/checkpoints/body_models/
 3. Rename 'models/smplx' to 'smplx' (remove 'models' parent folder)'''
         },
+        'smpl': {
+            'name': 'SMPL Models',
+            'requires_auth': False,
+            'files': [
+                {
+                    'url': 'https://huggingface.co/lithiumice/models_hub/resolve/main/4_SMPLhub/SMPL/X_pkl/SMPL_NEUTRAL.pkl',
+                    'filename': 'smpl/SMPL_NEUTRAL.pkl',
+                    'size_mb': 40,
+                },
+                {
+                    'url': 'https://huggingface.co/lithiumice/models_hub/resolve/main/4_SMPLhub/SMPL/X_pkl/SMPL_MALE.pkl',
+                    'filename': 'smpl/SMPL_MALE.pkl',
+                    'size_mb': 40,
+                },
+                {
+                    'url': 'https://huggingface.co/lithiumice/models_hub/resolve/main/4_SMPLhub/SMPL/X_pkl/SMPL_FEMALE.pkl',
+                    'filename': 'smpl/SMPL_FEMALE.pkl',
+                    'size_mb': 40,
+                },
+            ],
+            'dest_dir_rel': 'GVHMR/inputs/checkpoints/body_models',
+            'instructions': '''SMPL body models for GVHMR rendering.
+Downloaded from HuggingFace (lithiumice/models_hub).
+
+Manual download:
+https://huggingface.co/lithiumice/models_hub/tree/main/4_SMPLhub/SMPL/X_pkl'''
+        },
         'sam3': {
             'name': 'SAM3 Model',
             'requires_auth': False,  # Public repo at 1038lab/sam3
