@@ -501,7 +501,7 @@ export class ProjectsController {
         this.selectedStages.forEach(stage => {
             const stageInfo = stages[stage];
             if (stageInfo) {
-                const stageVramGb = stageInfo.base_vram_gb || 0;
+                const stageVramGb = stageInfo.estimated_vram_gb || stageInfo.base_vram_gb || 0;
                 if (stageVramGb > maxVramGb) {
                     maxVramGb = stageVramGb;
                 }

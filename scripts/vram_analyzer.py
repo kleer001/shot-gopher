@@ -27,27 +27,27 @@ class VramStatus(str, Enum):
 class StageVramConfig:
     """VRAM configuration for a pipeline stage."""
     base_vram_gb: float
-    scales_with_frames: bool = False
+    gb_per_100_frames: float = 0.0
     chunked: bool = False
     chunk_formula: Optional[str] = None
 
 
 STAGE_VRAM_REQUIREMENTS: dict[str, StageVramConfig] = {
-    "ingest": StageVramConfig(base_vram_gb=0, scales_with_frames=False),
-    "depth": StageVramConfig(base_vram_gb=3, scales_with_frames=False),
-    "roto": StageVramConfig(base_vram_gb=6, scales_with_frames=False),
-    "interactive": StageVramConfig(base_vram_gb=6, scales_with_frames=False),
+    "ingest": StageVramConfig(base_vram_gb=0),
+    "depth": StageVramConfig(base_vram_gb=3),
+    "roto": StageVramConfig(base_vram_gb=4, gb_per_100_frames=2.0),
+    "interactive": StageVramConfig(base_vram_gb=4, gb_per_100_frames=2.0),
     "mama": StageVramConfig(
-        base_vram_gb=12,
-        scales_with_frames=False,
+        base_vram_gb=8,
+        gb_per_100_frames=4.0,
         chunked=True,
         chunk_formula="vram_to_chunk_size"
     ),
-    "cleanplate": StageVramConfig(base_vram_gb=5, scales_with_frames=False),
-    "colmap": StageVramConfig(base_vram_gb=2, scales_with_frames=False),
-    "gsir": StageVramConfig(base_vram_gb=8, scales_with_frames=True),
-    "mocap": StageVramConfig(base_vram_gb=6, scales_with_frames=False),
-    "camera": StageVramConfig(base_vram_gb=0, scales_with_frames=False),
+    "cleanplate": StageVramConfig(base_vram_gb=4, gb_per_100_frames=1.0),
+    "colmap": StageVramConfig(base_vram_gb=2),
+    "gsir": StageVramConfig(base_vram_gb=6, gb_per_100_frames=2.0),
+    "mocap": StageVramConfig(base_vram_gb=6),
+    "camera": StageVramConfig(base_vram_gb=0),
 }
 
 
@@ -78,6 +78,7 @@ class StageAnalysis:
     stage: str
     status: VramStatus
     base_vram_gb: float
+    estimated_vram_gb: float
     user_vram_gb: float
     message: str
     chunk_size: Optional[int] = None
@@ -122,6 +123,12 @@ def get_gpu_name() -> Optional[str]:
     return None
 
 
+def calculate_estimated_vram(config: StageVramConfig, frame_count: int) -> float:
+    """Calculate estimated VRAM needed based on base + frame scaling."""
+    frame_scaling = (frame_count / 100.0) * config.gb_per_100_frames
+    return config.base_vram_gb + frame_scaling
+
+
 def analyze_stage(
     stage: str,
     vram_gb: Optional[float],
@@ -135,18 +142,23 @@ def analyze_stage(
             stage=stage,
             status=VramStatus.OK,
             base_vram_gb=0,
+            estimated_vram_gb=0,
             user_vram_gb=vram_gb or 0,
             message="Unknown stage",
         )
+
+    estimated_vram = calculate_estimated_vram(config, frame_count)
+    scales_with_frames = config.gb_per_100_frames > 0
 
     if vram_gb is None:
         return StageAnalysis(
             stage=stage,
             status=VramStatus.WARNING,
             base_vram_gb=config.base_vram_gb,
+            estimated_vram_gb=estimated_vram,
             user_vram_gb=0,
             message="GPU not detected - cannot estimate",
-            scales_with_frames=config.scales_with_frames,
+            scales_with_frames=scales_with_frames,
         )
 
     if config.base_vram_gb == 0:
@@ -154,11 +166,12 @@ def analyze_stage(
             stage=stage,
             status=VramStatus.OK,
             base_vram_gb=0,
+            estimated_vram_gb=0,
             user_vram_gb=vram_gb,
             message="Minimal VRAM required",
         )
 
-    headroom = vram_gb - config.base_vram_gb
+    headroom = vram_gb - estimated_vram
 
     if config.chunked:
         chunk_size = get_mama_chunk_size(vram_gb)
@@ -170,35 +183,35 @@ def analyze_stage(
             message = f"Will process in small chunks ({chunk_size} frames) - slower but works"
         else:
             status = VramStatus.WARNING
-            message = f"Low VRAM - will use minimum chunks ({chunk_size} frames), may be very slow"
+            message = f"Needs ~{estimated_vram:.1f}GB for {frame_count} frames, will use small chunks"
 
         return StageAnalysis(
             stage=stage,
             status=status,
             base_vram_gb=config.base_vram_gb,
+            estimated_vram_gb=estimated_vram,
             user_vram_gb=vram_gb,
             message=message,
             chunk_size=chunk_size,
+            scales_with_frames=scales_with_frames,
         )
 
-    if config.scales_with_frames:
+    if scales_with_frames:
         if headroom >= 4:
             status = VramStatus.OK
-            message = "Should work well"
+            message = f"~{estimated_vram:.1f}GB needed for {frame_count} frames"
         elif headroom >= 0:
             status = VramStatus.WARNING
-            if stage == "gsir":
-                message = f"May struggle with {frame_count} frames - consider shorter clip"
-            else:
-                message = "Tight on VRAM - may be slow"
+            message = f"Tight: ~{estimated_vram:.1f}GB needed for {frame_count} frames"
         else:
             status = VramStatus.INSUFFICIENT
-            message = f"Needs {config.base_vram_gb}GB, you have {vram_gb:.1f}GB"
+            message = f"Needs ~{estimated_vram:.1f}GB for {frame_count} frames, you have {vram_gb:.1f}GB"
 
         return StageAnalysis(
             stage=stage,
             status=status,
             base_vram_gb=config.base_vram_gb,
+            estimated_vram_gb=estimated_vram,
             user_vram_gb=vram_gb,
             message=message,
             scales_with_frames=True,
@@ -212,12 +225,13 @@ def analyze_stage(
         message = "Tight on VRAM - close other GPU applications"
     else:
         status = VramStatus.INSUFFICIENT
-        message = f"Needs {config.base_vram_gb}GB, you have {vram_gb:.1f}GB"
+        message = f"Needs {estimated_vram:.1f}GB, you have {vram_gb:.1f}GB"
 
     return StageAnalysis(
         stage=stage,
         status=status,
         base_vram_gb=config.base_vram_gb,
+        estimated_vram_gb=estimated_vram,
         user_vram_gb=vram_gb,
         message=message,
     )
@@ -253,6 +267,7 @@ def analyze_project_vram(
         stages_analysis[stage] = {
             "status": analysis.status.value,
             "base_vram_gb": analysis.base_vram_gb,
+            "estimated_vram_gb": analysis.estimated_vram_gb,
             "message": analysis.message,
         }
 
