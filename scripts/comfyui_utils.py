@@ -322,11 +322,11 @@ def wait_for_completion(
         True if completed successfully, False otherwise
     """
     start_time = time.time()
-    check_interval = 2  # seconds
+    check_interval = 1  # seconds
     last_file_count = 0
 
-    # Braille spinner characters for visual feedback
-    spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    # Braille spinner characters for visual feedback (snake pattern: 1→2→4→3→5→6→4→3)
+    spinner = ["⠁", "⠈", "⠐", "⠂", "⠄", "⠠", "⠐", "⠂"]
     spin_idx = 0
 
     while time.time() - start_time < timeout:
