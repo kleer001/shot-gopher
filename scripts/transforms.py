@@ -161,29 +161,29 @@ def rotation_matrix_to_euler(
         return np.degrees(np.array([x, y, z]))
 
     elif order == "zxy":
-        cy = np.sqrt(rotation[0, 0] ** 2 + rotation[2, 0] ** 2)
-        singular = cy < 1e-6
+        cx = np.sqrt(rotation[1, 0] ** 2 + rotation[1, 1] ** 2)
+        singular = cx < 1e-6
         if not singular:
-            x = np.arctan2(-rotation[2, 1], rotation[1, 1])
-            y = np.arctan2(rotation[2, 0], rotation[2, 2])
-            z = np.arctan2(-rotation[0, 1], rotation[1, 1])
+            x = np.arctan2(-rotation[1, 2], cx)
+            z = np.arctan2(rotation[1, 0], rotation[1, 1])
+            y = np.arctan2(rotation[0, 2], rotation[2, 2])
         else:
-            x = np.arctan2(rotation[1, 2], rotation[1, 1])
-            y = 0
-            z = np.arctan2(-rotation[0, 1], rotation[0, 0])
+            x = np.arctan2(-rotation[1, 2], cx)
+            z = 0
+            y = np.arctan2(-rotation[2, 0], rotation[0, 0])
         return np.degrees(np.array([x, y, z]))
 
     elif order == "zyx":
         cy = np.sqrt(rotation[0, 0] ** 2 + rotation[0, 1] ** 2)
         singular = cy < 1e-6
         if not singular:
-            x = np.arctan2(rotation[1, 2], rotation[2, 2])
-            y = np.arctan2(-rotation[0, 2], cy)
-            z = np.arctan2(rotation[0, 1], rotation[0, 0])
+            y = np.arctan2(rotation[0, 2], cy)
+            z = np.arctan2(-rotation[0, 1], rotation[0, 0])
+            x = np.arctan2(-rotation[1, 2], rotation[2, 2])
         else:
-            x = np.arctan2(-rotation[2, 1], rotation[1, 1])
-            y = np.arctan2(-rotation[0, 2], cy)
+            y = np.arctan2(rotation[0, 2], cy)
             z = 0
+            x = np.arctan2(rotation[2, 1], rotation[1, 1])
         return np.degrees(np.array([x, y, z]))
 
     else:
