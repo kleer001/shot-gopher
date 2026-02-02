@@ -230,7 +230,8 @@ def verify_chunk_output(
     """
     output_dir = project_dir / "output" / "cleanplate" / "chunks" / chunk.name
     if not output_dir.exists():
-        comfyui_output = Path("/tmp/comfyui_output")
+        import tempfile
+        comfyui_output = Path(tempfile.gettempdir()) / "comfyui_output"
         if comfyui_output.exists():
             output_dir = comfyui_output
 

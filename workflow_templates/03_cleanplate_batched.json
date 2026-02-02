@@ -77,7 +77,7 @@
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Scale Source to 1080p"
+      "title": "📐 Scale Source"
     },
     {
       "id": 8,
@@ -97,7 +97,7 @@
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [6]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Scale Mask to 1080p"
+      "title": "📐 Scale Mask"
     },
     {
       "id": 3,
@@ -132,7 +132,7 @@
       ],
       "properties": {"Node name for S&R": "ProPainterInpaint"},
       "widgets_values": [1920, 1080, 5, 8, 10, 2, 80, 5, "enable"],
-      "title": "🎨 ProPainter (1080p, 10 frames)"
+      "title": "🎨 ProPainter (10 frames)"
     },
     {
       "id": 10,
@@ -152,7 +152,7 @@
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [8]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Output to 1080p"
+      "title": "📐 Scale Output"
     },
     {
       "id": 5,
@@ -176,7 +176,7 @@
       "order": 9,
       "mode": 0,
       "properties": {"text": ""},
-      "widgets_values": ["📋 BATCHED CLEANPLATE WORKFLOW (1080p)\n\nProcesses 10 frames at a time. VHS_BatchManager auto-queues batches.\nClick 'Queue Prompt' once - it will process all batches automatically.\n⚠️ Adjust batch size in BatchManager if needed (lower = less VRAM, more batches)"],
+      "widgets_values": ["📋 BATCHED CLEANPLATE WORKFLOW\n\nProcesses 10 frames at a time. VHS_BatchManager auto-queues batches.\nClick 'Queue Prompt' once - it will process all batches automatically.\nResolution is auto-detected from source frames."],
       "title": "📋 Instructions"
     }
   ],

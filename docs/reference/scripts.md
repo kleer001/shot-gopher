@@ -366,8 +366,8 @@ python scripts/export_camera.py <project_dir> [options]
 - `--format` - Export format: `chan`, `csv`, `clip`, `cmd`, `json`, `abc`, `jsx`, `all` (default: `all`)
 - `--fps` - Frame rate (default: 24.0)
 - `--start-frame` - Starting frame number (default: 1)
-- `--width` - Image width in pixels (default: 1920)
-- `--height` - Image height in pixels (default: 1080)
+- `--width` - Image width in pixels (auto-detected from source frames or intrinsics)
+- `--height` - Image height in pixels (auto-detected from source frames or intrinsics)
 
 ### Examples
 
@@ -433,7 +433,7 @@ Notes:
 ### Tips
 
 - Use `--format all` to export all formats at once (default behavior)
-- Alembic (.abc) requires Blender (auto-installed via wizard). Note: conda-forge "alembic" is a database tool, not VFX Alembic.
+- Alembic (.abc) requires Blender (auto-installed via wizard)
 - For Nuke, use .chan for simplest import
 - For After Effects, run the .jsx script via File → Scripts → Run Script File
 - For Houdini, use .cmd via File → Run Script, or .clip via File CHOP

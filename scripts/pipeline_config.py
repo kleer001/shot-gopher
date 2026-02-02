@@ -120,9 +120,19 @@ class StageContext:
     skip_existing: bool
     overwrite: bool
     auto_movie: bool
+    source_width: int = 0
+    source_height: int = 0
 
     @classmethod
-    def from_config(cls, config: PipelineConfig, project_dir: Path, total_frames: int, fps: float) -> "StageContext":
+    def from_config(
+        cls,
+        config: PipelineConfig,
+        project_dir: Path,
+        total_frames: int,
+        fps: float,
+        width: int = 0,
+        height: int = 0,
+    ) -> "StageContext":
         """Create context from config and runtime values.
 
         Args:
@@ -130,6 +140,8 @@ class StageContext:
             project_dir: Resolved project directory
             total_frames: Number of source frames
             fps: Frames per second
+            width: Source frame width in pixels
+            height: Source frame height in pixels
 
         Returns:
             StageContext instance
@@ -144,4 +156,6 @@ class StageContext:
             skip_existing=config.skip_existing,
             overwrite=config.overwrite,
             auto_movie=config.auto_movie,
+            source_width=width,
+            source_height=height,
         )

@@ -378,14 +378,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--width",
         type=int,
-        default=1920,
-        help="Video width (default: 1920)"
+        default=None,
+        help="Video width (auto-detected from source frames if available)"
     )
     parser.add_argument(
         "--height",
         type=int,
-        default=1080,
-        help="Video height (default: 1080)"
+        default=None,
+        help="Video height (auto-detected from source frames if available)"
     )
     parser.add_argument(
         "--fps",
@@ -401,6 +401,28 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    width = args.width
+    height = args.height
+
+    if width is None or height is None:
+        source_frames_dir = args.project_dir / "source" / "frames"
+        if source_frames_dir.exists():
+            frames = sorted(source_frames_dir.glob("*.png"))
+            if not frames:
+                frames = sorted(source_frames_dir.glob("*.jpg"))
+            if frames:
+                from pipeline_utils import get_image_dimensions
+                w, h = get_image_dimensions(frames[0])
+                if w > 0 and h > 0:
+                    width = width or w
+                    height = height or h
+                    print(f"Detected resolution: {width}x{height}")
+
+        if width is None or height is None:
+            width = width or 1920
+            height = height or 1080
+            print(f"Using default resolution: {width}x{height}")
+
     if args.vram:
         vram = args.vram
     else:
@@ -412,7 +434,7 @@ if __name__ == "__main__":
 
     analysis = analyze_project_vram(
         frame_count=args.frames,
-        resolution=(args.width, args.height),
+        resolution=(width, height),
         fps=args.fps,
         vram_gb=vram,
     )

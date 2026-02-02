@@ -14,6 +14,8 @@ from typing import Dict, List, Optional, Tuple
 
 from env_config import INSTALL_DIR
 
+from .utils import BROWSER_USER_AGENT
+
 # Repo-local tools directory (sandboxed, no home directory pollution)
 TOOLS_DIR = INSTALL_DIR / "tools"
 
@@ -596,8 +598,9 @@ Run: python scripts/install_wizard.py
             True if extraction succeeded
         """
         import shutil
+        import tempfile
 
-        mount_point = Path("/tmp") / f"dmg_mount_{dmg_path.stem}"
+        mount_point = Path(tempfile.gettempdir()) / f"dmg_mount_{dmg_path.stem}"
         mounted = False
 
         try:
@@ -705,11 +708,43 @@ Run: python scripts/install_wizard.py
         tmp_path = None
         try:
             import urllib.request
+            import urllib.parse
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(url).suffix) as tmp:
+            url_path = urllib.parse.urlparse(url).path
+            suffix = Path(url_path).suffix
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 tmp_path = Path(tmp.name)
 
-            urllib.request.urlretrieve(url, tmp_path)
+            request = urllib.request.Request(
+                url,
+                headers={"User-Agent": BROWSER_USER_AGENT}
+            )
+            with urllib.request.urlopen(request, timeout=300) as response:
+                total_size = int(response.headers.get('Content-Length', 0))
+                downloaded = 0
+                chunk_size = 8192
+                last_print_len = 0
+
+                with open(tmp_path, "wb") as out_file:
+                    while True:
+                        chunk = response.read(chunk_size)
+                        if not chunk:
+                            break
+                        out_file.write(chunk)
+                        downloaded += len(chunk)
+
+                        mb_downloaded = downloaded / (1024 * 1024)
+                        if total_size > 0:
+                            pct = (downloaded / total_size) * 100
+                            mb_total = total_size / (1024 * 1024)
+                            msg = f"\r    Progress: {pct:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)"
+                        else:
+                            msg = f"\r    Downloaded: {mb_downloaded:.1f} MB"
+                        padding = " " * max(0, last_print_len - len(msg))
+                        print(msg + padding, end='', flush=True)
+                        last_print_len = len(msg)
+
+                print()
             print(f"    Downloaded to {tmp_path}")
 
             if tool_dir.exists():
@@ -719,15 +754,15 @@ Run: python scripts/install_wizard.py
 
             print(f"    Extracting to {tool_dir}...")
 
-            if url.endswith('.zip'):
+            if url_path.endswith('.zip'):
                 with zipfile.ZipFile(tmp_path, 'r') as zf:
                     zf.extractall(tool_dir)
                 PlatformManager._flatten_single_subdir(tool_dir)
-            elif url.endswith('.tar.gz') or url.endswith('.tar.xz'):
+            elif url_path.endswith('.tar.gz') or url_path.endswith('.tar.xz'):
                 with tarfile.open(tmp_path, 'r:*') as tf:
                     tf.extractall(tool_dir)
                 PlatformManager._flatten_single_subdir(tool_dir)
-            elif url.endswith('.dmg'):
+            elif url_path.endswith('.dmg'):
                 app_names = {
                     "blender": "Blender.app",
                 }
@@ -744,6 +779,7 @@ Run: python scripts/install_wizard.py
                 return None
 
         except Exception as e:
+            print()
             print(f"    Error installing {tool_name}: {e}")
             return None
         finally:
