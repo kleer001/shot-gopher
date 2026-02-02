@@ -716,8 +716,26 @@ Run: python scripts/install_wizard.py
                 headers={"User-Agent": BROWSER_USER_AGENT}
             )
             with urllib.request.urlopen(request) as response:
+                total_size = int(response.headers.get('Content-Length', 0))
+                downloaded = 0
+                chunk_size = 8192
+
                 with open(tmp_path, "wb") as out_file:
-                    out_file.write(response.read())
+                    while True:
+                        chunk = response.read(chunk_size)
+                        if not chunk:
+                            break
+                        out_file.write(chunk)
+                        downloaded += len(chunk)
+
+                        if total_size > 0:
+                            pct = (downloaded / total_size) * 100
+                            mb_downloaded = downloaded / (1024 * 1024)
+                            mb_total = total_size / (1024 * 1024)
+                            print(f"\r    Progress: {pct:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end='', flush=True)
+
+                if total_size > 0:
+                    print()
             print(f"    Downloaded to {tmp_path}")
 
             if tool_dir.exists():
