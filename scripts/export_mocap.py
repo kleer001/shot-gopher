@@ -363,35 +363,56 @@ def export_obj_sequence(
         return False
 
 
+def detect_gpu() -> bool:
+    """Detect if CUDA GPU is available.
+
+    Returns:
+        True if CUDA is available
+    """
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+
+
 def run_export(
     project_dir: Path,
-    output_format: str = "abc",
+    formats: List[str] = None,
     fps: float = 24.0,
     motion_file: Optional[Path] = None,
-    output_path: Optional[Path] = None,
-    use_gpu: bool = False
+    output_dir: Optional[Path] = None,
 ) -> bool:
     """Run motion export pipeline.
 
     Args:
         project_dir: Project directory
-        output_format: Export format (abc, usd, obj)
+        formats: Export formats (abc, usd, obj) - defaults to [abc, usd]
         fps: Frames per second
         motion_file: Override motion.pkl path
-        output_path: Override output path
-        use_gpu: Use GPU for mesh generation
+        output_dir: Override output directory
 
     Returns:
-        True if successful
+        True if all exports successful
     """
+    if formats is None:
+        formats = ["abc", "usd"]
+
     motion_path = motion_file or project_dir / "mocap" / "motion.pkl"
+    export_dir = output_dir or project_dir / "mocap" / "export"
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    use_gpu = detect_gpu()
+    device = "cuda" if use_gpu else "cpu"
 
     print(f"\n{'=' * 60}")
     print("Motion Capture Export")
     print("=" * 60)
     print(f"Motion file: {motion_path}")
-    print(f"Format: {output_format.upper()}")
+    print(f"Formats: {', '.join(formats).upper()}")
     print(f"FPS: {fps}")
+    print(f"Device: {device.upper()}")
+    print(f"Output dir: {export_dir}")
     print()
 
     motion_data = load_motion_data(motion_path)
@@ -406,41 +427,63 @@ def run_export(
     if model_path is None:
         return False
 
-    device = "cuda" if use_gpu else "cpu"
     meshes = generate_meshes(motion_data, model_path, device)
     if meshes is None:
         return False
 
-    if output_path is None:
-        export_dir = project_dir / "mocap" / "export"
-        export_dir.mkdir(parents=True, exist_ok=True)
+    all_success = True
+    exported_paths = []
 
-        if output_format == "abc":
+    for fmt in formats:
+        if fmt == "abc":
             output_path = export_dir / "body_motion.abc"
-        elif output_format == "usd":
+            success = export_alembic(meshes, output_path, fps)
+        elif fmt == "usd":
             output_path = export_dir / "body_motion.usd"
-        elif output_format == "obj":
+            success = export_usd(meshes, output_path, fps)
+        elif fmt == "obj":
             output_path = export_dir / "obj_sequence"
+            success = export_obj_sequence(meshes, output_path)
         else:
-            print(f"Error: Unknown format '{output_format}'", file=sys.stderr)
-            return False
+            print(f"Warning: Unknown format '{fmt}', skipping", file=sys.stderr)
+            continue
 
-    success = False
-    if output_format == "abc":
-        success = export_alembic(meshes, output_path, fps)
-    elif output_format == "usd":
-        success = export_usd(meshes, output_path, fps)
-    elif output_format == "obj":
-        success = export_obj_sequence(meshes, output_path)
+        if success:
+            exported_paths.append(output_path)
+        else:
+            all_success = False
 
-    if success:
+    if exported_paths:
         print(f"\n{'=' * 60}")
         print("Export Complete")
         print("=" * 60)
-        print(f"Output: {output_path}")
+        for p in exported_paths:
+            print(f"  {p}")
         print()
 
-    return success
+    return all_success
+
+
+def parse_formats(format_str: str) -> List[str]:
+    """Parse comma-separated format string.
+
+    Args:
+        format_str: Format string like "abc,usd" or "all"
+
+    Returns:
+        List of format strings
+    """
+    if format_str.lower() == "all":
+        return ["abc", "usd"]
+
+    formats = [f.strip().lower() for f in format_str.split(",")]
+    valid_formats = {"abc", "usd", "obj"}
+
+    for fmt in formats:
+        if fmt not in valid_formats:
+            print(f"Warning: Unknown format '{fmt}'", file=sys.stderr)
+
+    return [f for f in formats if f in valid_formats]
 
 
 def main():
@@ -456,9 +499,8 @@ def main():
     )
     parser.add_argument(
         "--format", "-f",
-        choices=["abc", "usd", "obj"],
-        default="abc",
-        help="Export format (default: abc)"
+        default="all",
+        help="Export format(s): abc, usd, obj, or comma-separated (default: all = abc,usd)"
     )
     parser.add_argument(
         "--fps",
@@ -472,14 +514,9 @@ def main():
         help="Override motion.pkl path"
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output-dir", "-o",
         type=Path,
-        help="Override output path"
-    )
-    parser.add_argument(
-        "--gpu",
-        action="store_true",
-        help="Use GPU for mesh generation"
+        help="Override output directory"
     )
 
     args = parser.parse_args()
@@ -491,13 +528,17 @@ def main():
         print(f"Error: Project directory not found: {project_dir}", file=sys.stderr)
         sys.exit(1)
 
+    formats = parse_formats(args.format)
+    if not formats:
+        print("Error: No valid formats specified", file=sys.stderr)
+        sys.exit(1)
+
     success = run_export(
         project_dir=project_dir,
-        output_format=args.format,
+        formats=formats,
         fps=args.fps,
         motion_file=args.motion_file,
-        output_path=args.output,
-        use_gpu=args.gpu,
+        output_dir=args.output_dir,
     )
 
     sys.exit(0 if success else 1)
