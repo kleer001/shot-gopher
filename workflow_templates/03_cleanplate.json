@@ -56,7 +56,7 @@
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Scale Source to 1080p"
+      "title": "📐 Scale Source"
     },
     {
       "id": 8,
@@ -76,7 +76,7 @@
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [7]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Scale Mask to 1080p"
+      "title": "📐 Scale Mask"
     },
     {
       "id": 9,
@@ -111,7 +111,7 @@
       ],
       "properties": {"Node name for S&R": "ProPainterInpaint"},
       "widgets_values": [1920, 1080, 5, 8, 10, 2, 80, 5, "enable"],
-      "title": "🎨 ProPainter Inpaint (1080p)"
+      "title": "🎨 ProPainter Inpaint"
     },
     {
       "id": 10,
@@ -131,7 +131,7 @@
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [8]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Output to 1080p"
+      "title": "📐 Scale Output"
     },
     {
       "id": 5,
@@ -144,7 +144,7 @@
       "inputs": [{"name": "images", "type": "IMAGE", "link": 8}],
       "properties": {},
       "widgets_values": ["cleanplate/clean"],
-      "title": "💾 Save Clean Plates (1080p)"
+      "title": "💾 Save Clean Plates"
     },
     {
       "id": 6,
@@ -155,7 +155,7 @@
       "order": 8,
       "mode": 0,
       "properties": {"text": ""},
-      "widgets_values": ["📋 CLEANPLATE WORKFLOW\n\nInput: source/frames + roto masks → Output: cleanplate/ at 1080p\nProcesses at native 1080p resolution.\n⚠️ Adjust scale nodes if your source isn't 1080p!"],
+      "widgets_values": ["📋 CLEANPLATE WORKFLOW\n\nInput: source/frames + roto masks → Output: cleanplate/\nResolution is auto-detected from source frames."],
       "title": "📋 Instructions"
     }
   ],
