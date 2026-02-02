@@ -7,6 +7,7 @@ Run at video ingest time to pre-calculate VRAM warnings for the web UI.
 """
 
 import json
+import subprocess
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from enum import Enum
@@ -114,7 +115,6 @@ def get_gpu_name() -> Optional[str]:
         pass
 
     try:
-        import subprocess
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
             capture_output=True,
