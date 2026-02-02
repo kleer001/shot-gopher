@@ -24,9 +24,11 @@ class ProjectRepository(Repository[Project]):
 
     def get(self, name: str) -> Optional[Project]:
         """Get project by name."""
-        project_path = self.projects_dir / name
+        project_path = self._safe_project_path(name)
+        if project_path is None:
+            return None
 
-        if not project_path.exists():
+        if not project_path.is_dir():
             return None
 
         return self._load_project(project_path)
@@ -38,11 +40,20 @@ class ProjectRepository(Repository[Project]):
         if not self.projects_dir.exists():
             return projects
 
-        for project_path in self.projects_dir.iterdir():
-            if project_path.is_dir():
+        try:
+            entries = list(self.projects_dir.iterdir())
+        except OSError:
+            return projects
+
+        for project_path in entries:
+            try:
+                if not project_path.is_dir():
+                    continue
                 project = self._load_project(project_path)
                 if project:
                     projects.append(project)
+            except OSError:
+                continue
 
         return sorted(projects, key=lambda p: p.created_at, reverse=True)
 
@@ -66,49 +77,98 @@ class ProjectRepository(Repository[Project]):
 
     def delete(self, name: str) -> bool:
         """Delete project directory."""
-        project_path = self.projects_dir / name
+        project_path = self._safe_project_path(name)
+        if project_path is None:
+            return False
 
-        if project_path.exists():
+        if not project_path.is_dir():
+            return False
+
+        try:
             shutil.rmtree(project_path)
             return True
+        except OSError:
+            return False
 
-        return False
+    def _safe_project_path(self, name: str) -> Optional[Path]:
+        """Validate and return safe project path, preventing directory traversal."""
+        if not name or '\x00' in name or '/' in name or '\\' in name or name in ('.', '..'):
+            return None
+        project_path = (self.projects_dir / name).resolve()
+        try:
+            if not project_path.parent.samefile(self.projects_dir):
+                return None
+        except OSError:
+            return None
+        return project_path
 
     def _load_project(self, project_path: Path) -> Optional[Project]:
         """Load project from filesystem."""
         state_file = project_path / "project_state.json"
 
-        if state_file.exists():
-            try:
-                with open(state_file, encoding='utf-8') as f:
-                    state = json.load(f)
+        try:
+            with open(state_file, encoding='utf-8') as f:
+                state = json.load(f)
 
-                return Project(
-                    name=state.get("name", project_path.name),
-                    path=project_path,
-                    status=ProjectStatus(state.get("status", "unknown")),
-                    video_path=Path(state["video_path"]) if state.get("video_path") else None,
-                    stages=state.get("stages", []),
-                    created_at=datetime.fromisoformat(state["created_at"]),
-                    updated_at=datetime.fromisoformat(state["updated_at"]),
-                )
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
-                return Project(
-                    name=project_path.name,
-                    path=project_path,
-                    status=ProjectStatus.UNKNOWN,
-                    video_path=None,
-                    stages=[],
-                    created_at=datetime.now(),
-                    updated_at=datetime.now(),
-                )
-        else:
             return Project(
-                name=project_path.name,
+                name=state.get("name", project_path.name),
                 path=project_path,
-                status=ProjectStatus.UNKNOWN,
-                video_path=None,
-                stages=[],
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
+                status=ProjectStatus(state.get("status", "unknown")),
+                video_path=Path(state["video_path"]) if state.get("video_path") else None,
+                stages=state.get("stages", []),
+                created_at=datetime.fromisoformat(state["created_at"]),
+                updated_at=datetime.fromisoformat(state["updated_at"]),
             )
+        except (json.JSONDecodeError, KeyError, ValueError, OSError):
+            return self._create_and_persist_project(project_path)
+
+    def _create_and_persist_project(self, project_path: Path) -> Optional[Project]:
+        """Create project from directory and attempt to save state file."""
+        try:
+            project = self._create_project_from_directory(project_path)
+        except OSError:
+            return None
+
+        try:
+            self.save(project)
+        except OSError:
+            pass
+
+        return project
+
+    def _create_project_from_directory(self, project_path: Path) -> Project:
+        """Create a Project from directory metadata when no valid state file exists."""
+        dir_mtime = datetime.fromtimestamp(project_path.stat().st_mtime)
+        stages = self._detect_completed_stages(project_path)
+
+        return Project(
+            name=project_path.name,
+            path=project_path,
+            status=ProjectStatus.UNKNOWN,
+            video_path=None,
+            stages=stages,
+            created_at=dir_mtime,
+            updated_at=dir_mtime,
+        )
+
+    def _detect_completed_stages(self, project_path: Path) -> List[str]:
+        """Detect which pipeline stages have completed based on output directories."""
+        stages = []
+        stage_output_dirs = {
+            'ingest': project_path / 'source' / 'frames',
+            'depth': project_path / 'depth',
+            'roto': project_path / 'roto',
+            'matte': project_path / 'matte',
+            'cleanplate': project_path / 'cleanplate',
+            'colmap': project_path / 'colmap',
+            'gsir': project_path / 'gsir',
+            'mocap': project_path / 'mocap',
+            'camera': project_path / 'camera',
+        }
+        for stage_name, stage_path in stage_output_dirs.items():
+            try:
+                if stage_path.exists() and any(stage_path.iterdir()):
+                    stages.append(stage_name)
+            except OSError:
+                pass
+        return stages
