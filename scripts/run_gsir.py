@@ -38,6 +38,7 @@ from subprocess_utils import (
     ProgressTracker,
     create_training_patterns,
 )
+from validate_gsir import validate_gsir_output, GsirValidationReport
 
 
 # Default training parameters
@@ -504,7 +505,8 @@ def run_gsir_pipeline(
     iterations_stage1: int = DEFAULT_ITERATIONS_STAGE1,
     iterations_stage2: int = DEFAULT_ITERATIONS_STAGE2,
     skip_training: bool = False,
-    gsir_path: Optional[Path] = None
+    gsir_path: Optional[Path] = None,
+    validate: bool = True,
 ) -> bool:
     """Run the complete GS-IR material decomposition pipeline.
 
@@ -514,6 +516,7 @@ def run_gsir_pipeline(
         iterations_stage2: Total training iterations
         skip_training: Skip training if checkpoint exists
         gsir_path: Path to GS-IR installation (auto-detect if None)
+        validate: Run output validation after export
 
     Returns:
         True if pipeline succeeded
@@ -586,6 +589,19 @@ def run_gsir_pipeline(
         print(f"\nGS-IR command timed out", file=sys.stderr)
         return False
 
+    # Validate outputs
+    validation_passed = True
+    if validate:
+        print("\n[Validation] Checking output quality")
+        report = validate_gsir_output(project_dir)
+        if report.valid:
+            print("  → All validation checks passed")
+        else:
+            print("  → Validation issues detected:")
+            for warning in report.warnings:
+                print(f"      {warning}")
+            validation_passed = False
+
     # Calculate timing
     pipeline_end = time.time()
     total_seconds = pipeline_end - pipeline_start
@@ -596,6 +612,8 @@ def run_gsir_pipeline(
     print(f"{'='*60}")
     print(f"Model: {gsir_model_dir}")
     print(f"Materials: {materials_output}")
+    if validate:
+        print(f"Validation: {'PASSED' if validation_passed else 'ISSUES DETECTED'}")
     print()
     print(f"TOTAL TIME: {total_minutes:.1f} minutes")
     print()
@@ -645,6 +663,11 @@ def main():
         action="store_true",
         help="Check if GS-IR is available and exit"
     )
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip output validation after export"
+    )
 
     args = parser.parse_args()
 
@@ -668,6 +691,7 @@ def main():
         iterations_stage2=args.iterations_stage2,
         skip_training=args.skip_training,
         gsir_path=args.gsir_path,
+        validate=not args.skip_validation,
     )
 
     sys.exit(0 if success else 1)
