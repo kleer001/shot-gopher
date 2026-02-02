@@ -135,15 +135,17 @@ async def upload_video(
 
     vram_analysis = None
     if video_info:
-        try:
-            vram_analysis = analyze_and_save(
-                project_dir=project.path,
-                frame_count=video_info.get("frame_count", 0),
-                resolution=tuple(video_info.get("resolution", [1920, 1080])),
-                fps=video_info.get("fps", 24.0),
-            )
-        except Exception as e:
-            print(f"VRAM analysis failed: {e}")
+        resolution = video_info.get("resolution")
+        if resolution and len(resolution) >= 2 and resolution[0] > 0 and resolution[1] > 0:
+            try:
+                vram_analysis = analyze_and_save(
+                    project_dir=project.path,
+                    frame_count=video_info.get("frame_count", 0),
+                    resolution=(resolution[0], resolution[1]),
+                    fps=video_info.get("fps", 24.0),
+                )
+            except Exception as e:
+                print(f"VRAM analysis failed: {e}")
 
     return {
         "project_id": project_name,
@@ -344,7 +346,7 @@ async def get_vram_analysis(
     analysis = load_vram_analysis(project_entity.path)
 
     if not analysis:
-        resolution = (1920, 1080)
+        resolution = None
         fps = 24.0
 
         source_dir = project_entity.path / "source"
@@ -354,18 +356,18 @@ async def get_vram_analysis(
         if has_frames:
             frames_dir = source_dir / "frames"
             res = await asyncio.to_thread(video_service.get_resolution_from_frames, frames_dir)
-            if res:
+            if res and res[0] > 0 and res[1] > 0:
                 resolution = res
         elif video_path:
             video_info = await asyncio.to_thread(video_service.get_video_info, video_path)
             if video_info:
                 frame_count = video_info.get("frame_count", 0)
-                res = video_info.get("resolution", [1920, 1080])
-                if res and len(res) >= 2:
+                res = video_info.get("resolution")
+                if res and len(res) >= 2 and res[0] > 0 and res[1] > 0:
                     resolution = (res[0], res[1])
                 fps = video_info.get("fps", 24.0)
 
-        if frame_count > 0:
+        if frame_count > 0 and resolution:
             try:
                 analysis = await asyncio.to_thread(
                     analyze_and_save,

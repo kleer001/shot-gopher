@@ -680,14 +680,14 @@ def main():
     parser.add_argument(
         "--width", "-W",
         type=int,
-        default=1920,
-        help="Image width in pixels (default: 1920)"
+        default=None,
+        help="Image width in pixels (auto-detected from intrinsics or source frames)"
     )
     parser.add_argument(
         "--height", "-H",
         type=int,
-        default=1080,
-        help="Image height in pixels (default: 1080)"
+        default=None,
+        help="Image height in pixels (auto-detected from intrinsics or source frames)"
     )
     parser.add_argument(
         "--output", "-o",
@@ -737,6 +737,32 @@ def main():
     camera_name = "colmap_camera" if source == "colmap" else "vda_camera"
     print(f"Loaded {len(extrinsics)} camera frames from {source_name}")
     print(f"  Coordinate system: OpenGL (Y-up, Z-back) for DCC compatibility")
+
+    image_width = args.width
+    image_height = args.height
+
+    if image_width is None or image_height is None:
+        if "width" in intrinsics and "height" in intrinsics:
+            image_width = image_width or int(intrinsics["width"])
+            image_height = image_height or int(intrinsics["height"])
+        else:
+            source_frames_dir = project_dir / "source" / "frames"
+            frames = sorted(source_frames_dir.glob("*.png"))
+            if not frames:
+                frames = sorted(source_frames_dir.glob("*.jpg"))
+            if frames:
+                from pipeline_utils import get_image_dimensions
+                w, h = get_image_dimensions(frames[0])
+                if w > 0 and h > 0:
+                    image_width = image_width or w
+                    image_height = image_height or h
+
+        if image_width is None or image_height is None:
+            image_width = image_width or 1920
+            image_height = image_height or 1080
+            print(f"  Warning: Could not detect resolution, using default {image_width}x{image_height}")
+        else:
+            print(f"  Detected resolution: {image_width}x{image_height}")
 
     # Determine output path
     output_base = args.output or (camera_dir / "camera")

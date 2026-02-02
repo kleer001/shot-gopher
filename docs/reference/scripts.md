@@ -366,8 +366,8 @@ python scripts/export_camera.py <project_dir> [options]
 - `--format` - Export format: `chan`, `csv`, `clip`, `cmd`, `json`, `abc`, `jsx`, `all` (default: `all`)
 - `--fps` - Frame rate (default: 24.0)
 - `--start-frame` - Starting frame number (default: 1)
-- `--width` - Image width in pixels (default: 1920)
-- `--height` - Image height in pixels (default: 1080)
+- `--width` - Image width in pixels (auto-detected from source frames or intrinsics)
+- `--height` - Image height in pixels (auto-detected from source frames or intrinsics)
 
 ### Examples
 

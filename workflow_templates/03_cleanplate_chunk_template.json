@@ -56,7 +56,7 @@
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Scale Source to 1080p"
+      "title": "📐 Scale Source"
     },
     {
       "id": 8,
@@ -76,7 +76,7 @@
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [6]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Scale Mask to 1080p"
+      "title": "📐 Scale Mask"
     },
     {
       "id": 3,
@@ -111,7 +111,7 @@
       ],
       "properties": {"Node name for S&R": "ProPainterInpaint"},
       "widgets_values": [1920, 1080, 5, 8, 10, 2, 10, 5, "enable"],
-      "title": "🎨 ProPainter Inpaint (1080p)"
+      "title": "🎨 ProPainter Inpaint"
     },
     {
       "id": 10,
@@ -131,7 +131,7 @@
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [8]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Output to 1080p"
+      "title": "📐 Scale Output"
     },
     {
       "id": 5,
