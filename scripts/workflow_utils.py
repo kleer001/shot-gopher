@@ -19,6 +19,56 @@ __all__ = [
 ]
 
 
+def _get_max_processing_dimensions() -> tuple[int, int]:
+    """Get max processing dimensions from environment or defaults."""
+    max_width = int(os.environ.get("CLEANPLATE_MAX_WIDTH", "1920"))
+    max_height = int(os.environ.get("CLEANPLATE_MAX_HEIGHT", "1080"))
+    return max_width, max_height
+
+
+def _calculate_processing_resolution(
+    source_width: int,
+    source_height: int,
+    max_width: int,
+    max_height: int,
+) -> tuple[int, int]:
+    """Calculate VRAM-safe processing resolution while maintaining aspect ratio.
+
+    Args:
+        source_width: Original width
+        source_height: Original height
+        max_width: Maximum allowed width
+        max_height: Maximum allowed height
+
+    Returns:
+        Tuple of (width, height) aligned to 8-pixel boundaries
+    """
+    if source_height == 0 or source_width == 0:
+        return 0, 0
+
+    proc_width = min(source_width, max_width)
+    proc_height = min(source_height, max_height)
+
+    source_aspect = source_width / source_height
+    proc_aspect = proc_width / proc_height
+
+    if abs(source_aspect - proc_aspect) > 0.01:
+        if source_aspect > proc_aspect:
+            proc_height = int(proc_width / source_aspect)
+        else:
+            proc_width = int(proc_height * source_aspect)
+
+    proc_width = (proc_width // 8) * 8
+    proc_height = (proc_height // 8) * 8
+
+    return proc_width, proc_height
+
+
+def _align_to_8(value: int) -> int:
+    """Align value to 8-pixel boundary."""
+    return (value // 8) * 8
+
+
 def get_comfyui_output_dir() -> Path:
     """Get the output directory that ComfyUI uses for SaveImage nodes.
 
@@ -141,31 +191,25 @@ def update_cleanplate_resolution(
     max_processing_width: int = None,
     max_processing_height: int = None
 ) -> None:
-    """Update ProPainterInpaint internal processing resolution in cleanplate workflow.
+    """Update ProPainterInpaint resolution by detecting from source frames.
 
-    ProPainter's width/height control the INTERNAL optical flow processing resolution,
-    not the output resolution. The output is automatically scaled to match input.
-    Higher resolution = better quality but more VRAM. For 24GB VRAM with 180 frames,
-    960x540 is typically safe. For 16GB or less, use 640x360.
+    This is a convenience wrapper that detects resolution from frames, then
+    delegates to update_workflow_resolution. Use update_workflow_resolution
+    directly when you already have the source dimensions.
 
     Args:
         workflow_path: Path to workflow JSON
         source_frames_dir: Directory containing source frames
-        max_processing_width: Max internal width (default: from CLEANPLATE_MAX_WIDTH env or 1920)
-        max_processing_height: Max internal height (default: from CLEANPLATE_MAX_HEIGHT env or 1080)
+        max_processing_width: Max internal width (default: from env or 1920)
+        max_processing_height: Max internal height (default: from env or 1080)
     """
-    if max_processing_width is None:
-        max_processing_width = int(os.environ.get("CLEANPLATE_MAX_WIDTH", "1920"))
-    if max_processing_height is None:
-        max_processing_height = int(os.environ.get("CLEANPLATE_MAX_HEIGHT", "1080"))
-
     frames = sorted(source_frames_dir.glob("*.png"))
     if not frames:
         frames = sorted(source_frames_dir.glob("*.jpg"))
     if not frames:
         frames = sorted(source_frames_dir.glob("*.exr"))
     if not frames:
-        print("  → Warning: No source frames found, using default resolution")
+        print("  → Warning: No source frames found, skipping resolution update")
         return
 
     source_width, source_height = get_image_dimensions(frames[0])
@@ -174,41 +218,16 @@ def update_cleanplate_resolution(
         print("  → Warning: Could not determine source resolution, skipping workflow update")
         return
 
-    proc_width = min(source_width, max_processing_width)
-    proc_height = min(source_height, max_processing_height)
-
-    source_aspect = source_width / source_height
-    proc_aspect = proc_width / proc_height
-
-    if abs(source_aspect - proc_aspect) > 0.01:
-        if source_aspect > proc_aspect:
-            proc_height = int(proc_width / source_aspect)
-        else:
-            proc_width = int(proc_height * source_aspect)
-
-    proc_width = (proc_width // 8) * 8
-    proc_height = (proc_height // 8) * 8
-
-    if proc_width < source_width or proc_height < source_height:
-        print(f"  → Source resolution: {source_width}x{source_height}")
-        print(f"  → ProPainter internal processing: {proc_width}x{proc_height} (capped for VRAM)")
-    else:
-        print(f"  → Setting cleanplate resolution to {proc_width}x{proc_height}")
-
-    with open(workflow_path) as f:
-        workflow = json.load(f)
-
-    for node in workflow.get("nodes", []):
-        if node.get("type") == "ProPainterInpaint":
-            widgets = node.get("widgets_values", [])
-            if len(widgets) >= 2:
-                widgets[0] = proc_width
-                widgets[1] = proc_height
-                node["widgets_values"] = widgets
-            break
-
-    with open(workflow_path, 'w', encoding='utf-8') as f:
-        json.dump(workflow, f, indent=2)
+    update_workflow_resolution(
+        workflow_path,
+        source_width,
+        source_height,
+        update_loaders=False,
+        update_scales=False,
+        update_propainter=True,
+        max_processing_width=max_processing_width,
+        max_processing_height=max_processing_height,
+    )
 
 
 def update_workflow_resolution(
@@ -237,28 +256,21 @@ def update_workflow_resolution(
         max_processing_width: Max width for ProPainter (default: from env or 1920)
         max_processing_height: Max height for ProPainter (default: from env or 1080)
     """
-    if max_processing_width is None:
-        max_processing_width = int(os.environ.get("CLEANPLATE_MAX_WIDTH", "1920"))
-    if max_processing_height is None:
-        max_processing_height = int(os.environ.get("CLEANPLATE_MAX_HEIGHT", "1080"))
+    if width <= 0 or height <= 0:
+        print("  → Warning: Invalid resolution, skipping workflow update")
+        return
 
-    proc_width = min(width, max_processing_width)
-    proc_height = min(height, max_processing_height)
+    if max_processing_width is None or max_processing_height is None:
+        default_max_w, default_max_h = _get_max_processing_dimensions()
+        max_processing_width = max_processing_width or default_max_w
+        max_processing_height = max_processing_height or default_max_h
 
-    source_aspect = width / height
-    proc_aspect = proc_width / proc_height
+    proc_width, proc_height = _calculate_processing_resolution(
+        width, height, max_processing_width, max_processing_height
+    )
 
-    if abs(source_aspect - proc_aspect) > 0.01:
-        if source_aspect > proc_aspect:
-            proc_height = int(proc_width / source_aspect)
-        else:
-            proc_width = int(proc_height * source_aspect)
-
-    proc_width = (proc_width // 8) * 8
-    proc_height = (proc_height // 8) * 8
-
-    width_8 = (width // 8) * 8
-    height_8 = (height // 8) * 8
+    width_8 = _align_to_8(width)
+    height_8 = _align_to_8(height)
 
     with open(workflow_path) as f:
         workflow = json.load(f)
