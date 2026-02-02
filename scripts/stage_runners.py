@@ -143,8 +143,8 @@ def export_camera_to_vfx_formats(
 ) -> bool:
     """Export camera data to VFX-friendly formats.
 
-    Exports to .chan (Nuke), .csv, .clip (Houdini), .camera.json.
-    Also exports .abc if PyAlembic is available.
+    Exports to .chan (Nuke), .csv, .clip (Houdini), .camera.json, .jsx (After Effects).
+    Also exports .abc (Alembic) and .usd (USD) if Blender is available.
 
     Args:
         project_dir: Project directory with camera/ subfolder
