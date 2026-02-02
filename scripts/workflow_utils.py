@@ -49,8 +49,8 @@ def _get_propainter_quality_params() -> tuple[int, int]:
     Returns:
         Tuple of (num_refine_iters, num_flows)
     """
-    num_refine_iters = int(os.environ.get("PROPAINTER_REFINE_ITERS", "12"))
-    num_flows = int(os.environ.get("PROPAINTER_NUM_FLOWS", "15"))
+    num_refine_iters = int(os.environ.get("PROPAINTER_REFINE_ITERS", "16"))
+    num_flows = int(os.environ.get("PROPAINTER_NUM_FLOWS", "20"))
     return num_refine_iters, num_flows
 
 

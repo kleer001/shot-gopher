@@ -131,7 +131,7 @@
         {"name": "MASK_DILATE", "type": "MASK", "links": null}
       ],
       "properties": {"Node name for S&R": "ProPainterInpaint"},
-      "widgets_values": [1920, 1080, 5, 12, 15, 2, 80, 5, "enable"],
+      "widgets_values": [1920, 1080, 5, 16, 20, 2, 80, 5, "enable"],
       "title": "🎨 ProPainter (10 frames)"
     },
     {
