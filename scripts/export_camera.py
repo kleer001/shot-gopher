@@ -35,20 +35,15 @@ from transforms import (
     compute_fov_from_intrinsics,
     convert_opencv_to_opengl,
     decompose_matrix,
-    matrix_to_alembic_xform,
     rotation_matrix_to_euler,
 )
 
+HAS_BLENDER = False
 try:
-    import alembic.Abc as Abc
-    import alembic.AbcGeom as AbcGeom
-    import imath
-    HAS_ALEMBIC = True
+    from blender import export_camera_to_alembic, check_blender_available
+    HAS_BLENDER = True
 except ImportError:
-    HAS_ALEMBIC = False
-    Abc = None
-    AbcGeom = None
-    imath = None
+    pass
 
 
 def load_camera_data(
@@ -106,96 +101,6 @@ def load_camera_data(
             extrinsics.append(matrix)
 
     return extrinsics, intrinsics_data, source
-
-
-def export_alembic_camera(
-    extrinsics: list[np.ndarray],
-    intrinsics: dict,
-    output_path: Path,
-    start_frame: int = 1,
-    fps: float = 24.0,
-    image_width: int = 1920,
-    image_height: int = 1080,
-    camera_name: str = "camera"
-) -> None:
-    """Export camera animation to Alembic file.
-
-    Args:
-        extrinsics: List of 4x4 camera-to-world matrices per frame
-        intrinsics: Camera intrinsics dict (fx, fy, cx, cy)
-        output_path: Output .abc file path
-        start_frame: Starting frame number (default: 1)
-        fps: Frames per second
-        image_width: Image width for FOV calculation
-        image_height: Image height for FOV calculation
-        camera_name: Name for the camera object (e.g., 'colmap_camera', 'da3_camera')
-    """
-    if not HAS_ALEMBIC:
-        raise ImportError(
-            "Alembic camera export requires Blender. Run the installation wizard."
-        )
-
-    # Calculate time per frame
-    time_per_frame = 1.0 / fps
-
-    # Create Alembic archive
-    archive = Abc.OArchive(str(output_path))
-    top = archive.getTop()
-
-    # Create time sampling (one sample per frame)
-    num_frames = len(extrinsics)
-    time_sampling = AbcGeom.TimeSampling(time_per_frame, start_frame / fps)
-    ts_index = archive.addTimeSampling(time_sampling)
-
-    # Create camera object
-    camera_obj = AbcGeom.OCamera(top, camera_name, ts_index)
-    camera_schema = camera_obj.getSchema()
-
-    # Create xform (transform) for the camera
-    xform_obj = AbcGeom.OXform(top, f"{camera_name}_xform", ts_index)
-    xform_schema = xform_obj.getSchema()
-
-    # Calculate FOV from intrinsics
-    h_fov, v_fov = compute_fov_from_intrinsics(intrinsics, image_width, image_height)
-
-    # Compute focal length in mm (assuming 36mm sensor width - full frame)
-    sensor_width_mm = 36.0
-    focal_length_mm = (sensor_width_mm / 2) / np.tan(np.radians(h_fov / 2))
-
-    # Write samples for each frame
-    for frame_idx, matrix in enumerate(extrinsics):
-        # Set camera intrinsics (same for all frames typically)
-        cam_sample = AbcGeom.CameraSample()
-        cam_sample.setFocalLength(focal_length_mm)
-        cam_sample.setHorizontalAperture(sensor_width_mm / 10)  # Alembic uses cm
-        cam_sample.setVerticalAperture((sensor_width_mm * image_height / image_width) / 10)
-        cam_sample.setNearClippingPlane(0.1)
-        cam_sample.setFarClippingPlane(10000.0)
-        camera_schema.set(cam_sample)
-
-        # Set transform
-        xform_sample = AbcGeom.XformSample()
-
-        # Decompose matrix for cleaner transform stack
-        translation, rotation, scale = decompose_matrix(matrix)
-        euler = rotation_matrix_to_euler(rotation)
-
-        # Add transform operations
-        xform_sample.addOp(AbcGeom.XformOp(AbcGeom.kTranslateOperation, AbcGeom.kTranslateHint),
-                          imath.V3d(*translation))
-        xform_sample.addOp(AbcGeom.XformOp(AbcGeom.kRotateXOperation, AbcGeom.kRotateHint),
-                          euler[0])
-        xform_sample.addOp(AbcGeom.XformOp(AbcGeom.kRotateYOperation, AbcGeom.kRotateHint),
-                          euler[1])
-        xform_sample.addOp(AbcGeom.XformOp(AbcGeom.kRotateZOperation, AbcGeom.kRotateHint),
-                          euler[2])
-
-        xform_schema.set(xform_sample)
-
-    print(f"Exported {num_frames} frames to {output_path}")
-    print(f"  Frame range: {start_frame}-{start_frame + num_frames - 1}")
-    print(f"  Focal length: {focal_length_mm:.2f}mm")
-    print(f"  H-FOV: {h_fov:.2f} deg, V-FOV: {v_fov:.2f} deg")
 
 
 def export_json_camera(
@@ -903,20 +808,17 @@ def main():
         )
         exported.append(f"camera.cmd (Houdini)")
 
-    # Alembic format (requires conda install -c conda-forge alembic)
+    # Alembic format (requires Blender)
     if fmt in ("abc", "all"):
         abc_path = output_base.with_suffix(".abc")
-        if HAS_ALEMBIC:
+        if HAS_BLENDER:
             try:
-                export_alembic_camera(
-                    extrinsics=extrinsics,
-                    intrinsics=intrinsics,
+                export_camera_to_alembic(
+                    camera_dir=camera_dir,
                     output_path=abc_path,
-                    start_frame=args.start_frame,
                     fps=args.fps,
-                    image_width=args.width,
-                    image_height=args.height,
-                    camera_name=camera_name
+                    start_frame=args.start_frame,
+                    camera_name=camera_name,
                 )
                 exported.append(f".abc (Alembic)")
             except Exception as e:

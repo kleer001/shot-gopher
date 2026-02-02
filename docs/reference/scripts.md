@@ -433,7 +433,7 @@ Notes:
 ### Tips
 
 - Use `--format all` to export all formats at once (default behavior)
-- Alembic (.abc) requires Blender (auto-installed via wizard). Note: conda-forge "alembic" is a database tool, not VFX Alembic.
+- Alembic (.abc) requires Blender (auto-installed via wizard)
 - For Nuke, use .chan for simplest import
 - For After Effects, run the .jsx script via File → Scripts → Run Script File
 - For Houdini, use .cmd via File → Run Script, or .clip via File CHOP
