@@ -698,6 +698,7 @@ def run_mocap_pipeline(
     motion_output = mocap_dir / "motion.pkl"
     if not save_motion_output(gvhmr_output, motion_output, gender=gender):
         print("Warning: Could not create motion output", file=sys.stderr)
+        return False
 
     print(f"\n{'=' * 60}")
     print("Motion Capture Complete")
@@ -707,6 +708,40 @@ def run_mocap_pipeline(
     print()
 
     return True
+
+
+def run_export_pipeline(
+    project_dir: Path,
+    fps: float = 24.0,
+) -> bool:
+    """Run mesh export after motion capture.
+
+    Args:
+        project_dir: Project directory
+        fps: Frames per second for export
+
+    Returns:
+        True if successful
+    """
+    motion_output = project_dir / "mocap" / "motion.pkl"
+
+    if not motion_output.exists():
+        print("Error: No motion data to export", file=sys.stderr)
+        return False
+
+    try:
+        from export_mocap import run_export
+        return run_export(
+            project_dir=project_dir,
+            formats=["abc", "usd"],
+            fps=fps,
+        )
+    except ImportError as e:
+        print(f"Warning: Could not import export_mocap: {e}", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"Warning: Export failed: {e}", file=sys.stderr)
+        return False
 
 
 def main():
@@ -737,6 +772,17 @@ def main():
         default="neutral",
         help="Body model gender (default: neutral)"
     )
+    parser.add_argument(
+        "--no-export",
+        action="store_true",
+        help="Skip automatic Alembic/USD export after motion capture"
+    )
+    parser.add_argument(
+        "--fps",
+        type=float,
+        default=24.0,
+        help="Frames per second for export (default: 24)"
+    )
 
     args = parser.parse_args()
 
@@ -763,7 +809,18 @@ def main():
         gender=args.gender,
     )
 
-    sys.exit(0 if success else 1)
+    if not success:
+        sys.exit(1)
+
+    if not args.no_export:
+        export_success = run_export_pipeline(
+            project_dir=project_dir,
+            fps=args.fps,
+        )
+        if not export_success:
+            print("Warning: Export failed, but motion data was saved", file=sys.stderr)
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":
