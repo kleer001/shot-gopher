@@ -186,12 +186,18 @@ def export_camera_to_vfx_formats(
 def run_mocap(
     project_dir: Path,
     use_colmap_intrinsics: bool = True,
+    gender: str = "neutral",
+    no_export: bool = False,
+    fps: Optional[float] = None,
 ) -> bool:
     """Run human motion capture with GVHMR.
 
     Args:
         project_dir: Project directory with frames and camera data
         use_colmap_intrinsics: Use COLMAP focal length for GVHMR
+        gender: Body model gender (neutral, male, female)
+        no_export: Skip automatic Alembic/USD export
+        fps: Frames per second for export
 
     Returns:
         True if mocap succeeded
@@ -205,10 +211,17 @@ def run_mocap(
     cmd = [
         sys.executable, str(script_path),
         str(project_dir),
+        "--gender", gender,
     ]
 
     if not use_colmap_intrinsics:
         cmd.append("--no-colmap-intrinsics")
+
+    if no_export:
+        cmd.append("--no-export")
+
+    if fps is not None:
+        cmd.extend(["--fps", str(fps)])
 
     try:
         run_command(cmd, "Running motion capture")
@@ -832,14 +845,22 @@ def run_stage_mocap(
     camera_dir = ctx.project_dir / "camera"
     has_camera = camera_dir.exists() and (camera_dir / "extrinsics.json").exists()
 
+    export_fps = config.mocap_fps if config.mocap_fps is not None else ctx.fps
+
     if ctx.skip_existing and mocap_output.exists():
         print("  → Skipping (mocap data exists)")
     else:
         if has_camera:
             print(f"  → Using COLMAP camera data for improved accuracy")
+        print(f"  → Gender: {config.mocap_gender}")
+        if not config.mocap_no_export:
+            print(f"  → Will export to Alembic/USD at {export_fps} fps")
         if not run_mocap(
             ctx.project_dir,
             use_colmap_intrinsics=has_camera,
+            gender=config.mocap_gender,
+            no_export=config.mocap_no_export,
+            fps=export_fps,
         ):
             print("  → Motion capture failed", file=sys.stderr)
 
