@@ -132,7 +132,8 @@ def run_command(
     capture: bool = False,
     timeout: int = 600,
     stream: bool = False,
-    shell: bool = False
+    shell: bool = False,
+    cwd: str = None
 ) -> Tuple[bool, str]:
     """Run shell command and return success status and output.
 
@@ -143,10 +144,11 @@ def run_command(
         timeout: Timeout in seconds (default 600 = 10 minutes for conda installs)
         stream: Stream output line by line (for long-running commands)
         shell: Use shell execution (required for Windows .bat files)
+        cwd: Working directory for the command
     """
     try:
         if capture:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, shell=shell)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, shell=shell, cwd=cwd)
             return result.returncode == 0, result.stdout + result.stderr
         elif stream:
             import sys
@@ -157,7 +159,8 @@ def run_command(
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                shell=shell
+                shell=shell,
+                cwd=cwd
             )
             output_lines = []
             if process.stdout:
@@ -168,7 +171,7 @@ def run_command(
             process.wait()
             return process.returncode == 0, ''.join(output_lines)
         else:
-            result = subprocess.run(cmd, check=check, timeout=timeout, shell=shell)
+            result = subprocess.run(cmd, check=check, timeout=timeout, shell=shell, cwd=cwd)
             return result.returncode == 0, ""
     except subprocess.TimeoutExpired:
         print_warning(f"Command timed out after {timeout}s")
