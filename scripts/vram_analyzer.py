@@ -25,9 +25,15 @@ class VramStatus(str, Enum):
 
 @dataclass
 class StageVramConfig:
-    """VRAM configuration for a pipeline stage."""
+    """VRAM configuration for a pipeline stage.
+
+    VRAM estimation formula:
+        estimated = base_vram_gb + (megapixels * frames * gb_per_mpx_frame)
+
+    Where megapixels = (width * height) / 1,000,000
+    """
     base_vram_gb: float
-    gb_per_100_frames: float = 0.0
+    gb_per_mpx_frame: float = 0.0
     chunked: bool = False
     chunk_formula: Optional[str] = None
 
@@ -35,17 +41,17 @@ class StageVramConfig:
 STAGE_VRAM_REQUIREMENTS: dict[str, StageVramConfig] = {
     "ingest": StageVramConfig(base_vram_gb=0),
     "depth": StageVramConfig(base_vram_gb=3),
-    "roto": StageVramConfig(base_vram_gb=4, gb_per_100_frames=2.0),
-    "interactive": StageVramConfig(base_vram_gb=4, gb_per_100_frames=2.0),
+    "roto": StageVramConfig(base_vram_gb=2, gb_per_mpx_frame=0.04),
+    "interactive": StageVramConfig(base_vram_gb=2, gb_per_mpx_frame=0.04),
     "mama": StageVramConfig(
-        base_vram_gb=8,
-        gb_per_100_frames=4.0,
+        base_vram_gb=4,
+        gb_per_mpx_frame=0.08,
         chunked=True,
         chunk_formula="vram_to_chunk_size"
     ),
-    "cleanplate": StageVramConfig(base_vram_gb=4, gb_per_100_frames=1.0),
+    "cleanplate": StageVramConfig(base_vram_gb=2, gb_per_mpx_frame=0.09),
     "colmap": StageVramConfig(base_vram_gb=2),
-    "gsir": StageVramConfig(base_vram_gb=6, gb_per_100_frames=2.0),
+    "gsir": StageVramConfig(base_vram_gb=4, gb_per_mpx_frame=0.04),
     "mocap": StageVramConfig(base_vram_gb=6),
     "camera": StageVramConfig(base_vram_gb=0),
 }
@@ -123,16 +129,26 @@ def get_gpu_name() -> Optional[str]:
     return None
 
 
-def calculate_estimated_vram(config: StageVramConfig, frame_count: int) -> float:
-    """Calculate estimated VRAM needed based on base + frame scaling."""
-    frame_scaling = (frame_count / 100.0) * config.gb_per_100_frames
-    return config.base_vram_gb + frame_scaling
+def calculate_estimated_vram(
+    config: StageVramConfig,
+    frame_count: int,
+    resolution: tuple[int, int]
+) -> float:
+    """Calculate estimated VRAM needed based on resolution and frame count.
+
+    Formula: base + (megapixels * frames * coefficient)
+    Where megapixels = (width * height) / 1,000,000
+    """
+    megapixels = (resolution[0] * resolution[1]) / 1_000_000
+    scaling = megapixels * frame_count * config.gb_per_mpx_frame
+    return config.base_vram_gb + scaling
 
 
 def analyze_stage(
     stage: str,
     vram_gb: Optional[float],
     frame_count: int,
+    resolution: tuple[int, int],
 ) -> StageAnalysis:
     """Analyze VRAM requirements for a single stage."""
     config = STAGE_VRAM_REQUIREMENTS.get(stage)
@@ -147,8 +163,8 @@ def analyze_stage(
             message="Unknown stage",
         )
 
-    estimated_vram = calculate_estimated_vram(config, frame_count)
-    scales_with_frames = config.gb_per_100_frames > 0
+    estimated_vram = calculate_estimated_vram(config, frame_count, resolution)
+    scales_with_frames = config.gb_per_mpx_frame > 0
 
     if vram_gb is None:
         return StageAnalysis(
@@ -263,7 +279,7 @@ def analyze_project_vram(
     warnings = []
 
     for stage in STAGE_VRAM_REQUIREMENTS:
-        analysis = analyze_stage(stage, vram_gb, frame_count)
+        analysis = analyze_stage(stage, vram_gb, frame_count, resolution)
         stages_analysis[stage] = {
             "status": analysis.status.value,
             "base_vram_gb": analysis.base_vram_gb,
