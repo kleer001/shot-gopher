@@ -99,10 +99,10 @@ class InstallationValidator:
         return True, f"COLMAP available at {colmap_path}"
 
     def validate_checkpoint_files(self, base_dir: Optional[Path] = None) -> Dict[str, bool]:
-        """Check if checkpoint files exist and are valid (not corrupted downloads).
+        """Check if checkpoint files exist and have correct file sizes.
 
-        Validates both existence and minimum file size to detect corrupted downloads
-        (e.g., HTML error pages from failed Google Drive downloads).
+        Validates both existence and expected file size (within 5% tolerance)
+        to detect corrupted or incomplete downloads.
 
         Args:
             base_dir: Base directory for checkpoints
@@ -117,25 +117,31 @@ class InstallationValidator:
         results = {}
 
         gvhmr_checkpoints = {
-            "gvhmr/gvhmr_siga24_release.ckpt": 1_000_000_000,
-            "hmr2/epoch=10-step=25000.ckpt": 800_000_000,
-            "vitpose/vitpose-h-multi-coco.pth": 1_000_000_000,
-            "dpvo/dpvo.pth": 150_000_000,
+            "gvhmr/gvhmr_siga24_release.ckpt": 1200 * 1024 * 1024,
+            "hmr2/epoch=10-step=25000.ckpt": 900 * 1024 * 1024,
+            "vitpose/vitpose-h-multi-coco.pth": 1100 * 1024 * 1024,
+            "dpvo/dpvo.pth": 200 * 1024 * 1024,
         }
+        size_tolerance = 0.05
 
         gvhmr_ckpt_dir = base_dir / "GVHMR" / "inputs" / "checkpoints"
         gvhmr_valid = True
         gvhmr_issues = []
 
-        for ckpt_path, min_size in gvhmr_checkpoints.items():
+        for ckpt_path, expected_size in gvhmr_checkpoints.items():
             full_path = gvhmr_ckpt_dir / ckpt_path
             if not full_path.exists():
                 gvhmr_valid = False
                 gvhmr_issues.append(f"missing: {ckpt_path}")
-            elif full_path.stat().st_size < min_size:
-                gvhmr_valid = False
+            else:
                 actual_size = full_path.stat().st_size
-                gvhmr_issues.append(f"corrupted: {ckpt_path} ({actual_size} bytes, expected >{min_size})")
+                min_size = expected_size * (1 - size_tolerance)
+                max_size = expected_size * (1 + size_tolerance)
+                if not (min_size <= actual_size <= max_size):
+                    gvhmr_valid = False
+                    actual_mb = actual_size / (1024 * 1024)
+                    expected_mb = expected_size / (1024 * 1024)
+                    gvhmr_issues.append(f"wrong size: {ckpt_path} ({actual_mb:.1f} MB, expected ~{expected_mb:.0f} MB)")
 
         results['gvhmr'] = gvhmr_valid
         if gvhmr_issues:
