@@ -46,7 +46,7 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 ### Core Pipeline
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) - Node-based workflow engine for ML inference
 - [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything) - Temporally consistent depth estimation
-- [Segment Anything Model 2/3](https://github.com/facebookresearch/segment-anything-2) - Text-prompted rotoscoping
+- [Segment Anything Model 3](https://github.com/facebookresearch/sam2) - Text-prompted rotoscoping
 - [VideoMaMa](https://github.com/hywang66/VideoMaMa) - Video matting for human alpha mattes
 - [ProPainter](https://github.com/sczhou/ProPainter) - Video inpainting for clean plates
 - [COLMAP](https://colmap.github.io/) - Structure-from-Motion and Multi-View Stereo
