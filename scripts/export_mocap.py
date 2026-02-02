@@ -117,6 +117,10 @@ def generate_meshes(
         gender = motion_data.get('gender', 'neutral')
 
         n_frames = len(poses)
+        if n_frames == 0:
+            print("Error: Motion data contains no frames", file=sys.stderr)
+            return None
+
         print(f"  Generating {n_frames} frames with {gender} body model...")
 
         model = smplx.create(
@@ -270,7 +274,7 @@ def export_usd(
         True if successful
     """
     try:
-        from pxr import Usd, UsdGeom, Vt, Gf, Sdf
+        from pxr import Usd, UsdGeom, Vt, Gf
     except ImportError:
         print("Error: pxr (OpenUSD) package not installed", file=sys.stderr)
         print("Install USD from: https://developer.nvidia.com/usd", file=sys.stderr)
@@ -337,8 +341,6 @@ def export_obj_sequence(
         True if successful
     """
     try:
-        import numpy as np
-
         output_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"  Exporting {len(meshes)} frames as OBJ sequence...")
@@ -398,6 +400,10 @@ def run_export(
     if formats is None:
         formats = ["abc", "usd"]
 
+    if fps <= 0:
+        print("Error: FPS must be greater than 0", file=sys.stderr)
+        return False
+
     motion_path = motion_file or project_dir / "mocap" / "motion.pkl"
     export_dir = output_dir or project_dir / "mocap" / "export"
     export_dir.mkdir(parents=True, exist_ok=True)
@@ -429,6 +435,10 @@ def run_export(
 
     meshes = generate_meshes(motion_data, model_path, device)
     if meshes is None:
+        return False
+
+    if not meshes:
+        print("Error: No mesh frames generated", file=sys.stderr)
         return False
 
     all_success = True
