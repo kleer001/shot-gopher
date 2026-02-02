@@ -489,7 +489,7 @@ class GVHMRInstaller(ComponentInstaller):
 
     GVHMR requires:
     - Separate conda environment (gvhmr) with Python 3.10
-    - PyTorch 2.3.0 with CUDA 12.1
+    - PyTorch 2.3.0 (with CUDA on Linux/Windows, MPS on macOS)
     - Specific package versions from requirements.txt
     - Editable install (pip install -e .)
 
@@ -536,6 +536,53 @@ class GVHMRInstaller(ComponentInstaller):
         success, _ = run_command(full_cmd, check=False, cwd=cwd)
         return success
 
+    def _detect_platform_and_gpu(self) -> tuple:
+        """Detect platform and GPU availability.
+
+        Returns:
+            Tuple of (platform, has_cuda) where platform is 'linux', 'darwin', or 'windows'
+        """
+        import platform as plat
+        system = plat.system().lower()
+
+        if system == "darwin":
+            return ("darwin", False)
+
+        has_cuda = False
+        if shutil.which("nvidia-smi"):
+            success, _ = run_command(["nvidia-smi"], check=False, capture=True)
+            has_cuda = success
+
+        if system == "windows":
+            return ("windows", has_cuda)
+        return ("linux", has_cuda)
+
+    def _get_pytorch_install_cmd(self) -> list:
+        """Get the appropriate PyTorch installation command for the platform."""
+        platform, has_cuda = self._detect_platform_and_gpu()
+
+        if platform == "darwin":
+            print_info("macOS detected - installing PyTorch with MPS support")
+            return ["pip", "install", "torch==2.3.0", "torchvision==0.18.0"]
+
+        if has_cuda:
+            print_info(f"{platform.title()} with CUDA detected - installing PyTorch with CUDA 12.1")
+            return [
+                "pip", "install",
+                "torch==2.3.0+cu121", "torchvision==0.18.0+cu121",
+                "--index-url", "https://download.pytorch.org/whl/cu121"
+            ]
+
+        print_warning(f"{platform.title()} without CUDA - installing CPU-only PyTorch")
+        print_info("GVHMR will run slower without GPU acceleration")
+        if platform == "linux":
+            return [
+                "pip", "install",
+                "torch==2.3.0+cpu", "torchvision==0.18.0+cpu",
+                "--index-url", "https://download.pytorch.org/whl/cpu"
+            ]
+        return ["pip", "install", "torch==2.3.0", "torchvision==0.18.0"]
+
     def install(self) -> bool:
         print(f"\nInstalling GVHMR (World-Grounded Human Motion Recovery)...")
         print_info("This will create a separate conda environment 'gvhmr' with Python 3.10")
@@ -573,12 +620,9 @@ class GVHMRInstaller(ComponentInstaller):
                 return False
             print_success("GVHMR repository cloned")
 
-        print("  Installing PyTorch 2.3.0 with CUDA 12.1...")
-        success = self._run_in_env([
-            "pip", "install",
-            "torch==2.3.0+cu121", "torchvision==0.18.0+cu121",
-            "--index-url", "https://download.pytorch.org/whl/cu121"
-        ])
+        print("  Installing PyTorch...")
+        pytorch_cmd = self._get_pytorch_install_cmd()
+        success = self._run_in_env(pytorch_cmd)
         if not success:
             print_warning("PyTorch installation may have failed - continuing anyway")
 
