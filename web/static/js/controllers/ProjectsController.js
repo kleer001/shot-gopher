@@ -110,7 +110,13 @@ export class ProjectsController {
 
     setupEventListeners() {
         this._boundHandlers.onUploadComplete = (e) => this.handleUploadComplete(e.detail);
+        this._boundHandlers.onStateChange = (e) => {
+            if ('gpuAvailableVramGb' in e.detail.updates) {
+                this.updateVramDisplay();
+            }
+        };
         stateManager.addEventListener(EVENTS.UPLOAD_COMPLETE, this._boundHandlers.onUploadComplete);
+        stateManager.addEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
     }
 
     async handleUploadComplete(detail) {
@@ -482,7 +488,7 @@ export class ProjectsController {
         }
 
         const stages = analysis.stages || {};
-        const availableGb = (analysis.available_vram_mb || 0) / 1024;
+        const availableGb = stateManager.get('gpuAvailableVramGb') || 0;
 
         if (this.selectedStages.size === 0) {
             dom.addClass(this.elements.vramInfoSection, CSS_CLASSES.HIDDEN);
@@ -782,6 +788,9 @@ export class ProjectsController {
 
         if (this._boundHandlers.onUploadComplete) {
             stateManager.removeEventListener(EVENTS.UPLOAD_COMPLETE, this._boundHandlers.onUploadComplete);
+        }
+        if (this._boundHandlers.onStateChange) {
+            stateManager.removeEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
         }
         this._boundHandlers = {};
     }
