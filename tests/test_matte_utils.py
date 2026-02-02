@@ -10,12 +10,6 @@ import pytest
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-try:
-    import cv2
-    HAS_CV2 = True
-except ImportError:
-    HAS_CV2 = False
-
 from matte_utils import (
     combine_mattes,
     combine_mask_sequences,
@@ -30,7 +24,6 @@ def create_test_mask(path: Path, value: int, width: int = 100, height: int = 100
     img.save(path)
 
 
-@pytest.mark.skipif(not HAS_CV2, reason="cv2 (OpenCV) not installed")
 class TestCombineMattes:
     def test_combine_empty_list_returns_false(self):
         with tempfile.TemporaryDirectory() as tmpdir:

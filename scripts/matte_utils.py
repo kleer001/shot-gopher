@@ -29,7 +29,7 @@ def combine_mattes(
     Returns:
         True if successful, False otherwise
     """
-    import cv2
+    from PIL import Image
     import numpy as np
 
     if not input_dirs:
@@ -55,18 +55,18 @@ def combine_mattes(
                 continue
 
             frame_file = dir_files[frame_idx]
-            matte = cv2.imread(str(frame_file), cv2.IMREAD_GRAYSCALE)
-            if matte is None:
-                continue
+            img = Image.open(frame_file).convert('L')
+            matte = np.array(img, dtype=np.float32)
 
             if combined is None:
-                combined = matte.astype(np.float32)
+                combined = matte
             else:
-                combined = np.maximum(combined, matte.astype(np.float32))
+                combined = np.maximum(combined, matte)
 
         if combined is not None:
             out_file = output_dir / f"{output_prefix}_{frame_idx:05d}_.png"
-            cv2.imwrite(str(out_file), combined.astype(np.uint8))
+            result = Image.fromarray(combined.astype(np.uint8))
+            result.save(out_file)
 
         if (frame_idx + 1) % 50 == 0:
             print(f"    Combined {frame_idx + 1}/{num_frames} frames...")
