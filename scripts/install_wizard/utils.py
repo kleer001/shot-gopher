@@ -66,6 +66,12 @@ def tty_input(prompt: str = "") -> str:
         return _tty_handle.readline().rstrip('\n')
 
 
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
+
 class Colors:
     """Terminal colors for pretty output."""
     HEADER = '\033[95m'

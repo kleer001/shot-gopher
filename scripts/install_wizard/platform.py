@@ -14,6 +14,8 @@ from typing import Dict, List, Optional, Tuple
 
 from env_config import INSTALL_DIR
 
+from .utils import BROWSER_USER_AGENT
+
 # Repo-local tools directory (sandboxed, no home directory pollution)
 TOOLS_DIR = INSTALL_DIR / "tools"
 
@@ -711,9 +713,7 @@ Run: python scripts/install_wizard.py
 
             request = urllib.request.Request(
                 url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                }
+                headers={"User-Agent": BROWSER_USER_AGENT}
             )
             with urllib.request.urlopen(request) as response:
                 with open(tmp_path, "wb") as out_file:
