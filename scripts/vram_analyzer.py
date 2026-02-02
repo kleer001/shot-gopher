@@ -34,19 +34,19 @@ class StageVramConfig:
 
 STAGE_VRAM_REQUIREMENTS: dict[str, StageVramConfig] = {
     "ingest": StageVramConfig(base_vram_gb=0, scales_with_frames=False),
-    "depth": StageVramConfig(base_vram_gb=7, scales_with_frames=False),
-    "roto": StageVramConfig(base_vram_gb=4, scales_with_frames=False),
-    "interactive": StageVramConfig(base_vram_gb=4, scales_with_frames=False),
+    "depth": StageVramConfig(base_vram_gb=3, scales_with_frames=False),
+    "roto": StageVramConfig(base_vram_gb=6, scales_with_frames=False),
+    "interactive": StageVramConfig(base_vram_gb=6, scales_with_frames=False),
     "mama": StageVramConfig(
         base_vram_gb=8,
         scales_with_frames=False,
         chunked=True,
         chunk_formula="vram_to_chunk_size"
     ),
-    "cleanplate": StageVramConfig(base_vram_gb=6, scales_with_frames=False),
-    "colmap": StageVramConfig(base_vram_gb=1, scales_with_frames=True),
-    "gsir": StageVramConfig(base_vram_gb=12, scales_with_frames=True),
-    "mocap": StageVramConfig(base_vram_gb=12, scales_with_frames=False),
+    "cleanplate": StageVramConfig(base_vram_gb=5, scales_with_frames=False),
+    "colmap": StageVramConfig(base_vram_gb=2, scales_with_frames=False),
+    "gsir": StageVramConfig(base_vram_gb=8, scales_with_frames=True),
+    "mocap": StageVramConfig(base_vram_gb=6, scales_with_frames=False),
     "camera": StageVramConfig(base_vram_gb=0, scales_with_frames=False),
 }
 
