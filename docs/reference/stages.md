@@ -375,7 +375,7 @@ python scripts/run_pipeline.py footage.mp4 -s colmap,camera
 
 | Format | Application | Notes |
 |--------|-------------|-------|
-| `.abc` (Alembic) | Maya, Houdini, Blender | Requires `alembic` package |
+| `.abc` (Alembic) | Maya, Houdini, Blender | Requires Blender (auto-installed) |
 | `.chan` | Nuke | Text format, ZXY rotation order |
 | `.clip` | Houdini | CHOP channel data |
 | `.jsx` | After Effects | JavaScript import script |

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from env_config import INSTALL_DIR
 
-from .utils import Colors, print_error, print_header, print_info, print_success, print_warning
+from .utils import BROWSER_USER_AGENT, Colors, print_error, print_header, print_info, print_success, print_warning
 
 
 def _is_windows() -> bool:
@@ -1174,9 +1174,7 @@ Auto-downloads from Ultralytics releases.'''
             with sync_playwright() as p:
                 # Launch headless browser
                 browser = p.chromium.launch(headless=True)
-                context = browser.new_context(
-                    user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                )
+                context = browser.new_context(user_agent=BROWSER_USER_AGENT)
                 page = context.new_page()
 
                 # Step 1: Go to login page
@@ -1276,7 +1274,7 @@ Auto-downloads from Ultralytics releases.'''
                 import requests
                 session = requests.Session()
                 session.headers.update({
-                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'User-Agent': BROWSER_USER_AGENT,
                     'Referer': download_page,
                 })
 
@@ -1392,7 +1390,7 @@ Auto-downloads from Ultralytics releases.'''
             # Create session to maintain cookies
             session = requests.Session()
             session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': BROWSER_USER_AGENT,
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
             })
