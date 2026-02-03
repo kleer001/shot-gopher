@@ -118,10 +118,13 @@ def _run_blender_script(
     try:
         stdout, stderr = process.communicate(timeout=timeout)
 
+        if stdout:
+            print(stdout)
+        if stderr:
+            print(f"Blender stderr: {stderr}")
+
         if process.returncode != 0:
             print(f"Blender export failed with code {process.returncode}")
-            print(f"stdout: {stdout}")
-            print(f"stderr: {stderr}")
             raise RuntimeError(f"Blender {format_name} export failed: {stderr}")
 
         if output_path.exists():
