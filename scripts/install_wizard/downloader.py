@@ -105,7 +105,7 @@ class CheckpointDownloader:
                     'extract': True
                 }
             ],
-            'dest_dir_rel': 'smplx_models',
+            'dest_dir_rel': 'GVHMR/inputs/checkpoints/body_models',
             'use_home_dir': False,
             'instructions': '''SMPL-X models require registration:
 1. Register at https://smpl-x.is.tue.mpg.de/register.php
@@ -113,7 +113,39 @@ class CheckpointDownloader:
 3. Create SMPL.login.dat in repository root with:
    Line 1: your email
    Line 2: your password
-4. Re-run the wizard to download models'''
+4. Re-run the wizard to download models
+
+Manual setup:
+1. Download models_smplx_v1_1.zip from SMPL-X website
+2. Extract to: GVHMR/inputs/checkpoints/body_models/
+3. Rename 'models/smplx' to 'smplx' (remove 'models' parent folder)'''
+        },
+        'smpl': {
+            'name': 'SMPL Models',
+            'requires_auth': False,
+            'files': [
+                {
+                    'url': 'https://huggingface.co/lithiumice/models_hub/resolve/main/4_SMPLhub/SMPL/X_pkl/SMPL_NEUTRAL.pkl',
+                    'filename': 'smpl/SMPL_NEUTRAL.pkl',
+                    'size_mb': 40,
+                },
+                {
+                    'url': 'https://huggingface.co/lithiumice/models_hub/resolve/main/4_SMPLhub/SMPL/X_pkl/SMPL_MALE.pkl',
+                    'filename': 'smpl/SMPL_MALE.pkl',
+                    'size_mb': 40,
+                },
+                {
+                    'url': 'https://huggingface.co/lithiumice/models_hub/resolve/main/4_SMPLhub/SMPL/X_pkl/SMPL_FEMALE.pkl',
+                    'filename': 'smpl/SMPL_FEMALE.pkl',
+                    'size_mb': 40,
+                },
+            ],
+            'dest_dir_rel': 'GVHMR/inputs/checkpoints/body_models',
+            'instructions': '''SMPL body models for GVHMR rendering.
+Downloaded from HuggingFace (lithiumice/models_hub).
+
+Manual download:
+https://huggingface.co/lithiumice/models_hub/tree/main/4_SMPLhub/SMPL/X_pkl'''
         },
         'sam3': {
             'name': 'SAM3 Model',
@@ -150,26 +182,24 @@ This model uses ~6.8GB VRAM (vs 23.6GB for Large), suitable for most GPUs.'''
         'gvhmr': {
             'name': 'GVHMR Checkpoints',
             'requires_auth': False,
-            'use_google_drive': True,
-            'gdrive_folder_id': '1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD',
             'files': [
                 {
-                    'gdrive_id': '1M5V-M3WZmcjn3I3Vv6rvwR9VqVuqnNxo',
+                    'url': 'https://huggingface.co/camenduru/GVHMR/resolve/main/gvhmr/gvhmr_siga24_release.ckpt',
                     'filename': 'gvhmr/gvhmr_siga24_release.ckpt',
                     'size_mb': 1200,
                 },
                 {
-                    'gdrive_id': '1i8Y6V8BeYKP3Os0n_G9HYbDJXMMqWyME',
+                    'url': 'https://huggingface.co/camenduru/GVHMR/resolve/main/hmr2/epoch%3D10-step%3D25000.ckpt',
                     'filename': 'hmr2/epoch=10-step=25000.ckpt',
                     'size_mb': 900,
                 },
                 {
-                    'gdrive_id': '1dG3T8OJhg1CKmVYhHvgVaQrz7Y1XUaKF',
+                    'url': 'https://huggingface.co/camenduru/GVHMR/resolve/main/vitpose/vitpose-h-multi-coco.pth',
                     'filename': 'vitpose/vitpose-h-multi-coco.pth',
                     'size_mb': 1100,
                 },
                 {
-                    'gdrive_id': '1FPbkdK9ZXW6EwJ8Y5R7OmJrMjY6UKWJY',
+                    'url': 'https://huggingface.co/camenduru/GVHMR/resolve/main/dpvo/dpvo.pth',
                     'filename': 'dpvo/dpvo.pth',
                     'size_mb': 200,
                 },
@@ -178,9 +208,11 @@ This model uses ~6.8GB VRAM (vs 23.6GB for Large), suitable for most GPUs.'''
             'instructions': '''GVHMR checkpoints for world-grounded motion capture.
 
 Manual download (if automatic fails):
-1. Visit: https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD
+1. Visit: https://huggingface.co/camenduru/GVHMR/tree/main
 2. Download all checkpoint folders (gvhmr/, hmr2/, vitpose/, dpvo/)
 3. Place in: GVHMR/inputs/checkpoints/
+
+Alternative (Google Drive): https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD
 
 YOLO will be auto-downloaded on first run.
 SMPL/SMPLX models must be downloaded separately (see smplx checkpoint).'''
@@ -300,9 +332,14 @@ Auto-downloads from Ultralytics releases.'''
             # Ensure directory exists
             dest.parent.mkdir(parents=True, exist_ok=True)
 
-            # Stream download with progress
             response = requests.get(url, stream=True, timeout=30)
             response.raise_for_status()
+
+            content_type = response.headers.get('content-type', '').lower()
+            if 'text/html' in content_type:
+                print_error("Server returned HTML instead of the expected file")
+                print_info("This may indicate a download error or expired link")
+                return False
 
             total_size = int(response.headers.get('content-length', 0))
             downloaded = 0
@@ -327,7 +364,6 @@ Auto-downloads from Ultralytics releases.'''
 
         except requests.exceptions.RequestException as e:
             print_error(f"Download failed: {e}")
-            # Clean up partial download
             if dest.exists():
                 dest.unlink()
             return False
@@ -752,9 +788,15 @@ Auto-downloads from Ultralytics releases.'''
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 output = gdown.download(url, str(dest), quiet=False)
 
-                if output is not None and dest.exists() and dest.stat().st_size > 1000:
-                    print_success(f"Downloaded {dest.name}")
-                    return True
+                if output is not None and dest.exists():
+                    actual_size = dest.stat().st_size
+                    min_valid_size = (expected_size_mb * 1024 * 1024 * 0.9) if expected_size_mb else 10000
+                    if actual_size >= min_valid_size:
+                        print_success(f"Downloaded {dest.name} ({actual_size / (1024*1024):.1f} MB)")
+                        return True
+                    else:
+                        print_warning(f"Download incomplete: {actual_size} bytes (expected ~{expected_size_mb} MB)")
+                        dest.unlink()
 
                 print_warning("gdown download failed, trying fallbacks...")
                 if dest.exists():
@@ -1787,9 +1829,16 @@ Auto-downloads from Ultralytics releases.'''
                     continue
 
                 dest_path = dest_dir / file_info['filename']
+                expected_size_mb = file_info.get('size_mb', 0)
                 if dest_path.exists():
-                    print_success(f"{file_info['filename']} already exists")
-                    continue
+                    actual_size = dest_path.stat().st_size
+                    min_valid_size = expected_size_mb * 1024 * 1024 * 0.9 if expected_size_mb else 10000
+                    if actual_size >= min_valid_size:
+                        print_success(f"{file_info['filename']} already exists ({actual_size / (1024*1024):.1f} MB)")
+                        continue
+                    else:
+                        print_warning(f"{file_info['filename']} exists but is too small ({actual_size} bytes), re-downloading...")
+                        dest_path.unlink()
 
                 dest_path.parent.mkdir(parents=True, exist_ok=True)
                 gdrive_url = f"https://drive.google.com/uc?id={file_info['gdrive_id']}"
@@ -1811,10 +1860,11 @@ Auto-downloads from Ultralytics releases.'''
         for file_info in checkpoint_info['files']:
             dest_path = dest_dir / file_info['filename']
 
-            # Skip if already exists (unless it needs extraction)
             if dest_path.exists() and not file_info.get('extract'):
                 print_success(f"{file_info['filename']} already exists")
                 continue
+
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Download with appropriate method
             if use_gdown:

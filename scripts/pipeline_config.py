@@ -40,6 +40,13 @@ class PipelineConfig:
     gsir_iterations: int = 35000
     gsir_path: Optional[str] = None
 
+    mocap_gender: str = "neutral"
+    mocap_no_export: bool = False
+    mocap_fps: Optional[float] = None
+    mocap_start_frame: Optional[int] = None
+    mocap_end_frame: Optional[int] = None
+    mocap_person: Optional[str] = None
+
     cleanplate_use_median: bool = False
 
     roto_prompt: Optional[str] = None
@@ -79,6 +86,12 @@ class PipelineConfig:
                 colmap_max_size=args.colmap_max_size,
                 gsir_iterations=args.gsir_iterations,
                 gsir_path=args.gsir_path,
+                mocap_gender=getattr(args, 'mocap_gender', 'neutral'),
+                mocap_no_export=getattr(args, 'mocap_no_export', False),
+                mocap_fps=getattr(args, 'mocap_fps', None),
+                mocap_start_frame=getattr(args, 'mocap_start_frame', None),
+                mocap_end_frame=getattr(args, 'mocap_end_frame', None),
+                mocap_person=getattr(args, 'mocap_person', None),
                 cleanplate_use_median=args.cleanplate_median,
                 roto_prompt=args.prompt,
                 roto_start_frame=args.start_frame,
@@ -104,6 +117,12 @@ class PipelineConfig:
             colmap_max_size=args.colmap_max_size,
             gsir_iterations=args.gsir_iterations,
             gsir_path=args.gsir_path,
+            mocap_gender=getattr(args, 'mocap_gender', 'neutral'),
+            mocap_no_export=getattr(args, 'mocap_no_export', False),
+            mocap_fps=getattr(args, 'mocap_fps', None),
+            mocap_start_frame=getattr(args, 'mocap_start_frame', None),
+            mocap_end_frame=getattr(args, 'mocap_end_frame', None),
+            mocap_person=getattr(args, 'mocap_person', None),
             cleanplate_use_median=args.cleanplate_median,
             roto_prompt=args.prompt,
             roto_start_frame=args.start_frame,

@@ -99,7 +99,10 @@ class InstallationValidator:
         return True, f"COLMAP available at {colmap_path}"
 
     def validate_checkpoint_files(self, base_dir: Optional[Path] = None) -> Dict[str, bool]:
-        """Check if checkpoint files exist.
+        """Check if checkpoint files exist and meet minimum size requirements.
+
+        Validates existence and minimum file size to detect corrupted or
+        incomplete downloads (e.g., HTML error pages from Google Drive).
 
         Args:
             base_dir: Base directory for checkpoints
@@ -113,14 +116,37 @@ class InstallationValidator:
 
         results = {}
 
-        # GVHMR: Check for the main checkpoint file
-        gvhmr_ckpt = base_dir / "GVHMR" / "inputs" / "checkpoints" / "gvhmr" / "gvhmr_siga24_release.ckpt"
-        results['gvhmr'] = gvhmr_ckpt.exists()
+        gvhmr_checkpoints = {
+            "gvhmr/gvhmr_siga24_release.ckpt": 1200,
+            "hmr2/epoch=10-step=25000.ckpt": 900,
+            "vitpose/vitpose-h-multi-coco.pth": 1100,
+            "dpvo/dpvo.pth": 200,
+        }
 
-        # ECON: Check for extracted data from econ_data.zip
+        gvhmr_ckpt_dir = base_dir / "GVHMR" / "inputs" / "checkpoints"
+        gvhmr_valid = True
+        gvhmr_issues = []
+
+        for ckpt_path, min_size_mb in gvhmr_checkpoints.items():
+            full_path = gvhmr_ckpt_dir / ckpt_path
+            min_size_bytes = min_size_mb * 1024 * 1024
+            if not full_path.exists():
+                gvhmr_valid = False
+                gvhmr_issues.append(f"missing: {ckpt_path}")
+            else:
+                actual_size = full_path.stat().st_size
+                if actual_size < min_size_bytes:
+                    gvhmr_valid = False
+                    actual_mb = actual_size / (1024 * 1024)
+                    gvhmr_issues.append(f"corrupted: {ckpt_path} ({actual_mb:.1f} MB, expected >={min_size_mb} MB)")
+
+        results['gvhmr'] = gvhmr_valid
+        if gvhmr_issues:
+            self._checkpoint_issues = getattr(self, '_checkpoint_issues', {})
+            self._checkpoint_issues['gvhmr'] = gvhmr_issues
+
         econ_data_dir = base_dir / "ECON" / "data"
         if econ_data_dir.exists():
-            # Check for any model/data files in the extracted directory
             has_data = any(econ_data_dir.glob("**/*.pkl")) or \
                        any(econ_data_dir.glob("**/*.pth")) or \
                        any(econ_data_dir.glob("**/smpl_related"))
@@ -214,9 +240,16 @@ class InstallationValidator:
         print("\n[Motion Capture Checkpoints]")
         for comp, status in results['checkpoints'].items():
             if status:
-                print_success(f"{comp.upper()} checkpoint found")
+                print_success(f"{comp.upper()} checkpoints valid")
             else:
-                print_info(f"{comp.upper()} checkpoint not found (install with wizard)")
+                issues = getattr(self, '_checkpoint_issues', {}).get(comp, [])
+                if issues:
+                    print_error(f"{comp.upper()} checkpoints invalid:")
+                    for issue in issues:
+                        print(f"    - {issue}")
+                    print_info("  Re-download from: https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD")
+                else:
+                    print_info(f"{comp.upper()} checkpoint not found (install with wizard)")
 
         # SMPL-X models
         print("\n[SMPL-X Models]")

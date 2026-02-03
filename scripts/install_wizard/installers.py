@@ -484,6 +484,188 @@ class GSIRInstaller(ComponentInstaller):
         return True
 
 
+class GVHMRInstaller(ComponentInstaller):
+    """Installer for GVHMR (World-Grounded Human Motion Recovery).
+
+    GVHMR requires:
+    - Separate conda environment (gvhmr) with Python 3.10
+    - PyTorch 2.3.0 (with CUDA on Linux/Windows, MPS on macOS)
+    - Specific package versions from requirements.txt
+    - Editable install (pip install -e .)
+
+    See: https://github.com/zju3dv/GVHMR/blob/main/docs/INSTALL.md
+    """
+
+    REPO_URL = "https://github.com/zju3dv/GVHMR.git"
+
+    def __init__(self, install_dir: Path = None, size_gb: float = 4.0):
+        super().__init__("GVHMR", size_gb)
+        self.install_dir = install_dir or INSTALL_DIR / "GVHMR"
+        self.env_name = "gvhmr"
+
+    def check(self) -> bool:
+        repo_exists = self.install_dir.exists() and (self.install_dir / ".git").exists()
+
+        conda_exe = self._find_conda()
+        env_exists = False
+        if conda_exe:
+            success, output = run_command(
+                [conda_exe, "env", "list"], check=False, capture=True
+            )
+            env_exists = success and self.env_name in output
+
+        self.installed = repo_exists and env_exists
+        return self.installed
+
+    def _find_conda(self) -> str:
+        import os
+        for cmd in ["conda", "mamba"]:
+            if shutil.which(cmd):
+                return cmd
+        conda_exe = os.environ.get("CONDA_EXE")
+        if conda_exe and Path(conda_exe).exists():
+            return str(conda_exe)
+        return None
+
+    def _run_in_env(self, cmd: list, cwd: str = None) -> bool:
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            print_error("Conda not found")
+            return False
+        full_cmd = [conda_exe, "run", "-n", self.env_name] + cmd
+        success, _ = run_command(full_cmd, check=False, cwd=cwd)
+        return success
+
+    def _detect_platform_and_gpu(self) -> tuple:
+        """Detect platform and GPU availability.
+
+        Returns:
+            Tuple of (platform, has_cuda) where platform is 'linux', 'darwin', or 'windows'
+        """
+        import platform as plat
+        system = plat.system().lower()
+
+        if system == "darwin":
+            return ("darwin", False)
+
+        has_cuda = False
+        if shutil.which("nvidia-smi"):
+            success, _ = run_command(["nvidia-smi"], check=False, capture=True)
+            has_cuda = success
+
+        if system == "windows":
+            return ("windows", has_cuda)
+        return ("linux", has_cuda)
+
+    def _get_pytorch_install_cmd(self) -> list:
+        """Get the appropriate PyTorch installation command for the platform."""
+        platform, has_cuda = self._detect_platform_and_gpu()
+
+        if platform == "darwin":
+            print_info("macOS detected - installing PyTorch with MPS support")
+            return ["pip", "install", "torch==2.3.0", "torchvision==0.18.0"]
+
+        if has_cuda:
+            print_info(f"{platform.title()} with CUDA detected - installing PyTorch with CUDA 12.1")
+            return [
+                "pip", "install",
+                "torch==2.3.0+cu121", "torchvision==0.18.0+cu121",
+                "--index-url", "https://download.pytorch.org/whl/cu121"
+            ]
+
+        print_warning(f"{platform.title()} without CUDA - installing CPU-only PyTorch")
+        print_info("GVHMR will run slower without GPU acceleration")
+        if platform == "linux":
+            return [
+                "pip", "install",
+                "torch==2.3.0+cpu", "torchvision==0.18.0+cpu",
+                "--index-url", "https://download.pytorch.org/whl/cpu"
+            ]
+        return ["pip", "install", "torch==2.3.0", "torchvision==0.18.0"]
+
+    def install(self) -> bool:
+        print(f"\nInstalling GVHMR (World-Grounded Human Motion Recovery)...")
+        print_info("This will create a separate conda environment 'gvhmr' with Python 3.10")
+
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            print_error("Conda not found - required for GVHMR installation")
+            return False
+
+        success, output = run_command([conda_exe, "env", "list"], check=False, capture=True)
+        if success and self.env_name in output:
+            print_info(f"Conda environment '{self.env_name}' already exists")
+        else:
+            print(f"  Creating conda environment '{self.env_name}' with Python 3.10...")
+            success, _ = run_command([
+                conda_exe, "create", "-y", "-n", self.env_name, "python=3.10"
+            ])
+            if not success:
+                print_error(f"Failed to create conda environment '{self.env_name}'")
+                return False
+            print_success(f"Created conda environment '{self.env_name}'")
+
+        self.install_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        if self.install_dir.exists() and (self.install_dir / ".git").exists():
+            print_info("GVHMR repository already cloned, updating...")
+            run_command(["git", "-C", str(self.install_dir), "pull"], check=False)
+        else:
+            print(f"  Cloning GVHMR repository...")
+            if self.install_dir.exists():
+                shutil.rmtree(self.install_dir)
+            success, _ = run_command(["git", "clone", self.REPO_URL, str(self.install_dir)])
+            if not success:
+                print_error("Failed to clone GVHMR repository")
+                return False
+            print_success("GVHMR repository cloned")
+
+        print("  Installing PyTorch...")
+        pytorch_cmd = self._get_pytorch_install_cmd()
+        success = self._run_in_env(pytorch_cmd)
+        if not success:
+            print_warning("PyTorch installation may have failed - continuing anyway")
+
+        print("  Installing OpenCV and core dependencies...")
+        self._run_in_env(["pip", "install", "opencv-python", "numpy", "scipy", "tqdm"])
+
+        print("  Installing chumpy (legacy SMPL dependency)...")
+        success = self._run_in_env(["pip", "install", "--no-build-isolation", "chumpy"])
+        if not success:
+            print_warning("chumpy failed to install - trying from git...")
+            success = self._run_in_env(["pip", "install", "git+https://github.com/mattloper/chumpy.git"])
+            if not success:
+                print_warning("chumpy installation failed - some SMPL features may not work")
+
+        requirements_txt = self.install_dir / "requirements.txt"
+        if requirements_txt.exists():
+            print("  Installing requirements.txt...")
+            success = self._run_in_env(
+                ["pip", "install", "-r", str(requirements_txt)],
+                cwd=str(self.install_dir)
+            )
+            if not success:
+                print_warning("Some requirements may have failed to install")
+
+        print("  Installing GVHMR package (pip install -e .)...")
+        success = self._run_in_env(
+            ["pip", "install", "-e", "."],
+            cwd=str(self.install_dir)
+        )
+        if not success:
+            print_warning("GVHMR package installation may have failed")
+
+        inputs_dir = self.install_dir / "inputs"
+        outputs_dir = self.install_dir / "outputs"
+        inputs_dir.mkdir(exist_ok=True)
+        outputs_dir.mkdir(exist_ok=True)
+
+        self.installed = True
+        print_success(f"GVHMR installed to {self.install_dir}")
+        print_info(f"Activate with: conda activate {self.env_name}")
+        return True
+
+
 class VideoMaMaInstaller(ComponentInstaller):
     """Installer for VideoMaMa (diffusion-based video matting).
 

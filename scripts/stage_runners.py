@@ -187,12 +187,24 @@ def export_camera_to_vfx_formats(
 def run_mocap(
     project_dir: Path,
     use_colmap_intrinsics: bool = True,
+    gender: str = "neutral",
+    no_export: bool = False,
+    fps: Optional[float] = None,
+    start_frame: Optional[int] = None,
+    end_frame: Optional[int] = None,
+    mocap_person: Optional[str] = None,
 ) -> bool:
     """Run human motion capture with GVHMR.
 
     Args:
         project_dir: Project directory with frames and camera data
         use_colmap_intrinsics: Use COLMAP focal length for GVHMR
+        gender: Body model gender (neutral, male, female)
+        no_export: Skip automatic Alembic/USD export
+        fps: Frames per second for export
+        start_frame: Start frame (1-indexed, inclusive)
+        end_frame: End frame (1-indexed, inclusive)
+        mocap_person: Roto person folder to isolate (e.g., 'person_00')
 
     Returns:
         True if mocap succeeded
@@ -206,10 +218,26 @@ def run_mocap(
     cmd = [
         sys.executable, str(script_path),
         str(project_dir),
+        "--gender", gender,
     ]
 
     if not use_colmap_intrinsics:
         cmd.append("--no-colmap-intrinsics")
+
+    if no_export:
+        cmd.append("--no-export")
+
+    if fps is not None:
+        cmd.extend(["--fps", str(fps)])
+
+    if start_frame is not None:
+        cmd.extend(["--start-frame", str(start_frame)])
+
+    if end_frame is not None:
+        cmd.extend(["--end-frame", str(end_frame)])
+
+    if mocap_person is not None:
+        cmd.extend(["--mocap-person", mocap_person])
 
     try:
         run_command(cmd, "Running motion capture")
@@ -840,14 +868,30 @@ def run_stage_mocap(
     camera_dir = ctx.project_dir / "camera"
     has_camera = camera_dir.exists() and (camera_dir / "extrinsics.json").exists()
 
+    export_fps = config.mocap_fps if config.mocap_fps is not None else ctx.fps
+
     if ctx.skip_existing and mocap_output.exists():
         print("  → Skipping (mocap data exists)")
     else:
         if has_camera:
             print(f"  → Using COLMAP camera data for improved accuracy")
+        print(f"  → Gender: {config.mocap_gender}")
+        if config.mocap_start_frame or config.mocap_end_frame:
+            range_str = f"{config.mocap_start_frame or 1}-{config.mocap_end_frame or 'end'}"
+            print(f"  → Frame range: {range_str}")
+        if config.mocap_person is not None:
+            print(f"  → Target person: {config.mocap_person}")
+        if not config.mocap_no_export:
+            print(f"  → Will export to Alembic/USD at {export_fps} fps")
         if not run_mocap(
             ctx.project_dir,
             use_colmap_intrinsics=has_camera,
+            gender=config.mocap_gender,
+            no_export=config.mocap_no_export,
+            fps=export_fps,
+            start_frame=config.mocap_start_frame,
+            end_frame=config.mocap_end_frame,
+            mocap_person=config.mocap_person,
         ):
             print("  → Motion capture failed", file=sys.stderr)
 

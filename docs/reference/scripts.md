@@ -14,6 +14,7 @@ While `run_pipeline.py` orchestrates the full pipeline, each component can also 
 | `run_colmap.py` | COLMAP reconstruction | Frames | 3D model |
 | `run_segmentation.py` | Dynamic scene roto | Frames | Masks |
 | `run_mocap.py` | Human motion capture (GVHMR) | Frames + camera | Mesh sequences |
+| `export_mocap.py` | Export mocap to VFX formats | motion.pkl | Alembic/USD/OBJ |
 | `run_gsir.py` | Material decomposition | COLMAP model | PBR materials |
 | `export_camera.py` | Camera export | Camera JSON | Alembic/FBX |
 | `texture_projection.py` | Texture SMPL-X meshes | Meshes + frames | Textured meshes |
@@ -228,10 +229,23 @@ python scripts/run_mocap.py <project_dir> [options]
 **Positional**:
 - `project_dir` - Project directory with frames and camera data
 
-**Options**:
-- `--skip-texture` - Skip texture projection (faster, kept for compatibility)
+**Core Options**:
 - `--check` - Validate installation without processing
 - `--no-colmap-intrinsics` - Don't use COLMAP camera intrinsics
+
+**Person Selection**:
+- `--mocap-person` - Roto person to isolate (e.g., `person_00`). Composites frames with roto matte
+- `--list-persons` - List detected persons in existing results and exit
+
+**Frame Range**:
+- `--start-frame` - First frame to process (1-indexed)
+- `--end-frame` - Last frame to process (1-indexed)
+
+**Body Model**:
+- `--gender` - Body model gender: `neutral`, `male`, `female` (default: `neutral`)
+
+**Export**:
+- `--export` - Auto-export formats: `abc`, `usd`, `obj`, `none` (default: `abc,usd`)
 
 ### Examples
 
@@ -240,9 +254,24 @@ python scripts/run_mocap.py <project_dir> [options]
 python scripts/run_mocap.py ./projects/Actor01
 ```
 
+**Multi-person tracking with roto isolation**:
+```bash
+# Track first person using their roto matte
+python scripts/run_mocap.py ./projects/MyShot --mocap-person person_00
+
+# Track second person with custom frame range
+python scripts/run_mocap.py ./projects/MyShot --mocap-person person_01 \
+    --start-frame 34 --end-frame 101 --gender female
+```
+
 **Check installation**:
 ```bash
 python scripts/run_mocap.py ./projects/Actor01 --check
+```
+
+**List detected persons**:
+```bash
+python scripts/run_mocap.py ./projects/MyShot --list-persons
 ```
 
 ### Input
@@ -250,24 +279,111 @@ python scripts/run_mocap.py ./projects/Actor01 --check
 - `source/frames/*.png` - Input frames
 - `camera/extrinsics.json` - Camera transforms (required)
 - `camera/intrinsics.json` - Camera parameters (required)
+- `roto/<person>/*.png` - Roto mattes (optional, for `--mocap-person`)
 
 ### Output
 
-- `mocap/motion.pkl` - Motion data (poses, translation, shape)
-- `mocap/mesh_sequence/` - Exported mesh sequence
-  - `mesh_*.obj` - OBJ mesh files
+```
+mocap/
+├── person/              # Default output (or person_00/, person_01/)
+│   ├── motion.pkl       # Motion data (poses, translation, shape)
+│   ├── mesh_sequence/   # Per-frame OBJ meshes
+│   │   └── mesh_*.obj
+│   └── export/          # Production formats (from auto-export)
+│       ├── tpose.obj    # T-pose bind reference
+│       ├── motion.abc   # Alembic animation
+│       └── motion.usd   # USD animation
+```
 
 ### Pipeline
 
-1. **GVHMR** extracts 3D pose from video (world-grounded motion)
-2. **SMPL-X mesh generation** creates animated body mesh sequence
+1. **Frame preparation** - Optional compositing with roto matte for person isolation
+2. **GVHMR** extracts 3D pose from video (world-grounded motion)
+3. **SMPL-X mesh generation** creates animated body mesh sequence
+4. **Auto-export** outputs T-pose reference and animations in Alembic/USD
 
 ### Tips
 
-- Requires good camera tracking (from COLMAP or Depth-Anything-V3)
+- Use `--mocap-person` to isolate individuals in multi-person shots
+- Use `--start-frame`/`--end-frame` when a person enters late or exits early
+- Requires good camera tracking (from COLMAP stage)
 - Actor should be visible in majority of frames
 - Better results with frontal views
 - GVHMR provides accurate world-grounded motion (SIGGRAPH Asia 2024)
+
+---
+
+## export_mocap.py
+
+Export motion capture data to VFX-ready formats (Alembic, USD, OBJ sequence).
+
+### Usage
+
+```bash
+python scripts/export_mocap.py <project_dir> [options]
+```
+
+### Arguments
+
+**Positional**:
+- `project_dir` - Project directory with mocap data
+
+**Options**:
+- `--format`, `-f` - Export formats: `abc`, `usd`, `obj` (default: `abc,usd`)
+- `--fps` - Frame rate (default: 24.0)
+- `--motion-file` - Path to motion.pkl (auto-detected if not specified)
+- `--output-dir` - Output directory (default: `mocap/<person>/export/`)
+- `--mocap-person` - Person folder to export from (e.g., `person_00`)
+
+### Examples
+
+**Export with default formats (Alembic + USD)**:
+```bash
+python scripts/export_mocap.py ./projects/Actor01
+```
+
+**Export specific person**:
+```bash
+python scripts/export_mocap.py ./projects/MyShot --mocap-person person_00
+```
+
+**Export OBJ sequence only**:
+```bash
+python scripts/export_mocap.py ./projects/Actor01 --format obj
+```
+
+**Custom output location**:
+```bash
+python scripts/export_mocap.py ./projects/Actor01 --output-dir ./delivery/mocap
+```
+
+### Input
+
+- `mocap/<person>/motion.pkl` - Motion data from run_mocap.py
+- SMPL-X model files (auto-detected from environment)
+
+### Output
+
+```
+mocap/<person>/export/
+├── tpose.obj        # T-pose bind reference (for rigging)
+├── motion.abc       # Alembic animated mesh
+└── motion.usd       # USD animated mesh
+```
+
+### T-Pose Reference
+
+The T-pose mesh is exported automatically with the same gender and body shape (betas) as the animated sequence. Use this as the bind pose for:
+- Rigging in Maya/Blender/Houdini
+- Cloth simulation binding
+- Texture projection reference
+
+### Tips
+
+- T-pose is always exported regardless of format selection
+- Alembic is most compatible with DCC applications
+- USD supports material assignment in Houdini/Solaris
+- OBJ sequence is useful for per-frame mesh editing
 
 ---
 

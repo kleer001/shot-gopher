@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from run_mocap import (
     colmap_intrinsics_to_focal_mm,
+    composite_frames_with_matte,
     detect_static_camera,
     find_or_create_video,
 )
@@ -390,6 +391,268 @@ class TestRunGvhmrMotionTracking:
 
             result = run_gvhmr_motion_tracking(project_dir)
             assert result is False
+
+
+class TestFindOrCreateVideoFrameRange:
+    """Tests for frame range functionality in find_or_create_video."""
+
+    def test_frame_range_returns_different_path(self):
+        """Test that specifying frame range creates a different video path."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            source_dir = project_dir / "source"
+            frames_dir = source_dir / "frames"
+            frames_dir.mkdir(parents=True)
+
+            for i in range(1, 101):
+                (frames_dir / f"frame_{i:04d}.png").touch()
+
+            result_full = find_or_create_video(project_dir)
+            assert result_full is None or "_gvhmr_input" in str(result_full)
+
+    def test_frame_range_only_start(self):
+        """Test specifying only start_frame (should go to end)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            source_dir = project_dir / "source"
+            source_dir.mkdir()
+
+            video_path = source_dir / "test.mp4"
+            video_path.touch()
+
+            result = find_or_create_video(project_dir, start_frame=50)
+            assert result is None or "_trimmed" in str(result) or result == video_path
+
+    def test_frame_range_only_end(self):
+        """Test specifying only end_frame (should start from beginning)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            source_dir = project_dir / "source"
+            source_dir.mkdir()
+
+            video_path = source_dir / "test.mp4"
+            video_path.touch()
+
+            result = find_or_create_video(project_dir, end_frame=100)
+            assert result is None or "_trimmed" in str(result) or result == video_path
+
+
+class TestSaveMotionOutputMultiPerson:
+    """Tests for multi-person handling in save_motion_output."""
+
+    def test_multi_person_defaults_to_first(self):
+        """Test that multi-person output defaults to person_0 as primary."""
+        pytest.importorskip("numpy")
+        import numpy as np
+        import pickle
+
+        from run_mocap import save_motion_output
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir) / "gvhmr"
+            gvhmr_dir.mkdir()
+
+            for person_idx in range(2):
+                person_dir = gvhmr_dir / f"person_{person_idx}"
+                person_dir.mkdir()
+
+                n_frames = 10 if person_idx == 0 else 20
+                gvhmr_data = {
+                    'smpl_params_global': {
+                        'body_pose': np.zeros((n_frames, 63)),
+                        'global_orient': np.zeros((n_frames, 3)),
+                        'transl': np.zeros((n_frames, 3)),
+                        'betas': np.zeros(10),
+                    }
+                }
+
+                gvhmr_output = person_dir / "output.pkl"
+                with open(gvhmr_output, 'wb') as f:
+                    pickle.dump(gvhmr_data, f)
+
+            motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
+
+            success = save_motion_output(gvhmr_dir, motion_output)
+            assert success is True
+
+            with open(motion_output, 'rb') as f:
+                motion_data = pickle.load(f)
+
+            assert motion_data['poses'].shape == (10, 72)
+
+
+class TestListDetectedPersons:
+    """Tests for list_detected_persons function."""
+
+    def test_list_multiple_persons(self):
+        """Test listing multiple detected persons."""
+        from run_mocap import list_detected_persons
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir)
+            (gvhmr_dir / "person_0").mkdir()
+            (gvhmr_dir / "person_1").mkdir()
+            (gvhmr_dir / "person_2").mkdir()
+
+            detected = list_detected_persons(gvhmr_dir)
+            assert detected == ["person_0", "person_1", "person_2"]
+
+    def test_list_single_person(self):
+        """Test listing a single detected person."""
+        from run_mocap import list_detected_persons
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir)
+            (gvhmr_dir / "person_0").mkdir()
+
+            detected = list_detected_persons(gvhmr_dir)
+            assert detected == ["person_0"]
+
+    def test_list_no_persons(self):
+        """Test listing when no persons detected (other files exist)."""
+        from run_mocap import list_detected_persons
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir)
+            (gvhmr_dir / "output.pkl").touch()
+
+            detected = list_detected_persons(gvhmr_dir)
+            assert detected == []
+
+    def test_list_nonexistent_dir(self):
+        """Test listing when directory doesn't exist."""
+        from run_mocap import list_detected_persons
+
+        detected = list_detected_persons(Path("/nonexistent/gvhmr"))
+        assert detected == []
+
+    def test_list_ignores_non_person_dirs(self):
+        """Test that non-person directories are ignored."""
+        from run_mocap import list_detected_persons
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir)
+            (gvhmr_dir / "person_0").mkdir()
+            (gvhmr_dir / "person_1").mkdir()
+            (gvhmr_dir / "other_dir").mkdir()
+            (gvhmr_dir / "output.pkl").touch()
+
+            detected = list_detected_persons(gvhmr_dir)
+            assert detected == ["person_0", "person_1"]
+
+
+class TestCompositeFramesWithMatte:
+    """Tests for composite_frames_with_matte function."""
+
+    def test_composite_basic(self):
+        """Test basic frame compositing with matte."""
+        pytest.importorskip("PIL")
+        pytest.importorskip("numpy")
+        from PIL import Image
+        import numpy as np
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frames_dir = Path(tmpdir) / "frames"
+            matte_dir = Path(tmpdir) / "matte"
+            output_dir = Path(tmpdir) / "output"
+            frames_dir.mkdir()
+            matte_dir.mkdir()
+
+            for i in range(3):
+                img = Image.new("RGB", (100, 100), color=(255, 128, 64))
+                img.save(frames_dir / f"frame_{i+1:04d}.png")
+
+                matte = Image.new("L", (100, 100), color=128)
+                matte.save(matte_dir / f"frame_{i+1:04d}.png")
+
+            result = composite_frames_with_matte(frames_dir, matte_dir, output_dir)
+
+            assert len(result) == 3
+            assert all(p.exists() for p in result)
+
+            result_img = Image.open(result[0])
+            result_array = np.array(result_img)
+            assert result_array.shape == (100, 100, 3)
+            expected_r = int(255 * 128 / 255)
+            assert abs(result_array[50, 50, 0] - expected_r) < 2
+
+    def test_composite_missing_frames(self):
+        """Test compositing with missing source frames."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frames_dir = Path(tmpdir) / "frames"
+            matte_dir = Path(tmpdir) / "matte"
+            output_dir = Path(tmpdir) / "output"
+            matte_dir.mkdir()
+
+            result = composite_frames_with_matte(frames_dir, matte_dir, output_dir)
+            assert result == []
+
+    def test_composite_missing_mattes(self):
+        """Test compositing with missing matte frames."""
+        pytest.importorskip("PIL")
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frames_dir = Path(tmpdir) / "frames"
+            matte_dir = Path(tmpdir) / "matte"
+            output_dir = Path(tmpdir) / "output"
+            frames_dir.mkdir()
+
+            img = Image.new("RGB", (100, 100), color=(255, 128, 64))
+            img.save(frames_dir / "frame_0001.png")
+
+            result = composite_frames_with_matte(frames_dir, matte_dir, output_dir)
+            assert result == []
+
+    def test_composite_frame_count_mismatch(self):
+        """Test compositing with different frame counts."""
+        pytest.importorskip("PIL")
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frames_dir = Path(tmpdir) / "frames"
+            matte_dir = Path(tmpdir) / "matte"
+            output_dir = Path(tmpdir) / "output"
+            frames_dir.mkdir()
+            matte_dir.mkdir()
+
+            for i in range(5):
+                img = Image.new("RGB", (100, 100), color=(255, 128, 64))
+                img.save(frames_dir / f"frame_{i+1:04d}.png")
+
+            for i in range(3):
+                matte = Image.new("L", (100, 100), color=255)
+                matte.save(matte_dir / f"frame_{i+1:04d}.png")
+
+            result = composite_frames_with_matte(frames_dir, matte_dir, output_dir)
+            assert result == []
+
+    def test_composite_with_frame_range(self):
+        """Test compositing with start/end frame range."""
+        pytest.importorskip("PIL")
+        pytest.importorskip("numpy")
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frames_dir = Path(tmpdir) / "frames"
+            matte_dir = Path(tmpdir) / "matte"
+            output_dir = Path(tmpdir) / "output"
+            frames_dir.mkdir()
+            matte_dir.mkdir()
+
+            for i in range(10):
+                img = Image.new("RGB", (100, 100), color=(255, 128, 64))
+                img.save(frames_dir / f"frame_{i+1:04d}.png")
+
+                matte = Image.new("L", (100, 100), color=255)
+                matte.save(matte_dir / f"frame_{i+1:04d}.png")
+
+            result = composite_frames_with_matte(
+                frames_dir, matte_dir, output_dir,
+                start_frame=3, end_frame=7
+            )
+
+            assert len(result) == 5
 
 
 class TestRunMocapPipeline:

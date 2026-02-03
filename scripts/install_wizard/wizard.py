@@ -15,7 +15,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VideoMaMaInstaller
+from .installers import CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VideoMaMaInstaller
 from .platform import PlatformManager
 from .state import InstallationStateManager
 from .utils import (
@@ -132,14 +132,13 @@ class InstallationWizard:
 
 
         # GVHMR (Gravity-View Human Motion Recovery - improved world-grounded mocap)
+        # Uses dedicated conda environment 'gvhmr' with Python 3.10 and specific PyTorch version
         self.components['gvhmr'] = {
             'name': 'GVHMR',
             'required': False,
             'installers': [
-                GitRepoInstaller(
-                    'GVHMR',
-                    'https://github.com/zju3dv/GVHMR.git',
-                    self.install_dir / "GVHMR",
+                GVHMRInstaller(
+                    install_dir=self.install_dir / "GVHMR",
                     size_gb=4.0  # Code + checkpoints (~3.5GB models)
                 )
             ]
@@ -684,6 +683,8 @@ class InstallationWizard:
             if 'gvhmr' in mocap_components:
                 print("\nDownloading YOLO model for GVHMR person detection...")
                 self.checkpoint_downloader.download_all_checkpoints(['yolo_gvhmr'], self.state_manager)
+                print("\nDownloading SMPL body models for GVHMR rendering...")
+                self.checkpoint_downloader.download_all_checkpoints(['smpl'], self.state_manager)
 
         # Download SMPL-X models if mocap_core was installed and credentials exist
         if 'mocap_core' in to_install:

@@ -272,6 +272,43 @@ def parse_arguments() -> argparse.Namespace:
         default=None,
         help="Path to GS-IR installation (default: auto-detect)"
     )
+
+    parser.add_argument(
+        "--mocap-gender",
+        choices=["neutral", "male", "female"],
+        default="neutral",
+        help="Body model gender for motion capture (default: neutral)"
+    )
+    parser.add_argument(
+        "--mocap-no-export",
+        action="store_true",
+        help="Skip automatic Alembic/USD export after motion capture"
+    )
+    parser.add_argument(
+        "--mocap-fps",
+        type=float,
+        default=None,
+        help="Frames per second for mocap export (default: use project fps)"
+    )
+    parser.add_argument(
+        "--mocap-start-frame",
+        type=int,
+        default=None,
+        help="Start frame for motion capture (1-indexed, inclusive)"
+    )
+    parser.add_argument(
+        "--mocap-end-frame",
+        type=int,
+        default=None,
+        help="End frame for motion capture (1-indexed, inclusive)"
+    )
+    parser.add_argument(
+        "--mocap-person",
+        type=str,
+        default=None,
+        help="Roto person folder to isolate (e.g., 'person_00'). Composites frames with roto matte for single-person tracking."
+    )
+
     parser.add_argument(
         "--cleanplate-median",
         action="store_true",
@@ -386,6 +423,9 @@ def main():
         colmap_max_size=args.colmap_max_size,
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
+        mocap_gender=args.mocap_gender,
+        mocap_no_export=args.mocap_no_export,
+        mocap_fps=args.mocap_fps,
         roto_prompt=args.prompt,
         roto_start_frame=args.start_frame,
         separate_instances=args.separate_instances,
