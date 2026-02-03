@@ -939,16 +939,12 @@ def run_mocap_pipeline(
         return False
 
     gvhmr_output = mocap_person_dir / "gvhmr"
-    motion_output = mocap_person_dir / "motion.pkl"
-    if not save_motion_output(gvhmr_output, motion_output, gender=gender):
-        print("Warning: Could not create motion output", file=sys.stderr)
-        return False
 
     print(f"\n{'=' * 60}")
     print("Motion Capture Complete")
     print("=" * 60)
     print(f"Output directory: {mocap_person_dir}")
-    print(f"Motion data: {motion_output}")
+    print(f"GVHMR output: {gvhmr_output}")
 
     detected = list_detected_persons(gvhmr_output)
     if len(detected) > 1:
