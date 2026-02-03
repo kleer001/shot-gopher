@@ -15,7 +15,6 @@ Example:
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from PIL import Image
@@ -262,14 +261,12 @@ def run_cleanplate_median(
     roto_dir = project_dir / "roto"
     output_dir = project_dir / "cleanplate"
 
-    combined_dir = roto_dir / "combined"
-    if combined_dir.exists() and list(combined_dir.glob("*.png")):
-        mask_dir = combined_dir
-    elif list(roto_dir.glob("*.png")):
-        mask_dir = roto_dir
-    else:
-        print(f"Error: No masks found in {roto_dir}", file=sys.stderr)
+    if not list(roto_dir.glob("*.png")):
+        print(f"Error: No mask files found in {roto_dir}", file=sys.stderr)
+        print("  (masks should be prepared by prepare_roto_for_cleanplate first)")
         return False
+
+    mask_dir = roto_dir
 
     if use_chunked:
         return generate_temporal_median_cleanplate_chunked(
