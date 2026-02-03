@@ -610,6 +610,23 @@ def _convert_single_gvhmr_file(
         return False
 
 
+def list_detected_persons(gvhmr_output_dir: Path) -> List[str]:
+    """List all persons detected by GVHMR.
+
+    Args:
+        gvhmr_output_dir: Directory containing GVHMR output
+
+    Returns:
+        List of person directory names (e.g., ['person_0', 'person_1'])
+    """
+    if not gvhmr_output_dir.exists():
+        return []
+
+    person_dirs = sorted([d.name for d in gvhmr_output_dir.iterdir()
+                         if d.is_dir() and d.name.startswith("person_")])
+    return person_dirs
+
+
 def save_motion_output(
     gvhmr_output_dir: Path,
     output_path: Path,
@@ -811,6 +828,15 @@ def run_mocap_pipeline(
     print("=" * 60)
     print(f"Output directory: {mocap_dir}")
     print(f"Motion data: {motion_output}")
+
+    detected = list_detected_persons(gvhmr_output)
+    if len(detected) > 1:
+        print(f"\nMulti-person shot detected ({len(detected)} persons):")
+        for i, person_name in enumerate(detected):
+            motion_file = mocap_dir / f"motion_{person_name}.pkl"
+            marker = " <-- primary" if i == (person_index or 0) else ""
+            print(f"  {i}: {motion_file.name}{marker}")
+        print("\nTo use a different person as primary, re-run with --mocap-person <index>")
     print()
 
     return True
@@ -907,12 +933,34 @@ def main():
         default=None,
         help="Person index for multi-person shots (0, 1, 2...). Uses person_N as primary output."
     )
+    parser.add_argument(
+        "--list-persons",
+        action="store_true",
+        help="List detected persons from existing GVHMR output and exit"
+    )
 
     args = parser.parse_args()
 
     if args.check:
         print_dependency_status()
         install_instructions()
+        sys.exit(0)
+
+    if args.list_persons:
+        if not args.project_dir:
+            print("Error: project_dir required for --list-persons", file=sys.stderr)
+            sys.exit(1)
+        gvhmr_output = args.project_dir.resolve() / "mocap" / "gvhmr"
+        detected = list_detected_persons(gvhmr_output)
+        if not detected:
+            print("No GVHMR output found. Run motion capture first.")
+            sys.exit(1)
+        print(f"Detected {len(detected)} person(s):")
+        mocap_dir = args.project_dir.resolve() / "mocap"
+        for i, person_name in enumerate(detected):
+            motion_file = mocap_dir / f"motion_{person_name}.pkl"
+            exists = "exists" if motion_file.exists() else "not exported"
+            print(f"  {i}: {person_name} ({exists})")
         sys.exit(0)
 
     require_conda_env()

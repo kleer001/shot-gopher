@@ -553,6 +553,66 @@ class TestSaveMotionOutputPersonIndex:
             assert motion_data['poses'].shape == (10, 72)
 
 
+class TestListDetectedPersons:
+    """Tests for list_detected_persons function."""
+
+    def test_list_multiple_persons(self):
+        """Test listing multiple detected persons."""
+        from run_mocap import list_detected_persons
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir)
+            (gvhmr_dir / "person_0").mkdir()
+            (gvhmr_dir / "person_1").mkdir()
+            (gvhmr_dir / "person_2").mkdir()
+
+            detected = list_detected_persons(gvhmr_dir)
+            assert detected == ["person_0", "person_1", "person_2"]
+
+    def test_list_single_person(self):
+        """Test listing a single detected person."""
+        from run_mocap import list_detected_persons
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir)
+            (gvhmr_dir / "person_0").mkdir()
+
+            detected = list_detected_persons(gvhmr_dir)
+            assert detected == ["person_0"]
+
+    def test_list_no_persons(self):
+        """Test listing when no persons detected (other files exist)."""
+        from run_mocap import list_detected_persons
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir)
+            (gvhmr_dir / "output.pkl").touch()
+
+            detected = list_detected_persons(gvhmr_dir)
+            assert detected == []
+
+    def test_list_nonexistent_dir(self):
+        """Test listing when directory doesn't exist."""
+        from run_mocap import list_detected_persons
+
+        detected = list_detected_persons(Path("/nonexistent/gvhmr"))
+        assert detected == []
+
+    def test_list_ignores_non_person_dirs(self):
+        """Test that non-person directories are ignored."""
+        from run_mocap import list_detected_persons
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir)
+            (gvhmr_dir / "person_0").mkdir()
+            (gvhmr_dir / "person_1").mkdir()
+            (gvhmr_dir / "other_dir").mkdir()
+            (gvhmr_dir / "output.pkl").touch()
+
+            detected = list_detected_persons(gvhmr_dir)
+            assert detected == ["person_0", "person_1"]
+
+
 class TestRunMocapPipeline:
     def test_missing_gvhmr(self):
         """Test that pipeline handles missing GVHMR gracefully."""
