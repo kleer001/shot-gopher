@@ -12,10 +12,11 @@ trimesh>=3.9.0
 # ComfyUI database migrations (required by ComfyUI)
 alembic>=1.13.0
 
-# SMPL-X mesh generation (smplx_from_motion.py)
+# SMPL-X mesh generation (smplx_from_motion.py, export_mocap.py)
 # Note: torch and smplx require separate installation due to CUDA dependencies
 # Install PyTorch: https://pytorch.org/get-started/locally/
 # Install smplx: pip install smplx
+# Note: export_mocap.py runs in gvhmr conda env which has chumpy pre-installed
 
 # Alembic export (export_alembic.py)
 # Uses Blender headless for mesh-to-Alembic export.

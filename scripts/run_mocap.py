@@ -613,7 +613,7 @@ def run_gvhmr_motion_tracking(
                 print(result.stderr[:500], file=sys.stderr)
             return False
 
-        output_files = list(output_dir.rglob("*.pkl"))
+        output_files = list(output_dir.rglob("hmr4d*.pt"))
         if not output_files:
             print(f"Error: No GVHMR output files found", file=sys.stderr)
             return False
@@ -640,7 +640,7 @@ def _convert_single_gvhmr_file(
     """Convert a single GVHMR output file to motion format.
 
     Args:
-        gvhmr_file_path: Path to GVHMR pickle file
+        gvhmr_file_path: Path to GVHMR .pt file (hmr4d_results.pt)
         output_path: Path for output file
         np_module: numpy module reference
         gender: Body model gender (neutral, male, female)
@@ -649,11 +649,21 @@ def _convert_single_gvhmr_file(
         True if conversion successful
     """
     import pickle
+    import torch
     np = np_module
 
+    def to_numpy(obj):
+        if hasattr(obj, 'numpy'):
+            return obj.numpy()
+        elif isinstance(obj, dict):
+            return {k: to_numpy(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [to_numpy(v) for v in obj]
+        return obj
+
     try:
-        with open(gvhmr_file_path, 'rb') as f:
-            gvhmr_data = pickle.load(f)
+        gvhmr_data = torch.load(gvhmr_file_path, map_location='cpu', weights_only=False)
+        gvhmr_data = to_numpy(gvhmr_data)
 
         if 'smpl_params_global' in gvhmr_data:
             params = gvhmr_data['smpl_params_global']
@@ -800,22 +810,16 @@ def save_motion_output(
 
         for idx, person_dir in enumerate(person_dirs):
             person_id = person_dir.name
-            person_pkl_files = list(person_dir.glob("*.pkl"))
+            person_files = list(person_dir.glob("hmr4d*.pt"))
 
-            if not person_pkl_files:
-                print(f"    Warning: No pkl files in {person_id}")
+            if not person_files:
+                print(f"    Warning: No hmr4d output in {person_id}")
                 continue
-
-            person_pkl = person_pkl_files[0]
-            for f in person_pkl_files:
-                if "gvhmr" in f.name.lower() or "global" in f.name.lower():
-                    person_pkl = f
-                    break
 
             person_output = output_dir / f"motion_{person_id}.pkl"
             print(f"  → Converting {person_id}...")
 
-            if _convert_single_gvhmr_file(person_pkl, person_output, np, gender):
+            if _convert_single_gvhmr_file(person_files[0], person_output, np, gender):
                 success_count += 1
                 person_outputs[idx] = person_output
 
@@ -830,17 +834,12 @@ def save_motion_output(
             print("Error: No persons converted successfully", file=sys.stderr)
             return False
 
-    gvhmr_files = list(gvhmr_output_dir.rglob("*.pkl"))
+    gvhmr_files = list(gvhmr_output_dir.rglob("hmr4d*.pt"))
     if not gvhmr_files:
-        print(f"Error: No GVHMR output files found in {gvhmr_output_dir}", file=sys.stderr)
+        print(f"Error: No GVHMR output (hmr4d*.pt) found in {gvhmr_output_dir}", file=sys.stderr)
         return False
 
     gvhmr_output_path = gvhmr_files[0]
-    for f in gvhmr_files:
-        if "gvhmr" in f.name.lower() or "global" in f.name.lower():
-            gvhmr_output_path = f
-            break
-
     print(f"  → Converting {gvhmr_output_path.name} to motion format...")
 
     if _convert_single_gvhmr_file(gvhmr_output_path, output_path, np, gender):
@@ -940,16 +939,12 @@ def run_mocap_pipeline(
         return False
 
     gvhmr_output = mocap_person_dir / "gvhmr"
-    motion_output = mocap_person_dir / "motion.pkl"
-    if not save_motion_output(gvhmr_output, motion_output, gender=gender):
-        print("Warning: Could not create motion output", file=sys.stderr)
-        return False
 
     print(f"\n{'=' * 60}")
     print("Motion Capture Complete")
     print("=" * 60)
     print(f"Output directory: {mocap_person_dir}")
-    print(f"Motion data: {motion_output}")
+    print(f"GVHMR output: {gvhmr_output}")
 
     detected = list_detected_persons(gvhmr_output)
     if len(detected) > 1:
@@ -971,6 +966,9 @@ def run_export_pipeline(
 ) -> bool:
     """Run mesh export after motion capture.
 
+    Runs export_mocap.py in the gvhmr conda environment which has
+    chumpy and other SMPL dependencies pre-installed.
+
     Args:
         project_dir: Project directory
         fps: Frames per second for export
@@ -981,22 +979,47 @@ def run_export_pipeline(
     """
     person_folder = mocap_person or "person"
     mocap_person_dir = project_dir / "mocap" / person_folder
-    motion_output = mocap_person_dir / "motion.pkl"
+    gvhmr_dir = mocap_person_dir / "gvhmr"
 
-    if not motion_output.exists():
-        print(f"Error: No motion data to export at {motion_output}", file=sys.stderr)
+    if not gvhmr_dir.exists():
+        print(f"Error: No GVHMR output to export at {gvhmr_dir}", file=sys.stderr)
         return False
 
+    gvhmr_files = list(gvhmr_dir.rglob("hmr4d*.pt"))
+    if not gvhmr_files:
+        print(f"Error: No GVHMR output (hmr4d*.pt) found in {gvhmr_dir}", file=sys.stderr)
+        return False
+
+    conda_exe = _find_conda()
+    if not conda_exe:
+        print("Error: Conda not found - required for export", file=sys.stderr)
+        return False
+
+    scripts_dir = Path(__file__).parent
+    export_script = scripts_dir / "export_mocap.py"
+
+    export_args = [
+        "python", str(export_script),
+        str(project_dir),
+        "--fps", str(fps),
+        "--format", "abc,usd",
+    ]
+    if mocap_person:
+        export_args.extend(["--mocap-person", mocap_person])
+
+    cmd = [conda_exe, "run", "-n", "gvhmr", "--no-capture-output"] + export_args
+
+    print(f"  → Running export in 'gvhmr' conda environment...")
+
     try:
-        from export_mocap import run_export
-        return run_export(
-            project_dir=project_dir,
-            formats=["abc", "usd"],
-            fps=fps,
-            mocap_person=mocap_person,
+        result = subprocess.run(
+            cmd,
+            capture_output=False,
+            timeout=1800,
         )
-    except ImportError as e:
-        print(f"Warning: Could not import export_mocap: {e}", file=sys.stderr)
+        return result.returncode == 0
+    except subprocess.TimeoutExpired:
+        print("Error: Export timed out (>30 minutes)", file=sys.stderr)
         return False
     except Exception as e:
         print(f"Warning: Export failed: {e}", file=sys.stderr)

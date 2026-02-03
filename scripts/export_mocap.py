@@ -5,12 +5,17 @@ Converts motion.pkl (SMPL parameters) to animated mesh files:
 - Alembic (.abc) - Industry standard for mesh animation
 - USD (.usd) - Universal Scene Description
 
+Environment:
+    Requires 'gvhmr' conda environment (has smplx, chumpy, torch).
+    This script handles SMPL body model processing which shares
+    dependencies with GVHMR motion capture.
+
 Usage:
-    python export_mocap.py <project_dir> [options]
+    conda run -n gvhmr python export_mocap.py <project_dir> [options]
 
 Example:
-    python export_mocap.py /path/to/project --format abc
-    python export_mocap.py /path/to/project --format usd --fps 30
+    conda run -n gvhmr python export_mocap.py /path/to/project --format abc
+    conda run -n gvhmr python export_mocap.py /path/to/project --format usd --fps 30
 """
 
 import argparse
@@ -20,6 +25,8 @@ from pathlib import Path
 from typing import Optional, List, Tuple
 
 from env_config import require_conda_env, INSTALL_DIR
+
+REQUIRED_ENV = "gvhmr"
 
 
 def load_motion_data(motion_path: Path) -> Optional[dict]:
@@ -53,6 +60,127 @@ def load_motion_data(motion_path: Path) -> Optional[dict]:
     except Exception as e:
         print(f"Error loading motion data: {e}", file=sys.stderr)
         return None
+
+
+def convert_gvhmr_to_motion(gvhmr_dir: Path, output_path: Path, gender: str = "neutral") -> bool:
+    """Convert GVHMR output (hmr4d_results.pt) to motion.pkl format.
+
+    This function runs in gvhmr environment where numpy versions match,
+    avoiding pickle compatibility issues.
+
+    Args:
+        gvhmr_dir: Directory containing GVHMR output (e.g., mocap/person/gvhmr)
+        output_path: Path for output motion.pkl
+        gender: Body model gender
+
+    Returns:
+        True if conversion successful
+    """
+    import numpy as np
+    import torch
+
+    gvhmr_files = list(gvhmr_dir.rglob("hmr4d*.pt"))
+    if not gvhmr_files:
+        print(f"Error: No GVHMR output (hmr4d*.pt) found in {gvhmr_dir}", file=sys.stderr)
+        return False
+
+    gvhmr_file = gvhmr_files[0]
+    print(f"  → Converting {gvhmr_file.name} to motion.pkl...")
+
+    def to_numpy(obj):
+        if hasattr(obj, 'numpy'):
+            return obj.numpy()
+        elif isinstance(obj, dict):
+            return {k: to_numpy(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [to_numpy(v) for v in obj]
+        return obj
+
+    try:
+        gvhmr_data = torch.load(gvhmr_file, map_location='cpu', weights_only=False)
+        gvhmr_data = to_numpy(gvhmr_data)
+
+        if 'smpl_params_global' in gvhmr_data:
+            params = gvhmr_data['smpl_params_global']
+        elif 'global_orient' in gvhmr_data:
+            params = gvhmr_data
+        else:
+            params = gvhmr_data
+
+        body_pose = params.get('body_pose', params.get('poses'))
+        global_orient = params.get('global_orient')
+        transl = params.get('transl', params.get('trans'))
+        betas = params.get('betas')
+
+        if body_pose is None:
+            print(f"Error: Could not find body_pose in {gvhmr_file.name}", file=sys.stderr)
+            return False
+
+        body_pose = np.array(body_pose)
+        if body_pose.ndim < 2 or body_pose.shape[0] == 0:
+            print(f"Error: Invalid body_pose shape in {gvhmr_file.name}", file=sys.stderr)
+            return False
+
+        n_frames = len(body_pose)
+
+        if global_orient is not None:
+            global_orient = np.array(global_orient)
+            if global_orient.ndim == 1:
+                global_orient = global_orient.reshape(1, -1)
+            if len(global_orient) == 1 and n_frames > 1:
+                global_orient = np.tile(global_orient, (n_frames, 1))
+        else:
+            global_orient = np.zeros((n_frames, 3))
+
+        if body_pose.shape[1] == 63:
+            poses = np.concatenate([
+                global_orient,
+                body_pose,
+                np.zeros((n_frames, 6))
+            ], axis=1)
+        elif body_pose.shape[1] > 63:
+            poses = np.concatenate([
+                global_orient,
+                body_pose[:, :63],
+                np.zeros((n_frames, 6))
+            ], axis=1)
+        else:
+            padding_needed = 69 - body_pose.shape[1]
+            poses = np.concatenate([
+                global_orient,
+                body_pose,
+                np.zeros((n_frames, padding_needed))
+            ], axis=1)
+
+        if transl is not None:
+            transl = np.array(transl)
+        else:
+            transl = np.zeros((n_frames, 3))
+
+        if betas is not None:
+            betas = np.array(betas)
+            if betas.ndim > 1:
+                betas = betas[0]
+        else:
+            betas = np.zeros(10)
+
+        motion_format = {
+            'poses': poses,
+            'trans': transl,
+            'betas': betas,
+            'gender': gender
+        }
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, 'wb') as f:
+            pickle.dump(motion_format, f)
+
+        print(f"  OK Converted {n_frames} frames to {output_path.name}")
+        return True
+
+    except Exception as e:
+        print(f"Error converting GVHMR output: {e}", file=sys.stderr)
+        return False
 
 
 def get_smpl_model_path(gender: str) -> Optional[Path]:
@@ -124,7 +252,7 @@ def generate_meshes(
         print(f"  Generating {n_frames} frames with {gender} body model...")
 
         model = smplx.create(
-            model_path=str(model_path.parent),
+            model_path=str(model_path.parent.parent),
             model_type='smpl',
             gender=gender,
             num_betas=10,
@@ -412,7 +540,7 @@ def export_tpose(
         print(f"  → Generating T-pose ({gender})...")
 
         model = smplx.create(
-            model_path=str(model_path.parent),
+            model_path=str(model_path.parent.parent),
             model_type='smpl',
             gender=gender,
             num_betas=10,
@@ -493,8 +621,16 @@ def run_export(
     person_folder = mocap_person or "person"
     mocap_person_dir = project_dir / "mocap" / person_folder
     motion_path = motion_file or mocap_person_dir / "motion.pkl"
+    gvhmr_dir = mocap_person_dir / "gvhmr"
     export_dir = output_dir or mocap_person_dir / "export"
     export_dir.mkdir(parents=True, exist_ok=True)
+
+    if gvhmr_dir.exists():
+        gvhmr_files = list(gvhmr_dir.rglob("hmr4d*.pt"))
+        if gvhmr_files:
+            print("  → Converting GVHMR output to motion.pkl...")
+            if not convert_gvhmr_to_motion(gvhmr_dir, motion_path):
+                return False
 
     use_gpu = detect_gpu()
     device = "cuda" if use_gpu else "cpu"
@@ -633,7 +769,7 @@ def main():
 
     args = parser.parse_args()
 
-    require_conda_env()
+    require_conda_env(REQUIRED_ENV)
 
     project_dir = args.project_dir.resolve()
     if not project_dir.exists():
