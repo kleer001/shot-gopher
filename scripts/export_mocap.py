@@ -378,6 +378,90 @@ def detect_gpu() -> bool:
         return False
 
 
+def export_tpose(
+    model_path: Path,
+    output_path: Path,
+    betas: Optional[list] = None,
+    gender: str = "neutral",
+    device: str = "cpu"
+) -> bool:
+    """Export T-pose reference mesh as OBJ.
+
+    Generates the SMPL body model in its default T-pose (zero pose)
+    with optional shape parameters (betas) from motion data.
+
+    Args:
+        model_path: Path to SMPL model
+        output_path: Output .obj file path
+        betas: Shape parameters (10 values), None for default shape
+        gender: Body model gender
+        device: torch device (cpu or cuda)
+
+    Returns:
+        True if successful
+    """
+    try:
+        import numpy as np
+        import torch
+        import smplx
+    except ImportError as e:
+        print(f"Error: Missing dependency for T-pose export: {e}", file=sys.stderr)
+        return False
+
+    try:
+        print(f"  → Generating T-pose ({gender})...")
+
+        model = smplx.create(
+            model_path=str(model_path.parent),
+            model_type='smpl',
+            gender=gender,
+            num_betas=10,
+            batch_size=1,
+        ).to(device)
+
+        if betas is not None:
+            betas_array = np.array(betas)
+            if betas_array.ndim == 1:
+                betas_array = betas_array.reshape(1, -1)
+            if betas_array.shape[1] < 10:
+                betas_array = np.pad(betas_array, ((0, 0), (0, 10 - betas_array.shape[1])))
+            betas_t = torch.tensor(betas_array[0], dtype=torch.float32, device=device).unsqueeze(0)
+        else:
+            betas_t = torch.zeros(1, 10, dtype=torch.float32, device=device)
+
+        global_orient_t = torch.zeros(1, 3, dtype=torch.float32, device=device)
+        body_pose_t = torch.zeros(1, 69, dtype=torch.float32, device=device)
+        transl_t = torch.zeros(1, 3, dtype=torch.float32, device=device)
+
+        with torch.no_grad():
+            output = model(
+                global_orient=global_orient_t,
+                body_pose=body_pose_t,
+                betas=betas_t,
+                transl=transl_t,
+            )
+
+        vertices = output.vertices[0].cpu().numpy()
+        faces = model.faces
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, 'w') as f:
+            f.write(f"# SMPL T-pose reference mesh\n")
+            f.write(f"# Gender: {gender}\n")
+            f.write(f"# Betas: {'custom' if betas is not None else 'default'}\n")
+            for v in vertices:
+                f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
+            for face in faces:
+                f.write(f"f {face[0]+1} {face[1]+1} {face[2]+1}\n")
+
+        print(f"  OK Exported T-pose: {output_path.name}")
+        return True
+
+    except Exception as e:
+        print(f"Error exporting T-pose: {e}", file=sys.stderr)
+        return False
+
+
 def run_export(
     project_dir: Path,
     formats: List[str] = None,
@@ -437,6 +521,11 @@ def run_export(
     if model_path is None:
         return False
 
+    tpose_path = export_dir / "tpose.obj"
+    betas = motion_data.get('betas')
+    if not export_tpose(model_path, tpose_path, betas=betas, gender=gender, device=device):
+        print("Warning: T-pose export failed, continuing with animation export", file=sys.stderr)
+
     meshes = generate_meshes(motion_data, model_path, device)
     if meshes is None:
         return False
@@ -447,6 +536,9 @@ def run_export(
 
     all_success = True
     exported_paths = []
+
+    if tpose_path.exists():
+        exported_paths.append(tpose_path)
 
     for fmt in formats:
         if fmt == "abc":
