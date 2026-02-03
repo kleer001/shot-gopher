@@ -400,6 +400,30 @@ mocap/
 | `--export` | Export formats: `abc`, `usd`, `obj`, `none` |
 | `--list-persons` | List detected persons in existing results |
 
+### Export Formats
+
+| Format | Contents | Use Case |
+|--------|----------|----------|
+| `tpose.obj` | T-pose mesh with UVs | Bind pose for rigging, cloth sim reference |
+| `motion.abc` | Animated mesh sequence | Maya, Houdini, Blender, Nuke |
+| `motion.usd` | Animated mesh sequence | Houdini/Solaris, USD pipelines |
+
+### How to Import
+
+| Application | Method |
+|-------------|--------|
+| Maya | File → Import → Alembic (`motion.abc`) |
+| Houdini | Alembic SOP → `motion.abc` |
+| Blender | File → Import → Alembic |
+| Nuke | ReadGeo → `motion.abc` |
+| Solaris | Reference LOP → `motion.usd` |
+
+**Rigging workflow:**
+1. Import `tpose.obj` as bind pose
+2. Build rig/skeleton on T-pose
+3. Import `motion.abc` as animated geometry
+4. Transfer animation or use as reference
+
 **Troubleshooting:** See [Mocap issues](troubleshooting.md#motion-capture-requires-camera-data)
 
 ---
