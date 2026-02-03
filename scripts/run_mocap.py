@@ -613,10 +613,7 @@ def run_gvhmr_motion_tracking(
                 print(result.stderr[:500], file=sys.stderr)
             return False
 
-        output_files = list(output_dir.rglob("*.pkl")) + list(output_dir.rglob("*.pt"))
-        output_files = [f for f in output_files if "hmr4d" in f.name.lower() or "gvhmr" in f.name.lower() or "results" in f.name.lower()]
-        if not output_files:
-            output_files = list(output_dir.rglob("*.pkl")) + list(output_dir.rglob("*.pt"))
+        output_files = list(output_dir.rglob("hmr4d*.pt"))
         if not output_files:
             print(f"Error: No GVHMR output files found", file=sys.stderr)
             return False
@@ -643,7 +640,7 @@ def _convert_single_gvhmr_file(
     """Convert a single GVHMR output file to motion format.
 
     Args:
-        gvhmr_file_path: Path to GVHMR .pkl or .pt file
+        gvhmr_file_path: Path to GVHMR .pt file (hmr4d_results.pt)
         output_path: Path for output file
         np_module: numpy module reference
         gender: Body model gender (neutral, male, female)
@@ -652,27 +649,21 @@ def _convert_single_gvhmr_file(
         True if conversion successful
     """
     import pickle
+    import torch
     np = np_module
 
+    def to_numpy(obj):
+        if hasattr(obj, 'numpy'):
+            return obj.numpy()
+        elif isinstance(obj, dict):
+            return {k: to_numpy(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [to_numpy(v) for v in obj]
+        return obj
+
     try:
-        if gvhmr_file_path.suffix == '.pt':
-            import torch
-            gvhmr_data = torch.load(gvhmr_file_path, map_location='cpu', weights_only=False)
-            if hasattr(gvhmr_data, 'numpy'):
-                gvhmr_data = {k: v.numpy() if hasattr(v, 'numpy') else v for k, v in gvhmr_data.items()}
-            elif isinstance(gvhmr_data, dict):
-                def to_numpy(obj):
-                    if hasattr(obj, 'numpy'):
-                        return obj.numpy()
-                    elif isinstance(obj, dict):
-                        return {k: to_numpy(v) for k, v in obj.items()}
-                    elif isinstance(obj, list):
-                        return [to_numpy(v) for v in obj]
-                    return obj
-                gvhmr_data = to_numpy(gvhmr_data)
-        else:
-            with open(gvhmr_file_path, 'rb') as f:
-                gvhmr_data = pickle.load(f)
+        gvhmr_data = torch.load(gvhmr_file_path, map_location='cpu', weights_only=False)
+        gvhmr_data = to_numpy(gvhmr_data)
 
         if 'smpl_params_global' in gvhmr_data:
             params = gvhmr_data['smpl_params_global']
@@ -819,23 +810,16 @@ def save_motion_output(
 
         for idx, person_dir in enumerate(person_dirs):
             person_id = person_dir.name
-            person_files = list(person_dir.glob("*.pkl")) + list(person_dir.glob("*.pt"))
-            person_files = [f for f in person_files if not f.name.startswith(('bbx', 'vitpose', 'vit_features', 'slam'))]
+            person_files = list(person_dir.glob("hmr4d*.pt"))
 
             if not person_files:
-                print(f"    Warning: No output files in {person_id}")
+                print(f"    Warning: No hmr4d output in {person_id}")
                 continue
-
-            person_pkl = person_files[0]
-            for f in person_files:
-                if "hmr4d" in f.name.lower() or "gvhmr" in f.name.lower() or "global" in f.name.lower():
-                    person_pkl = f
-                    break
 
             person_output = output_dir / f"motion_{person_id}.pkl"
             print(f"  → Converting {person_id}...")
 
-            if _convert_single_gvhmr_file(person_pkl, person_output, np, gender):
+            if _convert_single_gvhmr_file(person_files[0], person_output, np, gender):
                 success_count += 1
                 person_outputs[idx] = person_output
 
@@ -850,18 +834,12 @@ def save_motion_output(
             print("Error: No persons converted successfully", file=sys.stderr)
             return False
 
-    gvhmr_files = list(gvhmr_output_dir.rglob("*.pkl")) + list(gvhmr_output_dir.rglob("*.pt"))
-    gvhmr_files = [f for f in gvhmr_files if not f.name.startswith(('bbx', 'vitpose', 'vit_features', 'slam'))]
+    gvhmr_files = list(gvhmr_output_dir.rglob("hmr4d*.pt"))
     if not gvhmr_files:
-        print(f"Error: No GVHMR output files found in {gvhmr_output_dir}", file=sys.stderr)
+        print(f"Error: No GVHMR output (hmr4d*.pt) found in {gvhmr_output_dir}", file=sys.stderr)
         return False
 
     gvhmr_output_path = gvhmr_files[0]
-    for f in gvhmr_files:
-        if "hmr4d" in f.name.lower() or "gvhmr" in f.name.lower() or "global" in f.name.lower():
-            gvhmr_output_path = f
-            break
-
     print(f"  → Converting {gvhmr_output_path.name} to motion format...")
 
     if _convert_single_gvhmr_file(gvhmr_output_path, output_path, np, gender):
