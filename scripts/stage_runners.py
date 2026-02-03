@@ -191,7 +191,7 @@ def run_mocap(
     fps: Optional[float] = None,
     start_frame: Optional[int] = None,
     end_frame: Optional[int] = None,
-    person: Optional[int] = None,
+    mocap_person: Optional[str] = None,
 ) -> bool:
     """Run human motion capture with GVHMR.
 
@@ -203,7 +203,7 @@ def run_mocap(
         fps: Frames per second for export
         start_frame: Start frame (1-indexed, inclusive)
         end_frame: End frame (1-indexed, inclusive)
-        person: Person index for multi-person shots (0, 1, 2...)
+        mocap_person: Roto person folder to isolate (e.g., 'person_00')
 
     Returns:
         True if mocap succeeded
@@ -235,8 +235,8 @@ def run_mocap(
     if end_frame is not None:
         cmd.extend(["--end-frame", str(end_frame)])
 
-    if person is not None:
-        cmd.extend(["--person", str(person)])
+    if mocap_person is not None:
+        cmd.extend(["--mocap-person", mocap_person])
 
     try:
         run_command(cmd, "Running motion capture")
@@ -883,7 +883,7 @@ def run_stage_mocap(
             fps=export_fps,
             start_frame=config.mocap_start_frame,
             end_frame=config.mocap_end_frame,
-            person=config.mocap_person,
+            mocap_person=config.mocap_person,
         ):
             print("  → Motion capture failed", file=sys.stderr)
 

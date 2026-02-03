@@ -758,20 +758,18 @@ def save_motion_output(
     gvhmr_output_dir: Path,
     output_path: Path,
     gender: str = "neutral",
-    person_index: Optional[int] = None,
 ) -> bool:
     """Convert GVHMR output to standardized motion.pkl format.
 
     Handles both single-person and multi-person GVHMR outputs:
     - Single person: Creates motion.pkl
     - Multi-person: Creates motion_person_0.pkl, motion_person_1.pkl, etc.
-                    Also creates motion.pkl as copy of selected person
+                    Also creates motion.pkl as copy of person_0
 
     Args:
         gvhmr_output_dir: Directory containing GVHMR output
         output_path: Path for output file (motion.pkl)
         gender: Body model gender (neutral, male, female)
-        person_index: Which person to use as primary (0, 1, 2...). Default: 0
 
     Returns:
         True if conversion successful
@@ -796,10 +794,6 @@ def save_motion_output(
         print(f"  → Found {len(person_dirs)} person(s) in GVHMR output")
         output_dir = output_path.parent
         output_dir.mkdir(parents=True, exist_ok=True)
-
-        if person_index is not None and person_index >= len(person_dirs):
-            print(f"Error: Person index {person_index} out of range (found {len(person_dirs)} persons)", file=sys.stderr)
-            return False
 
         success_count = 0
         person_outputs = {}
@@ -826,9 +820,7 @@ def save_motion_output(
                 person_outputs[idx] = person_output
 
         if success_count > 0 and person_outputs:
-            primary_idx = person_index if person_index is not None else 0
-            if primary_idx not in person_outputs:
-                primary_idx = min(person_outputs.keys())
+            primary_idx = min(person_outputs.keys())
             primary_output = person_outputs[primary_idx]
             shutil.copy2(primary_output, output_path)
             print(f"  OK Converted {success_count} person(s) to motion format")
@@ -868,7 +860,6 @@ def run_mocap_pipeline(
     gender: str = "neutral",
     start_frame: Optional[int] = None,
     end_frame: Optional[int] = None,
-    person_index: Optional[int] = None,
     mocap_person: Optional[str] = None,
 ) -> bool:
     """Run motion capture pipeline with GVHMR.
@@ -879,7 +870,6 @@ def run_mocap_pipeline(
         gender: Body model gender (neutral, male, female)
         start_frame: Start frame (1-indexed, inclusive)
         end_frame: End frame (1-indexed, inclusive)
-        person_index: Which detected person to use as primary (0, 1, 2...)
         mocap_person: Roto person folder to isolate (e.g., 'person_00')
 
     Returns:
@@ -918,8 +908,6 @@ def run_mocap_pipeline(
     if start_frame or end_frame:
         range_str = f"{start_frame or 1}-{end_frame or 'end'}"
         print(f"Frame range: {range_str}")
-    if person_index is not None:
-        print(f"Target person index: {person_index}")
     print()
 
     focal_mm = None
@@ -953,7 +941,7 @@ def run_mocap_pipeline(
 
     gvhmr_output = mocap_person_dir / "gvhmr"
     motion_output = mocap_person_dir / "motion.pkl"
-    if not save_motion_output(gvhmr_output, motion_output, gender=gender, person_index=person_index):
+    if not save_motion_output(gvhmr_output, motion_output, gender=gender):
         print("Warning: Could not create motion output", file=sys.stderr)
         return False
 
@@ -968,9 +956,9 @@ def run_mocap_pipeline(
         print(f"\nMulti-person detected in footage ({len(detected)} persons):")
         for i, person_name in enumerate(detected):
             motion_file = mocap_person_dir / f"motion_{person_name}.pkl"
-            marker = " <-- primary" if i == (person_index or 0) else ""
+            marker = " <-- primary" if i == 0 else ""
             print(f"  {i}: {motion_file.name}{marker}")
-        print("\nTo select a different detected person, use --person <index>")
+        print("\nTip: Use --mocap-person with roto mattes to isolate individuals")
     print()
 
     return True
@@ -1067,12 +1055,6 @@ def main():
         help="End frame for motion capture (1-indexed, inclusive)"
     )
     parser.add_argument(
-        "--person",
-        type=int,
-        default=None,
-        help="Person index for multi-person shots (0, 1, 2...). Uses person_N as primary output."
-    )
-    parser.add_argument(
         "--mocap-person",
         type=str,
         default=None,
@@ -1126,7 +1108,6 @@ def main():
         gender=args.gender,
         start_frame=args.start_frame,
         end_frame=args.end_frame,
-        person_index=args.person,
         mocap_person=args.mocap_person,
     )
 

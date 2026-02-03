@@ -95,8 +95,6 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | `--mocap-person` | Roto person to isolate (e.g., `person_00`). Composites source frames with roto matte for single-person tracking |
 | `--mocap-start-frame` | Start frame for mocap (1-indexed). Use when person enters late |
 | `--mocap-end-frame` | End frame for mocap (1-indexed). Use when person exits early |
-| `--mocap-person-index` | Which detected person to track (0-indexed, default: 0) |
-| `--mocap-list-persons` | List detected persons and exit |
 | `--mocap-gender` | Body model gender: `neutral`, `male`, `female` (default: `neutral`) |
 | `--mocap-export` | Auto-export formats: `abc`, `usd`, `obj`, `none` (default: `abc,usd`) |
 

@@ -437,84 +437,11 @@ class TestFindOrCreateVideoFrameRange:
             assert result is None or "_trimmed" in str(result) or result == video_path
 
 
-class TestSaveMotionOutputPersonIndex:
-    """Tests for person index selection in save_motion_output."""
+class TestSaveMotionOutputMultiPerson:
+    """Tests for multi-person handling in save_motion_output."""
 
-    def test_person_index_selection(self):
-        """Test that person_index selects the correct person as primary."""
-        pytest.importorskip("numpy")
-        import numpy as np
-        import pickle
-
-        from run_mocap import save_motion_output
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            gvhmr_dir = Path(tmpdir) / "gvhmr"
-            gvhmr_dir.mkdir()
-
-            for person_idx in range(3):
-                person_dir = gvhmr_dir / f"person_{person_idx}"
-                person_dir.mkdir()
-
-                n_frames = 10 + person_idx * 5
-                gvhmr_data = {
-                    'smpl_params_global': {
-                        'body_pose': np.ones((n_frames, 63)) * person_idx,
-                        'global_orient': np.zeros((n_frames, 3)),
-                        'transl': np.ones((n_frames, 3)) * person_idx,
-                        'betas': np.zeros(10),
-                    }
-                }
-
-                gvhmr_output = person_dir / "output.pkl"
-                with open(gvhmr_output, 'wb') as f:
-                    pickle.dump(gvhmr_data, f)
-
-            motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
-
-            success = save_motion_output(gvhmr_dir, motion_output, person_index=2)
-            assert success is True
-
-            with open(motion_output, 'rb') as f:
-                motion_data = pickle.load(f)
-
-            assert motion_data['poses'].shape == (20, 72)
-
-    def test_person_index_out_of_range(self):
-        """Test that out-of-range person_index fails gracefully."""
-        pytest.importorskip("numpy")
-        import numpy as np
-        import pickle
-
-        from run_mocap import save_motion_output
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            gvhmr_dir = Path(tmpdir) / "gvhmr"
-            gvhmr_dir.mkdir()
-
-            person_dir = gvhmr_dir / "person_0"
-            person_dir.mkdir()
-
-            gvhmr_data = {
-                'smpl_params_global': {
-                    'body_pose': np.zeros((10, 63)),
-                    'global_orient': np.zeros((10, 3)),
-                    'transl': np.zeros((10, 3)),
-                    'betas': np.zeros(10),
-                }
-            }
-
-            gvhmr_output = person_dir / "output.pkl"
-            with open(gvhmr_output, 'wb') as f:
-                pickle.dump(gvhmr_data, f)
-
-            motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
-
-            success = save_motion_output(gvhmr_dir, motion_output, person_index=5)
-            assert success is False
-
-    def test_person_index_default_zero(self):
-        """Test that person_index=None defaults to person_0."""
+    def test_multi_person_defaults_to_first(self):
+        """Test that multi-person output defaults to person_0 as primary."""
         pytest.importorskip("numpy")
         import numpy as np
         import pickle
@@ -545,7 +472,7 @@ class TestSaveMotionOutputPersonIndex:
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 
-            success = save_motion_output(gvhmr_dir, motion_output, person_index=None)
+            success = save_motion_output(gvhmr_dir, motion_output)
             assert success is True
 
             with open(motion_output, 'rb') as f:

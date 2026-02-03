@@ -293,9 +293,9 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mocap-person",
-        type=int,
+        type=str,
         default=None,
-        help="Person index for multi-person shots (0, 1, 2...). Uses person_N as primary output."
+        help="Roto person folder to isolate (e.g., 'person_00'). Composites frames with roto matte for single-person tracking."
     )
 
     parser.add_argument(

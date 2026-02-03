@@ -234,7 +234,6 @@ python scripts/run_mocap.py <project_dir> [options]
 
 **Person Selection**:
 - `--mocap-person` - Roto person to isolate (e.g., `person_00`). Composites frames with roto matte
-- `--person` - Which detected person to track (0-indexed, default: 0)
 - `--list-persons` - List detected persons in existing results and exit
 
 **Frame Range**:

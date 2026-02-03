@@ -45,7 +45,7 @@ class PipelineConfig:
     mocap_fps: Optional[float] = None
     mocap_start_frame: Optional[int] = None
     mocap_end_frame: Optional[int] = None
-    mocap_person: Optional[int] = None
+    mocap_person: Optional[str] = None
 
     roto_prompt: Optional[str] = None
     roto_start_frame: Optional[int] = None
