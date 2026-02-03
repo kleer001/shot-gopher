@@ -235,7 +235,7 @@ Removes masked objects using ProPainter video inpainting.
 
 | | |
 |---|---|
-| **VRAM** | ~6 GB |
+| **VRAM** | ~6 GB (peak ~18 GB) |
 | **Input** | `source/frames/*.png`, `roto/*/*.png`, optionally `matte/*.png` |
 | **Output** | `cleanplate/*.png` |
 | **Workflow** | `03_cleanplate.json` |
@@ -252,6 +252,21 @@ python scripts/run_pipeline.py footage.mp4 -s roto,cleanplate
 1. Collects all masks from `roto/` subdirectories
 2. Uses VideoMaMa refined mattes if available (from `matte/` directory)
 3. Combines into single mask for inpainting
+
+**Quality tuning (environment variables):**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROPAINTER_INTERNAL_SCALE` | `0.5` | Internal processing resolution (0.1-1.0). Higher = sharper but more VRAM |
+| `PROPAINTER_REFINE_ITERS` | `16` | Refinement iterations (compute-bound, not VRAM) |
+| `PROPAINTER_NUM_FLOWS` | `20` | Optical flow frames for temporal consistency |
+
+**Example:**
+```bash
+PROPAINTER_REFINE_ITERS=20 python scripts/run_pipeline.py footage.mp4 -s cleanplate
+```
+
+**GPU profiling:** Use `--gpu-profile` to log VRAM usage per stage to `project/gpu_profile.log`.
 
 ---
 
