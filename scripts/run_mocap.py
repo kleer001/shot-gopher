@@ -29,14 +29,10 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Dict
 
-# Environment check and configuration
 from env_config import require_conda_env, INSTALL_DIR
-
-# Log capture for debugging
 from log_manager import LogCapture
 
 
-# Dependencies check results (cached)
 _DEPS_CHECKED = {}
 
 
@@ -103,7 +99,6 @@ def print_dependency_status():
     print("\nDependency Status:")
     print("=" * 60)
 
-    # Core dependencies
     print("\nCore (required):")
     for name in ["numpy", "pytorch", "smplx", "trimesh", "opencv", "pillow"]:
         status = "OK" if deps[name] else "X"
