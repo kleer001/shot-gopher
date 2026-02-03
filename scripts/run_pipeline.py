@@ -20,6 +20,7 @@ from pathlib import Path
 from comfyui_manager import stop_comfyui, prepare_comfyui_for_processing
 from comfyui_utils import DEFAULT_COMFYUI_URL
 from env_config import require_conda_env, DEFAULT_PROJECTS_DIR, INSTALL_DIR
+from gpu_monitor import start_pipeline_monitor, stop_pipeline_monitor, log_stage
 from log_manager import LogCapture
 from pipeline_config import PipelineConfig, StageContext
 from pipeline_constants import STAGES, STAGE_ORDER, STAGES_REQUIRING_FRAMES
@@ -65,6 +66,7 @@ def run_pipeline(config: PipelineConfig) -> bool:
     Returns:
         True if all stages successful
     """
+    gpu_monitor = None
     comfyui_stages = {"depth", "roto", "cleanplate"}
     needs_comfyui = bool(comfyui_stages & set(config.stages))
 
@@ -84,6 +86,10 @@ def run_pipeline(config: PipelineConfig) -> bool:
 
     project_dir = config.projects_dir / project_name
     save_last_project(project_dir)
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    if config.gpu_profile:
+        gpu_monitor = start_pipeline_monitor(project_dir)
 
     source_frames = project_dir / "source" / "frames"
     workflows_dir = Path(__file__).parent.parent / "workflow_templates"
@@ -115,7 +121,6 @@ def run_pipeline(config: PipelineConfig) -> bool:
     fps = fps or 24.0
     print(f"Frame rate: {fps} fps")
 
-    project_dir.mkdir(parents=True, exist_ok=True)
     metadata.initialize(project_name, fps, config.input_path)
 
     print("\n[Setup]")
@@ -127,9 +132,11 @@ def run_pipeline(config: PipelineConfig) -> bool:
     width, height = 0, 0
 
     if "ingest" in config.stages:
+        log_stage("ingest")
         ctx = StageContext.from_config(config, project_dir, total_frames, fps)
         handler = STAGE_HANDLERS["ingest"]
         if not handler(ctx, config):
+            stop_pipeline_monitor()
             return False
         total_frames = len(list(source_frames.glob("*.png")))
 
@@ -148,11 +155,15 @@ def run_pipeline(config: PipelineConfig) -> bool:
         if stage == "ingest":
             continue
 
+        log_stage(stage)
         handler = STAGE_HANDLERS.get(stage)
         if handler:
             if not handler(ctx, config):
                 if stage == "depth":
+                    stop_pipeline_monitor()
                     return False
+
+    stop_pipeline_monitor()
 
     print(f"\n{'='*60}")
     print(f"Pipeline complete: {project_dir}")
@@ -294,6 +305,11 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Keep existing output files instead of clearing them before running stages"
     )
+    parser.add_argument(
+        "--gpu-profile",
+        action="store_true",
+        help="Enable GPU VRAM profiling (logs to project/gpu_profile.log)"
+    )
 
     return parser.parse_args()
 
@@ -368,6 +384,7 @@ def main():
         roto_prompt=args.prompt,
         roto_start_frame=args.start_frame,
         separate_instances=args.separate_instances,
+        gpu_profile=args.gpu_profile,
     )
 
     print(f"Stages to run: {', '.join(config.stages)}")

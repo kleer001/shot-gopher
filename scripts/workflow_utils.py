@@ -26,6 +26,34 @@ def _get_max_processing_dimensions() -> tuple[int, int]:
     return max_width, max_height
 
 
+def _get_propainter_internal_scale() -> float:
+    """Get ProPainter internal resolution scale factor from environment.
+
+    ProPainter processes at reduced resolution internally, then upscales.
+    Default is 0.5 (half resolution) for stable VRAM usage.
+
+    Returns:
+        Scale factor between 0.1 and 1.0
+    """
+    scale = float(os.environ.get("PROPAINTER_INTERNAL_SCALE", "0.5"))
+    return max(0.1, min(1.0, scale))
+
+
+def _get_propainter_quality_params() -> tuple[int, int]:
+    """Get ProPainter quality parameters from environment.
+
+    These parameters improve inpainting quality with minimal VRAM impact:
+    - num_refine_iters: Refinement iterations (compute-bound, not VRAM)
+    - num_flows: Optical flow frames for temporal consistency (minor VRAM)
+
+    Returns:
+        Tuple of (num_refine_iters, num_flows)
+    """
+    num_refine_iters = int(os.environ.get("PROPAINTER_REFINE_ITERS", "16"))
+    num_flows = int(os.environ.get("PROPAINTER_NUM_FLOWS", "20"))
+    return num_refine_iters, num_flows
+
+
 def _calculate_processing_resolution(
     source_width: int,
     source_height: int,
@@ -269,6 +297,10 @@ def update_workflow_resolution(
         width, height, max_processing_width, max_processing_height
     )
 
+    propainter_scale = _get_propainter_internal_scale()
+    propainter_width = _align_to_8(int(proc_width * propainter_scale))
+    propainter_height = _align_to_8(int(proc_height * propainter_scale))
+
     width_8 = _align_to_8(width)
     height_8 = _align_to_8(height)
 
@@ -297,11 +329,18 @@ def update_workflow_resolution(
                 nodes_updated.append(f"{title} ({width_8}x{height_8})")
 
         elif update_propainter and node_type == "ProPainterInpaint":
-            if len(widgets) >= 2:
-                widgets[0] = proc_width
-                widgets[1] = proc_height
+            if len(widgets) >= 5:
+                num_refine_iters, num_flows = _get_propainter_quality_params()
+                widgets[0] = propainter_width
+                widgets[1] = propainter_height
+                widgets[3] = num_refine_iters
+                widgets[4] = num_flows
                 node["widgets_values"] = widgets
-                nodes_updated.append(f"ProPainterInpaint (internal: {proc_width}x{proc_height})")
+                scale_pct = int(propainter_scale * 100)
+                nodes_updated.append(
+                    f"ProPainterInpaint (internal: {propainter_width}x{propainter_height} @ {scale_pct}%, "
+                    f"refine={num_refine_iters}, flows={num_flows})"
+                )
 
     with open(workflow_path, 'w', encoding='utf-8') as f:
         json.dump(workflow, f, indent=2)

@@ -44,6 +44,8 @@ class PipelineConfig:
     roto_start_frame: Optional[int] = None
     separate_instances: bool = True
 
+    gpu_profile: bool = False
+
     @classmethod
     def from_args(cls, args, input_path: Optional[Path] = None, project_dir: Optional[Path] = None) -> "PipelineConfig":
         """Create config from argparse namespace.
@@ -78,6 +80,7 @@ class PipelineConfig:
                 roto_prompt=args.prompt,
                 roto_start_frame=args.start_frame,
                 separate_instances=args.separate_instances,
+                gpu_profile=getattr(args, 'gpu_profile', False),
             )
 
         return cls(
@@ -101,6 +104,7 @@ class PipelineConfig:
             roto_prompt=args.prompt,
             roto_start_frame=args.start_frame,
             separate_instances=args.separate_instances,
+            gpu_profile=getattr(args, 'gpu_profile', False),
         )
 
 
