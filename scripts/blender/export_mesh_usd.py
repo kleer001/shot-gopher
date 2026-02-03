@@ -141,6 +141,11 @@ def import_obj_sequence_as_shape_keys(
         key.value = 0.0
         key.keyframe_insert(data_path="value", frame=frame + 1)
 
+    action = base_obj.data.shape_keys.animation_data.action
+    for fcurve in action.fcurves:
+        for keyframe in fcurve.keyframe_points:
+            keyframe.interpolation = 'CONSTANT'
+
     return base_obj
 
 
@@ -237,14 +242,19 @@ def main():
         sys.exit(1)
 
     print(f"Created animated mesh: {mesh_obj.name}")
+    print(f"  Vertices: {len(mesh_obj.data.vertices)}")
 
     if mesh_obj.data.shape_keys and len(mesh_obj.data.shape_keys.key_blocks) > 1:
+        num_shape_keys = len(mesh_obj.data.shape_keys.key_blocks) - 1
         end_frame = max(
             get_shape_key_frame(key)
             for key in mesh_obj.data.shape_keys.key_blocks[1:]
         )
+        print(f"  Shape keys: {num_shape_keys}")
+        print(f"  Animation range: {args.start_frame}-{end_frame}")
     else:
         end_frame = args.start_frame
+        print(f"  No shape keys - static mesh")
 
     print(f"Exporting USD...")
     print(f"  Output: {args.output}")

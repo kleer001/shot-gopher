@@ -141,6 +141,11 @@ def import_obj_sequence_as_shape_keys(
         key.value = 0.0
         key.keyframe_insert(data_path="value", frame=frame + 1)
 
+    action = base_obj.data.shape_keys.animation_data.action
+    for fcurve in action.fcurves:
+        for keyframe in fcurve.keyframe_points:
+            keyframe.interpolation = 'CONSTANT'
+
     return base_obj
 
 
@@ -149,16 +154,14 @@ def export_alembic(
     start_frame: int,
     end_frame: int,
     fps: float = 24.0,
-    apply_modifiers: bool = True
 ):
-    """Export scene to Alembic file.
+    """Export scene to Alembic file with animation baked.
 
     Args:
         output_path: Output .abc file path
         start_frame: First frame to export
         end_frame: Last frame to export
         fps: Frames per second
-        apply_modifiers: Whether to apply modifiers (shape keys need this True)
     """
     bpy.context.scene.frame_start = start_frame
     bpy.context.scene.frame_end = end_frame
@@ -176,7 +179,6 @@ def export_alembic(
         uvs=True,
         normals=True,
         vcolors=False,
-        apply_subdiv=apply_modifiers,
         curves_as_mesh=False,
         use_instancing=True,
         global_scale=1.0,
@@ -185,6 +187,7 @@ def export_alembic(
         export_particles=False,
         packuv=True,
         face_sets=False,
+        evaluation_mode='RENDER',
     )
 
 
@@ -248,14 +251,19 @@ def main():
         sys.exit(1)
 
     print(f"Created animated mesh: {mesh_obj.name}")
+    print(f"  Vertices: {len(mesh_obj.data.vertices)}")
 
     if mesh_obj.data.shape_keys and len(mesh_obj.data.shape_keys.key_blocks) > 1:
+        num_shape_keys = len(mesh_obj.data.shape_keys.key_blocks) - 1
         end_frame = max(
             get_shape_key_frame(key)
             for key in mesh_obj.data.shape_keys.key_blocks[1:]
         )
+        print(f"  Shape keys: {num_shape_keys}")
+        print(f"  Animation range: {args.start_frame}-{end_frame}")
     else:
         end_frame = args.start_frame
+        print(f"  No shape keys - static mesh")
 
     print(f"Exporting Alembic...")
     print(f"  Output: {args.output}")
@@ -268,7 +276,6 @@ def main():
             args.start_frame,
             end_frame,
             args.fps,
-            apply_modifiers=True
         )
     except Exception as e:
         print(f"Error exporting Alembic: {e}", file=sys.stderr)
