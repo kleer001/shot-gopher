@@ -71,6 +71,12 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | `--no-separate-instances` | Combine all instances into single mask |
 | `--start-frame` | Frame to start roto from (enables bidirectional propagation). Use when subject isn't visible on first frame |
 
+### Cleanplate Options
+
+| Long | Description |
+|------|-------------|
+| `--cleanplate-median` | Use temporal median instead of ProPainter (faster, requires static camera) |
+
 ### COLMAP Options
 
 | Short | Long | Description |

@@ -224,6 +224,10 @@ def run_pipeline_thread(
         if opts.get("no_masks"):
             cmd.append("-M")
 
+        opts = stage_options.get("cleanplate", {})
+        if opts.get("method") == "median":
+            cmd.append("--cleanplate-median")
+
         opts = stage_options.get("gsir", {})
         if opts.get("iterations"):
             cmd.extend(["-i", str(opts["iterations"])])
