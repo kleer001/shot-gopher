@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Tuple
 
-from env_config import require_conda_env, INSTALL_DIR
+from env_config import is_conda_env_active, get_activation_instructions, INSTALL_DIR
 
 
 def load_motion_data(motion_path: Path) -> Optional[dict]:
@@ -633,7 +633,9 @@ def main():
 
     args = parser.parse_args()
 
-    require_conda_env()
+    if not (is_conda_env_active('vfx-pipeline') or is_conda_env_active('gvhmr')):
+        print(get_activation_instructions(), file=sys.stderr)
+        sys.exit(1)
 
     project_dir = args.project_dir.resolve()
     if not project_dir.exists():
