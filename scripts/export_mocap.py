@@ -124,7 +124,7 @@ def generate_meshes(
         print(f"  Generating {n_frames} frames with {gender} body model...")
 
         model = smplx.create(
-            model_path=str(model_path.parent),
+            model_path=str(model_path.parent.parent),
             model_type='smpl',
             gender=gender,
             num_betas=10,
@@ -412,7 +412,7 @@ def export_tpose(
         print(f"  → Generating T-pose ({gender})...")
 
         model = smplx.create(
-            model_path=str(model_path.parent),
+            model_path=str(model_path.parent.parent),
             model_type='smpl',
             gender=gender,
             num_betas=10,
