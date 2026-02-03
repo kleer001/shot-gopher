@@ -11,9 +11,8 @@ Usage (from command line):
         --fps 24 \
         --start-frame 1
 
-The script will:
-1. Import OBJ files as an animated mesh sequence
-2. Export to USD with proper time sampling
+The script uses a frame change handler to update mesh vertices at each
+frame during export, ensuring USD properly captures the animation.
 """
 
 import argparse
@@ -36,117 +35,91 @@ def clear_scene():
 
 
 def find_obj_files(input_dir: Path) -> list[Path]:
-    """Find and sort OBJ files in directory.
-
-    Args:
-        input_dir: Directory containing OBJ files
-
-    Returns:
-        Sorted list of OBJ file paths
-    """
+    """Find and sort OBJ files in directory."""
     obj_files = list(input_dir.glob("*.obj")) + list(input_dir.glob("*.OBJ"))
     return sorted(set(obj_files))
 
 
-def get_shape_key_frame(shape_key: bpy.types.ShapeKey) -> int:
-    """Extract frame number from shape key name.
-
-    Shape keys are named 'frame_XXXX' where XXXX is the frame number.
+def read_obj_vertices(filepath: Path) -> list[tuple[float, float, float]]:
+    """Read vertex positions from OBJ file.
 
     Args:
-        shape_key: Blender shape key with name in 'frame_XXXX' format
+        filepath: Path to OBJ file
 
     Returns:
-        Frame number as integer
+        List of (x, y, z) vertex positions
     """
-    return int(shape_key.name.split("_")[1])
+    vertices = []
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith('v '):
+                parts = line.split()
+                x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+                vertices.append((x, y, z))
+    return vertices
 
 
-def import_obj_sequence_as_shape_keys(
-    obj_files: list[Path],
-    start_frame: int = 1
-) -> bpy.types.Object:
-    """Import OBJ sequence using shape keys for animation.
-
-    This method imports the first OBJ as the base mesh, then adds
-    each subsequent OBJ as a shape key. This preserves vertex order
-    and creates smooth interpolation.
+def load_all_obj_data(obj_files: list[Path]) -> list[list[tuple[float, float, float]]]:
+    """Load vertex data from all OBJ files.
 
     Args:
         obj_files: List of OBJ file paths
-        start_frame: Starting frame number
 
     Returns:
-        The imported mesh object
-
-    Raises:
-        ValueError: If no OBJ files provided or import fails
-        RuntimeError: If OBJ files have inconsistent vertex counts
+        List of vertex position lists, one per frame
     """
-    if not obj_files:
-        raise ValueError("No OBJ files provided")
+    all_vertices = []
+    for obj_file in obj_files:
+        vertices = read_obj_vertices(obj_file)
+        all_vertices.append(vertices)
+    return all_vertices
 
-    bpy.ops.wm.obj_import(filepath=str(obj_files[0]))
+
+def create_mesh_from_obj(filepath: Path) -> bpy.types.Object:
+    """Create a mesh object from OBJ file.
+
+    Args:
+        filepath: Path to OBJ file
+
+    Returns:
+        Created mesh object
+    """
+    bpy.ops.wm.obj_import(filepath=str(filepath))
     if not bpy.context.selected_objects:
-        raise ValueError(f"Failed to import base mesh: {obj_files[0]}")
+        raise ValueError(f"Failed to import: {filepath}")
 
-    base_obj = bpy.context.selected_objects[0]
-    base_obj.name = "animated_mesh"
-    base_vertex_count = len(base_obj.data.vertices)
+    obj = bpy.context.selected_objects[0]
+    obj.name = "animated_mesh"
+    return obj
 
-    if not base_obj.data.shape_keys:
-        base_obj.shape_key_add(name="Basis", from_mix=False)
 
-    for i, obj_file in enumerate(obj_files[1:], start=1):
-        frame = start_frame + i
+class MeshSequenceUpdater:
+    """Updates mesh vertices at each frame from pre-loaded OBJ data."""
 
-        bpy.ops.wm.obj_import(filepath=str(obj_file))
-        if not bpy.context.selected_objects:
-            print(f"Warning: Failed to import {obj_file}, skipping")
-            continue
+    def __init__(self, mesh_obj: bpy.types.Object,
+                 all_vertices: list[list[tuple[float, float, float]]],
+                 start_frame: int):
+        self.mesh_obj = mesh_obj
+        self.all_vertices = all_vertices
+        self.start_frame = start_frame
+        self.num_frames = len(all_vertices)
 
-        temp_obj = bpy.context.selected_objects[0]
+    def update(self, scene):
+        """Frame change handler - updates mesh vertices."""
+        frame = scene.frame_current
+        frame_index = frame - self.start_frame
 
-        base_obj.select_set(True)
-        bpy.context.view_layer.objects.active = base_obj
+        if frame_index < 0 or frame_index >= self.num_frames:
+            return
 
-        try:
-            temp_vertex_count = len(temp_obj.data.vertices)
-            if temp_vertex_count != base_vertex_count:
-                raise RuntimeError(
-                    f"Vertex count mismatch: {obj_file.name} has {temp_vertex_count} vertices, "
-                    f"expected {base_vertex_count}. All OBJ files must have identical topology."
-                )
+        vertices = self.all_vertices[frame_index]
+        mesh = self.mesh_obj.data
 
-            sk = base_obj.shape_key_add(name=f"frame_{frame:04d}", from_mix=False)
-            for j, vert in enumerate(temp_obj.data.vertices):
-                sk.data[j].co = vert.co
-        finally:
-            bpy.data.objects.remove(temp_obj, do_unlink=True)
+        for i, (x, y, z) in enumerate(vertices):
+            if i < len(mesh.vertices):
+                mesh.vertices[i].co = (x, y, z)
 
-    if len(obj_files) == 1:
-        print("Note: Only 1 OBJ file - exporting static mesh (no animation)")
-        return base_obj
-
-    for key in base_obj.data.shape_keys.key_blocks[1:]:
-        frame = get_shape_key_frame(key)
-        prev_frame = frame - 1
-
-        key.value = 0.0
-        key.keyframe_insert(data_path="value", frame=prev_frame)
-
-        key.value = 1.0
-        key.keyframe_insert(data_path="value", frame=frame)
-
-        key.value = 0.0
-        key.keyframe_insert(data_path="value", frame=frame + 1)
-
-    action = base_obj.data.shape_keys.animation_data.action
-    for fcurve in action.fcurves:
-        for keyframe in fcurve.keyframe_points:
-            keyframe.interpolation = 'CONSTANT'
-
-    return base_obj
+        mesh.update()
 
 
 def export_usd(
@@ -177,7 +150,7 @@ def export_usd(
         export_uvmaps=True,
         export_normals=True,
         export_materials=False,
-        use_instancing=True,
+        use_instancing=False,
         evaluation_mode='RENDER',
     )
 
@@ -232,29 +205,34 @@ def main():
     print(f"  First: {obj_files[0].name}")
     print(f"  Last: {obj_files[-1].name}")
 
+    print("Loading all OBJ vertex data...")
+    all_vertices = load_all_obj_data(obj_files)
+
+    vertex_count = len(all_vertices[0]) if all_vertices else 0
+    for i, verts in enumerate(all_vertices):
+        if len(verts) != vertex_count:
+            print(f"Error: Vertex count mismatch at frame {i}: {len(verts)} vs {vertex_count}",
+                  file=sys.stderr)
+            sys.exit(1)
+
     clear_scene()
 
-    try:
-        print("Importing mesh sequence...")
-        mesh_obj = import_obj_sequence_as_shape_keys(obj_files, args.start_frame)
-    except (ValueError, RuntimeError) as e:
-        print(f"Error importing mesh sequence: {e}", file=sys.stderr)
-        sys.exit(1)
+    print("Creating base mesh...")
+    mesh_obj = create_mesh_from_obj(obj_files[0])
 
     print(f"Created animated mesh: {mesh_obj.name}")
     print(f"  Vertices: {len(mesh_obj.data.vertices)}")
+    print(f"  Frames: {len(obj_files)}")
 
-    if mesh_obj.data.shape_keys and len(mesh_obj.data.shape_keys.key_blocks) > 1:
-        num_shape_keys = len(mesh_obj.data.shape_keys.key_blocks) - 1
-        end_frame = max(
-            get_shape_key_frame(key)
-            for key in mesh_obj.data.shape_keys.key_blocks[1:]
-        )
-        print(f"  Shape keys: {num_shape_keys}")
-        print(f"  Animation range: {args.start_frame}-{end_frame}")
-    else:
-        end_frame = args.start_frame
-        print(f"  No shape keys - static mesh")
+    updater = MeshSequenceUpdater(mesh_obj, all_vertices, args.start_frame)
+    bpy.app.handlers.frame_change_pre.append(updater.update)
+
+    end_frame = args.start_frame + len(obj_files) - 1
+
+    print(f"  Animation range: {args.start_frame}-{end_frame}")
+
+    bpy.context.scene.frame_set(args.start_frame)
+    updater.update(bpy.context.scene)
 
     print(f"Exporting USD...")
     print(f"  Output: {args.output}")
@@ -271,6 +249,9 @@ def main():
     except Exception as e:
         print(f"Error exporting USD: {e}", file=sys.stderr)
         sys.exit(1)
+    finally:
+        if updater.update in bpy.app.handlers.frame_change_pre:
+            bpy.app.handlers.frame_change_pre.remove(updater.update)
 
     print(f"Successfully exported: {args.output}")
 
