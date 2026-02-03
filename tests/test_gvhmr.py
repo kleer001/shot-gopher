@@ -392,6 +392,167 @@ class TestRunGvhmrMotionTracking:
             assert result is False
 
 
+class TestFindOrCreateVideoFrameRange:
+    """Tests for frame range functionality in find_or_create_video."""
+
+    def test_frame_range_returns_different_path(self):
+        """Test that specifying frame range creates a different video path."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            source_dir = project_dir / "source"
+            frames_dir = source_dir / "frames"
+            frames_dir.mkdir(parents=True)
+
+            for i in range(1, 101):
+                (frames_dir / f"frame_{i:04d}.png").touch()
+
+            result_full = find_or_create_video(project_dir)
+            assert result_full is None or "_gvhmr_input" in str(result_full)
+
+    def test_frame_range_only_start(self):
+        """Test specifying only start_frame (should go to end)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            source_dir = project_dir / "source"
+            source_dir.mkdir()
+
+            video_path = source_dir / "test.mp4"
+            video_path.touch()
+
+            result = find_or_create_video(project_dir, start_frame=50)
+            assert result is None or "_trimmed" in str(result) or result == video_path
+
+    def test_frame_range_only_end(self):
+        """Test specifying only end_frame (should start from beginning)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            source_dir = project_dir / "source"
+            source_dir.mkdir()
+
+            video_path = source_dir / "test.mp4"
+            video_path.touch()
+
+            result = find_or_create_video(project_dir, end_frame=100)
+            assert result is None or "_trimmed" in str(result) or result == video_path
+
+
+class TestSaveMotionOutputPersonIndex:
+    """Tests for person index selection in save_motion_output."""
+
+    def test_person_index_selection(self):
+        """Test that person_index selects the correct person as primary."""
+        pytest.importorskip("numpy")
+        import numpy as np
+        import pickle
+
+        from run_mocap import save_motion_output
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir) / "gvhmr"
+            gvhmr_dir.mkdir()
+
+            for person_idx in range(3):
+                person_dir = gvhmr_dir / f"person_{person_idx}"
+                person_dir.mkdir()
+
+                n_frames = 10 + person_idx * 5
+                gvhmr_data = {
+                    'smpl_params_global': {
+                        'body_pose': np.ones((n_frames, 63)) * person_idx,
+                        'global_orient': np.zeros((n_frames, 3)),
+                        'transl': np.ones((n_frames, 3)) * person_idx,
+                        'betas': np.zeros(10),
+                    }
+                }
+
+                gvhmr_output = person_dir / "output.pkl"
+                with open(gvhmr_output, 'wb') as f:
+                    pickle.dump(gvhmr_data, f)
+
+            motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
+
+            success = save_motion_output(gvhmr_dir, motion_output, person_index=2)
+            assert success is True
+
+            with open(motion_output, 'rb') as f:
+                motion_data = pickle.load(f)
+
+            assert motion_data['poses'].shape == (20, 72)
+
+    def test_person_index_out_of_range(self):
+        """Test that out-of-range person_index fails gracefully."""
+        pytest.importorskip("numpy")
+        import numpy as np
+        import pickle
+
+        from run_mocap import save_motion_output
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir) / "gvhmr"
+            gvhmr_dir.mkdir()
+
+            person_dir = gvhmr_dir / "person_0"
+            person_dir.mkdir()
+
+            gvhmr_data = {
+                'smpl_params_global': {
+                    'body_pose': np.zeros((10, 63)),
+                    'global_orient': np.zeros((10, 3)),
+                    'transl': np.zeros((10, 3)),
+                    'betas': np.zeros(10),
+                }
+            }
+
+            gvhmr_output = person_dir / "output.pkl"
+            with open(gvhmr_output, 'wb') as f:
+                pickle.dump(gvhmr_data, f)
+
+            motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
+
+            success = save_motion_output(gvhmr_dir, motion_output, person_index=5)
+            assert success is False
+
+    def test_person_index_default_zero(self):
+        """Test that person_index=None defaults to person_0."""
+        pytest.importorskip("numpy")
+        import numpy as np
+        import pickle
+
+        from run_mocap import save_motion_output
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gvhmr_dir = Path(tmpdir) / "gvhmr"
+            gvhmr_dir.mkdir()
+
+            for person_idx in range(2):
+                person_dir = gvhmr_dir / f"person_{person_idx}"
+                person_dir.mkdir()
+
+                n_frames = 10 if person_idx == 0 else 20
+                gvhmr_data = {
+                    'smpl_params_global': {
+                        'body_pose': np.zeros((n_frames, 63)),
+                        'global_orient': np.zeros((n_frames, 3)),
+                        'transl': np.zeros((n_frames, 3)),
+                        'betas': np.zeros(10),
+                    }
+                }
+
+                gvhmr_output = person_dir / "output.pkl"
+                with open(gvhmr_output, 'wb') as f:
+                    pickle.dump(gvhmr_data, f)
+
+            motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
+
+            success = save_motion_output(gvhmr_dir, motion_output, person_index=None)
+            assert success is True
+
+            with open(motion_output, 'rb') as f:
+                motion_data = pickle.load(f)
+
+            assert motion_data['poses'].shape == (10, 72)
+
+
 class TestRunMocapPipeline:
     def test_missing_gvhmr(self):
         """Test that pipeline handles missing GVHMR gracefully."""

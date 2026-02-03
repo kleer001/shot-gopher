@@ -279,6 +279,24 @@ def parse_arguments() -> argparse.Namespace:
         default=None,
         help="Frames per second for mocap export (default: use project fps)"
     )
+    parser.add_argument(
+        "--mocap-start-frame",
+        type=int,
+        default=None,
+        help="Start frame for motion capture (1-indexed, inclusive)"
+    )
+    parser.add_argument(
+        "--mocap-end-frame",
+        type=int,
+        default=None,
+        help="End frame for motion capture (1-indexed, inclusive)"
+    )
+    parser.add_argument(
+        "--mocap-person",
+        type=int,
+        default=None,
+        help="Person index for multi-person shots (0, 1, 2...). Uses person_N as primary output."
+    )
 
     parser.add_argument(
         "--no-auto-comfyui",

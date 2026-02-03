@@ -43,6 +43,9 @@ class PipelineConfig:
     mocap_gender: str = "neutral"
     mocap_no_export: bool = False
     mocap_fps: Optional[float] = None
+    mocap_start_frame: Optional[int] = None
+    mocap_end_frame: Optional[int] = None
+    mocap_person: Optional[int] = None
 
     roto_prompt: Optional[str] = None
     roto_start_frame: Optional[int] = None
@@ -82,6 +85,9 @@ class PipelineConfig:
                 mocap_gender=getattr(args, 'mocap_gender', 'neutral'),
                 mocap_no_export=getattr(args, 'mocap_no_export', False),
                 mocap_fps=getattr(args, 'mocap_fps', None),
+                mocap_start_frame=getattr(args, 'mocap_start_frame', None),
+                mocap_end_frame=getattr(args, 'mocap_end_frame', None),
+                mocap_person=getattr(args, 'mocap_person', None),
                 roto_prompt=args.prompt,
                 roto_start_frame=args.start_frame,
                 separate_instances=args.separate_instances,
@@ -108,6 +114,9 @@ class PipelineConfig:
             mocap_gender=getattr(args, 'mocap_gender', 'neutral'),
             mocap_no_export=getattr(args, 'mocap_no_export', False),
             mocap_fps=getattr(args, 'mocap_fps', None),
+            mocap_start_frame=getattr(args, 'mocap_start_frame', None),
+            mocap_end_frame=getattr(args, 'mocap_end_frame', None),
+            mocap_person=getattr(args, 'mocap_person', None),
             roto_prompt=args.prompt,
             roto_start_frame=args.start_frame,
             separate_instances=args.separate_instances,

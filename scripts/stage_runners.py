@@ -189,6 +189,9 @@ def run_mocap(
     gender: str = "neutral",
     no_export: bool = False,
     fps: Optional[float] = None,
+    start_frame: Optional[int] = None,
+    end_frame: Optional[int] = None,
+    person: Optional[int] = None,
 ) -> bool:
     """Run human motion capture with GVHMR.
 
@@ -198,6 +201,9 @@ def run_mocap(
         gender: Body model gender (neutral, male, female)
         no_export: Skip automatic Alembic/USD export
         fps: Frames per second for export
+        start_frame: Start frame (1-indexed, inclusive)
+        end_frame: End frame (1-indexed, inclusive)
+        person: Person index for multi-person shots (0, 1, 2...)
 
     Returns:
         True if mocap succeeded
@@ -222,6 +228,15 @@ def run_mocap(
 
     if fps is not None:
         cmd.extend(["--fps", str(fps)])
+
+    if start_frame is not None:
+        cmd.extend(["--start-frame", str(start_frame)])
+
+    if end_frame is not None:
+        cmd.extend(["--end-frame", str(end_frame)])
+
+    if person is not None:
+        cmd.extend(["--person", str(person)])
 
     try:
         run_command(cmd, "Running motion capture")
@@ -853,6 +868,11 @@ def run_stage_mocap(
         if has_camera:
             print(f"  → Using COLMAP camera data for improved accuracy")
         print(f"  → Gender: {config.mocap_gender}")
+        if config.mocap_start_frame or config.mocap_end_frame:
+            range_str = f"{config.mocap_start_frame or 1}-{config.mocap_end_frame or 'end'}"
+            print(f"  → Frame range: {range_str}")
+        if config.mocap_person is not None:
+            print(f"  → Target person: {config.mocap_person}")
         if not config.mocap_no_export:
             print(f"  → Will export to Alembic/USD at {export_fps} fps")
         if not run_mocap(
@@ -861,6 +881,9 @@ def run_stage_mocap(
             gender=config.mocap_gender,
             no_export=config.mocap_no_export,
             fps=export_fps,
+            start_frame=config.mocap_start_frame,
+            end_frame=config.mocap_end_frame,
+            person=config.mocap_person,
         ):
             print("  → Motion capture failed", file=sys.stderr)
 

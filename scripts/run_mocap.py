@@ -218,31 +218,70 @@ def detect_static_camera(
 
 def find_or_create_video(
     project_dir: Path,
-    fps: float = 24.0
+    fps: float = 24.0,
+    start_frame: Optional[int] = None,
+    end_frame: Optional[int] = None,
 ) -> Optional[Path]:
     """Find source video or create one from frames.
 
     GVHMR requires video input, not frames. This function:
-    1. Looks for original source video
-    2. Falls back to re-encoding frames
+    1. Looks for original source video (trims if frame range specified)
+    2. Falls back to re-encoding frames (with frame range)
 
     Args:
         project_dir: Project directory
         fps: Frame rate for video encoding
+        start_frame: Start frame (1-indexed, inclusive)
+        end_frame: End frame (1-indexed, inclusive)
 
     Returns:
         Path to video file, or None if creation fails
     """
+    has_frame_range = start_frame is not None or end_frame is not None
     source_dir = project_dir / "source"
 
+    source_video = None
     video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".webm"]
     for ext in video_extensions:
         for video_file in source_dir.glob(f"*{ext}"):
             if not video_file.name.startswith("_"):
-                return video_file
+                source_video = video_file
+                break
+        if source_video:
+            break
         for video_file in source_dir.glob(f"*{ext.upper()}"):
             if not video_file.name.startswith("_"):
-                return video_file
+                source_video = video_file
+                break
+        if source_video:
+            break
+
+    if source_video and has_frame_range:
+        trimmed_path = source_dir / "_gvhmr_trimmed.mp4"
+        start_time = (start_frame - 1) / fps if start_frame else 0
+        trim_cmd = ["ffmpeg", "-y", "-i", str(source_video)]
+        if start_frame:
+            trim_cmd.extend(["-ss", str(start_time)])
+        if end_frame:
+            duration = (end_frame - (start_frame or 1) + 1) / fps
+            trim_cmd.extend(["-t", str(duration)])
+        trim_cmd.extend([
+            "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+            "-pix_fmt", "yuv420p", str(trimmed_path)
+        ])
+        range_str = f"{start_frame or 1}-{end_frame or 'end'}"
+        print(f"  → Trimming video to frames {range_str}...")
+        try:
+            result = subprocess.run(trim_cmd, capture_output=True, text=True, timeout=300)
+            if result.returncode == 0 and trimmed_path.exists():
+                print(f"  OK Created trimmed video: {trimmed_path.name}")
+                return trimmed_path
+        except Exception as e:
+            print(f"  Error trimming video: {e}", file=sys.stderr)
+        return None
+
+    if source_video and not has_frame_range:
+        return source_video
 
     frames_dir = source_dir / "frames"
     if not frames_dir.exists():
@@ -252,21 +291,37 @@ def find_or_create_video(
     if not frames:
         return None
 
-    video_path = source_dir / "_gvhmr_input.mp4"
+    if has_frame_range:
+        actual_start = (start_frame or 1) - 1
+        actual_end = end_frame if end_frame else len(frames)
+        frames = frames[actual_start:actual_end]
+        if not frames:
+            print(f"Error: No frames in range {start_frame}-{end_frame}", file=sys.stderr)
+            return None
 
-    if video_path.exists():
+    range_suffix = ""
+    if has_frame_range:
+        range_suffix = f"_{start_frame or 1}_{end_frame or 'end'}"
+    video_path = source_dir / f"_gvhmr_input{range_suffix}.mp4"
+
+    if video_path.exists() and not has_frame_range:
         return video_path
 
-    print(f"  → Creating video from {len(frames)} frames...")
+    range_str = f" (frames {start_frame or 1}-{end_frame or len(frames)})" if has_frame_range else ""
+    print(f"  → Creating video from {len(frames)} frames{range_str}...")
 
     if (frames_dir / "frame_0001.png").exists():
         frame_pattern = frames_dir / "frame_%04d.png"
+        pattern_start = 1
     elif (frames_dir / "frame_00001.png").exists():
         frame_pattern = frames_dir / "frame_%05d.png"
+        pattern_start = 1
     elif (frames_dir / "frame_0001.jpg").exists():
         frame_pattern = frames_dir / "frame_%04d.jpg"
+        pattern_start = 1
     elif (frames_dir / "frame_00001.jpg").exists():
         frame_pattern = frames_dir / "frame_%05d.jpg"
+        pattern_start = 1
     else:
         first_frame = frames[0]
         stem = first_frame.stem
@@ -275,19 +330,39 @@ def find_or_create_video(
             num_part = stem.rsplit('_', 1)[1]
             num_digits = len(num_part)
             frame_pattern = first_frame.parent / f"{prefix}_%0{num_digits}d{first_frame.suffix}"
+            pattern_start = int(num_part)
         else:
             frame_pattern = first_frame.parent / f"%04d{first_frame.suffix}"
+            pattern_start = 1
 
-    cmd = [
-        "ffmpeg", "-y",
-        "-framerate", str(fps),
-        "-i", str(frame_pattern),
+    cmd = ["ffmpeg", "-y", "-framerate", str(fps)]
+
+    if has_frame_range:
+        first_sliced_frame = frames[0]
+        stem = first_sliced_frame.stem
+        if '_' in stem:
+            num_part = stem.rsplit('_', 1)[1]
+            try:
+                actual_start_number = int(num_part)
+            except ValueError:
+                actual_start_number = pattern_start
+        else:
+            actual_start_number = pattern_start
+        cmd.extend(["-start_number", str(actual_start_number)])
+
+    cmd.extend(["-i", str(frame_pattern)])
+
+    if has_frame_range:
+        frame_count = len(frames)
+        cmd.extend(["-frames:v", str(frame_count)])
+
+    cmd.extend([
         "-c:v", "libx264",
         "-crf", "18",
         "-preset", "fast",
         "-pix_fmt", "yuv420p",
         str(video_path)
-    ]
+    ])
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
@@ -320,7 +395,10 @@ def run_gvhmr_motion_tracking(
     project_dir: Path,
     focal_mm: Optional[float] = None,
     static_camera: bool = False,
-    output_dir: Optional[Path] = None
+    output_dir: Optional[Path] = None,
+    start_frame: Optional[int] = None,
+    end_frame: Optional[int] = None,
+    fps: float = 24.0,
 ) -> bool:
     """Run GVHMR for world-grounded motion tracking.
 
@@ -332,6 +410,9 @@ def run_gvhmr_motion_tracking(
         focal_mm: Focal length in mm (from COLMAP intrinsics)
         static_camera: Skip visual odometry for static cameras
         output_dir: Output directory for results
+        start_frame: Start frame (1-indexed, inclusive)
+        end_frame: End frame (1-indexed, inclusive)
+        fps: Frames per second (for trimming calculations)
 
     Returns:
         True if successful
@@ -350,7 +431,7 @@ def run_gvhmr_motion_tracking(
     output_dir = output_dir or project_dir / "mocap" / "gvhmr"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    video_path = find_or_create_video(project_dir)
+    video_path = find_or_create_video(project_dir, fps, start_frame, end_frame)
     if not video_path:
         print("Error: No video file found and could not create from frames", file=sys.stderr)
         return False
@@ -359,6 +440,9 @@ def run_gvhmr_motion_tracking(
     print("GVHMR Motion Tracking")
     print("=" * 60)
     print(f"Video: {video_path}")
+    if start_frame or end_frame:
+        range_str = f"{start_frame or 1}-{end_frame or 'end'}"
+        print(f"Frame range: {range_str}")
     if focal_mm:
         print(f"Focal length: {focal_mm:.1f}mm")
     if static_camera:
@@ -529,19 +613,21 @@ def _convert_single_gvhmr_file(
 def save_motion_output(
     gvhmr_output_dir: Path,
     output_path: Path,
-    gender: str = "neutral"
+    gender: str = "neutral",
+    person_index: Optional[int] = None,
 ) -> bool:
     """Convert GVHMR output to standardized motion.pkl format.
 
     Handles both single-person and multi-person GVHMR outputs:
     - Single person: Creates motion.pkl
     - Multi-person: Creates motion_person_0.pkl, motion_person_1.pkl, etc.
-                    Also creates motion.pkl as copy of person_0 for compatibility
+                    Also creates motion.pkl as copy of selected person
 
     Args:
         gvhmr_output_dir: Directory containing GVHMR output
         output_path: Path for output file (motion.pkl)
         gender: Body model gender (neutral, male, female)
+        person_index: Which person to use as primary (0, 1, 2...). Default: 0
 
     Returns:
         True if conversion successful
@@ -567,10 +653,14 @@ def save_motion_output(
         output_dir = output_path.parent
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        success_count = 0
-        first_person_output = None
+        if person_index is not None and person_index >= len(person_dirs):
+            print(f"Error: Person index {person_index} out of range (found {len(person_dirs)} persons)", file=sys.stderr)
+            return False
 
-        for person_dir in person_dirs:
+        success_count = 0
+        person_outputs = {}
+
+        for idx, person_dir in enumerate(person_dirs):
             person_id = person_dir.name
             person_pkl_files = list(person_dir.glob("*.pkl"))
 
@@ -589,13 +679,16 @@ def save_motion_output(
 
             if _convert_single_gvhmr_file(person_pkl, person_output, np, gender):
                 success_count += 1
-                if first_person_output is None:
-                    first_person_output = person_output
+                person_outputs[idx] = person_output
 
-        if success_count > 0 and first_person_output:
-            shutil.copy2(first_person_output, output_path)
+        if success_count > 0 and person_outputs:
+            primary_idx = person_index if person_index is not None else 0
+            if primary_idx not in person_outputs:
+                primary_idx = min(person_outputs.keys())
+            primary_output = person_outputs[primary_idx]
+            shutil.copy2(primary_output, output_path)
             print(f"  OK Converted {success_count} person(s) to motion format")
-            print(f"    Primary output: {output_path}")
+            print(f"    Primary output: {output_path} (person_{primary_idx})")
             return True
         else:
             print("Error: No persons converted successfully", file=sys.stderr)
@@ -629,6 +722,9 @@ def run_mocap_pipeline(
     project_dir: Path,
     use_colmap_intrinsics: bool = True,
     gender: str = "neutral",
+    start_frame: Optional[int] = None,
+    end_frame: Optional[int] = None,
+    person_index: Optional[int] = None,
 ) -> bool:
     """Run motion capture pipeline with GVHMR.
 
@@ -636,6 +732,9 @@ def run_mocap_pipeline(
         project_dir: Project directory
         use_colmap_intrinsics: Use COLMAP focal length for GVHMR
         gender: Body model gender (neutral, male, female)
+        start_frame: Start frame (1-indexed, inclusive)
+        end_frame: End frame (1-indexed, inclusive)
+        person_index: Which detected person to use as primary (0, 1, 2...)
 
     Returns:
         True if successful
@@ -666,6 +765,11 @@ def run_mocap_pipeline(
     print("Motion Capture Pipeline (GVHMR)")
     print("=" * 60)
     print(f"Project: {project_dir}")
+    if start_frame or end_frame:
+        range_str = f"{start_frame or 1}-{end_frame or 'end'}"
+        print(f"Frame range: {range_str}")
+    if person_index is not None:
+        print(f"Target person: {person_index}")
     print()
 
     focal_mm = None
@@ -687,7 +791,9 @@ def run_mocap_pipeline(
         project_dir,
         focal_mm=focal_mm,
         static_camera=static_camera,
-        output_dir=mocap_dir / "gvhmr"
+        output_dir=mocap_dir / "gvhmr",
+        start_frame=start_frame,
+        end_frame=end_frame,
     )
 
     if not success:
@@ -696,7 +802,7 @@ def run_mocap_pipeline(
 
     gvhmr_output = mocap_dir / "gvhmr"
     motion_output = mocap_dir / "motion.pkl"
-    if not save_motion_output(gvhmr_output, motion_output, gender=gender):
+    if not save_motion_output(gvhmr_output, motion_output, gender=gender, person_index=person_index):
         print("Warning: Could not create motion output", file=sys.stderr)
         return False
 
@@ -783,6 +889,24 @@ def main():
         default=24.0,
         help="Frames per second for export (default: 24)"
     )
+    parser.add_argument(
+        "--start-frame",
+        type=int,
+        default=None,
+        help="Start frame for motion capture (1-indexed, inclusive)"
+    )
+    parser.add_argument(
+        "--end-frame",
+        type=int,
+        default=None,
+        help="End frame for motion capture (1-indexed, inclusive)"
+    )
+    parser.add_argument(
+        "--person",
+        type=int,
+        default=None,
+        help="Person index for multi-person shots (0, 1, 2...). Uses person_N as primary output."
+    )
 
     args = parser.parse_args()
 
@@ -807,6 +931,9 @@ def main():
         project_dir=project_dir,
         use_colmap_intrinsics=not args.no_colmap_intrinsics,
         gender=args.gender,
+        start_frame=args.start_frame,
+        end_frame=args.end_frame,
+        person_index=args.person,
     )
 
     if not success:
