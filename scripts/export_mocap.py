@@ -5,12 +5,17 @@ Converts motion.pkl (SMPL parameters) to animated mesh files:
 - Alembic (.abc) - Industry standard for mesh animation
 - USD (.usd) - Universal Scene Description
 
+Environment:
+    Requires 'gvhmr' conda environment (has smplx, chumpy, torch).
+    This script handles SMPL body model processing which shares
+    dependencies with GVHMR motion capture.
+
 Usage:
-    python export_mocap.py <project_dir> [options]
+    conda run -n gvhmr python export_mocap.py <project_dir> [options]
 
 Example:
-    python export_mocap.py /path/to/project --format abc
-    python export_mocap.py /path/to/project --format usd --fps 30
+    conda run -n gvhmr python export_mocap.py /path/to/project --format abc
+    conda run -n gvhmr python export_mocap.py /path/to/project --format usd --fps 30
 """
 
 import argparse
@@ -19,7 +24,9 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Tuple
 
-from env_config import is_conda_env_active, get_activation_instructions, INSTALL_DIR
+from env_config import require_conda_env, INSTALL_DIR
+
+REQUIRED_ENV = "gvhmr"
 
 
 def load_motion_data(motion_path: Path) -> Optional[dict]:
@@ -633,9 +640,7 @@ def main():
 
     args = parser.parse_args()
 
-    if not (is_conda_env_active('vfx-pipeline') or is_conda_env_active('gvhmr')):
-        print(get_activation_instructions(), file=sys.stderr)
-        sys.exit(1)
+    require_conda_env(REQUIRED_ENV)
 
     project_dir = args.project_dir.resolve()
     if not project_dir.exists():

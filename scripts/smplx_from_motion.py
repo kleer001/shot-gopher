@@ -5,17 +5,22 @@ Converts motion.pkl (pose parameters from GVHMR) into animated
 SMPL-X OBJ meshes. This is required for the mesh_deform.py script which
 needs animated SMPL-X as the deformation driver.
 
+Environment:
+    Requires 'gvhmr' conda environment (has smplx, chumpy, torch).
+    This script handles SMPL body model processing which shares
+    dependencies with GVHMR motion capture.
+
 Usage:
-    python smplx_from_motion.py <project_dir> [options]
+    conda run -n gvhmr python smplx_from_motion.py <project_dir> [options]
 
 Example:
     # Generate from GVHMR motion (preferred)
-    python smplx_from_motion.py /path/to/project \\
+    conda run -n gvhmr python smplx_from_motion.py /path/to/project \\
         --motion mocap/motion.pkl \\
         --output mocap/smplx_animated/
 
     # Also export rest pose (frame 0)
-    python smplx_from_motion.py /path/to/project \\
+    conda run -n gvhmr python smplx_from_motion.py /path/to/project \\
         --motion mocap/motion.pkl \\
         --output mocap/smplx_animated/ \\
         --rest-pose mocap/smplx_rest.obj
@@ -30,7 +35,9 @@ from typing import Optional, Dict, Any
 
 import numpy as np
 
-from env_config import INSTALL_DIR
+from env_config import require_conda_env, INSTALL_DIR
+
+REQUIRED_ENV = "gvhmr"
 
 
 def extract_frame_number(filename: str) -> int:
@@ -453,6 +460,8 @@ def main():
     )
 
     args = parser.parse_args()
+
+    require_conda_env(REQUIRED_ENV)
 
     if not check_dependencies():
         sys.exit(1)
