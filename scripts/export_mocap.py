@@ -313,7 +313,10 @@ def export_alembic(
     output_path: Path,
     fps: float = 24.0
 ) -> bool:
-    """Export meshes to Alembic format.
+    """Export meshes to Alembic format using Blender.
+
+    Writes OBJ sequence to temp directory, then uses Blender headless
+    to convert to Alembic.
 
     Args:
         meshes: List of (vertices, faces) tuples
@@ -323,67 +326,62 @@ def export_alembic(
     Returns:
         True if successful
     """
+    import tempfile
+    import shutil
+
     try:
-        import alembic
-        from alembic import Abc, AbcGeom
-        import imath
+        from blender import export_mesh_sequence_to_alembic, check_blender_available
     except ImportError:
-        print("Error: alembic package not installed", file=sys.stderr)
-        print("Install with: pip install alembic", file=sys.stderr)
+        print("Error: Blender integration module not found", file=sys.stderr)
         return False
 
+    available, message = check_blender_available()
+    if not available:
+        print(f"Error: {message}", file=sys.stderr)
+        return False
+
+    temp_dir = None
     try:
-        import numpy as np
+        temp_dir = Path(tempfile.mkdtemp(prefix="mocap_export_"))
+        obj_dir = temp_dir / "obj_sequence"
+        obj_dir.mkdir()
 
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"  Writing {len(meshes)} OBJ frames for Alembic conversion...")
 
-        archive = Abc.OArchive(str(output_path))
-        top = archive.getTop()
-
-        time_per_frame = 1.0 / fps
-        time_sampling = AbcGeom.TimeSampling(time_per_frame, 0.0)
-        time_sampling_index = archive.addTimeSampling(time_sampling)
-
-        mesh_obj = AbcGeom.OPolyMesh(top, "body_mesh", time_sampling_index)
-        mesh_schema = mesh_obj.getSchema()
-
-        faces = meshes[0][1]
-        face_counts = imath.IntArray(len(faces))
-        face_indices = imath.IntArray(len(faces) * 3)
-
-        for i, face in enumerate(faces):
-            face_counts[i] = 3
-            face_indices[i * 3] = int(face[0])
-            face_indices[i * 3 + 1] = int(face[1])
-            face_indices[i * 3 + 2] = int(face[2])
-
-        print(f"  Exporting {len(meshes)} frames to Alembic...")
-
-        for frame_idx, (vertices, _) in enumerate(meshes):
+        for frame_idx, (vertices, faces) in enumerate(meshes):
             if frame_idx % 100 == 0:
                 print(f"    Frame {frame_idx}/{len(meshes)}...")
 
-            positions = imath.V3fArray(len(vertices))
-            for i, v in enumerate(vertices):
-                positions[i] = imath.V3f(float(v[0]), float(v[1]), float(v[2]))
+            obj_path = obj_dir / f"frame_{frame_idx:05d}.obj"
+            with open(obj_path, 'w') as f:
+                for v in vertices:
+                    f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
+                for face in faces:
+                    f.write(f"f {face[0]+1} {face[1]+1} {face[2]+1}\n")
 
-            sample = AbcGeom.OPolyMeshSchemaSample(
-                positions,
-                face_indices,
-                face_counts
-            )
-            mesh_schema.set(sample)
+        print(f"  Converting to Alembic via Blender...")
+        export_mesh_sequence_to_alembic(
+            input_dir=obj_dir,
+            output_path=output_path,
+            fps=fps,
+            start_frame=1,
+        )
 
-        del archive
-
-        print(f"  OK Exported to {output_path}")
-        return True
+        if output_path.exists():
+            print(f"  OK Exported to {output_path}")
+            return True
+        else:
+            print("Error: Alembic export completed but file not created", file=sys.stderr)
+            return False
 
     except Exception as e:
         print(f"Error exporting Alembic: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
         return False
+    finally:
+        if temp_dir and temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def export_usd(
@@ -391,7 +389,10 @@ def export_usd(
     output_path: Path,
     fps: float = 24.0
 ) -> bool:
-    """Export meshes to USD format.
+    """Export meshes to USD format using Blender.
+
+    Writes OBJ sequence to temp directory, then uses Blender headless
+    to convert to USD.
 
     Args:
         meshes: List of (vertices, faces) tuples
@@ -401,56 +402,62 @@ def export_usd(
     Returns:
         True if successful
     """
+    import tempfile
+    import shutil
+
     try:
-        from pxr import Usd, UsdGeom, Vt, Gf
+        from blender import export_mesh_sequence_to_usd, check_blender_available
     except ImportError:
-        print("Error: pxr (OpenUSD) package not installed", file=sys.stderr)
-        print("Install USD from: https://developer.nvidia.com/usd", file=sys.stderr)
-        print("Or: pip install usd-core", file=sys.stderr)
+        print("Error: Blender integration module not found", file=sys.stderr)
         return False
 
+    available, message = check_blender_available()
+    if not available:
+        print(f"Error: {message}", file=sys.stderr)
+        return False
+
+    temp_dir = None
     try:
-        import numpy as np
+        temp_dir = Path(tempfile.mkdtemp(prefix="mocap_export_"))
+        obj_dir = temp_dir / "obj_sequence"
+        obj_dir.mkdir()
 
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"  Writing {len(meshes)} OBJ frames for USD conversion...")
 
-        stage = Usd.Stage.CreateNew(str(output_path))
-        stage.SetStartTimeCode(0)
-        stage.SetEndTimeCode(len(meshes) - 1)
-        stage.SetFramesPerSecond(fps)
-
-        mesh_prim = UsdGeom.Mesh.Define(stage, "/World/body_mesh")
-
-        faces = meshes[0][1]
-        face_vertex_counts = [3] * len(faces)
-        face_vertex_indices = []
-        for face in faces:
-            face_vertex_indices.extend([int(face[0]), int(face[1]), int(face[2])])
-
-        mesh_prim.GetFaceVertexCountsAttr().Set(face_vertex_counts)
-        mesh_prim.GetFaceVertexIndicesAttr().Set(face_vertex_indices)
-
-        print(f"  Exporting {len(meshes)} frames to USD...")
-
-        points_attr = mesh_prim.GetPointsAttr()
-
-        for frame_idx, (vertices, _) in enumerate(meshes):
+        for frame_idx, (vertices, faces) in enumerate(meshes):
             if frame_idx % 100 == 0:
                 print(f"    Frame {frame_idx}/{len(meshes)}...")
 
-            points = [Gf.Vec3f(float(v[0]), float(v[1]), float(v[2])) for v in vertices]
-            points_attr.Set(Vt.Vec3fArray(points), frame_idx)
+            obj_path = obj_dir / f"frame_{frame_idx:05d}.obj"
+            with open(obj_path, 'w') as f:
+                for v in vertices:
+                    f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
+                for face in faces:
+                    f.write(f"f {face[0]+1} {face[1]+1} {face[2]+1}\n")
 
-        stage.Save()
+        print(f"  Converting to USD via Blender...")
+        export_mesh_sequence_to_usd(
+            input_dir=obj_dir,
+            output_path=output_path,
+            fps=fps,
+            start_frame=1,
+        )
 
-        print(f"  OK Exported to {output_path}")
-        return True
+        if output_path.exists():
+            print(f"  OK Exported to {output_path}")
+            return True
+        else:
+            print("Error: USD export completed but file not created", file=sys.stderr)
+            return False
 
     except Exception as e:
         print(f"Error exporting USD: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
         return False
+    finally:
+        if temp_dir and temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def export_obj_sequence(
