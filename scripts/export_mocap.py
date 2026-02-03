@@ -625,8 +625,20 @@ def run_export(
     export_dir = output_dir or mocap_person_dir / "export"
     export_dir.mkdir(parents=True, exist_ok=True)
 
+    needs_conversion = False
     if not motion_path.exists() and gvhmr_dir.exists():
-        print("  → motion.pkl not found, converting from GVHMR output...")
+        needs_conversion = True
+    elif motion_path.exists() and gvhmr_dir.exists():
+        gvhmr_files = list(gvhmr_dir.rglob("hmr4d*.pt"))
+        if gvhmr_files:
+            pt_mtime = max(f.stat().st_mtime for f in gvhmr_files)
+            pkl_mtime = motion_path.stat().st_mtime
+            if pt_mtime > pkl_mtime:
+                print("  → GVHMR output newer than motion.pkl, reconverting...")
+                needs_conversion = True
+
+    if needs_conversion:
+        print("  → Converting GVHMR output to motion.pkl...")
         if not convert_gvhmr_to_motion(gvhmr_dir, motion_path):
             return False
 
