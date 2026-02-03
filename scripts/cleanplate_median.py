@@ -36,11 +36,8 @@ def _gather_frame_paths(
     Raises:
         ValueError: If no frames found or frame counts don't match
     """
-    source_frames = sorted(
-        list(source_dir.glob("*.png")) + list(source_dir.glob("*.jpg")),
-        key=lambda p: p.stem
-    )
-    mask_frames = sorted(mask_dir.glob("*.png"), key=lambda p: p.stem)
+    source_frames = sorted(source_dir.glob("*.png")) + sorted(source_dir.glob("*.jpg"))
+    mask_frames = sorted(mask_dir.glob("*.png"))
 
     if not source_frames:
         raise ValueError(f"No source frames found in {source_dir}")
