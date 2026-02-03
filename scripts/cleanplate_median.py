@@ -31,7 +31,7 @@ def _gather_frame_paths(
         mask_dir: Directory containing mask frames
 
     Returns:
-        Tuple of (source_frames, mask_frames) sorted by stem name
+        Tuple of (source_frames, mask_frames) sorted by filename
 
     Raises:
         ValueError: If no frames found or frame counts don't match
@@ -162,6 +162,8 @@ def generate_temporal_median_cleanplate(
     print(f"  Resolution: {width}x{height}")
     print(f"  Mask threshold: {threshold}")
 
+    all_source_frames = source_frames
+
     if sample_count > 0 and sample_count < len(source_frames):
         indices = np.linspace(0, len(source_frames) - 1, sample_count, dtype=int)
         source_frames = [source_frames[i] for i in indices]
@@ -193,11 +195,11 @@ def generate_temporal_median_cleanplate(
 
     cleanplate_img = Image.fromarray(cleanplate)
 
-    for src_path in source_frames:
+    for src_path in all_source_frames:
         output_path = output_dir / f"{src_path.stem}.png"
         cleanplate_img.save(output_path)
 
-    print(f"  Wrote {len(source_frames)} cleanplate frames to {output_dir}")
+    print(f"  Wrote {len(all_source_frames)} cleanplate frames to {output_dir}")
     return True
 
 
