@@ -95,6 +95,7 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | `--no-auto-comfyui` | Don't auto-start ComfyUI |
 | `--auto-movie` | Generate preview MP4s for each stage |
 | `--no-overwrite` | Keep existing output files |
+| `--gpu-profile` | Log GPU VRAM usage to `project/gpu_profile.log` |
 
 ---
 
