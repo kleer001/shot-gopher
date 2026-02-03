@@ -900,8 +900,10 @@ def run_mocap_pipeline(
         install_instructions()
         return False
 
+    person_folder = mocap_person or "person"
     mocap_dir = project_dir / "mocap"
-    mocap_dir.mkdir(parents=True, exist_ok=True)
+    mocap_person_dir = mocap_dir / person_folder
+    mocap_person_dir.mkdir(parents=True, exist_ok=True)
 
     gvhmr_dir = INSTALL_DIR / "GVHMR"
     gvhmr_checkpoint = gvhmr_dir / "inputs" / "checkpoints" / "gvhmr" / "gvhmr_siga24_release.ckpt"
@@ -944,7 +946,7 @@ def run_mocap_pipeline(
         project_dir,
         focal_mm=focal_mm,
         static_camera=static_camera,
-        output_dir=mocap_dir / "gvhmr",
+        output_dir=mocap_person_dir / "gvhmr",
         start_frame=start_frame,
         end_frame=end_frame,
         mocap_person=mocap_person,
@@ -954,8 +956,8 @@ def run_mocap_pipeline(
         print("Motion tracking failed", file=sys.stderr)
         return False
 
-    gvhmr_output = mocap_dir / "gvhmr"
-    motion_output = mocap_dir / "motion.pkl"
+    gvhmr_output = mocap_person_dir / "gvhmr"
+    motion_output = mocap_person_dir / "motion.pkl"
     if not save_motion_output(gvhmr_output, motion_output, gender=gender, person_index=person_index):
         print("Warning: Could not create motion output", file=sys.stderr)
         return False
@@ -963,17 +965,17 @@ def run_mocap_pipeline(
     print(f"\n{'=' * 60}")
     print("Motion Capture Complete")
     print("=" * 60)
-    print(f"Output directory: {mocap_dir}")
+    print(f"Output directory: {mocap_person_dir}")
     print(f"Motion data: {motion_output}")
 
     detected = list_detected_persons(gvhmr_output)
     if len(detected) > 1:
-        print(f"\nMulti-person shot detected ({len(detected)} persons):")
+        print(f"\nMulti-person detected in footage ({len(detected)} persons):")
         for i, person_name in enumerate(detected):
-            motion_file = mocap_dir / f"motion_{person_name}.pkl"
+            motion_file = mocap_person_dir / f"motion_{person_name}.pkl"
             marker = " <-- primary" if i == (person_index or 0) else ""
             print(f"  {i}: {motion_file.name}{marker}")
-        print("\nTo use a different person as primary, re-run with --mocap-person <index>")
+        print("\nTo select a different detected person, use --person <index>")
     print()
 
     return True
@@ -982,20 +984,24 @@ def run_mocap_pipeline(
 def run_export_pipeline(
     project_dir: Path,
     fps: float = 24.0,
+    mocap_person: Optional[str] = None,
 ) -> bool:
     """Run mesh export after motion capture.
 
     Args:
         project_dir: Project directory
         fps: Frames per second for export
+        mocap_person: Person folder name (e.g., 'person_00'), defaults to 'person'
 
     Returns:
         True if successful
     """
-    motion_output = project_dir / "mocap" / "motion.pkl"
+    person_folder = mocap_person or "person"
+    mocap_person_dir = project_dir / "mocap" / person_folder
+    motion_output = mocap_person_dir / "motion.pkl"
 
     if not motion_output.exists():
-        print("Error: No motion data to export", file=sys.stderr)
+        print(f"Error: No motion data to export at {motion_output}", file=sys.stderr)
         return False
 
     try:
@@ -1004,6 +1010,7 @@ def run_export_pipeline(
             project_dir=project_dir,
             formats=["abc", "usd"],
             fps=fps,
+            mocap_person=mocap_person,
         )
     except ImportError as e:
         print(f"Warning: Could not import export_mocap: {e}", file=sys.stderr)
@@ -1135,6 +1142,7 @@ def main():
         export_success = run_export_pipeline(
             project_dir=project_dir,
             fps=args.fps,
+            mocap_person=args.mocap_person,
         )
         if not export_success:
             print("Warning: Export failed, but motion data was saved", file=sys.stderr)

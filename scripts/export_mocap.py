@@ -384,6 +384,7 @@ def run_export(
     fps: float = 24.0,
     motion_file: Optional[Path] = None,
     output_dir: Optional[Path] = None,
+    mocap_person: Optional[str] = None,
 ) -> bool:
     """Run motion export pipeline.
 
@@ -393,6 +394,7 @@ def run_export(
         fps: Frames per second
         motion_file: Override motion.pkl path
         output_dir: Override output directory
+        mocap_person: Person folder name (e.g., 'person_00'), defaults to 'person'
 
     Returns:
         True if all exports successful
@@ -404,8 +406,10 @@ def run_export(
         print("Error: FPS must be greater than 0", file=sys.stderr)
         return False
 
-    motion_path = motion_file or project_dir / "mocap" / "motion.pkl"
-    export_dir = output_dir or project_dir / "mocap" / "export"
+    person_folder = mocap_person or "person"
+    mocap_person_dir = project_dir / "mocap" / person_folder
+    motion_path = motion_file or mocap_person_dir / "motion.pkl"
+    export_dir = output_dir or mocap_person_dir / "export"
     export_dir.mkdir(parents=True, exist_ok=True)
 
     use_gpu = detect_gpu()
@@ -528,6 +532,12 @@ def main():
         type=Path,
         help="Override output directory"
     )
+    parser.add_argument(
+        "--mocap-person",
+        type=str,
+        default=None,
+        help="Person folder name (e.g., 'person_00'). Defaults to 'person'."
+    )
 
     args = parser.parse_args()
 
@@ -549,6 +559,7 @@ def main():
         fps=args.fps,
         motion_file=args.motion_file,
         output_dir=args.output_dir,
+        mocap_person=args.mocap_person,
     )
 
     sys.exit(0 if success else 1)
