@@ -1,8 +1,8 @@
 {
   "id": "00000000-0000-0000-0000-000000000003",
   "revision": 0,
-  "last_node_id": 13,
-  "last_link_id": 13,
+  "last_node_id": 10,
+  "last_link_id": 8,
   "nodes": [
     {
       "id": 1,
@@ -13,7 +13,7 @@
       "order": 0,
       "mode": 0,
       "outputs": [
-        {"name": "IMAGE", "type": "IMAGE", "links": [1, 12]},
+        {"name": "IMAGE", "type": "IMAGE", "links": [1]},
         {"name": "MASK", "type": "MASK", "links": null},
         {"name": "frame_count", "type": "INT", "links": null}
       ],
@@ -56,7 +56,7 @@
       "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Scale Source (ProPainter)"
+      "title": "📐 Scale Source"
     },
     {
       "id": 8,
@@ -87,7 +87,7 @@
       "order": 4,
       "mode": 0,
       "inputs": [{"name": "image", "type": "IMAGE", "link": 7}],
-      "outputs": [{"name": "MASK", "type": "MASK", "links": [3, 11]}],
+      "outputs": [{"name": "MASK", "type": "MASK", "links": [3]}],
       "properties": {"Node name for S&R": "ImageToMask"},
       "widgets_values": ["red"],
       "title": "🔄 Image to Mask"
@@ -128,40 +128,20 @@
         {"name": "height", "type": "INT", "link": null, "widget": {"name": "height"}},
         {"name": "crop", "type": "COMBO", "link": null, "widget": {"name": "crop"}}
       ],
-      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [9]}],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [8]}],
       "properties": {"Node name for S&R": "ImageScale"},
       "widgets_values": ["lanczos", 1920, 1080, "disabled"],
-      "title": "📐 Upscale Inpainted"
-    },
-    {
-      "id": 13,
-      "type": "ImageCompositeMasked",
-      "pos": [1300, 380],
-      "size": [280, 120],
-      "flags": {},
-      "order": 7,
-      "mode": 0,
-      "inputs": [
-        {"name": "destination", "type": "IMAGE", "link": 12},
-        {"name": "source", "type": "IMAGE", "link": 9},
-        {"name": "mask", "type": "MASK", "link": 11},
-        {"name": "x", "type": "INT", "link": null, "widget": {"name": "x"}},
-        {"name": "y", "type": "INT", "link": null, "widget": {"name": "y"}}
-      ],
-      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [13]}],
-      "properties": {"Node name for S&R": "ImageCompositeMasked"},
-      "widgets_values": [0, 0, false],
-      "title": "🔀 Composite (Mask Only)"
+      "title": "📐 Scale Output"
     },
     {
       "id": 5,
       "type": "SaveImage",
-      "pos": [1650, 300],
+      "pos": [1650, 200],
       "size": [320, 280],
       "flags": {},
-      "order": 8,
+      "order": 7,
       "mode": 0,
-      "inputs": [{"name": "images", "type": "IMAGE", "link": 13}],
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 8}],
       "properties": {},
       "widgets_values": ["cleanplate/clean"],
       "title": "💾 Save Clean Plates"
@@ -172,10 +152,10 @@
       "pos": [100, 50],
       "size": [600, 100],
       "flags": {},
-      "order": 9,
+      "order": 8,
       "mode": 0,
       "properties": {"text": ""},
-      "widgets_values": ["📋 CLEANPLATE WORKFLOW\n\nInput: source/frames + roto masks → Output: cleanplate/\nOnly masked region is replaced. Original pixels preserved outside mask."],
+      "widgets_values": ["📋 CLEANPLATE WORKFLOW\n\nInput: source/frames + roto masks → Output: cleanplate/\nResolution is auto-detected from source frames."],
       "title": "📋 Instructions"
     }
   ],
@@ -186,17 +166,14 @@
     [5, 7, 0, 4, 0, "IMAGE"],
     [6, 2, 0, 8, 0, "IMAGE"],
     [7, 8, 0, 9, 0, "IMAGE"],
-    [9, 10, 0, 13, 1, "IMAGE"],
-    [11, 9, 0, 13, 2, "MASK"],
-    [12, 1, 0, 13, 0, "IMAGE"],
-    [13, 13, 0, 5, 0, "IMAGE"]
+    [8, 10, 0, 5, 0, "IMAGE"]
   ],
   "groups": [
     {"title": "📥 INPUT", "bounding": [80, 180, 380, 560], "color": "#3f789e"},
     {"title": "📐 SCALE", "bounding": [480, 180, 320, 450], "color": "#5e8f9e"},
     {"title": "🎨 INPAINT", "bounding": [830, 180, 420, 420], "color": "#9e3e5f"},
-    {"title": "🔀 COMPOSITE", "bounding": [1280, 180, 320, 340], "color": "#9e8f3e"},
-    {"title": "💾 OUTPUT", "bounding": [1630, 280, 360, 340], "color": "#3e9e5f"}
+    {"title": "📐 OUTPUT SCALE", "bounding": [1280, 180, 320, 180], "color": "#5e9e8f"},
+    {"title": "💾 OUTPUT", "bounding": [1630, 180, 360, 340], "color": "#3e9e5f"}
   ],
   "config": {},
   "extra": {
@@ -204,7 +181,7 @@
     "info": {
       "name": "VFX Pipeline - Cleanplate",
       "author": "VFX Pipeline",
-      "description": "ProPainter inpainting with masked compositing - only replaces masked region"
+      "description": "ProPainter video inpainting for clean plate generation"
     }
   },
   "version": 0.4
