@@ -45,14 +45,12 @@ def get_desktop_path() -> Path:
         return Path.home() / "Desktop"
 
 
-def create_windows_shortcut(target_path: Path, shortcut_path: Path) -> bool:
+def create_windows_shortcut(target_path: Path, shortcut_path: Path, working_dir: Path | None = None) -> bool:
     """Create a Windows .lnk shortcut using PowerShell."""
-    # Escape paths for PowerShell (replace backslashes, escape quotes)
     target_str = str(target_path).replace("'", "''")
     shortcut_str = str(shortcut_path).replace("'", "''")
-    workdir_str = str(target_path.parent).replace("'", "''")
+    workdir_str = str(working_dir if working_dir else target_path.parent).replace("'", "''")
 
-    # PowerShell script to create shortcut (use single quotes for paths)
     ps_script = f'''
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut('{shortcut_str}')
@@ -71,7 +69,7 @@ $Shortcut.Save()
     return result.returncode == 0
 
 
-def create_windows_start_menu_shortcut(target_path: Path) -> bool:
+def create_windows_start_menu_shortcut(target_path: Path, working_dir: Path | None = None) -> bool:
     """Create a Windows Start Menu shortcut."""
     appdata = os.environ.get("APPDATA")
     if not appdata:
@@ -82,7 +80,7 @@ def create_windows_start_menu_shortcut(target_path: Path) -> bool:
         return False
 
     shortcut_path = start_menu / "Shot Gopher.lnk"
-    return create_windows_shortcut(target_path, shortcut_path)
+    return create_windows_shortcut(target_path, shortcut_path, working_dir)
 
 
 def create_mac_desktop_alias(target_path: Path, alias_path: Path) -> bool:
@@ -244,7 +242,7 @@ def main():
             desktop = get_desktop_path()
             shortcut_path = desktop / "Shot Gopher.lnk"
             print(f"Creating Desktop shortcut: {shortcut_path}")
-            if create_windows_shortcut(launcher, shortcut_path):
+            if create_windows_shortcut(launcher, shortcut_path, repo_root):
                 created.append("Desktop")
                 print("  OK")
             else:
@@ -252,7 +250,7 @@ def main():
 
         if create_menu:
             print("Creating Start Menu shortcut...")
-            if create_windows_start_menu_shortcut(launcher):
+            if create_windows_start_menu_shortcut(launcher, repo_root):
                 created.append("Start Menu")
                 print("  OK")
             else:
