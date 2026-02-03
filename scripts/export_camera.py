@@ -9,6 +9,7 @@ Supported output formats:
   - CSV (spreadsheet-compatible camera data)
   - JSON (detailed per-frame transforms)
   - Alembic .abc (requires Blender, auto-installed via wizard)
+  - USD .usd/.usda/.usdc (requires Blender, auto-installed via wizard)
   - After Effects .jsx (JavaScript script for camera import)
 
 Supports camera data from:
@@ -40,7 +41,7 @@ from transforms import (
 
 HAS_BLENDER = False
 try:
-    from blender import export_camera_to_alembic, check_blender_available
+    from blender import export_camera_to_alembic, export_camera_to_usd, check_blender_available
     HAS_BLENDER = True
 except ImportError:
     pass
@@ -697,9 +698,9 @@ def main():
     )
     parser.add_argument(
         "--format",
-        choices=["chan", "csv", "clip", "cmd", "json", "abc", "jsx", "all"],
+        choices=["chan", "csv", "clip", "cmd", "json", "abc", "usd", "jsx", "all"],
         default="all",
-        help="Output format: chan (Nuke), csv, clip (Houdini), json, abc (Alembic), jsx (After Effects), all (default: all)"
+        help="Output format: chan (Nuke), csv, clip (Houdini), json, abc (Alembic), usd (USD), jsx (After Effects), all (default: all)"
     )
     parser.add_argument(
         "--rotation-order", "-r",
@@ -857,6 +858,30 @@ def main():
                 sys.exit(1)
             else:
                 print("Note: Alembic not available (requires Blender), skipping .abc")
+
+    # USD format (requires Blender)
+    if fmt in ("usd", "all"):
+        usd_path = output_base.with_suffix(".usd")
+        if HAS_BLENDER:
+            try:
+                export_camera_to_usd(
+                    camera_dir=camera_dir,
+                    output_path=usd_path,
+                    fps=args.fps,
+                    start_frame=args.start_frame,
+                    camera_name=camera_name,
+                )
+                exported.append(f".usd (USD)")
+            except Exception as e:
+                print(f"Error exporting USD: {e}", file=sys.stderr)
+                if fmt == "usd":
+                    sys.exit(1)
+        else:
+            if fmt == "usd":
+                print("Error: USD export requires Blender. Run the installation wizard.", file=sys.stderr)
+                sys.exit(1)
+            else:
+                print("Note: USD not available (requires Blender), skipping .usd")
 
     # After Effects JSX format (always available)
     if fmt in ("jsx", "all"):

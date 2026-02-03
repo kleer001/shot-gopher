@@ -4,9 +4,9 @@ REM Double-click this file to launch Shot Gopher
 
 setlocal EnableDelayedExpansion
 
-REM Get the directory where this script is located
+REM Get the directory where this script is located and go to repo root
 set "SCRIPT_DIR=%~dp0"
-cd /d "%SCRIPT_DIR%"
+cd /d "%SCRIPT_DIR%.."
 
 echo.
 echo  ====================================

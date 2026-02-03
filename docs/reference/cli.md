@@ -71,6 +71,12 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | `--no-separate-instances` | Combine all instances into single mask |
 | `--start-frame` | Frame to start roto from (enables bidirectional propagation). Use when subject isn't visible on first frame |
 
+### Cleanplate Options
+
+| Long | Description |
+|------|-------------|
+| `--cleanplate-median` | Use temporal median instead of ProPainter (faster, requires static camera) |
+
 ### COLMAP Options
 
 | Short | Long | Description |
@@ -105,6 +111,7 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | `--no-auto-comfyui` | Don't auto-start ComfyUI |
 | `--auto-movie` | Generate preview MP4s for each stage |
 | `--no-overwrite` | Keep existing output files |
+| `--gpu-profile` | Log GPU VRAM usage to `project/gpu_profile.log` |
 
 ---
 

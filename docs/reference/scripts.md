@@ -20,6 +20,7 @@ While `run_pipeline.py` orchestrates the full pipeline, each component can also 
 | `texture_projection.py` | Texture SMPL-X meshes | Meshes + frames | Textured meshes |
 | `smplx_from_motion.py` | Generate SMPL-X from motion data | motion.pkl | Mesh sequence |
 | `mesh_deform.py` | Deform clothed mesh with SMPL-X | SMPL-X + clothed meshes | Animated mesh |
+| `gpu_monitor.py` | Profile GPU VRAM usage | — | Log file |
 
 ## setup_project.py
 
@@ -827,6 +828,62 @@ UV-based correspondence avoids this because:
 - Start with `smooth` mode, try `rigid` if clothing looks too damped
 - Low UV coverage (<90%) indicates UV mismatch between meshes
 - Clothed mesh and SMPL-X must have compatible UV layouts
+
+---
+
+## gpu_monitor.py
+
+Monitor GPU VRAM usage in real-time for profiling and optimization.
+
+### Usage
+
+```bash
+# Standalone monitoring
+python scripts/gpu_monitor.py -o gpu_usage.log -i 0.5
+
+# Integrated with pipeline (recommended)
+python scripts/run_pipeline.py footage.mp4 -s cleanplate --gpu-profile
+```
+
+### Arguments
+
+**Options**:
+- `-o`, `--output` - Output log file (default: `gpu_usage.log`)
+- `-i`, `--interval` - Polling interval in seconds (default: 1.0)
+- `-q`, `--quiet` - Suppress terminal output (log to file only)
+
+### Output Format
+
+```
+# GPU Monitor - NVIDIA GeForce RTX 3090 (24.0GB)
+# Started: 2026-02-03T15:10:00
+# Interval: 0.5s
+#
+# Format: timestamp | stage | used_gb | peak_gb | gpu_util%
+#
+
+# === STAGE: cleanplate (15:10:05.123) ===
+15:10:05.623 | cleanplate   |  8.60GB | 10.04GB |  94%
+15:10:06.155 | cleanplate   | 16.42GB | 16.42GB | 100%
+15:10:06.687 | cleanplate   |  8.92GB | 16.42GB | 100%
+
+# Stopped: 2026-02-03T15:15:00
+# Duration: 0:05:00
+# Peak VRAM: 16.42GB
+```
+
+### Use Cases
+
+- **Find peak VRAM** - Identify VRAM spikes that cause OOM crashes
+- **Optimize settings** - Tune quality parameters based on available headroom
+- **Compare stages** - See which stages are most VRAM-intensive
+- **Debug crashes** - Correlate timestamps with error logs
+
+### Tips
+
+- Use `-i 0.5` for finer granularity (catches short spikes)
+- Pipeline integration (`--gpu-profile`) automatically logs stage transitions
+- Log file saved to project directory for per-shot comparison
 
 ---
 

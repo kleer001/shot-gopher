@@ -356,7 +356,7 @@ class TestExportSubprocessBehavior:
                     input_dir.mkdir()
                     output = Path(tmp) / "output.abc"
 
-                    with pytest.raises(RuntimeError, match="Blender export failed"):
+                    with pytest.raises(RuntimeError, match="Blender.*export failed"):
                         export_mesh_sequence_to_alembic(input_dir, output)
 
     def test_raises_when_output_not_created(self):

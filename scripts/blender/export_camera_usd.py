@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Blender script to export camera animation to Alembic.
+"""Blender script to export camera animation to USD.
 
 This script runs inside Blender's Python environment and exports
-camera data from JSON files as an animated Alembic (.abc) file.
+camera data from JSON files as an animated USD (.usd/.usda/.usdc) file.
 
 Usage (from command line):
-    blender -b --python export_camera_alembic.py -- \
+    blender -b --python export_camera_usd.py -- \
         --input /path/to/camera/ \
-        --output /path/to/camera.abc \
+        --output /path/to/camera.usd \
         --fps 24 \
         --start-frame 1
 
 The script will:
 1. Load extrinsics.json and intrinsics.json from the camera directory
 2. Create a camera with animated transforms
-3. Export to Alembic with proper time sampling
+3. Export to USD with proper time sampling
 """
 
 import argparse
@@ -26,15 +26,15 @@ import bpy
 from camera_common import run_camera_export
 
 
-def export_alembic(
+def export_usd(
     output_path: Path,
     start_frame: int,
     end_frame: int,
 ):
-    """Export scene to Alembic file.
+    """Export scene to USD file.
 
     Args:
-        output_path: Output .abc file path
+        output_path: Output .usd/.usda/.usdc file path
         start_frame: First frame to export
         end_frame: Last frame to export
     """
@@ -43,25 +43,21 @@ def export_alembic(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    bpy.ops.wm.alembic_export(
+    bpy.ops.wm.usd_export(
         filepath=str(output_path),
-        start=start_frame,
-        end=end_frame,
-        selected=False,
+        selected_objects_only=False,
         visible_objects_only=True,
-        flatten=False,
-        uvs=False,
-        normals=False,
-        vcolors=False,
-        apply_subdiv=False,
-        curves_as_mesh=False,
-        use_instancing=True,
-        global_scale=1.0,
-        triangulate=False,
+        export_animation=True,
         export_hair=False,
-        export_particles=False,
-        packuv=False,
-        face_sets=False,
+        export_uvmaps=False,
+        export_normals=False,
+        export_materials=False,
+        use_instancing=True,
+        evaluation_mode='RENDER',
+        generate_preview_surface=False,
+        export_textures=False,
+        overwrite_textures=False,
+        relative_paths=True,
     )
 
 
@@ -74,7 +70,7 @@ def main():
         argv = []
 
     parser = argparse.ArgumentParser(
-        description="Export camera animation to Alembic"
+        description="Export camera animation to USD"
     )
     parser.add_argument(
         "--input", "-i",
@@ -86,7 +82,7 @@ def main():
         "--output", "-o",
         type=Path,
         required=True,
-        help="Output Alembic file path"
+        help="Output USD file path (.usd, .usda, or .usdc)"
     )
     parser.add_argument(
         "--fps", "-f",
@@ -114,8 +110,8 @@ def main():
         fps=args.fps,
         start_frame=args.start_frame,
         camera_name=args.camera_name,
-        format_name="Alembic",
-        export_fn=export_alembic,
+        format_name="USD",
+        export_fn=export_usd,
     )
 
 

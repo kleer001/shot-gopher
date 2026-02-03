@@ -38,6 +38,7 @@ from subprocess_utils import (
     ProgressTracker,
     create_training_patterns,
 )
+from validate_gsir import validate_gsir_output
 
 
 # Default training parameters
@@ -504,7 +505,9 @@ def run_gsir_pipeline(
     iterations_stage1: int = DEFAULT_ITERATIONS_STAGE1,
     iterations_stage2: int = DEFAULT_ITERATIONS_STAGE2,
     skip_training: bool = False,
-    gsir_path: Optional[Path] = None
+    gsir_path: Optional[Path] = None,
+    validate: bool = True,
+    export_usd: bool = False,
 ) -> bool:
     """Run the complete GS-IR material decomposition pipeline.
 
@@ -514,6 +517,8 @@ def run_gsir_pipeline(
         iterations_stage2: Total training iterations
         skip_training: Skip training if checkpoint exists
         gsir_path: Path to GS-IR installation (auto-detect if None)
+        validate: Run output validation after export
+        export_usd: Export materials to USD format using Blender
 
     Returns:
         True if pipeline succeeded
@@ -586,6 +591,40 @@ def run_gsir_pipeline(
         print(f"\nGS-IR command timed out", file=sys.stderr)
         return False
 
+    # Validate outputs
+    validation_passed = True
+    if validate:
+        print("\n[Validation] Checking output quality")
+        report = validate_gsir_output(project_dir)
+        if report.valid:
+            print("  → All validation checks passed")
+        else:
+            print("  → Validation issues detected:")
+            for warning in report.warnings:
+                print(f"      {warning}")
+            validation_passed = False
+
+    # Export to USD if requested
+    usd_output = None
+    if export_usd:
+        print("\n[USD Export] Creating USD material file")
+        try:
+            from blender import export_gsir_materials_to_usd
+
+            usd_output = materials_output / "gsir_materials.usd"
+            export_gsir_materials_to_usd(
+                camera_dir=materials_output,
+                output_path=usd_output,
+                material_name="gsir_material",
+                create_geometry=True,
+                export_textures=True,
+            )
+            print(f"  → USD exported: {usd_output}")
+        except FileNotFoundError as e:
+            print(f"  → USD export skipped: {e}")
+        except Exception as e:
+            print(f"  → USD export failed: {e}")
+
     # Calculate timing
     pipeline_end = time.time()
     total_seconds = pipeline_end - pipeline_start
@@ -596,6 +635,10 @@ def run_gsir_pipeline(
     print(f"{'='*60}")
     print(f"Model: {gsir_model_dir}")
     print(f"Materials: {materials_output}")
+    if usd_output and usd_output.exists():
+        print(f"USD: {usd_output}")
+    if validate:
+        print(f"Validation: {'PASSED' if validation_passed else 'ISSUES DETECTED'}")
     print()
     print(f"TOTAL TIME: {total_minutes:.1f} minutes")
     print()
@@ -645,6 +688,16 @@ def main():
         action="store_true",
         help="Check if GS-IR is available and exit"
     )
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip output validation after export"
+    )
+    parser.add_argument(
+        "--export-usd",
+        action="store_true",
+        help="Export materials to USD format using Blender"
+    )
 
     args = parser.parse_args()
 
@@ -668,6 +721,8 @@ def main():
         iterations_stage2=args.iterations_stage2,
         skip_training=args.skip_training,
         gsir_path=args.gsir_path,
+        validate=not args.skip_validation,
+        export_usd=args.export_usd,
     )
 
     sys.exit(0 if success else 1)
