@@ -979,10 +979,15 @@ def run_export_pipeline(
     """
     person_folder = mocap_person or "person"
     mocap_person_dir = project_dir / "mocap" / person_folder
-    motion_output = mocap_person_dir / "motion.pkl"
+    gvhmr_dir = mocap_person_dir / "gvhmr"
 
-    if not motion_output.exists():
-        print(f"Error: No motion data to export at {motion_output}", file=sys.stderr)
+    if not gvhmr_dir.exists():
+        print(f"Error: No GVHMR output to export at {gvhmr_dir}", file=sys.stderr)
+        return False
+
+    gvhmr_files = list(gvhmr_dir.rglob("hmr4d*.pt"))
+    if not gvhmr_files:
+        print(f"Error: No GVHMR output (hmr4d*.pt) found in {gvhmr_dir}", file=sys.stderr)
         return False
 
     conda_exe = _find_conda()
