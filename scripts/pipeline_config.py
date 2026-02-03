@@ -40,6 +40,8 @@ class PipelineConfig:
     gsir_iterations: int = 35000
     gsir_path: Optional[str] = None
 
+    cleanplate_use_median: bool = False
+
     roto_prompt: Optional[str] = None
     roto_start_frame: Optional[int] = None
     separate_instances: bool = True
@@ -77,6 +79,7 @@ class PipelineConfig:
                 colmap_max_size=args.colmap_max_size,
                 gsir_iterations=args.gsir_iterations,
                 gsir_path=args.gsir_path,
+                cleanplate_use_median=args.cleanplate_median,
                 roto_prompt=args.prompt,
                 roto_start_frame=args.start_frame,
                 separate_instances=args.separate_instances,
@@ -101,6 +104,7 @@ class PipelineConfig:
             colmap_max_size=args.colmap_max_size,
             gsir_iterations=args.gsir_iterations,
             gsir_path=args.gsir_path,
+            cleanplate_use_median=args.cleanplate_median,
             roto_prompt=args.prompt,
             roto_start_frame=args.start_frame,
             separate_instances=args.separate_instances,
@@ -126,6 +130,7 @@ class StageContext:
     auto_movie: bool
     source_width: int = 0
     source_height: int = 0
+    cleanplate_use_median: bool = False
 
     @classmethod
     def from_config(
@@ -162,4 +167,5 @@ class StageContext:
             auto_movie=config.auto_movie,
             source_width=width,
             source_height=height,
+            cleanplate_use_median=config.cleanplate_use_median,
         )

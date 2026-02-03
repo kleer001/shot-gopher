@@ -17,6 +17,7 @@ if sys.platform != "win32":
 from typing import Optional, Callable, TYPE_CHECKING
 
 from comfyui_utils import run_comfyui_workflow
+from cleanplate_median import run_cleanplate_median
 from matte_utils import combine_mattes, prepare_roto_for_cleanplate
 from pipeline_constants import START_FRAME
 from pipeline_utils import (
@@ -745,30 +746,37 @@ def run_stage_cleanplate(
 
     print(f"  → {roto_message}")
 
-    if ctx.source_width > 0 and ctx.source_height > 0:
-        update_workflow_resolution(
-            workflow_path,
-            ctx.source_width,
-            ctx.source_height,
-            update_loaders=True,
-            update_scales=True,
-            update_propainter=True,
-        )
+    if ctx.cleanplate_use_median:
+        print("  → Using temporal median (static camera mode)")
+        if not run_cleanplate_median(ctx.project_dir):
+            print("  → Temporal median cleanplate failed", file=sys.stderr)
+            return False
     else:
-        update_cleanplate_resolution(workflow_path, ctx.source_frames)
+        if ctx.source_width > 0 and ctx.source_height > 0:
+            update_workflow_resolution(
+                workflow_path,
+                ctx.source_width,
+                ctx.source_height,
+                update_loaders=True,
+                update_scales=True,
+                update_propainter=True,
+            )
+        else:
+            update_cleanplate_resolution(workflow_path, ctx.source_frames)
 
-    if not run_comfyui_workflow(
-        workflow_path, ctx.comfyui_url,
-        output_dir=cleanplate_dir,
-        total_frames=ctx.total_frames,
-        stage_name="cleanplate",
-    ):
-        print("  → Cleanplate stage failed", file=sys.stderr)
+        if not run_comfyui_workflow(
+            workflow_path, ctx.comfyui_url,
+            output_dir=cleanplate_dir,
+            total_frames=ctx.total_frames,
+            stage_name="cleanplate",
+        ):
+            print("  → Cleanplate stage failed", file=sys.stderr)
+
+        clear_gpu_memory(ctx.comfyui_url)
 
     if ctx.auto_movie and list(cleanplate_dir.glob("*.png")):
         generate_preview_movie(cleanplate_dir, ctx.project_dir / "preview" / "cleanplate.mp4", ctx.fps)
 
-    clear_gpu_memory(ctx.comfyui_url)
     return True
 
 
