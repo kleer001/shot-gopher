@@ -216,29 +216,157 @@ def detect_static_camera(
         return False
 
 
+def composite_frames_with_matte(
+    frames_dir: Path,
+    matte_dir: Path,
+    output_dir: Path,
+    start_frame: Optional[int] = None,
+    end_frame: Optional[int] = None,
+) -> List[Path]:
+    """Composite source frames with roto mattes to isolate a person.
+
+    Multiplies each frame by its corresponding matte, resulting in the
+    person isolated on a black background.
+
+    Args:
+        frames_dir: Directory containing source frames
+        matte_dir: Directory containing matte frames (white=person, black=background)
+        output_dir: Directory to write composited frames
+        start_frame: Start frame (1-indexed, inclusive)
+        end_frame: End frame (1-indexed, inclusive)
+
+    Returns:
+        List of paths to composited frames, empty if failed
+    """
+    try:
+        from PIL import Image
+        import numpy as np
+    except ImportError:
+        print("Error: PIL and numpy required for matte compositing", file=sys.stderr)
+        return []
+
+    source_frames = sorted(frames_dir.glob("*.png")) + sorted(frames_dir.glob("*.jpg"))
+    if not source_frames:
+        print(f"Error: No source frames in {frames_dir}", file=sys.stderr)
+        return []
+
+    matte_frames = sorted(matte_dir.glob("*.png")) + sorted(matte_dir.glob("*.jpg"))
+    if not matte_frames:
+        print(f"Error: No matte frames in {matte_dir}", file=sys.stderr)
+        return []
+
+    if start_frame is not None or end_frame is not None:
+        actual_start = (start_frame or 1) - 1
+        actual_end = end_frame if end_frame else len(source_frames)
+        source_frames = source_frames[actual_start:actual_end]
+        matte_frames = matte_frames[actual_start:actual_end]
+
+    if len(source_frames) != len(matte_frames):
+        print(f"Error: Frame count mismatch - {len(source_frames)} source vs {len(matte_frames)} matte", file=sys.stderr)
+        return []
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    composited = []
+
+    for i, (src_path, matte_path) in enumerate(zip(source_frames, matte_frames)):
+        try:
+            src_img = Image.open(src_path).convert("RGB")
+            matte_img = Image.open(matte_path).convert("L")
+
+            if src_img.size != matte_img.size:
+                matte_img = matte_img.resize(src_img.size, Image.LANCZOS)
+
+            src_array = np.array(src_img, dtype=np.float32)
+            matte_array = np.array(matte_img, dtype=np.float32) / 255.0
+            matte_array = matte_array[:, :, np.newaxis]
+
+            result_array = (src_array * matte_array).astype(np.uint8)
+            result_img = Image.fromarray(result_array)
+
+            output_path = output_dir / f"frame_{i+1:05d}.png"
+            result_img.save(output_path)
+            composited.append(output_path)
+
+        except Exception as e:
+            print(f"Error compositing frame {i+1}: {e}", file=sys.stderr)
+            return []
+
+    return composited
+
+
 def find_or_create_video(
     project_dir: Path,
     fps: float = 24.0,
     start_frame: Optional[int] = None,
     end_frame: Optional[int] = None,
+    mocap_person: Optional[str] = None,
 ) -> Optional[Path]:
     """Find source video or create one from frames.
 
     GVHMR requires video input, not frames. This function:
-    1. Looks for original source video (trims if frame range specified)
-    2. Falls back to re-encoding frames (with frame range)
+    1. If mocap_person specified: composites frames with roto matte to isolate person
+    2. Otherwise looks for original source video (trims if frame range specified)
+    3. Falls back to re-encoding frames (with frame range)
 
     Args:
         project_dir: Project directory
         fps: Frame rate for video encoding
         start_frame: Start frame (1-indexed, inclusive)
         end_frame: End frame (1-indexed, inclusive)
+        mocap_person: Roto person folder name (e.g., 'person_00') to isolate
 
     Returns:
         Path to video file, or None if creation fails
     """
     has_frame_range = start_frame is not None or end_frame is not None
     source_dir = project_dir / "source"
+
+    if mocap_person:
+        frames_dir = source_dir / "frames"
+        matte_dir = project_dir / "roto" / mocap_person
+
+        if not frames_dir.exists():
+            print(f"Error: Source frames required for matte isolation: {frames_dir}", file=sys.stderr)
+            return None
+
+        if not matte_dir.exists():
+            print(f"Error: Roto matte directory not found: {matte_dir}", file=sys.stderr)
+            return None
+
+        masked_dir = source_dir / f"_gvhmr_masked_{mocap_person}"
+        range_suffix = ""
+        if has_frame_range:
+            range_suffix = f"_{start_frame or 1}_{end_frame or 'end'}"
+
+        print(f"  → Isolating {mocap_person} using roto matte...")
+        composited = composite_frames_with_matte(
+            frames_dir, matte_dir, masked_dir,
+            start_frame=start_frame, end_frame=end_frame
+        )
+
+        if not composited:
+            return None
+
+        print(f"  OK Composited {len(composited)} frames")
+
+        video_path = source_dir / f"_gvhmr_masked_{mocap_person}{range_suffix}.mp4"
+        cmd = [
+            "ffmpeg", "-y", "-framerate", str(fps),
+            "-i", str(masked_dir / "frame_%05d.png"),
+            "-frames:v", str(len(composited)),
+            "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+            "-pix_fmt", "yuv420p", str(video_path)
+        ]
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            if result.returncode == 0 and video_path.exists():
+                print(f"  OK Created masked video: {video_path.name}")
+                return video_path
+        except Exception as e:
+            print(f"  Error creating masked video: {e}", file=sys.stderr)
+
+        return None
 
     source_video = None
     video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".webm"]
@@ -399,6 +527,7 @@ def run_gvhmr_motion_tracking(
     start_frame: Optional[int] = None,
     end_frame: Optional[int] = None,
     fps: float = 24.0,
+    mocap_person: Optional[str] = None,
 ) -> bool:
     """Run GVHMR for world-grounded motion tracking.
 
@@ -413,6 +542,7 @@ def run_gvhmr_motion_tracking(
         start_frame: Start frame (1-indexed, inclusive)
         end_frame: End frame (1-indexed, inclusive)
         fps: Frames per second (for trimming calculations)
+        mocap_person: Roto person folder to isolate (e.g., 'person_00')
 
     Returns:
         True if successful
@@ -431,7 +561,7 @@ def run_gvhmr_motion_tracking(
     output_dir = output_dir or project_dir / "mocap" / "gvhmr"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    video_path = find_or_create_video(project_dir, fps, start_frame, end_frame)
+    video_path = find_or_create_video(project_dir, fps, start_frame, end_frame, mocap_person)
     if not video_path:
         print("Error: No video file found and could not create from frames", file=sys.stderr)
         return False
@@ -440,6 +570,8 @@ def run_gvhmr_motion_tracking(
     print("GVHMR Motion Tracking")
     print("=" * 60)
     print(f"Video: {video_path}")
+    if mocap_person:
+        print(f"Isolated person: {mocap_person} (via roto matte)")
     if start_frame or end_frame:
         range_str = f"{start_frame or 1}-{end_frame or 'end'}"
         print(f"Frame range: {range_str}")
@@ -742,6 +874,7 @@ def run_mocap_pipeline(
     start_frame: Optional[int] = None,
     end_frame: Optional[int] = None,
     person_index: Optional[int] = None,
+    mocap_person: Optional[str] = None,
 ) -> bool:
     """Run motion capture pipeline with GVHMR.
 
@@ -752,6 +885,7 @@ def run_mocap_pipeline(
         start_frame: Start frame (1-indexed, inclusive)
         end_frame: End frame (1-indexed, inclusive)
         person_index: Which detected person to use as primary (0, 1, 2...)
+        mocap_person: Roto person folder to isolate (e.g., 'person_00')
 
     Returns:
         True if successful
@@ -782,11 +916,13 @@ def run_mocap_pipeline(
     print("Motion Capture Pipeline (GVHMR)")
     print("=" * 60)
     print(f"Project: {project_dir}")
+    if mocap_person:
+        print(f"Isolating: {mocap_person} (via roto matte)")
     if start_frame or end_frame:
         range_str = f"{start_frame or 1}-{end_frame or 'end'}"
         print(f"Frame range: {range_str}")
     if person_index is not None:
-        print(f"Target person: {person_index}")
+        print(f"Target person index: {person_index}")
     print()
 
     focal_mm = None
@@ -811,6 +947,7 @@ def run_mocap_pipeline(
         output_dir=mocap_dir / "gvhmr",
         start_frame=start_frame,
         end_frame=end_frame,
+        mocap_person=mocap_person,
     )
 
     if not success:
@@ -934,6 +1071,12 @@ def main():
         help="Person index for multi-person shots (0, 1, 2...). Uses person_N as primary output."
     )
     parser.add_argument(
+        "--mocap-person",
+        type=str,
+        default=None,
+        help="Roto person folder to isolate (e.g., 'person_00'). Composites frames with roto matte."
+    )
+    parser.add_argument(
         "--list-persons",
         action="store_true",
         help="List detected persons from existing GVHMR output and exit"
@@ -982,6 +1125,7 @@ def main():
         start_frame=args.start_frame,
         end_frame=args.end_frame,
         person_index=args.person,
+        mocap_person=args.mocap_person,
     )
 
     if not success:

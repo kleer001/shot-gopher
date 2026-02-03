@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from run_mocap import (
     colmap_intrinsics_to_focal_mm,
+    composite_frames_with_matte,
     detect_static_camera,
     find_or_create_video,
 )
@@ -611,6 +612,120 @@ class TestListDetectedPersons:
 
             detected = list_detected_persons(gvhmr_dir)
             assert detected == ["person_0", "person_1"]
+
+
+class TestCompositeFramesWithMatte:
+    """Tests for composite_frames_with_matte function."""
+
+    def test_composite_basic(self):
+        """Test basic frame compositing with matte."""
+        pytest.importorskip("PIL")
+        pytest.importorskip("numpy")
+        from PIL import Image
+        import numpy as np
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frames_dir = Path(tmpdir) / "frames"
+            matte_dir = Path(tmpdir) / "matte"
+            output_dir = Path(tmpdir) / "output"
+            frames_dir.mkdir()
+            matte_dir.mkdir()
+
+            for i in range(3):
+                img = Image.new("RGB", (100, 100), color=(255, 128, 64))
+                img.save(frames_dir / f"frame_{i+1:04d}.png")
+
+                matte = Image.new("L", (100, 100), color=128)
+                matte.save(matte_dir / f"frame_{i+1:04d}.png")
+
+            result = composite_frames_with_matte(frames_dir, matte_dir, output_dir)
+
+            assert len(result) == 3
+            assert all(p.exists() for p in result)
+
+            result_img = Image.open(result[0])
+            result_array = np.array(result_img)
+            assert result_array.shape == (100, 100, 3)
+            expected_r = int(255 * 128 / 255)
+            assert abs(result_array[50, 50, 0] - expected_r) < 2
+
+    def test_composite_missing_frames(self):
+        """Test compositing with missing source frames."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frames_dir = Path(tmpdir) / "frames"
+            matte_dir = Path(tmpdir) / "matte"
+            output_dir = Path(tmpdir) / "output"
+            matte_dir.mkdir()
+
+            result = composite_frames_with_matte(frames_dir, matte_dir, output_dir)
+            assert result == []
+
+    def test_composite_missing_mattes(self):
+        """Test compositing with missing matte frames."""
+        pytest.importorskip("PIL")
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frames_dir = Path(tmpdir) / "frames"
+            matte_dir = Path(tmpdir) / "matte"
+            output_dir = Path(tmpdir) / "output"
+            frames_dir.mkdir()
+
+            img = Image.new("RGB", (100, 100), color=(255, 128, 64))
+            img.save(frames_dir / "frame_0001.png")
+
+            result = composite_frames_with_matte(frames_dir, matte_dir, output_dir)
+            assert result == []
+
+    def test_composite_frame_count_mismatch(self):
+        """Test compositing with different frame counts."""
+        pytest.importorskip("PIL")
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frames_dir = Path(tmpdir) / "frames"
+            matte_dir = Path(tmpdir) / "matte"
+            output_dir = Path(tmpdir) / "output"
+            frames_dir.mkdir()
+            matte_dir.mkdir()
+
+            for i in range(5):
+                img = Image.new("RGB", (100, 100), color=(255, 128, 64))
+                img.save(frames_dir / f"frame_{i+1:04d}.png")
+
+            for i in range(3):
+                matte = Image.new("L", (100, 100), color=255)
+                matte.save(matte_dir / f"frame_{i+1:04d}.png")
+
+            result = composite_frames_with_matte(frames_dir, matte_dir, output_dir)
+            assert result == []
+
+    def test_composite_with_frame_range(self):
+        """Test compositing with start/end frame range."""
+        pytest.importorskip("PIL")
+        pytest.importorskip("numpy")
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            frames_dir = Path(tmpdir) / "frames"
+            matte_dir = Path(tmpdir) / "matte"
+            output_dir = Path(tmpdir) / "output"
+            frames_dir.mkdir()
+            matte_dir.mkdir()
+
+            for i in range(10):
+                img = Image.new("RGB", (100, 100), color=(255, 128, 64))
+                img.save(frames_dir / f"frame_{i+1:04d}.png")
+
+                matte = Image.new("L", (100, 100), color=255)
+                matte.save(matte_dir / f"frame_{i+1:04d}.png")
+
+            result = composite_frames_with_matte(
+                frames_dir, matte_dir, output_dir,
+                start_frame=3, end_frame=7
+            )
+
+            assert len(result) == 5
 
 
 class TestRunMocapPipeline:
