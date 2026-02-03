@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-"""Temporal median cleanplate generation.
+"""Temporal median cleanplate generation for static camera shots.
 
-Creates a cleanplate by computing the temporal median of masked frames.
-This works well for static camera shots where the foreground object moves
-enough to reveal all background pixels at some point.
+Computes per-pixel temporal median using only unmasked (background) samples.
+Foreground objects that move enough to reveal all background pixels get removed.
 
 Usage:
-    python cleanplate_median.py <project_dir> [options]
-
-Example:
-    python cleanplate_median.py /path/to/projects/My_Shot
+    python cleanplate_median.py <project_dir> [--sample-count N] [--threshold T]
 """
 
 import argparse
@@ -24,18 +20,6 @@ def _gather_frame_paths(
     source_dir: Path,
     mask_dir: Path,
 ) -> tuple[list[Path], list[Path]]:
-    """Gather and validate source and mask frame paths.
-
-    Args:
-        source_dir: Directory containing source frames
-        mask_dir: Directory containing mask frames
-
-    Returns:
-        Tuple of (source_frames, mask_frames) sorted by filename
-
-    Raises:
-        ValueError: If no frames found or frame counts don't match
-    """
     source_frames = sorted(source_dir.glob("*.png")) + sorted(source_dir.glob("*.jpg"))
     mask_frames = sorted(mask_dir.glob("*.png"))
 
@@ -61,18 +45,6 @@ def _load_frame_pair(
     threshold: float,
     channels: int,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Load and preprocess a source/mask frame pair.
-
-    Args:
-        src_path: Path to source frame
-        mask_path: Path to mask frame
-        target_size: Target (height, width) for resizing if needed
-        threshold: Mask threshold (0-1)
-        channels: Number of color channels
-
-    Returns:
-        Tuple of (source_array, background_mask_boolean)
-    """
     height, width = target_size
 
     src_img = np.array(Image.open(src_path))
@@ -94,16 +66,6 @@ def _compute_masked_median(
     pixel_valid: np.ndarray,
     channels: int,
 ) -> np.ndarray:
-    """Compute per-pixel median using only valid (unmasked) samples.
-
-    Args:
-        pixel_values: Array of shape (H, W, C, T) with pixel values
-        pixel_valid: Boolean array of shape (H, W, T) indicating valid samples
-        channels: Number of color channels
-
-    Returns:
-        Cleanplate array of shape (H, W, C)
-    """
     height, width = pixel_values.shape[:2]
     cleanplate = np.zeros((height, width, channels), dtype=np.uint8)
 
@@ -129,22 +91,6 @@ def generate_temporal_median_cleanplate(
     sample_count: int = 0,
     threshold: float = 0.5,
 ) -> bool:
-    """Generate a cleanplate using temporal median of unmasked pixels.
-
-    For each output pixel, collects values from frames where that pixel
-    is not masked (background), then takes the median. This effectively
-    removes moving foreground objects while preserving the static background.
-
-    Args:
-        source_dir: Directory containing source frames (PNG/JPG)
-        mask_dir: Directory containing mask frames (white = foreground to remove)
-        output_dir: Directory to write cleanplate frames
-        sample_count: Max frames to sample (0 = all frames)
-        threshold: Mask threshold (0-1), pixels above this are considered masked
-
-    Returns:
-        True if successful
-    """
     try:
         source_frames, mask_frames = _gather_frame_paths(source_dir, mask_dir)
     except ValueError as e:
@@ -208,16 +154,6 @@ def run_cleanplate_median(
     sample_count: int = 0,
     threshold: float = 0.5,
 ) -> bool:
-    """Run temporal median cleanplate generation for a project.
-
-    Args:
-        project_dir: Project directory
-        sample_count: Max frames to sample (0 = all)
-        threshold: Mask threshold
-
-    Returns:
-        True if successful
-    """
     source_dir = project_dir / "source" / "frames"
     roto_dir = project_dir / "roto"
     output_dir = project_dir / "cleanplate"
@@ -233,7 +169,6 @@ def run_cleanplate_median(
 
 
 def main():
-    """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Generate cleanplate using temporal median"
     )
