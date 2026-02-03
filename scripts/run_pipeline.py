@@ -273,6 +273,11 @@ def parse_arguments() -> argparse.Namespace:
         help="Path to GS-IR installation (default: auto-detect)"
     )
     parser.add_argument(
+        "--cleanplate-median",
+        action="store_true",
+        help="Use temporal median for cleanplate instead of ProPainter (faster, requires static camera)"
+    )
+    parser.add_argument(
         "--no-auto-comfyui",
         action="store_true",
         help="Don't auto-start ComfyUI (assume it's already running)"

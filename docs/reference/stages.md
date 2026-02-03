@@ -231,27 +231,39 @@ python scripts/run_pipeline.py footage.mp4 -s roto,mama
 
 ## cleanplate
 
-Removes masked objects using ProPainter video inpainting.
+Removes masked objects from footage. Two methods available:
+
+| Method | Best For | VRAM |
+|--------|----------|------|
+| **ProPainter** (default) | Moving cameras, complex scenes | ~6 GB (peak ~18 GB) |
+| **Temporal Median** | Static cameras, fast turnaround | ~2 GB |
 
 | | |
 |---|---|
-| **VRAM** | ~6 GB (peak ~18 GB) |
 | **Input** | `source/frames/*.png`, `roto/*/*.png`, optionally `matte/*.png` |
 | **Output** | `cleanplate/*.png` |
-| **Workflow** | `03_cleanplate.json` |
+| **Workflow** | `03_cleanplate.json` (ProPainter only) |
 
 **Requirements:**
-- ComfyUI server running
+- ComfyUI server running (ProPainter only)
 - Roto masks from roto stage
 
 ```bash
+# ProPainter (default) - handles moving cameras
 python scripts/run_pipeline.py footage.mp4 -s roto,cleanplate
+
+# Temporal median - fast, static camera only
+python scripts/run_pipeline.py footage.mp4 -s roto,cleanplate --cleanplate-median
 ```
 
 **Mask handling:**
 1. Collects all masks from `roto/` subdirectories
 2. Uses VideoMaMa refined mattes if available (from `matte/` directory)
 3. Combines into single mask for inpainting
+
+### ProPainter Method
+
+AI-powered video inpainting that handles camera motion and complex occlusions.
 
 **Quality tuning (environment variables):**
 
@@ -264,6 +276,16 @@ python scripts/run_pipeline.py footage.mp4 -s roto,cleanplate
 **Example:**
 ```bash
 PROPAINTER_REFINE_ITERS=20 python scripts/run_pipeline.py footage.mp4 -s cleanplate
+```
+
+### Temporal Median Method
+
+Computes per-pixel temporal median using only unmasked (background) samples. Fast but requires:
+- **Static camera** (locked-off tripod shot)
+- **Moving foreground** (subject must move enough to reveal all background pixels)
+
+```bash
+python scripts/run_pipeline.py footage.mp4 -s cleanplate --cleanplate-median
 ```
 
 **GPU profiling:** Use `--gpu-profile` to log VRAM usage per stage to `project/gpu_profile.log`.

@@ -36,6 +36,9 @@ const STAGE_OPTIONS = {
         { id: 'prompt', label: 'Prompt', type: 'text', default: 'person', placeholder: 'person,car,ball' },
         { id: 'separate_instances', label: 'Separate Instances', type: 'checkbox', default: true },
     ],
+    cleanplate: [
+        { id: 'method', label: 'Method', type: 'select', default: 'propainter', options: ['propainter', 'median'] },
+    ],
     colmap: [
         { id: 'quality', label: 'Quality', type: 'select', default: 'medium', options: ['low', 'medium', 'high', 'slow'] },
         { id: 'dense', label: 'Dense', type: 'checkbox', default: false },

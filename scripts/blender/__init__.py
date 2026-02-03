@@ -56,6 +56,86 @@ def install_blender() -> Optional[Path]:
         return PlatformManager.install_tool("blender")
 
 
+def _ensure_blender(blender_path: Optional[Path] = None) -> Path:
+    """Ensure Blender is available, installing if necessary.
+
+    Args:
+        blender_path: Optional explicit path to Blender
+
+    Returns:
+        Path to Blender executable
+
+    Raises:
+        FileNotFoundError: If Blender cannot be found or installed
+    """
+    if blender_path is not None:
+        return blender_path
+
+    blender_path = find_blender()
+
+    if blender_path is None:
+        print("Blender not found. Attempting to install...")
+        blender_path = install_blender()
+
+    if blender_path is None:
+        raise FileNotFoundError(
+            "Blender not found and installation failed. "
+            "Please install Blender manually or run the installation wizard."
+        )
+
+    return blender_path
+
+
+def _run_blender_script(
+    cmd: list[str],
+    output_path: Path,
+    timeout: int,
+    format_name: str,
+) -> bool:
+    """Run a Blender script via subprocess with standard error handling.
+
+    Args:
+        cmd: Command list to execute
+        output_path: Expected output file path
+        timeout: Maximum time in seconds
+        format_name: Format name for error messages
+
+    Returns:
+        True if export succeeded
+
+    Raises:
+        RuntimeError: If export fails or times out
+    """
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+    )
+
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+
+        if process.returncode != 0:
+            print(f"Blender export failed with code {process.returncode}")
+            print(f"stdout: {stdout}")
+            print(f"stderr: {stderr}")
+            raise RuntimeError(f"Blender {format_name} export failed: {stderr}")
+
+        if output_path.exists():
+            print(f"Successfully exported: {output_path}")
+            return True
+        else:
+            raise RuntimeError("Export completed but output file not created")
+
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        raise RuntimeError(f"Blender export timed out after {timeout} seconds")
+
+
 def export_mesh_sequence_to_alembic(
     input_dir: Path,
     output_path: Path,
@@ -91,18 +171,7 @@ def export_mesh_sequence_to_alembic(
     if start_frame < 0:
         raise ValueError(f"Start frame must be non-negative, got {start_frame}")
 
-    if blender_path is None:
-        blender_path = find_blender()
-
-    if blender_path is None:
-        print("Blender not found. Attempting to install...")
-        blender_path = install_blender()
-
-    if blender_path is None:
-        raise FileNotFoundError(
-            "Blender not found and installation failed. "
-            "Please install Blender manually or run the installation wizard."
-        )
+    blender_path = _ensure_blender(blender_path)
 
     script_path = SCRIPTS_DIR / "export_mesh_alembic.py"
     if not script_path.exists():
@@ -125,32 +194,81 @@ def export_mesh_sequence_to_alembic(
     print(f"  FPS: {fps}")
     print(f"  Start frame: {start_frame}")
 
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    return _run_blender_script(cmd, output_path, timeout, "mesh")
 
-    try:
-        stdout, stderr = process.communicate(timeout=timeout)
 
-        if process.returncode != 0:
-            print(f"Blender export failed with code {process.returncode}")
-            print(f"stdout: {stdout}")
-            print(f"stderr: {stderr}")
-            raise RuntimeError(f"Blender export failed: {stderr}")
+def _export_camera(
+    camera_dir: Path,
+    output_path: Path,
+    script_name: str,
+    format_name: str,
+    fps: float = 24.0,
+    start_frame: int = 1,
+    camera_name: Optional[str] = None,
+    blender_path: Optional[Path] = None,
+    timeout: int = 300,
+) -> bool:
+    """Export camera animation using Blender (shared implementation).
 
-        if output_path.exists():
-            print(f"Successfully exported: {output_path}")
-            return True
-        else:
-            raise RuntimeError("Export completed but output file not created")
+    Args:
+        camera_dir: Directory containing extrinsics.json and intrinsics.json
+        output_path: Output file path
+        script_name: Name of the export script (e.g., "export_camera_alembic.py")
+        format_name: Format name for messages (e.g., "Alembic", "USD")
+        fps: Frames per second
+        start_frame: Starting frame number
+        camera_name: Optional camera name (default: based on source)
+        blender_path: Optional path to Blender executable
+        timeout: Maximum time in seconds
 
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
-        raise RuntimeError(f"Blender export timed out after {timeout} seconds")
+    Returns:
+        True if export succeeded
+
+    Raises:
+        FileNotFoundError: If Blender is not installed or camera_dir not found
+        ValueError: If camera_dir is not a directory or parameters invalid
+        RuntimeError: If export fails
+    """
+    if not camera_dir.exists():
+        raise FileNotFoundError(f"Camera directory not found: {camera_dir}")
+    if not camera_dir.is_dir():
+        raise ValueError(f"Camera path is not a directory: {camera_dir}")
+    if fps <= 0:
+        raise ValueError(f"FPS must be positive, got {fps}")
+    if start_frame < 0:
+        raise ValueError(f"Start frame must be non-negative, got {start_frame}")
+
+    extrinsics_path = camera_dir / "extrinsics.json"
+    if not extrinsics_path.exists():
+        raise FileNotFoundError(f"Extrinsics not found: {extrinsics_path}")
+
+    blender_path = _ensure_blender(blender_path)
+
+    script_path = SCRIPTS_DIR / script_name
+    if not script_path.exists():
+        raise FileNotFoundError(f"Export script not found: {script_path}")
+
+    cmd = [
+        str(blender_path),
+        "-b",
+        "--python", str(script_path),
+        "--",
+        "--input", str(camera_dir),
+        "--output", str(output_path),
+        "--fps", str(fps),
+        "--start-frame", str(start_frame),
+    ]
+
+    if camera_name:
+        cmd.extend(["--camera-name", camera_name])
+
+    print(f"Running Blender headless {format_name} camera export...")
+    print(f"  Input: {camera_dir}")
+    print(f"  Output: {output_path}")
+    print(f"  FPS: {fps}")
+    print(f"  Start frame: {start_frame}")
+
+    return _run_blender_script(cmd, output_path, timeout, format_name)
 
 
 def export_camera_to_alembic(
@@ -181,82 +299,17 @@ def export_camera_to_alembic(
         ValueError: If camera_dir is not a directory or parameters invalid
         RuntimeError: If export fails
     """
-    if not camera_dir.exists():
-        raise FileNotFoundError(f"Camera directory not found: {camera_dir}")
-    if not camera_dir.is_dir():
-        raise ValueError(f"Camera path is not a directory: {camera_dir}")
-    if fps <= 0:
-        raise ValueError(f"FPS must be positive, got {fps}")
-    if start_frame < 0:
-        raise ValueError(f"Start frame must be non-negative, got {start_frame}")
-
-    extrinsics_path = camera_dir / "extrinsics.json"
-    if not extrinsics_path.exists():
-        raise FileNotFoundError(f"Extrinsics not found: {extrinsics_path}")
-
-    if blender_path is None:
-        blender_path = find_blender()
-
-    if blender_path is None:
-        print("Blender not found. Attempting to install...")
-        blender_path = install_blender()
-
-    if blender_path is None:
-        raise FileNotFoundError(
-            "Blender not found and installation failed. "
-            "Please install Blender manually or run the installation wizard."
-        )
-
-    script_path = SCRIPTS_DIR / "export_camera_alembic.py"
-    if not script_path.exists():
-        raise FileNotFoundError(f"Export script not found: {script_path}")
-
-    cmd = [
-        str(blender_path),
-        "-b",
-        "--python", str(script_path),
-        "--",
-        "--input", str(camera_dir),
-        "--output", str(output_path),
-        "--fps", str(fps),
-        "--start-frame", str(start_frame),
-    ]
-
-    if camera_name:
-        cmd.extend(["--camera-name", camera_name])
-
-    print(f"Running Blender headless camera export...")
-    print(f"  Input: {camera_dir}")
-    print(f"  Output: {output_path}")
-    print(f"  FPS: {fps}")
-    print(f"  Start frame: {start_frame}")
-
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+    return _export_camera(
+        camera_dir=camera_dir,
+        output_path=output_path,
+        script_name="export_camera_alembic.py",
+        format_name="Alembic",
+        fps=fps,
+        start_frame=start_frame,
+        camera_name=camera_name,
+        blender_path=blender_path,
+        timeout=timeout,
     )
-
-    try:
-        stdout, stderr = process.communicate(timeout=timeout)
-
-        if process.returncode != 0:
-            print(f"Blender export failed with code {process.returncode}")
-            print(f"stdout: {stdout}")
-            print(f"stderr: {stderr}")
-            raise RuntimeError(f"Blender camera export failed: {stderr}")
-
-        if output_path.exists():
-            print(f"Successfully exported: {output_path}")
-            return True
-        else:
-            raise RuntimeError("Export completed but output file not created")
-
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
-        raise RuntimeError(f"Blender export timed out after {timeout} seconds")
 
 
 def check_blender_available() -> tuple[bool, str]:
@@ -288,3 +341,118 @@ def check_blender_available() -> tuple[bool, str]:
         return False, "Blender found but version check timed out"
     except Exception as e:
         return False, f"Blender check failed: {e}"
+
+
+def export_camera_to_usd(
+    camera_dir: Path,
+    output_path: Path,
+    fps: float = 24.0,
+    start_frame: int = 1,
+    camera_name: Optional[str] = None,
+    blender_path: Optional[Path] = None,
+    timeout: int = 300,
+) -> bool:
+    """Export camera animation to USD using Blender.
+
+    Args:
+        camera_dir: Directory containing extrinsics.json and intrinsics.json
+        output_path: Output .usd/.usda/.usdc file path
+        fps: Frames per second
+        start_frame: Starting frame number
+        camera_name: Optional camera name (default: based on source)
+        blender_path: Optional path to Blender executable
+        timeout: Maximum time in seconds (default: 5 minutes)
+
+    Returns:
+        True if export succeeded
+
+    Raises:
+        FileNotFoundError: If Blender is not installed or camera_dir not found
+        ValueError: If camera_dir is not a directory or parameters invalid
+        RuntimeError: If export fails
+    """
+    return _export_camera(
+        camera_dir=camera_dir,
+        output_path=output_path,
+        script_name="export_camera_usd.py",
+        format_name="USD",
+        fps=fps,
+        start_frame=start_frame,
+        camera_name=camera_name,
+        blender_path=blender_path,
+        timeout=timeout,
+    )
+
+
+def export_gsir_materials_to_usd(
+    camera_dir: Path,
+    output_path: Path,
+    material_name: str = "gsir_material",
+    create_geometry: bool = False,
+    export_textures: bool = True,
+    blender_path: Optional[Path] = None,
+    timeout: int = 300,
+) -> bool:
+    """Export GS-IR materials to USD using Blender.
+
+    Creates a USD file with PBR materials from GS-IR output including:
+    - Albedo/base color texture
+    - Roughness texture
+    - Metallic texture
+    - Normal map
+    - Environment map (as emission material)
+
+    Args:
+        camera_dir: Directory containing GS-IR outputs (materials/, normals/, etc.)
+        output_path: Output .usd/.usda/.usdc file path
+        material_name: Name for the PBR material
+        create_geometry: Create geometry (card for materials, dome for environment)
+        export_textures: Copy textures alongside USD file
+        blender_path: Optional path to Blender executable
+        timeout: Maximum time in seconds (default: 5 minutes)
+
+    Returns:
+        True if export succeeded
+
+    Raises:
+        FileNotFoundError: If Blender is not installed or camera_dir not found
+        ValueError: If camera_dir is not a directory
+        RuntimeError: If export fails
+    """
+    if not camera_dir.exists():
+        raise FileNotFoundError(f"Camera directory not found: {camera_dir}")
+    if not camera_dir.is_dir():
+        raise ValueError(f"Camera path is not a directory: {camera_dir}")
+
+    materials_dir = camera_dir / "materials"
+    if not materials_dir.exists():
+        raise FileNotFoundError(f"Materials directory not found: {materials_dir}")
+
+    blender_path = _ensure_blender(blender_path)
+
+    script_path = SCRIPTS_DIR / "export_gsir_usd.py"
+    if not script_path.exists():
+        raise FileNotFoundError(f"Export script not found: {script_path}")
+
+    cmd = [
+        str(blender_path),
+        "-b",
+        "--python", str(script_path),
+        "--",
+        "--input", str(camera_dir),
+        "--output", str(output_path),
+        "--material-name", material_name,
+    ]
+
+    if create_geometry:
+        cmd.append("--create-geometry")
+
+    if not export_textures:
+        cmd.append("--no-textures")
+
+    print(f"Running Blender headless USD export...")
+    print(f"  Input: {camera_dir}")
+    print(f"  Output: {output_path}")
+    print(f"  Material: {material_name}")
+
+    return _run_blender_script(cmd, output_path, timeout, "USD material")
