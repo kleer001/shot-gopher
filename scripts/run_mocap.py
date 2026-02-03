@@ -970,6 +970,9 @@ def run_export_pipeline(
 ) -> bool:
     """Run mesh export after motion capture.
 
+    Runs export_mocap.py in the gvhmr conda environment which has
+    chumpy and other SMPL dependencies pre-installed.
+
     Args:
         project_dir: Project directory
         fps: Frames per second for export
@@ -986,16 +989,36 @@ def run_export_pipeline(
         print(f"Error: No motion data to export at {motion_output}", file=sys.stderr)
         return False
 
+    conda_exe = _find_conda()
+    if not conda_exe:
+        print("Error: Conda not found - required for export", file=sys.stderr)
+        return False
+
+    scripts_dir = Path(__file__).parent
+    export_script = scripts_dir / "export_mocap.py"
+
+    export_args = [
+        "python", str(export_script),
+        str(project_dir),
+        "--fps", str(fps),
+        "--format", "abc,usd",
+    ]
+    if mocap_person:
+        export_args.extend(["--mocap-person", mocap_person])
+
+    cmd = [conda_exe, "run", "-n", "gvhmr", "--no-capture-output"] + export_args
+
+    print(f"  → Running export in 'gvhmr' conda environment...")
+
     try:
-        from export_mocap import run_export
-        return run_export(
-            project_dir=project_dir,
-            formats=["abc", "usd"],
-            fps=fps,
-            mocap_person=mocap_person,
+        result = subprocess.run(
+            cmd,
+            capture_output=False,
+            timeout=1800,
         )
-    except ImportError as e:
-        print(f"Warning: Could not import export_mocap: {e}", file=sys.stderr)
+        return result.returncode == 0
+    except subprocess.TimeoutExpired:
+        print("Error: Export timed out (>30 minutes)", file=sys.stderr)
         return False
     except Exception as e:
         print(f"Warning: Export failed: {e}", file=sys.stderr)

@@ -16,7 +16,7 @@ alembic>=1.13.0
 # Note: torch and smplx require separate installation due to CUDA dependencies
 # Install PyTorch: https://pytorch.org/get-started/locally/
 # Install smplx: pip install smplx
-chumpy  # Required to load SMPL model .pkl files
+# Note: export_mocap.py runs in gvhmr conda env which has chumpy pre-installed
 
 # Alembic export (export_alembic.py)
 # Uses Blender headless for mesh-to-Alembic export.
