@@ -302,7 +302,7 @@ Human motion capture using GVHMR.
 |---|---|
 | **VRAM** | ~12 GB |
 | **Input** | `source/frames/*.png`, `camera/extrinsics.json` |
-| **Output** | `mocap/motion.pkl`, `mocap/mesh_sequence/` |
+| **Output** | `mocap/<person>/motion.pkl`, `mocap/<person>/mesh_sequence/`, `mocap/<person>/export/` |
 | **Workflow** | None (GVHMR) |
 
 **📖 Tutorials:**
@@ -320,6 +320,48 @@ python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
 **Pipeline:**
 1. **GVHMR** — Extracts world-grounded pose from video (SMPL-X compatible)
 2. **Mesh Generation** — Creates animated SMPL-X mesh sequence
+3. **Export** — Outputs T-pose reference and animated mesh in Alembic/USD formats
+
+### Multi-Person Tracking
+
+For shots with multiple people, use roto isolation to track each person separately:
+
+```bash
+# Track person using their roto matte
+python scripts/run_mocap.py ./projects/MyShot --mocap-person person_00
+
+# Track person with custom frame range (enters late, exits early)
+python scripts/run_mocap.py ./projects/MyShot --mocap-person person_01 \
+    --start-frame 34 --end-frame 101
+```
+
+The `--mocap-person` flag composites source frames with the corresponding roto matte, isolating a single person on a black background for clean tracking.
+
+### Output Structure
+
+```
+mocap/
+├── person/              # Default output (single person)
+│   ├── motion.pkl       # Pose data (SMPL parameters)
+│   ├── mesh_sequence/   # OBJ mesh per frame
+│   └── export/          # Production-ready formats
+│       ├── tpose.obj    # T-pose bind reference
+│       ├── motion.abc   # Alembic animation
+│       └── motion.usd   # USD animation
+├── person_00/           # First person (when using --mocap-person)
+└── person_01/           # Second person
+```
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `--mocap-person` | Roto person to isolate (e.g., `person_00`) |
+| `--start-frame` | First frame to process (1-indexed) |
+| `--end-frame` | Last frame to process (1-indexed) |
+| `--gender` | Body model: `neutral`, `male`, `female` |
+| `--export` | Export formats: `abc`, `usd`, `obj`, `none` |
+| `--list-persons` | List detected persons in existing results |
 
 **Troubleshooting:** See [Mocap issues](troubleshooting.md#motion-capture-requires-camera-data)
 

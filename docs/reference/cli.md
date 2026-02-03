@@ -88,6 +88,18 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | `-i` | `--gsir-iterations` | Training iterations (default: 35000) |
 | `-g` | `--gsir-path` | GS-IR installation path |
 
+### Mocap Options
+
+| Long | Description |
+|------|-------------|
+| `--mocap-person` | Roto person to isolate (e.g., `person_00`). Composites source frames with roto matte for single-person tracking |
+| `--mocap-start-frame` | Start frame for mocap (1-indexed). Use when person enters late |
+| `--mocap-end-frame` | End frame for mocap (1-indexed). Use when person exits early |
+| `--mocap-person-index` | Which detected person to track (0-indexed, default: 0) |
+| `--mocap-list-persons` | List detected persons and exit |
+| `--mocap-gender` | Body model gender: `neutral`, `male`, `female` (default: `neutral`) |
+| `--mocap-export` | Auto-export formats: `abc`, `usd`, `obj`, `none` (default: `abc,usd`) |
+
 ### Automation Options
 
 | Long | Description |
@@ -150,6 +162,21 @@ python scripts/run_pipeline.py footage.mp4 -s roto --prompt "person"
 
 For production work with multiple people, use [interactive roto](#interactive-roto-recommended-for-multiple-people) instead.
 
+### Multi-Person Mocap
+
+When a shot has multiple people, use roto isolation to track each person separately:
+
+```bash
+# Track first person (uses roto/person_00 matte)
+python scripts/run_mocap.py ./projects/MyShot --mocap-person person_00
+
+# Track second person with custom frame range (enters at frame 34, exits at 101)
+python scripts/run_mocap.py ./projects/MyShot --mocap-person person_01 \
+    --start-frame 34 --end-frame 101
+```
+
+Creates separate output folders: `mocap/person_00/`, `mocap/person_01/`
+
 ### High-Quality COLMAP
 
 ```bash
@@ -193,8 +220,13 @@ Pipeline creates this directory structure:
 │   ├── dense/           # Dense point cloud (optional)
 │   └── meshed/          # Mesh (optional)
 ├── mocap/
-│   ├── motion.pkl       # GVHMR pose estimates
-│   └── mesh_sequence/   # SMPL-X mesh sequence
+│   └── person/          # Default person output (or person_00/, person_01/)
+│       ├── motion.pkl   # GVHMR pose estimates
+│       ├── mesh_sequence/  # SMPL-X mesh sequence
+│       └── export/      # Exported formats
+│           ├── tpose.obj   # T-pose reference mesh
+│           ├── motion.abc  # Alembic animation
+│           └── motion.usd  # USD animation
 ├── gsir/
 │   ├── model/           # Checkpoints
 │   └── materials/       # Albedo, roughness, metallic
