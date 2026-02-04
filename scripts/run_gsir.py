@@ -279,19 +279,16 @@ def run_gsir_command(
         ProcessResult with captured output
     """
     script_path = gsir_path / script
-    script_name = script.replace('.py', '')
 
-    cmd = [sys.executable, "-c",
-           f"import sys; sys.path.insert(0, r'{gsir_path}'); "
-           f"sys.argv = sys.argv[1:]; "
-           f"import runpy; runpy.run_path(r'{script_path}', run_name='__main__')",
-           str(script_path)]
-
+    args_list = []
     for key, value in args.items():
         if value is True:
-            cmd.append(f"--{key}")
+            args_list.append(f"--{key}")
         elif value is not False and value is not None:
-            cmd.extend([f"--{key}" if not key.startswith("-") else key, str(value)])
+            args_list.extend([f"--{key}" if not key.startswith("-") else key, str(value)])
+
+    args_str = " ".join(f'"{a}"' if " " in a else a for a in args_list)
+    shell_cmd = f'cd "{gsir_path}" && PYTHONPATH="{gsir_path}" "{sys.executable}" "{script_path}" {args_str}'
 
     tracker = ProgressTracker(
         patterns=create_training_patterns(),
@@ -299,9 +296,9 @@ def run_gsir_command(
         min_total=100,
         report_interval=2500,
     )
-    runner = ProcessRunner(progress_tracker=tracker)
+    runner = ProcessRunner(progress_tracker=tracker, shell=True)
 
-    return runner.run(cmd, description=description, cwd=gsir_path, timeout=timeout)
+    return runner.run([shell_cmd], description=description, timeout=timeout)
 
 
 def run_gsir_training(
