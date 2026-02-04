@@ -338,6 +338,8 @@ python scripts/run_pipeline.py footage.mp4 -s colmap -q high -d
 
 **Troubleshooting:** See [COLMAP issues](troubleshooting.md#colmap-reconstruction-failed)
 
+**Technical note — mask file naming:** COLMAP requires masks to be named `{image_filename}.png` (e.g., `frame_0001.png.png` for image `frame_0001.png`). The pipeline automatically copies masks from `roto/` to a temporary `colmap/masks/` directory with the required naming convention, then cleans up after reconstruction completes.
+
 ---
 
 ## mocap
