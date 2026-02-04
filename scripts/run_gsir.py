@@ -287,6 +287,13 @@ def run_gsir_command(
         elif value is not False and value is not None:
             cmd.extend([f"--{key}" if not key.startswith("-") else key, str(value)])
 
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    if existing_pythonpath:
+        env["PYTHONPATH"] = f"{gsir_path}{os.pathsep}{existing_pythonpath}"
+    else:
+        env["PYTHONPATH"] = str(gsir_path)
+
     tracker = ProgressTracker(
         patterns=create_training_patterns(),
         throttle_interval=2.0,
@@ -295,7 +302,7 @@ def run_gsir_command(
     )
     runner = ProcessRunner(progress_tracker=tracker)
 
-    return runner.run(cmd, description=description, cwd=gsir_path, timeout=timeout)
+    return runner.run(cmd, description=description, cwd=gsir_path, env=env, timeout=timeout)
 
 
 def run_gsir_training(
