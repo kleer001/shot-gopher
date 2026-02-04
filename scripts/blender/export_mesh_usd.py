@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Blender script to export OBJ mesh sequence to Alembic.
+"""Blender script to export OBJ mesh sequence to USD.
 
 This script runs inside Blender's Python environment and exports
-a sequence of OBJ files as an animated Alembic (.abc) file.
+a sequence of OBJ files as an animated USD (.usd/.usda/.usdc) file.
 
 Usage (from command line):
-    blender -b --python export_mesh_alembic.py -- \
+    blender -b --python export_mesh_usd.py -- \
         --input /path/to/meshes/ \
-        --output /path/to/output.abc \
+        --output /path/to/output.usd \
         --fps 24 \
         --start-frame 1
 
-Uses shape keys with proper animation setup that Blender's Alembic
+Uses shape keys with proper animation setup that Blender's USD
 exporter can detect and bake into vertex animation.
 """
 
@@ -136,13 +136,13 @@ def setup_shape_key_animation(mesh_obj: bpy.types.Object,
     return end_frame
 
 
-def export_alembic(
+def export_usd(
     output_path: Path,
     start_frame: int,
     end_frame: int,
     fps: float = 24.0,
 ):
-    """Export scene to Alembic file with animation baked."""
+    """Export scene to USD file with animation baked."""
     bpy.context.scene.frame_start = start_frame
     bpy.context.scene.frame_end = end_frame
     bpy.context.scene.render.fps = int(fps)
@@ -150,26 +150,17 @@ def export_alembic(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"Calling Alembic export for frames {start_frame}-{end_frame}...")
+    print(f"Calling USD export for frames {start_frame}-{end_frame}...")
 
-    bpy.ops.wm.alembic_export(
+    bpy.ops.wm.usd_export(
         filepath=str(output_path),
-        start=start_frame,
-        end=end_frame,
-        selected=False,
+        selected_objects_only=False,
         visible_objects_only=True,
-        flatten=False,
-        uvs=True,
-        normals=True,
-        vcolors=False,
-        curves_as_mesh=False,
+        export_animation=True,
+        export_uvmaps=True,
+        export_normals=True,
+        export_materials=False,
         use_instancing=False,
-        global_scale=1.0,
-        triangulate=False,
-        export_hair=False,
-        export_particles=False,
-        packuv=True,
-        face_sets=False,
         evaluation_mode='RENDER',
     )
 
@@ -214,7 +205,7 @@ def main():
         argv = []
 
     parser = argparse.ArgumentParser(
-        description="Export OBJ mesh sequence to Alembic"
+        description="Export OBJ mesh sequence to USD"
     )
     parser.add_argument(
         "--input", "-i",
@@ -226,7 +217,7 @@ def main():
         "--output", "-o",
         type=Path,
         required=True,
-        help="Output Alembic file path"
+        help="Output USD file path"
     )
     parser.add_argument(
         "--fps", "-f",
@@ -269,20 +260,20 @@ def main():
 
     verify_animation(mesh_obj, args.start_frame, end_frame)
 
-    print(f"\nExporting Alembic...")
+    print(f"\nExporting USD...")
     print(f"  Output: {args.output}")
     print(f"  Frames: {args.start_frame}-{end_frame}")
     print(f"  FPS: {args.fps}")
 
     try:
-        export_alembic(
+        export_usd(
             args.output,
             args.start_frame,
             end_frame,
             args.fps,
         )
     except Exception as e:
-        print(f"Error exporting Alembic: {e}", file=sys.stderr)
+        print(f"Error exporting USD: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
         sys.exit(1)

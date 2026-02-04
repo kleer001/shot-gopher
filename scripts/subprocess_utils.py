@@ -262,8 +262,7 @@ class ProcessRunner:
         stdout = ''.join(stdout_lines)
 
         if check and process.returncode != 0:
-            error_output = stdout[-2000:] if len(stdout) > 2000 else stdout
-            print(f"    Error output:\n{error_output}", file=sys.stderr)
+            print(f"    Error output:\n{stdout}", file=sys.stderr)
             raise subprocess.CalledProcessError(
                 process.returncode, cmd, stdout, ""
             )

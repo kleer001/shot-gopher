@@ -610,7 +610,9 @@ def run_gvhmr_motion_tracking(
         if result.returncode != 0:
             print(f"Error: GVHMR failed", file=sys.stderr)
             if result.stderr:
-                print(result.stderr[:500], file=sys.stderr)
+                print(result.stderr, file=sys.stderr)
+            if result.stdout:
+                print(result.stdout, file=sys.stderr)
             return False
 
         output_files = list(output_dir.rglob("hmr4d*.pt"))
@@ -1014,10 +1016,18 @@ def run_export_pipeline(
     try:
         result = subprocess.run(
             cmd,
-            capture_output=False,
+            capture_output=True,
+            text=True,
             timeout=1800,
         )
-        return result.returncode == 0
+        if result.stdout:
+            print(result.stdout)
+        if result.returncode != 0:
+            print(f"Error: Export failed with exit code {result.returncode}", file=sys.stderr)
+            if result.stderr:
+                print(result.stderr, file=sys.stderr)
+            return False
+        return True
     except subprocess.TimeoutExpired:
         print("Error: Export timed out (>30 minutes)", file=sys.stderr)
         return False

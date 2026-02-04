@@ -118,10 +118,13 @@ def _run_blender_script(
     try:
         stdout, stderr = process.communicate(timeout=timeout)
 
+        if stdout:
+            print(stdout)
+        if stderr:
+            print(f"Blender stderr: {stderr}")
+
         if process.returncode != 0:
             print(f"Blender export failed with code {process.returncode}")
-            print(f"stdout: {stdout}")
-            print(f"stderr: {stderr}")
             raise RuntimeError(f"Blender {format_name} export failed: {stderr}")
 
         if output_path.exists():
@@ -382,6 +385,67 @@ def export_camera_to_usd(
         blender_path=blender_path,
         timeout=timeout,
     )
+
+
+def export_mesh_sequence_to_usd(
+    input_dir: Path,
+    output_path: Path,
+    fps: float = 24.0,
+    start_frame: int = 1,
+    blender_path: Optional[Path] = None,
+    timeout: int = 3600,
+) -> bool:
+    """Export OBJ mesh sequence to USD using Blender.
+
+    Args:
+        input_dir: Directory containing OBJ files
+        output_path: Output .usd file path
+        fps: Frames per second
+        start_frame: Starting frame number
+        blender_path: Optional path to Blender executable
+        timeout: Maximum time in seconds (default: 1 hour)
+
+    Returns:
+        True if export succeeded
+
+    Raises:
+        FileNotFoundError: If Blender is not installed or input_dir not found
+        ValueError: If input_dir is not a directory or parameters invalid
+        RuntimeError: If export fails
+    """
+    if not input_dir.exists():
+        raise FileNotFoundError(f"Input directory not found: {input_dir}")
+    if not input_dir.is_dir():
+        raise ValueError(f"Input path is not a directory: {input_dir}")
+    if fps <= 0:
+        raise ValueError(f"FPS must be positive, got {fps}")
+    if start_frame < 0:
+        raise ValueError(f"Start frame must be non-negative, got {start_frame}")
+
+    blender_path = _ensure_blender(blender_path)
+
+    script_path = SCRIPTS_DIR / "export_mesh_usd.py"
+    if not script_path.exists():
+        raise FileNotFoundError(f"Export script not found: {script_path}")
+
+    cmd = [
+        str(blender_path),
+        "-b",
+        "--python", str(script_path),
+        "--",
+        "--input", str(input_dir),
+        "--output", str(output_path),
+        "--fps", str(fps),
+        "--start-frame", str(start_frame),
+    ]
+
+    print(f"Running Blender headless USD export...")
+    print(f"  Input: {input_dir}")
+    print(f"  Output: {output_path}")
+    print(f"  FPS: {fps}")
+    print(f"  Start frame: {start_frame}")
+
+    return _run_blender_script(cmd, output_path, timeout, "USD mesh")
 
 
 def export_gsir_materials_to_usd(
