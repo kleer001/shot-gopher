@@ -98,7 +98,11 @@ class CondaPackageInstaller(ComponentInstaller):
         self.conda_manager = conda_manager
 
     def check(self) -> bool:
-        """Check if package command is available in the conda environment."""
+        """Check if package command is available in the conda environment.
+
+        For system-wide check, uses PlatformManager.find_tool() which properly
+        skips snap versions for tools with confinement issues.
+        """
         if self.conda_manager and self.conda_manager.conda_exe:
             success, _ = run_command([
                 self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
@@ -106,9 +110,10 @@ class CondaPackageInstaller(ComponentInstaller):
             ], check=False, capture=True)
             self.installed = success
         else:
-            # Check system-wide
-            success, _ = run_command([self.command, "--version"], check=False, capture=True)
-            self.installed = success
+            # Check system-wide using PlatformManager (skips snap for restricted tools)
+            from .platform import PlatformManager
+            path = PlatformManager.find_tool(self.command)
+            self.installed = path is not None
         return self.installed
 
     def install(self) -> bool:
@@ -138,10 +143,15 @@ class SystemPackageInstaller(ComponentInstaller):
         self.command = command or apt_package
 
     def check(self) -> bool:
-        """Check if command is available system-wide."""
-        import shutil
-        # Use shutil.which() - more reliable than running --version
-        self.installed = shutil.which(self.command) is not None
+        """Check if command is available system-wide.
+
+        Uses PlatformManager.find_tool() which properly skips snap versions
+        for tools with known confinement issues (e.g., COLMAP can't write
+        to mounted drives like /media/).
+        """
+        from .platform import PlatformManager
+        path = PlatformManager.find_tool(self.command)
+        self.installed = path is not None
         return self.installed
 
     def install(self) -> bool:
@@ -735,5 +745,122 @@ class VideoMaMaInstaller(ComponentInstaller):
             print_success("VideoMaMa installed successfully")
         else:
             print_error("VideoMaMa installation failed")
+
+        return success
+
+
+class COLMAPInstaller(ComponentInstaller):
+    """Installer for COLMAP in a dedicated conda environment.
+
+    COLMAP is installed in its own conda environment to avoid dependency
+    conflicts with the main vfx-pipeline environment. The solver can stall
+    for a long time when trying to install COLMAP into an existing env
+    with many packages.
+
+    The dedicated env approach:
+    - Fast installation (no solver conflicts)
+    - Isolated from other package updates
+    - Same pattern as GVHMR
+    """
+
+    ENV_NAME = "colmap"
+    CHANNEL = "conda-forge"
+
+    def __init__(self, size_gb: float = 1.5):
+        super().__init__("COLMAP", size_gb)
+
+    def _find_conda(self) -> Optional[str]:
+        """Find conda or mamba executable."""
+        import os
+        for cmd in ["mamba", "conda"]:
+            if shutil.which(cmd):
+                return cmd
+        conda_exe = os.environ.get("CONDA_EXE")
+        if conda_exe and Path(conda_exe).exists():
+            return str(conda_exe)
+        return None
+
+    def _find_conda_base(self) -> Optional[Path]:
+        """Find the conda base directory."""
+        import os
+        conda_exe = os.environ.get("CONDA_EXE")
+        if conda_exe:
+            return Path(conda_exe).parent.parent
+
+        for base_name in ["anaconda3", "miniconda3", "miniforge3"]:
+            conda_base = Path.home() / base_name
+            if conda_base.exists():
+                return conda_base
+
+        return None
+
+    def _env_exists(self, conda_exe: str) -> bool:
+        """Check if the colmap conda environment exists."""
+        success, output = run_command(
+            [conda_exe, "env", "list"], check=False, capture=True
+        )
+        return success and self.ENV_NAME in output
+
+    def _colmap_installed_in_env(self) -> bool:
+        """Check if colmap binary exists in the dedicated env."""
+        conda_base = self._find_conda_base()
+        if not conda_base:
+            return False
+
+        env_path = conda_base / "envs" / self.ENV_NAME
+        if sys.platform == "win32":
+            candidates = [
+                env_path / "Scripts" / "colmap.exe",
+                env_path / "Library" / "bin" / "colmap.exe",
+            ]
+        else:
+            candidates = [env_path / "bin" / "colmap"]
+
+        return any(c.exists() for c in candidates)
+
+    def check(self) -> bool:
+        """Check if COLMAP is installed in the dedicated environment."""
+        self.installed = self._colmap_installed_in_env()
+        return self.installed
+
+    def install(self) -> bool:
+        """Install COLMAP in a dedicated conda environment."""
+        print(f"\nInstalling COLMAP in dedicated conda environment '{self.ENV_NAME}'...")
+        print_info("This avoids dependency conflicts with the main environment")
+
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            print_error("Conda not found - required for COLMAP installation")
+            print_warning("Install manually: conda create -n colmap -c conda-forge colmap")
+            return False
+
+        if self._env_exists(conda_exe):
+            if self._colmap_installed_in_env():
+                print_info(f"COLMAP already installed in '{self.ENV_NAME}' environment")
+                self.installed = True
+                return True
+            else:
+                print_info(f"Environment '{self.ENV_NAME}' exists but COLMAP not found, installing...")
+                success, _ = run_command([
+                    conda_exe, "install", "-n", self.ENV_NAME,
+                    "-c", self.CHANNEL, "colmap", "-y"
+                ], stream=True)
+        else:
+            print(f"  Creating conda environment '{self.ENV_NAME}' with COLMAP...")
+            success, _ = run_command([
+                conda_exe, "create", "-n", self.ENV_NAME,
+                "-c", self.CHANNEL, "colmap", "-y"
+            ], stream=True)
+
+        if success:
+            self.installed = True
+            print_success(f"COLMAP installed in '{self.ENV_NAME}' environment")
+            conda_base = self._find_conda_base()
+            if conda_base:
+                colmap_path = conda_base / "envs" / self.ENV_NAME / "bin" / "colmap"
+                print_info(f"COLMAP path: {colmap_path}")
+        else:
+            print_error("COLMAP installation failed")
+            print_warning("Try manually: conda create -n colmap -c conda-forge colmap")
 
         return success

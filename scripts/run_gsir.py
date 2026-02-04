@@ -28,6 +28,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+from run_colmap import get_colmap_executable
 from typing import Optional
 
 from env_config import require_conda_env, INSTALL_DIR
@@ -109,12 +111,17 @@ def run_colmap_undistorter(
     Returns:
         True if undistortion succeeded
     """
+    colmap_exe = get_colmap_executable()
+    if not colmap_exe:
+        print(f"    Error: COLMAP not found. Install via: conda create -n colmap -c conda-forge colmap", file=sys.stderr)
+        return False
+
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     args = [
-        "colmap", "image_undistorter",
+        colmap_exe, "image_undistorter",
         "--image_path", str(image_path),
         "--input_path", str(colmap_dir / "sparse" / "0"),
         "--output_path", str(output_dir),
@@ -133,8 +140,6 @@ def run_colmap_undistorter(
             print(f"    Error: image_undistorter failed: {result.stderr}", file=sys.stderr)
             return False
 
-        # COLMAP outputs to sparse/ directly, but GS-IR expects sparse/0/
-        # Move files to create the expected structure
         sparse_dir = output_dir / "sparse"
         sparse_0_dir = sparse_dir / "0"
         if sparse_dir.exists() and not sparse_0_dir.exists():
@@ -149,7 +154,7 @@ def run_colmap_undistorter(
         print(f"    Error: image_undistorter timed out", file=sys.stderr)
         return False
     except FileNotFoundError:
-        print(f"    Error: colmap command not found", file=sys.stderr)
+        print(f"    Error: COLMAP executable not found at: {colmap_exe}", file=sys.stderr)
         return False
 
 
@@ -274,13 +279,16 @@ def run_gsir_command(
         ProcessResult with captured output
     """
     script_path = gsir_path / script
-    cmd = [sys.executable, str(script_path)]
 
+    args_list = []
     for key, value in args.items():
         if value is True:
-            cmd.append(f"--{key}")
+            args_list.append(f"--{key}")
         elif value is not False and value is not None:
-            cmd.extend([f"--{key}" if not key.startswith("-") else key, str(value)])
+            args_list.extend([f"--{key}" if not key.startswith("-") else key, str(value)])
+
+    args_str = " ".join(f'"{a}"' if " " in a else a for a in args_list)
+    shell_cmd = f'cd "{gsir_path}" && PYTHONPATH="{gsir_path}" "{sys.executable}" "{script_path}" {args_str}'
 
     tracker = ProgressTracker(
         patterns=create_training_patterns(),
@@ -288,9 +296,9 @@ def run_gsir_command(
         min_total=100,
         report_interval=2500,
     )
-    runner = ProcessRunner(progress_tracker=tracker)
+    runner = ProcessRunner(progress_tracker=tracker, shell=True)
 
-    return runner.run(cmd, description=description, cwd=gsir_path, timeout=timeout)
+    return runner.run([shell_cmd], description=description, timeout=timeout)
 
 
 def run_gsir_training(
