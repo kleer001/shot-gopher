@@ -279,20 +279,19 @@ def run_gsir_command(
         ProcessResult with captured output
     """
     script_path = gsir_path / script
-    cmd = [sys.executable, str(script_path)]
+    script_name = script.replace('.py', '')
+
+    cmd = [sys.executable, "-c",
+           f"import sys; sys.path.insert(0, r'{gsir_path}'); "
+           f"sys.argv = sys.argv[1:]; "
+           f"import runpy; runpy.run_path(r'{script_path}', run_name='__main__')",
+           str(script_path)]
 
     for key, value in args.items():
         if value is True:
             cmd.append(f"--{key}")
         elif value is not False and value is not None:
             cmd.extend([f"--{key}" if not key.startswith("-") else key, str(value)])
-
-    env = os.environ.copy()
-    existing_pythonpath = env.get("PYTHONPATH", "")
-    if existing_pythonpath:
-        env["PYTHONPATH"] = f"{gsir_path}{os.pathsep}{existing_pythonpath}"
-    else:
-        env["PYTHONPATH"] = str(gsir_path)
 
     tracker = ProgressTracker(
         patterns=create_training_patterns(),
@@ -302,7 +301,7 @@ def run_gsir_command(
     )
     runner = ProcessRunner(progress_tracker=tracker)
 
-    return runner.run(cmd, description=description, cwd=gsir_path, env=env, timeout=timeout)
+    return runner.run(cmd, description=description, cwd=gsir_path, timeout=timeout)
 
 
 def run_gsir_training(
