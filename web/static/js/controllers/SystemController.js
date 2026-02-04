@@ -74,6 +74,7 @@ export class SystemController {
             stateManager.setState({
                 comfyuiOnline: status.comfyui,
                 diskSpaceGB: status.disk_free_gb,
+                gpuAvailableVramGb: status.gpu_available_vram_gb || 0,
             });
 
             this.updateStatusDisplay(status.comfyui);

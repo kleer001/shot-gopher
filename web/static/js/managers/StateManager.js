@@ -49,6 +49,7 @@ export class StateManager extends EventTarget {
             // System state
             comfyuiOnline: false,
             diskSpaceGB: 0,
+            gpuAvailableVramGb: 0,
 
             // Projects list
             projects: [],

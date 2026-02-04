@@ -110,7 +110,13 @@ export class ProjectsController {
 
     setupEventListeners() {
         this._boundHandlers.onUploadComplete = (e) => this.handleUploadComplete(e.detail);
+        this._boundHandlers.onStateChange = (e) => {
+            if ('gpuAvailableVramGb' in e.detail.updates) {
+                this.updateVramDisplay();
+            }
+        };
         stateManager.addEventListener(EVENTS.UPLOAD_COMPLETE, this._boundHandlers.onUploadComplete);
+        stateManager.addEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
     }
 
     async handleUploadComplete(detail) {
@@ -482,7 +488,12 @@ export class ProjectsController {
         }
 
         const stages = analysis.stages || {};
-        const availableGb = (analysis.available_vram_mb || 0) / 1024;
+        const availableGb = stateManager.get('gpuAvailableVramGb') || 0;
+        const frameCount = analysis.frame_count || 0;
+        const resolution = analysis.resolution || [0, 0];
+        const resolutionStr = resolution[0] && resolution[1]
+            ? `${resolution[0]}×${resolution[1]}`
+            : 'Unknown';
 
         if (this.selectedStages.size === 0) {
             dom.addClass(this.elements.vramInfoSection, CSS_CLASSES.HIDDEN);
@@ -495,7 +506,7 @@ export class ProjectsController {
         this.selectedStages.forEach(stage => {
             const stageInfo = stages[stage];
             if (stageInfo) {
-                const stageVramGb = stageInfo.base_vram_gb || 0;
+                const stageVramGb = stageInfo.estimated_vram_gb || stageInfo.base_vram_gb || 0;
                 if (stageVramGb > maxVramGb) {
                     maxVramGb = stageVramGb;
                 }
@@ -511,6 +522,9 @@ export class ProjectsController {
         const valueClass = hasWarning ? 'danger' : 'ok';
 
         let html = `
+            <div class="vram-row vram-project-info">
+                <span class="vram-label">${frameCount} frames @ ${resolutionStr}</span>
+            </div>
             <div class="vram-row">
                 <span class="vram-label">Required</span>
                 <span class="vram-value ${valueClass}">${maxVramGb.toFixed(1)} GB</span>
@@ -782,6 +796,9 @@ export class ProjectsController {
 
         if (this._boundHandlers.onUploadComplete) {
             stateManager.removeEventListener(EVENTS.UPLOAD_COMPLETE, this._boundHandlers.onUploadComplete);
+        }
+        if (this._boundHandlers.onStateChange) {
+            stateManager.removeEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
         }
         this._boundHandlers = {};
     }

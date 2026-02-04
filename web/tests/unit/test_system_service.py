@@ -40,7 +40,7 @@ class TestSystemService:
         service = SystemService()
         with patch("subprocess.run", side_effect=Exception("Command not found")):
             result = service.get_gpu_info()
-        assert result == {"name": "Unknown", "vram_gb": 0}
+        assert result == {"name": "Unknown", "vram_gb": 0, "vram_available_gb": 0}
 
     def test_get_gpu_info_parses_nvidia_smi_output(self):
         """Parses nvidia-smi output correctly."""
@@ -48,12 +48,13 @@ class TestSystemService:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
-                stdout="NVIDIA GeForce RTX 4090, 24576"
+                stdout="NVIDIA GeForce RTX 4090, 24576, 20000"
             )
             result = service.get_gpu_info()
 
         assert result["name"] == "NVIDIA GeForce RTX 4090"
         assert result["vram_gb"] == 24.0
+        assert result["vram_available_gb"] == 19.5
 
     def test_get_disk_usage_returns_stats(self, tmp_path):
         """Returns disk usage statistics for existing path."""
@@ -84,7 +85,7 @@ class TestSystemService:
             )
             result = service.get_gpu_info()
 
-        assert result == {"name": "Unknown", "vram_gb": 0}
+        assert result == {"name": "Unknown", "vram_gb": 0, "vram_available_gb": 0}
 
     def test_get_gpu_info_handles_non_numeric_vram(self):
         """Returns unknown when VRAM is not a number."""
@@ -92,11 +93,11 @@ class TestSystemService:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
-                stdout="NVIDIA GPU, not_a_number"
+                stdout="NVIDIA GPU, not_a_number, 1000"
             )
             result = service.get_gpu_info()
 
-        assert result == {"name": "Unknown", "vram_gb": 0}
+        assert result == {"name": "Unknown", "vram_gb": 0, "vram_available_gb": 0}
 
     def test_get_disk_usage_uses_parent_if_path_missing(self, tmp_path):
         """Falls back to parent directory if path doesn't exist."""

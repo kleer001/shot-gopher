@@ -453,6 +453,7 @@ async def system_status():
         "install_dir": str(INSTALL_DIR),
         "gpu_name": "Unknown",
         "gpu_vram_gb": 0,
+        "gpu_available_vram_gb": 0,
     }
 
     try:
@@ -476,6 +477,7 @@ async def system_status():
         gpu_info = await asyncio.to_thread(system_service.get_gpu_info)
         status["gpu_name"] = gpu_info["name"]
         status["gpu_vram_gb"] = gpu_info["vram_gb"]
+        status["gpu_available_vram_gb"] = gpu_info.get("vram_available_gb", 0)
     except Exception:
         pass
 
