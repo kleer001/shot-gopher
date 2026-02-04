@@ -147,7 +147,7 @@ def create_animated_camera(
     """
     cam_data = bpy.data.cameras.new(name=camera_name)
     cam_obj = bpy.data.objects.new(camera_name, cam_data)
-    bpy.context.collection.objects.link(cam_obj)
+    bpy.context.scene.collection.objects.link(cam_obj)
 
     fx = intrinsics.get("fx", intrinsics.get("focal_x", 1000))
     width = intrinsics.get("width", 1920)
