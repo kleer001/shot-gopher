@@ -446,44 +446,61 @@ class GSIRInstaller(ComponentInstaller):
         return success
 
     def _apply_patches(self) -> bool:
-        """Apply patches to fix CUDA compilation issues in GS-IR source files."""
+        """Apply patches to fix CUDA compilation and import issues in GS-IR."""
         patches_dir = Path(__file__).parent / "patches"
-        if not patches_dir.exists():
-            return True
+        patched_any = False
 
         gsir_src = self.install_dir / "gs-ir" / "src"
-        if not gsir_src.exists():
-            return True
+        if gsir_src.exists():
+            cstdint_patches = {
+                "utils.h": gsir_src / "utils.h",
+                "pbr_utils.cuh": gsir_src / "pbr_utils.cuh",
+            }
 
-        patched_any = False
-        patch_files = {
-            "utils.h.patch": gsir_src / "utils.h",
-            "pbr_utils.cuh.patch": gsir_src / "pbr_utils.cuh",
-        }
+            for name, target_file in cstdint_patches.items():
+                if not target_file.exists():
+                    continue
 
-        for patch_name, target_file in patch_files.items():
-            patch_file = patches_dir / patch_name
-            if not patch_file.exists() or not target_file.exists():
-                continue
+                content = target_file.read_text()
+                if "#include <cstdint>" in content:
+                    continue
 
-            content = target_file.read_text()
-            if "#include <cstdint>" in content:
-                continue
+                lines = content.split("\n")
+                new_lines = []
+                inserted = False
+                for line in lines:
+                    new_lines.append(line)
+                    if not inserted and line.strip() == "#pragma once":
+                        new_lines.append("")
+                        new_lines.append("#include <cstdint>")
+                        inserted = True
 
-            lines = content.split("\n")
-            new_lines = []
-            inserted = False
-            for line in lines:
-                new_lines.append(line)
-                if not inserted and line.strip() == "#pragma once":
-                    new_lines.append("")
-                    new_lines.append("#include <cstdint>")
-                    inserted = True
+                if inserted:
+                    target_file.write_text("\n".join(new_lines))
+                    print_info(f"  Patched {name} (added #include <cstdint>)")
+                    patched_any = True
 
-            if inserted:
-                target_file.write_text("\n".join(new_lines))
-                print_info(f"  Patched {target_file.name} (added #include <cstdint>)")
-                patched_any = True
+        train_py = self.install_dir / "train.py"
+        if train_py.exists():
+            content = train_py.read_text()
+            summary_writer_import = "from torch.utils.tensorboard import SummaryWriter"
+            if summary_writer_import not in content and "SummaryWriter" in content:
+                lines = content.split("\n")
+                new_lines = []
+                inserted = False
+                for line in lines:
+                    new_lines.append(line)
+                    if not inserted and line.startswith("from typing import"):
+                        new_lines.append(summary_writer_import)
+                        inserted = True
+                    elif not inserted and line.startswith("import ") and "torch" in line:
+                        new_lines.append(summary_writer_import)
+                        inserted = True
+
+                if inserted:
+                    train_py.write_text("\n".join(new_lines))
+                    print_info("  Patched train.py (added SummaryWriter import)")
+                    patched_any = True
 
         if patched_any:
             print_success("Applied CUDA compatibility patches")
