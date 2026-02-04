@@ -1,0 +1,9 @@
+--- a/gs-ir/src/pbr_utils.cuh
++++ b/gs-ir/src/pbr_utils.cuh
+@@ -1,5 +1,6 @@
+ #pragma once
+
++#include <cstdint>
+ #include "utils.h"
+
+ namespace gsir {
