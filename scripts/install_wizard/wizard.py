@@ -110,12 +110,12 @@ class InstallationWizard:
             ]
         }
 
-        # COLMAP (installed via apt on Linux)
+        # COLMAP (installed via conda for GPU support)
         self.components['colmap'] = {
             'name': 'COLMAP',
             'required': False,
             'installers': [
-                SystemPackageInstaller('COLMAP', 'colmap', size_gb=0.5),
+                CondaPackageInstaller('COLMAP', 'colmap', channel='conda-forge', size_gb=0.5),
             ],
             'size_gb': 0.5,
         }
