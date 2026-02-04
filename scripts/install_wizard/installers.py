@@ -446,61 +446,42 @@ class GSIRInstaller(ComponentInstaller):
         return success
 
     def _apply_patches(self) -> bool:
-        """Apply patches to fix CUDA compilation and import issues in GS-IR."""
-        patches_dir = Path(__file__).parent / "patches"
-        patched_any = False
+        """Apply patches to fix CUDA compilation issues in GS-IR.
 
+        The gs-ir CUDA source files are missing #include <cstdint> which
+        causes compilation to fail with 'uint32_t is undefined' errors.
+        This is a known issue (GS-IR GitHub issue #37).
+        """
         gsir_src = self.install_dir / "gs-ir" / "src"
-        if gsir_src.exists():
-            cstdint_patches = {
-                "utils.h": gsir_src / "utils.h",
-                "pbr_utils.cuh": gsir_src / "pbr_utils.cuh",
-            }
+        if not gsir_src.exists():
+            return True
 
-            for name, target_file in cstdint_patches.items():
-                if not target_file.exists():
-                    continue
+        patched_any = False
+        cuda_files = ["utils.h", "pbr_utils.cuh"]
 
-                content = target_file.read_text()
-                if "#include <cstdint>" in content:
-                    continue
+        for filename in cuda_files:
+            target_file = gsir_src / filename
+            if not target_file.exists():
+                continue
 
-                lines = content.split("\n")
-                new_lines = []
-                inserted = False
-                for line in lines:
-                    new_lines.append(line)
-                    if not inserted and line.strip() == "#pragma once":
-                        new_lines.append("")
-                        new_lines.append("#include <cstdint>")
-                        inserted = True
+            content = target_file.read_text()
+            if "#include <cstdint>" in content:
+                continue
 
-                if inserted:
-                    target_file.write_text("\n".join(new_lines))
-                    print_info(f"  Patched {name} (added #include <cstdint>)")
-                    patched_any = True
+            lines = content.split("\n")
+            new_lines = []
+            inserted = False
+            for line in lines:
+                new_lines.append(line)
+                if not inserted and line.strip() == "#pragma once":
+                    new_lines.append("")
+                    new_lines.append("#include <cstdint>")
+                    inserted = True
 
-        train_py = self.install_dir / "train.py"
-        if train_py.exists():
-            content = train_py.read_text()
-            summary_writer_import = "from torch.utils.tensorboard import SummaryWriter"
-            if summary_writer_import not in content and "SummaryWriter" in content:
-                lines = content.split("\n")
-                new_lines = []
-                inserted = False
-                for line in lines:
-                    new_lines.append(line)
-                    if not inserted and line.startswith("from typing import"):
-                        new_lines.append(summary_writer_import)
-                        inserted = True
-                    elif not inserted and line.startswith("import ") and "torch" in line:
-                        new_lines.append(summary_writer_import)
-                        inserted = True
-
-                if inserted:
-                    train_py.write_text("\n".join(new_lines))
-                    print_info("  Patched train.py (added SummaryWriter import)")
-                    patched_any = True
+            if inserted:
+                target_file.write_text("\n".join(new_lines))
+                print_info(f"  Patched {filename} (added #include <cstdint>)")
+                patched_any = True
 
         if patched_any:
             print_success("Applied CUDA compatibility patches")
@@ -530,9 +511,11 @@ class GSIRInstaller(ComponentInstaller):
         print("  Applying CUDA compatibility patches...")
         self._apply_patches()
 
-        print("  Installing kornia...")
-        if not self._run_pip(["install", "kornia"]):
-            print_warning("Failed to install kornia")
+        print("  Installing Python dependencies...")
+        missing_deps = ["kornia", "tensorboard", "imageio", "lpips"]
+        for dep in missing_deps:
+            if not self._run_pip(["install", dep]):
+                print_warning(f"Failed to install {dep}")
 
         print("  Installing nvdiffrast...")
         if not self._run_pip(["install", "--no-build-isolation", "git+https://github.com/NVlabs/nvdiffrast.git"]):
