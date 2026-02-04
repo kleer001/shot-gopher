@@ -356,6 +356,24 @@ class TestSnapDetection:
 
         assert result == Path("/snap/bin/ffmpeg")
 
+    def test_is_snap_path_windows_paths_not_matched(self):
+        """Windows paths are never detected as snap paths."""
+        # Windows paths use backslashes and don't contain /snap/
+        assert not PlatformManager._is_snap_path("C:\\Program Files\\COLMAP\\COLMAP.bat")
+        assert not PlatformManager._is_snap_path("C:/Program Files/COLMAP/colmap.exe")
+        assert not PlatformManager._is_snap_path("D:\\tools\\colmap\\bin\\colmap.exe")
+
+    @patch("install_wizard.platform.shutil.which")
+    def test_find_tool_uses_windows_path_for_colmap(self, mock_which):
+        """On Windows, COLMAP paths found via which are used (no snap on Windows)."""
+        mock_which.return_value = "C:\\Program Files\\COLMAP\\COLMAP.bat"
+
+        with patch.object(PlatformManager, "_get_local_tool_paths", return_value=[]):
+            result = PlatformManager.find_tool("colmap")
+
+        # Windows path doesn't match snap check, so it should be returned
+        assert result == Path("C:\\Program Files\\COLMAP\\COLMAP.bat")
+
 
 class TestPackageManagerDetection:
     """Test package manager detection."""
