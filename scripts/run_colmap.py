@@ -409,6 +409,68 @@ def run_colmap_command(
     return runner.run(cmd, description=description, timeout=timeout)
 
 
+def prepare_colmap_masks(
+    roto_dir: Path,
+    frames_dir: Path,
+    colmap_dir: Path,
+) -> Optional[Path]:
+    """Prepare masks with COLMAP-compatible naming convention.
+
+    COLMAP expects masks to be named {image_filename}.png - so for an image
+    named 'frame_0001.png', the mask must be 'frame_0001.png.png'.
+
+    This function maps masks from roto/ to the frames in frames_dir by
+    sequence order (not by filename matching).
+
+    Args:
+        roto_dir: Directory containing mask images (any naming convention)
+        frames_dir: Directory containing source images
+        colmap_dir: COLMAP working directory (masks will be placed in colmap/masks/)
+
+    Returns:
+        Path to prepared masks directory, or None if no masks available
+    """
+    if not roto_dir.exists():
+        return None
+
+    mask_files = sorted(
+        list(roto_dir.glob("*.png")) + list(roto_dir.glob("*.jpg"))
+    )
+    if not mask_files:
+        return None
+
+    frame_files = sorted(
+        list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg")) + list(frames_dir.glob("*.jpeg"))
+    )
+    if not frame_files:
+        return None
+
+    if len(mask_files) != len(frame_files):
+        print(f"    Warning: Mask count ({len(mask_files)}) != frame count ({len(frame_files)})")
+        print(f"    Masks will be matched by sequence order")
+
+    masks_output_dir = colmap_dir / "masks"
+    if masks_output_dir.exists():
+        shutil.rmtree(masks_output_dir)
+    masks_output_dir.mkdir(parents=True)
+
+    copied_count = 0
+    for i, frame_file in enumerate(frame_files):
+        if i >= len(mask_files):
+            break
+
+        colmap_mask_name = f"{frame_file.name}.png"
+        dest_path = masks_output_dir / colmap_mask_name
+        shutil.copy2(mask_files[i], dest_path)
+        copied_count += 1
+
+    if copied_count > 0:
+        print(f"    Prepared {copied_count} masks for COLMAP (renamed to {frame_files[0].name}.png format)")
+        return masks_output_dir
+
+    return None
+
+
 def extract_features(
     database_path: Path,
     image_path: Path,
@@ -1468,24 +1530,27 @@ def run_colmap_pipeline(
         print(f"  Warning: Slow-camera mode uses aggressive settings for minimal motion")
         print(f"           Results may be jittery due to low parallax")
 
-    # Check for segmentation masks
-    mask_dir = project_dir / "roto"
-    mask_path = None
-    if use_masks and mask_dir.exists():
-        mask_count = len(list(mask_dir.glob("*.png"))) + len(list(mask_dir.glob("*.jpg")))
-        if mask_count > 0:
-            mask_path = mask_dir
-            print(f"Dynamic scene segmentation: Enabled ({mask_count} masks)")
-            print(f"  → Excluding dynamic regions from feature extraction")
-        else:
-            print(f"Dynamic scene segmentation: Disabled (no masks found)")
-    else:
-        print(f"Dynamic scene segmentation: Disabled")
-    print()
-
     # Setup paths
     colmap_dir = project_dir / "colmap"
     colmap_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check for segmentation masks and prepare with COLMAP-compatible naming
+    roto_dir = project_dir / "roto"
+    mask_path = None
+    if use_masks and roto_dir.exists():
+        roto_mask_count = len(list(roto_dir.glob("*.png"))) + len(list(roto_dir.glob("*.jpg")))
+        if roto_mask_count > 0:
+            mask_path = prepare_colmap_masks(roto_dir, frames_dir, colmap_dir)
+            if mask_path:
+                print(f"Dynamic scene segmentation: Enabled ({roto_mask_count} masks)")
+                print(f"  → Excluding dynamic regions from feature extraction")
+            else:
+                print(f"Dynamic scene segmentation: Disabled (mask preparation failed)")
+        else:
+            print(f"Dynamic scene segmentation: Disabled (no masks found in roto/)")
+    else:
+        print(f"Dynamic scene segmentation: Disabled")
+    print()
 
     database_path = colmap_dir / "database.db"
     sparse_path = colmap_dir / "sparse"
