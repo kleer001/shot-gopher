@@ -15,7 +15,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VideoMaMaInstaller
+from .installers import COLMAPInstaller, CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VideoMaMaInstaller
 from .platform import PlatformManager
 from .state import InstallationStateManager
 from .utils import (
@@ -110,14 +110,14 @@ class InstallationWizard:
             ]
         }
 
-        # COLMAP (installed via conda for GPU support)
+        # COLMAP (installed in dedicated conda env to avoid solver conflicts)
         self.components['colmap'] = {
             'name': 'COLMAP',
             'required': False,
             'installers': [
-                CondaPackageInstaller('COLMAP', 'colmap', channel='conda-forge', size_gb=0.5),
+                COLMAPInstaller(size_gb=1.5),
             ],
-            'size_gb': 0.5,
+            'size_gb': 1.5,
         }
 
         # Motion capture dependencies
@@ -321,34 +321,24 @@ class InstallationWizard:
                     "ffmpeg", self.os_name, self.environment, self.pkg_manager
                 ))
 
-        # COLMAP (use PlatformManager.find_tool to skip snap versions)
-        colmap_path = PlatformManager.find_tool("colmap")
-        if colmap_path:
-            print_success(f"COLMAP available at {colmap_path}")
+        # COLMAP (check dedicated conda env first, then fallback locations)
+        colmap_installer = COLMAPInstaller()
+        if colmap_installer.check():
+            print_success("COLMAP available in dedicated conda environment")
         else:
-            # Only Windows has pre-built binaries with GPU support
-            if self.os_name == "windows":
+            # Check fallback locations (Windows pre-built, system PATH)
+            colmap_path = PlatformManager.find_tool("colmap")
+            if colmap_path:
+                print_success(f"COLMAP available at {colmap_path}")
+            elif self.os_name == "windows":
                 print_info("COLMAP not found - attempting automatic installation...")
                 installed_path = PlatformManager.install_tool("colmap")
                 if installed_path:
                     print_success(f"COLMAP installed to {installed_path}")
                 else:
-                    print_warning("COLMAP auto-install failed")
-                    print()
-                    print(self.platform_manager.get_missing_dependency_instructions(
-                        "colmap", self.os_name, self.environment, self.pkg_manager
-                    ))
+                    print_warning("COLMAP not found (will be installed in dedicated conda env)")
             else:
-                # Linux/macOS: No pre-built binaries, recommend conda for GPU support
-                print_warning("COLMAP not found (optional, for 3D reconstruction)")
-                print()
-                print("  For GPU-accelerated COLMAP (recommended):")
-                print("    conda install -c conda-forge colmap")
-                print()
-                print("  For CPU-only COLMAP:")
-                print("    sudo apt install colmap")
-                print()
-                print("  Note: snap COLMAP has confinement issues with /media/ drives")
+                print_warning("COLMAP not found (will be installed in dedicated conda env)")
 
         return True
 

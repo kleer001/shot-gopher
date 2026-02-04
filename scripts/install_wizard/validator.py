@@ -78,10 +78,12 @@ class InstallationValidator:
     def validate_colmap(self) -> Tuple[bool, str]:
         """Check if COLMAP is accessible.
 
+        Checks dedicated 'colmap' conda env first, then fallback locations.
+
         Returns:
             (success, message)
         """
-        colmap_path = PlatformManager.find_tool("colmap")
+        colmap_path = self._find_colmap_executable()
         if not colmap_path:
             return False, "COLMAP not found in PATH or standard locations"
 
@@ -97,6 +99,40 @@ class InstallationValidator:
             return True, f"COLMAP {version}"
 
         return True, f"COLMAP available at {colmap_path}"
+
+    def _find_colmap_executable(self) -> Optional[Path]:
+        """Find COLMAP executable, checking dedicated conda env first."""
+        import os
+        import sys
+
+        # Check dedicated colmap conda env first
+        conda_exe = os.environ.get("CONDA_EXE")
+        if conda_exe:
+            conda_base = Path(conda_exe).parent.parent
+        else:
+            conda_base = None
+            for base_name in ["anaconda3", "miniconda3", "miniforge3"]:
+                candidate = Path.home() / base_name
+                if candidate.exists():
+                    conda_base = candidate
+                    break
+
+        if conda_base:
+            env_path = conda_base / "envs" / "colmap"
+            if sys.platform == "win32":
+                candidates = [
+                    env_path / "Scripts" / "colmap.exe",
+                    env_path / "Library" / "bin" / "colmap.exe",
+                ]
+            else:
+                candidates = [env_path / "bin" / "colmap"]
+
+            for candidate in candidates:
+                if candidate.exists():
+                    return candidate
+
+        # Fall back to PlatformManager
+        return PlatformManager.find_tool("colmap")
 
     def validate_checkpoint_files(self, base_dir: Optional[Path] = None) -> Dict[str, bool]:
         """Check if checkpoint files exist and meet minimum size requirements.

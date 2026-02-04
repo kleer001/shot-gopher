@@ -49,13 +49,50 @@ from transforms import (
 # Cache for COLMAP executable path
 _colmap_path: Optional[str] = None
 
+# Dedicated conda environment for COLMAP (avoids solver conflicts)
+COLMAP_CONDA_ENV = "colmap"
+
+
+def _find_conda_base() -> Optional[Path]:
+    """Find the conda base directory."""
+    # Check CONDA_EXE first (most reliable)
+    conda_exe = os.environ.get("CONDA_EXE")
+    if conda_exe:
+        # CONDA_EXE is like /home/user/anaconda3/bin/conda
+        return Path(conda_exe).parent.parent
+
+    # Check common locations
+    for base_name in ["anaconda3", "miniconda3", "miniforge3"]:
+        conda_base = Path.home() / base_name
+        if conda_base.exists():
+            return conda_base
+
+    return None
+
+
+def _get_conda_colmap_path(env_path: Path) -> Optional[Path]:
+    """Get the colmap executable path within a conda environment."""
+    if sys.platform == "win32":
+        candidates = [
+            env_path / "Scripts" / "colmap.exe",
+            env_path / "Library" / "bin" / "colmap.exe",
+        ]
+    else:
+        candidates = [env_path / "bin" / "colmap"]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
 
 def get_colmap_executable() -> Optional[str]:
     """Get the path to COLMAP executable.
 
     Search order:
-    1. Active conda environment bin directory
-    2. PlatformManager.find_tool() (repo-local, system PATH excluding snap, standard locations)
+    1. Dedicated 'colmap' conda environment (recommended)
+    2. Active conda environment (CONDA_PREFIX)
+    3. PlatformManager.find_tool() (repo-local, system PATH excluding snap)
 
     Returns:
         Path to COLMAP executable as string, or None if not found
@@ -64,15 +101,24 @@ def get_colmap_executable() -> Optional[str]:
     if _colmap_path is not None:
         return _colmap_path
 
-    # Check active conda environment first
-    conda_prefix = os.environ.get("CONDA_PREFIX")
-    if conda_prefix:
-        conda_colmap = Path(conda_prefix) / "bin" / "colmap"
-        if conda_colmap.exists():
-            _colmap_path = str(conda_colmap)
+    # 1. Check dedicated colmap conda environment
+    conda_base = _find_conda_base()
+    if conda_base:
+        dedicated_env = conda_base / "envs" / COLMAP_CONDA_ENV
+        colmap_path = _get_conda_colmap_path(dedicated_env)
+        if colmap_path:
+            _colmap_path = str(colmap_path)
             return _colmap_path
 
-    # Use PlatformManager which skips snap for COLMAP
+    # 2. Check active conda environment
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        colmap_path = _get_conda_colmap_path(Path(conda_prefix))
+        if colmap_path:
+            _colmap_path = str(colmap_path)
+            return _colmap_path
+
+    # 3. Use PlatformManager which skips snap for COLMAP
     found = PlatformManager.find_tool("colmap")
     if found:
         _colmap_path = str(found)
