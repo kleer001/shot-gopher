@@ -22,6 +22,27 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 
 ---
 
+## Pipeline Stage License Matrix
+
+Each pipeline stage uses specific components. This matrix shows which licenses apply at each stage:
+
+| Stage | Components Used | License Restrictions |
+|-------|-----------------|---------------------|
+| **ingest** | FFmpeg | LGPL-2.1+ ✅ |
+| **interactive** | ComfyUI, SAM3 | GPL-3.0, Apache-2.0 ✅ |
+| **depth** | ComfyUI, Depth Anything V3 | GPL-3.0, Apache-2.0 or CC BY-NC 4.0 ⚠️ |
+| **roto** | ComfyUI, SAM3 | GPL-3.0, Apache-2.0 ✅ |
+| **mama** | VideoMaMa | CC BY-NC 4.0 + Stability AI ❌ |
+| **cleanplate** | ComfyUI, ProPainter | GPL-3.0, NTU S-Lab ❌ |
+| **colmap** | COLMAP | BSD-3-Clause ✅ |
+| **mocap** | GVHMR, SMPL-X | MIT, MPI Academic ⚠️ |
+| **gsir** | GS-IR (→3DGS) | MIT, INRIA Non-Commercial ❌ |
+| **camera** | Blender (Alembic export) | GPL-2.0+ ✅ |
+
+**Legend:** ✅ Commercial OK | ⚠️ Partial/Conditional | ❌ Non-commercial only
+
+---
+
 ## License Classification Summary
 
 ### Tier 1: Fully Permissive (Commercial OK)
@@ -35,6 +56,7 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 | COLMAP | BSD-3-Clause | ✅ Unrestricted (source); GPL when built with deps |
 | FFmpeg | LGPL-2.1+ (default) | ✅ Yes (with compliance requirements) |
 | GS-IR | MIT | ✅ Unrestricted |
+| Blender | GPL-2.0+ | ✅ Yes (with copyleft obligations) |
 | NumPy | BSD-3-Clause | ✅ Unrestricted |
 | SciPy | BSD-3-Clause | ✅ Unrestricted |
 | Pillow | HPND (PIL Software License) | ✅ Unrestricted |
@@ -49,7 +71,6 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 | Component | License | Commercial Use |
 |-----------|---------|----------------|
 | **ProPainter** | NTU S-Lab License 1.0 | ❌ Non-commercial only |
-| **ECON** | MPI Non-Commercial License | ❌ Non-commercial only |
 | **Depth Anything V3** (Giant/Nested models) | CC BY-NC 4.0 | ❌ Non-commercial only |
 | **3D Gaussian Splatting** (INRIA) | INRIA Non-Commercial | ❌ Non-commercial only |
 | **VideoMaMa** (code) | CC BY-NC 4.0 | ❌ Non-commercial only |
@@ -132,8 +153,6 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 - DA3-Giant: CC BY-NC 4.0 ❌
 - DA3Nested series: CC BY-NC 4.0 ❌
 
-**Recommendation:** Use Large models for commercial applications; Giant/Nested models require non-commercial license or commercial agreement with ByteDance.
-
 ---
 
 ### ProPainter (Clean Plates)
@@ -154,27 +173,6 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 - Any activity for commercial gain
 
 **Commercial licensing:** Contact Dr. Shangchen Zhou (shangchenzhou@gmail.com)
-
----
-
-### ECON (Clothed Human Reconstruction)
-
-**License:** [MPI Non-Commercial License](https://github.com/YuliangXiu/ECON/blob/master/LICENSE)
-**Source:** [YuliangXiu/ECON](https://github.com/YuliangXiu/ECON)
-
-**Permitted uses:**
-- Non-commercial scientific research
-- Non-commercial education
-- Non-commercial artistic projects
-
-**Prohibited uses:**
-- Commercial purposes
-- Pornographic content
-- Military applications
-- Surveillance
-- Defamatory content
-
-**Commercial licensing:** Contact ps-licensing@tue.mpg.de
 
 ---
 
@@ -310,86 +308,36 @@ This VFX pipeline integrates multiple open-source projects with **varying licens
 
 ---
 
-## Commercial Use Roadmap
+### Blender (Alembic/USD Export)
 
-### Scenario A: Full Commercial Deployment
+**License:** [GPL-2.0+](https://www.blender.org/about/license/)
+**Source:** [blender.org](https://www.blender.org/)
 
-To use this pipeline commercially with all features, you would need:
+**Used for:** Camera and mesh export to Alembic (.abc) and USD formats in the `camera` stage.
 
-1. **Contact for commercial licenses:**
-   - NTU S-Lab (ProPainter): shangchenzhou@gmail.com
-   - Max Planck Institute (ECON, SMPL-X): ps-licensing@tue.mpg.de
-   - Meshcapade (SMPL-X commercial): sales@meshcapade.com
-   - INRIA (3D Gaussian Splatting): stip-sophia.transfert@inria.fr
-   - ByteDance (Depth Anything Giant/Nested): Contact via GitHub
-   - KAIST CV Lab (VideoMaMa code): Contact via GitHub
-   - Stability AI (VideoMaMa model weights, if revenue >$1M): stability.ai/license
+**What you can do:**
+- Use commercially
+- Modify and distribute
+- Use for any purpose
 
-2. **Use Apache-2.0 Depth Anything models** (Large variants)
+**Obligations (Copyleft):**
+- If you distribute modified versions, you must release source code under GPL-2.0+
+- Include license and copyright notices
 
-3. **Ensure FFmpeg LGPL compliance**
-
-4. **Include GPL notices** for ComfyUI if distributing
-
-### Scenario B: Commercial with Limited Features
-
-Use only permissively-licensed components:
-
-| Stage | Permissive Alternative |
-|-------|----------------------|
-| Depth estimation | Depth Anything V3 Large (Apache-2.0) ✅ |
-| Segmentation | SAM3 (Apache-2.0) ✅ |
-| Clean plates | ❌ No permissive alternative (ProPainter restricted) |
-| Video matting | VideoMaMa (CC BY-NC 4.0 + Stability AI) ⚠️ |
-| Camera tracking | COLMAP (BSD, with care) ✅ |
-| Motion capture | GVHMR + SMPL-X (requires license) ⚠️ |
-| Material decomposition | GS-IR (MIT, but base tech restricted) ⚠️ |
-
-### Scenario C: Research/Academic Use
-
-All components are freely available for:
-- Academic research
-- Educational purposes
-- Non-commercial demonstrations
-- Personal projects
+**Note:** Using Blender as a tool (headless export) does not trigger copyleft for your project's code. The GPL applies if you modify and distribute Blender itself.
 
 ---
 
-## Compliance Checklist
+## Commercial Licensing Contacts
 
-### For Any Distribution
-
-- [ ] Include this project's MIT LICENSE file
-- [ ] Include ComfyUI's GPL-3.0 license
-- [ ] Include attribution notices for all dependencies
-- [ ] Document which optional components are included
-
-### For Commercial Use
-
-- [ ] Audit which non-commercial components are used
-- [ ] Obtain commercial licenses for restricted components
-- [ ] Use only Apache-2.0/BSD/MIT licensed models
-- [ ] Verify FFmpeg build configuration (LGPL vs GPL)
-- [ ] Register for SMPL-X if using motion capture features
-- [ ] Consider INRIA licensing for Gaussian Splatting features
-
-### For Open Source Distribution
-
-- [ ] Comply with GPL-3.0 for ComfyUI integration
-- [ ] Clearly document license restrictions in README
-- [ ] Do not bundle non-redistributable components
-
----
-
-## Recommendations
-
-1. **For production VFX studios:** Contact NTU S-Lab and MPI for commercial licenses before deploying ProPainter and ECON in production pipelines.
-
-2. **For research teams:** All components are freely available; ensure proper citation in publications.
-
-3. **For indie developers:** Use the permissive stack (SAM, Depth Anything Large, COLMAP, GVHMR) for commercial projects; VideoMaMa requires careful consideration of the dual-license (code is CC BY-NC 4.0, model weights are free only under $1M revenue); avoid ProPainter/ECON without licensing.
-
-4. **For SaaS deployment:** ComfyUI's GPL-3.0 and component licenses may have specific implications; consult legal counsel.
+| Component | Contact |
+|-----------|---------|
+| ProPainter | shangchenzhou@gmail.com |
+| SMPL-X | ps-licensing@tue.mpg.de or sales@meshcapade.com |
+| 3D Gaussian Splatting | stip-sophia.transfert@inria.fr |
+| Depth Anything V3 (Giant/Nested) | Contact via [GitHub](https://github.com/ByteDance-Seed/Depth-Anything-3) |
+| VideoMaMa (code) | Contact via [GitHub](https://github.com/cvlab-kaist/VideoMaMa) |
+| VideoMaMa (model weights) | [stability.ai/license](https://stability.ai/license) (if revenue >$1M) |
 
 ---
 
@@ -399,7 +347,6 @@ All components are freely available for:
 - [SAM3 License](https://github.com/1038lab/ComfyUI-SAM3/blob/main/LICENSE)
 - [Depth Anything V3](https://github.com/ByteDance-Seed/Depth-Anything-3)
 - [ProPainter License](https://github.com/sczhou/ProPainter/blob/main/LICENSE)
-- [ECON License](https://github.com/YuliangXiu/ECON/blob/master/LICENSE)
 - [SMPL-X License](https://smpl-x.is.tue.mpg.de/modellicense.html)
 - [GVHMR](https://github.com/zju3dv/GVHMR)
 - [GS-IR](https://github.com/lzhnb/GS-IR)
@@ -409,6 +356,7 @@ All components are freely available for:
 - [PyTorch License](https://github.com/pytorch/pytorch/blob/main/LICENSE)
 - [VideoMaMa](https://github.com/cvlab-kaist/VideoMaMa)
 - [Stability AI Community License](https://stability.ai/license)
+- [Blender License](https://www.blender.org/about/license/)
 
 ---
 
