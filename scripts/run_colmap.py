@@ -1685,6 +1685,10 @@ def run_colmap_pipeline(
         except subprocess.TimeoutExpired:
             print(f"\nCOLMAP command timed out", file=sys.stderr)
             return False
+        finally:
+            temp_masks_dir = colmap_dir / "masks"
+            if temp_masks_dir.exists():
+                shutil.rmtree(temp_masks_dir)
 
 
 def main():
