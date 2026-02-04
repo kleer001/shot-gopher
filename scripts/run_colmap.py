@@ -605,7 +605,6 @@ def match_features(
             args = {
                 "database_path": str(database_path),
                 "SequentialMatching.overlap": sequential_overlap,
-                "SiftMatching.max_num_matches": 32768,
             }
             if gpu_sift_available:
                 args["SiftMatching.use_gpu"] = 1 if gpu else 0
@@ -616,7 +615,6 @@ def match_features(
         elif matcher_type == "exhaustive":
             args = {
                 "database_path": str(database_path),
-                "SiftMatching.max_num_matches": 32768,
             }
             if gpu_sift_available:
                 args["SiftMatching.use_gpu"] = 1 if gpu else 0
