@@ -14,6 +14,7 @@
  */
 
 import { stateManager } from './managers/StateManager.js';
+import { themeManager } from './managers/ThemeManager.js';
 import { apiService } from './services/APIService.js';
 import { wsService } from './services/WebSocketService.js';
 import { UploadController } from './controllers/UploadController.js';
@@ -84,6 +85,11 @@ class Application {
     initializeControllers() {
         console.log('Initializing controllers...');
 
+        // Initialize theme manager first (applies saved theme immediately)
+        themeManager.init();
+        themeManager.renderPaletteOptions();
+        console.log('Theme manager initialized');
+
         // System controller (checks ComfyUI status, handles errors)
         this.controllers.system = new SystemController();
 
@@ -146,6 +152,7 @@ if (document.readyState === 'loading') {
 // Export for debugging
 window.app = app;
 window.stateManager = stateManager;
+window.themeManager = themeManager;
 window.apiService = apiService;
 window.wsService = wsService;
 
