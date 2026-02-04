@@ -502,7 +502,7 @@ class GSIRInstaller(ComponentInstaller):
         gsir_module = self.install_dir / "gs-ir"
         print("  Installing gs-ir module...")
         if gsir_module.exists():
-            if not self._run_pip(["install", "-e", str(gsir_module)]):
+            if not self._run_pip(["install", "--no-build-isolation", "-e", str(gsir_module)]):
                 print_warning("Failed to install gs-ir module (may work without it)")
         else:
             print_warning("gs-ir module directory not found")
