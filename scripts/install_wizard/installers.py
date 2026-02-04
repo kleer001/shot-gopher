@@ -98,7 +98,11 @@ class CondaPackageInstaller(ComponentInstaller):
         self.conda_manager = conda_manager
 
     def check(self) -> bool:
-        """Check if package command is available in the conda environment."""
+        """Check if package command is available in the conda environment.
+
+        For system-wide check, uses PlatformManager.find_tool() which properly
+        skips snap versions for tools with confinement issues.
+        """
         if self.conda_manager and self.conda_manager.conda_exe:
             success, _ = run_command([
                 self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
@@ -106,9 +110,10 @@ class CondaPackageInstaller(ComponentInstaller):
             ], check=False, capture=True)
             self.installed = success
         else:
-            # Check system-wide
-            success, _ = run_command([self.command, "--version"], check=False, capture=True)
-            self.installed = success
+            # Check system-wide using PlatformManager (skips snap for restricted tools)
+            from .platform import PlatformManager
+            path = PlatformManager.find_tool(self.command)
+            self.installed = path is not None
         return self.installed
 
     def install(self) -> bool:
