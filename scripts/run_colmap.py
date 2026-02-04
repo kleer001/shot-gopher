@@ -1361,15 +1361,18 @@ def run_colmap_pipeline(
             print(f"  Found: {snap_path}", file=sys.stderr)
             print("", file=sys.stderr)
             print("Snap apps have confinement that prevents writing to /media/, /mnt/, etc.", file=sys.stderr)
+            print("", file=sys.stderr)
             print("Install a non-snap version:", file=sys.stderr)
-            print("  Ubuntu: sudo apt install colmap", file=sys.stderr)
-            print("  Conda: conda install -c conda-forge colmap", file=sys.stderr)
+            print("  GPU support: conda install -c conda-forge colmap", file=sys.stderr)
+            print("  CPU only:    sudo apt install colmap", file=sys.stderr)
             print("", file=sys.stderr)
             print("Or move your project to a non-mounted directory (e.g., ~/projects/)", file=sys.stderr)
         else:
-            print("Error: COLMAP not found. Install with:", file=sys.stderr)
-            print("  Ubuntu: sudo apt install colmap", file=sys.stderr)
-            print("  Conda: conda install -c conda-forge colmap", file=sys.stderr)
+            print("Error: COLMAP not found.", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Install with:", file=sys.stderr)
+            print("  GPU support: conda install -c conda-forge colmap", file=sys.stderr)
+            print("  CPU only:    sudo apt install colmap", file=sys.stderr)
         return False
 
     pipeline_start = time.time()

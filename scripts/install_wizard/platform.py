@@ -559,10 +559,15 @@ Run: python scripts/install_wizard.py
     # =========================================================================
 
     # Tool download URLs - GitHub releases and official builds
+    # NOTE: COLMAP only provides Windows pre-built binaries
+    # Linux users should use: conda install -c conda-forge colmap (for GPU)
+    #                     or: sudo apt install colmap (CPU-only)
     TOOL_DOWNLOADS: Dict[str, Dict[str, str]] = {
         "colmap": {
-            "windows": "https://github.com/colmap/colmap/releases/download/3.9.1/COLMAP-3.9.1-windows-cuda.zip",
-            "linux": "https://github.com/colmap/colmap/releases/download/3.9.1/COLMAP-3.9.1-linux-no-cuda.tar.gz",
+            # Windows: CUDA-enabled pre-built binary from GitHub
+            "windows": "https://github.com/colmap/colmap/releases/download/3.11.1/colmap-x64-windows-cuda.zip",
+            # Linux: No pre-built binaries available from COLMAP
+            # Recommend conda for GPU support, apt for CPU-only
         },
         "ffmpeg": {
             "windows": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",

@@ -326,16 +326,29 @@ class InstallationWizard:
         if colmap_path:
             print_success(f"COLMAP available at {colmap_path}")
         else:
-            print_info("COLMAP not found - attempting automatic installation...")
-            installed_path = PlatformManager.install_tool("colmap")
-            if installed_path:
-                print_success(f"COLMAP installed to {installed_path}")
+            # Only Windows has pre-built binaries with GPU support
+            if self.os_name == "windows":
+                print_info("COLMAP not found - attempting automatic installation...")
+                installed_path = PlatformManager.install_tool("colmap")
+                if installed_path:
+                    print_success(f"COLMAP installed to {installed_path}")
+                else:
+                    print_warning("COLMAP auto-install failed")
+                    print()
+                    print(self.platform_manager.get_missing_dependency_instructions(
+                        "colmap", self.os_name, self.environment, self.pkg_manager
+                    ))
             else:
-                print_warning("COLMAP auto-install failed (optional, for 3D reconstruction)")
+                # Linux/macOS: No pre-built binaries, recommend conda for GPU support
+                print_warning("COLMAP not found (optional, for 3D reconstruction)")
                 print()
-                print(self.platform_manager.get_missing_dependency_instructions(
-                    "colmap", self.os_name, self.environment, self.pkg_manager
-                ))
+                print("  For GPU-accelerated COLMAP (recommended):")
+                print("    conda install -c conda-forge colmap")
+                print()
+                print("  For CPU-only COLMAP:")
+                print("    sudo apt install colmap")
+                print()
+                print("  Note: snap COLMAP has confinement issues with /media/ drives")
 
         return True
 
