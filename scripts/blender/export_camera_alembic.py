@@ -23,6 +23,7 @@ from pathlib import Path
 
 import bpy
 
+sys.path.insert(0, str(Path(__file__).parent))
 from camera_common import run_camera_export
 
 
