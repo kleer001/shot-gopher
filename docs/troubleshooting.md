@@ -104,7 +104,6 @@ python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
 | colmap | 2-4 GB |
 | mocap | 12 GB |
 | gsir | 8 GB |
-| camera | CPU |
 
 **Fixes:**
 1. Check GPU usage: `nvidia-smi`
@@ -150,8 +149,8 @@ python -c "from huggingface_hub import hf_hub_download; \
 Which stages can run in parallel:
 
 ```
-ingest ─┬─► depth ──────────────────────┬─► camera
-        │                               │
+ingest ─┬─► depth
+        │
         ├─► roto ─► mama ─► cleanplate
         │
         └─► colmap ─┬─► mocap
@@ -185,7 +184,7 @@ Checks for existing output in each stage directory before running.
 
 | Workflow | Command | Use Case |
 |----------|---------|----------|
-| Fast preview | `-s depth,colmap,camera -q low` | Quick check |
+| Fast preview | `-s depth,colmap -q low` | Quick check |
 | Balanced | `-s all` | Default |
 | Production | `-s all -q high -d -m` | Final delivery |
 

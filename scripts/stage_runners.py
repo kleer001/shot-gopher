@@ -837,16 +837,10 @@ def run_stage_colmap(
         ):
             print("  → COLMAP reconstruction failed", file=sys.stderr)
 
-    camera_dir = ctx.project_dir / "camera"
-    if (camera_dir / "extrinsics.json").exists():
-        print("\n  → Exporting camera to VFX formats...")
-        export_camera_to_vfx_formats(
-            ctx.project_dir,
-            start_frame=1,
-            fps=ctx.fps,
-        )
-
     clear_gpu_memory(ctx.comfyui_url)
+
+    run_stage_camera(ctx, config)
+
     return True
 
 

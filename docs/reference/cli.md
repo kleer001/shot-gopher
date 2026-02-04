@@ -23,7 +23,6 @@ Run the VFX pipeline from a single command.
 | [colmap](stages.md#colmap) | Camera tracking | 2-4 GB |
 | [mocap](stages.md#mocap) | Motion capture | 12 GB |
 | [gsir](stages.md#gsir) | PBR materials | 8 GB |
-| [camera](stages.md#camera) | Export camera | CPU |
 
 ---
 
@@ -135,7 +134,7 @@ Opens ComfyUI in browser for manual point/box selection of objects.
 ### Matchmove Only
 
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s colmap,camera
+python scripts/run_pipeline.py footage.mp4 -s colmap
 ```
 
 ### Object Removal

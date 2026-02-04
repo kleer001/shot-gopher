@@ -38,7 +38,7 @@ A dichotomous key to find the right pipeline stages for your footage.
 ### 4. Does your scene have good texture and detail?
 
 **Yes** → Go to [6](#6-do-you-need-motion-capture)
-- Available: `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `gsir`, `mocap`, `camera`
+- Available: `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `gsir`, `mocap`
 
 **No** → Go to [7](#7-do-you-need-separate-masks-for-multiple-similar-objects)
 - Available: `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`
@@ -51,7 +51,7 @@ A dichotomous key to find the right pipeline stages for your footage.
 - Available: `ingest`, `depth`
 
 **No** → Go to [6](#6-do-you-need-motion-capture)
-- Available: `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `mocap`, `camera`
+- Available: `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `mocap`
 
 ---
 
@@ -95,9 +95,9 @@ See [Interactive Roto Guide](reference/interactive-segmentation.md)
 | Your Situation | Available Stages |
 |----------------|------------------|
 | Static camera | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate` |
-| Smooth moving + textured | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `gsir`, `mocap`, `camera` |
+| Smooth moving + textured | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `gsir`, `mocap` |
 | Smooth moving + low texture | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate` |
-| Handheld + no fast motion | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `mocap`, `camera` |
+| Handheld + no fast motion | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `mocap` |
 | Handheld + fast motion | `ingest`, `depth` |
 
 ---
@@ -111,7 +111,7 @@ python scripts/run_pipeline.py video.mp4 -s ingest,roto,mama,cleanplate --prompt
 
 **Camera track for CGI:**
 ```bash
-python scripts/run_pipeline.py video.mp4 -s ingest,colmap,camera -q high
+python scripts/run_pipeline.py video.mp4 -s ingest,colmap -q high
 ```
 
 **Motion capture:**

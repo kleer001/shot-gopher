@@ -24,7 +24,7 @@ python scripts/run_pipeline.py --help
 Process a video with selected stages:
 
 ```bash
-python scripts/run_pipeline.py /path/to/video.mp4 -s ingest,depth,roto,cleanplate,colmap,camera
+python scripts/run_pipeline.py /path/to/video.mp4 -s ingest,depth,roto,cleanplate,colmap
 ```
 
 This processes the video through the specified stages in order.
@@ -51,7 +51,7 @@ python scripts/run_pipeline.py ~/Videos/test_shot.mp4 \
 **Full VFX prep**:
 ```bash
 python scripts/run_pipeline.py ~/Videos/shot001.mp4 \
-  -s ingest,depth,roto,matte,cleanplate,colmap,camera \
+  -s ingest,depth,roto,matte,cleanplate,colmap \
   --name Shot001
 ```
 
@@ -88,8 +88,7 @@ python scripts/run_pipeline.py video.mp4 \
 | `roto` | Text-prompted roto | Binary masks in `roto/` |
 | `mama` | Alpha matte refinement (VideoMaMa) | Alpha mattes in `matte/` |
 | `cleanplate` | Video inpainting | Clean backgrounds in `cleanplate/` |
-| `colmap` | Structure-from-Motion camera solve | Point cloud, camera poses in `colmap/` |
-| `camera` | Export camera to multiple formats | Alembic, JSON, meshes in `camera/` |
+| `colmap` | Structure-from-Motion camera solve | Point cloud, camera exports in `colmap/` and `camera/` |
 | `mocap` | Human motion capture (experimental) | SMPL-X parameters, meshes in `mocap/` |
 
 ### Environment Variables
@@ -214,7 +213,7 @@ After running your first project:
 
 1. Start with simple stages: `ingest,depth`
 2. Add segmentation: `ingest,depth,roto`
-3. Try camera tracking: `ingest,colmap,camera`
+3. Try camera tracking: `ingest,colmap`
 4. Experiment with full pipeline: `all`
 5. Customize per shot type (see tool limitations table)
 
@@ -244,7 +243,7 @@ cp ~/Videos/my_shot.mp4 ~/Desktop/
 python scripts/run_pipeline.py \
   ~/Desktop/my_shot.mp4 \
   --name MyShot \
-  -s ingest,depth,roto,mama,cleanplate,colmap,camera
+  -s ingest,depth,roto,mama,cleanplate,colmap
 ```
 
 ### Step 3: Check Output

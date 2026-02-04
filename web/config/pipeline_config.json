@@ -74,7 +74,7 @@
       "required": false,
       "dependencies": [],
       "defaultEnabled": false,
-      "enables": ["gsir", "mocap", "camera"]
+      "enables": ["gsir", "mocap"]
     },
     "gsir": {
       "name": "Materials",
@@ -95,16 +95,6 @@
       "required": false,
       "dependencies": ["colmap"],
       "defaultEnabled": false
-    },
-    "camera": {
-      "name": "Camera Export",
-      "displayName": "Export Camera (Alembic)",
-      "description": "Export tracked camera to Alembic format",
-      "outputDir": "camera",
-      "estimatedTimePerFrame": 0.01,
-      "required": false,
-      "dependencies": ["colmap"],
-      "defaultEnabled": false
     }
   },
   "presets": {
@@ -121,7 +111,7 @@
     "all": {
       "name": "Everything",
       "description": "All available stages including 3D reconstruction",
-      "stages": ["depth", "roto", "mama", "cleanplate", "colmap", "gsir", "mocap", "camera"]
+      "stages": ["depth", "roto", "mama", "cleanplate", "colmap", "gsir", "mocap"]
     }
   },
   "supportedVideoFormats": [
