@@ -413,7 +413,25 @@ class GSIRInstaller(ComponentInstaller):
             return False
         train_py = self.install_dir / "train.py"
         gsir_module = self.install_dir / "gs-ir"
-        self.installed = train_py.exists() and gsir_module.exists()
+        if not (train_py.exists() and gsir_module.exists()):
+            self.installed = False
+            return False
+
+        if self.conda_manager and self.conda_manager.conda_exe:
+            success, _ = run_command([
+                self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                "python", "-c", "import gs_ir"
+            ], check=False, capture=True)
+        else:
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, "-c", "import gs_ir"],
+                capture_output=True,
+                timeout=10
+            )
+            success = result.returncode == 0
+
+        self.installed = success
         return self.installed
 
     def _run_pip(self, args: list) -> bool:

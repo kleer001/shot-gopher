@@ -49,6 +49,24 @@ DEFAULT_ITERATIONS_STAGE2 = 35000
 DEFAULT_SH_DEGREE = 3
 
 
+def _verify_gsir_module_importable() -> bool:
+    """Check if the gs_ir CUDA module is importable.
+
+    Returns:
+        True if gs_ir can be imported successfully
+    """
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import gs_ir"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
 def check_gsir_available() -> tuple[bool, Optional[Path]]:
     """Check if GS-IR is installed and find its location.
 
@@ -56,41 +74,57 @@ def check_gsir_available() -> tuple[bool, Optional[Path]]:
         Tuple of (is_available, gsir_path or None)
         The path returned is the GS-IR repo root containing train.py
     """
-    # Check GSIR_PATH environment variable first (most reliable)
+    gsir_path = None
+
     gsir_env = os.environ.get("GSIR_PATH")
     if gsir_env:
-        gsir_path = Path(gsir_env)
-        if (gsir_path / "train.py").exists():
-            return True, gsir_path
+        candidate = Path(gsir_env)
+        if (candidate / "train.py").exists():
+            gsir_path = candidate
 
-    # Check common installation locations
-    common_paths = [
-        INSTALL_DIR / "GS-IR",
-        Path.cwd() / "GS-IR",
-        Path("/opt/GS-IR"),
-    ]
+    if not gsir_path:
+        common_paths = [
+            INSTALL_DIR / "GS-IR",
+            Path.cwd() / "GS-IR",
+            Path("/opt/GS-IR"),
+        ]
+        for path in common_paths:
+            if (path / "train.py").exists():
+                gsir_path = path
+                break
 
-    for path in common_paths:
-        if (path / "train.py").exists():
-            return True, path
+    if not gsir_path:
+        try:
+            result = subprocess.run(
+                [sys.executable, "-c", "import gs_ir; print(gs_ir.__file__)"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                module_path = Path(result.stdout.strip()).parent
+                for parent in [module_path] + list(module_path.parents):
+                    if (parent / "train.py").exists():
+                        gsir_path = parent
+                        break
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
 
-    # Check if gsir module is importable and find repo root from module path
-    try:
-        result = subprocess.run(
-            [sys.executable, "-c", "import gs_ir; print(gs_ir.__file__)"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if result.returncode == 0:
-            module_path = Path(result.stdout.strip()).parent
-            for parent in [module_path] + list(module_path.parents):
-                if (parent / "train.py").exists():
-                    return True, parent
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
+    if not gsir_path:
+        return False, None
 
-    return False, None
+    if not _verify_gsir_module_importable():
+        print(f"Warning: GS-IR directory found at {gsir_path}", file=sys.stderr)
+        print(f"         but gs_ir CUDA module is not importable.", file=sys.stderr)
+        print(f"", file=sys.stderr)
+        print(f"To fix, install the gs_ir module:", file=sys.stderr)
+        print(f"  cd {gsir_path}/gs-ir && pip install -e .", file=sys.stderr)
+        print(f"", file=sys.stderr)
+        print(f"Or re-run the installation wizard:", file=sys.stderr)
+        print(f"  python scripts/install_wizard/wizard.py", file=sys.stderr)
+        return False, None
+
+    return True, gsir_path
 
 
 def run_colmap_undistorter(

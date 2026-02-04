@@ -15,6 +15,7 @@ COLMAP_AVAILABLE = shutil.which("colmap") is not None
 from run_gsir import (
     check_gsir_available,
     setup_gsir_data_structure,
+    _verify_gsir_module_importable,
 )
 
 
@@ -40,9 +41,21 @@ class TestCheckGsirAvailable:
             gsir_path = Path(tmpdir)
             (gsir_path / "train.py").touch()
             with patch.dict("os.environ", {"GSIR_PATH": str(gsir_path)}):
-                available, path = check_gsir_available()
-                assert available is True
-                assert path == gsir_path
+                with patch("run_gsir._verify_gsir_module_importable", return_value=True):
+                    available, path = check_gsir_available()
+                    assert available is True
+                    assert path == gsir_path
+
+    def test_gsir_dir_exists_but_module_not_importable(self):
+        """Test that check fails if gs_ir module is not importable."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gsir_path = Path(tmpdir)
+            (gsir_path / "train.py").touch()
+            with patch.dict("os.environ", {"GSIR_PATH": str(gsir_path)}):
+                with patch("run_gsir._verify_gsir_module_importable", return_value=False):
+                    available, path = check_gsir_available()
+                    assert available is False
+                    assert path is None
 
 
 class TestSetupGsirDataStructure:
