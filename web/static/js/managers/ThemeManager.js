@@ -5,28 +5,80 @@
  * - Runtime CSS variable switching
  * - Persistent theme preference via localStorage
  * - Event-driven theme changes
- * - Support for multiple expandable palettes
+ * - Dynamic palette loading from API
  *
  * Follows the Single Responsibility Principle by only managing themes.
  */
 
-import { PALETTES, DEFAULT_PALETTE, THEME_STORAGE_KEY, EVENTS } from '../config/constants.js';
+import { DEFAULT_PALETTE, THEME_STORAGE_KEY, EVENTS, API_ENDPOINTS } from '../config/constants.js';
+
+const FALLBACK_PALETTE = {
+    id: 'dark',
+    name: 'Dark',
+    icon: '\u{1F319}',
+    colors: {
+        '--bg': '#0a0e27',
+        '--bg-card': '#131b3a',
+        '--bg-hover': '#1a2547',
+        '--border': '#1e2d5f',
+        '--text': '#e0e7ff',
+        '--text-dim': '#6b7db8',
+        '--accent': '#3b82f6',
+        '--accent-glow': 'rgba(59, 130, 246, 0.3)',
+        '--success': '#10b981',
+        '--warning': '#f59e0b',
+        '--danger': '#ef4444',
+    },
+};
 
 export class ThemeManager extends EventTarget {
     constructor() {
         super();
         this._currentPaletteId = DEFAULT_PALETTE;
         this._isPopupOpen = false;
+        this._palettes = {};
+        this._isLoaded = false;
     }
 
     /**
      * Initialize the theme manager
      * Loads saved preference and applies it
      */
-    init() {
+    async init() {
         const savedTheme = this._loadSavedTheme();
+        this._currentPaletteId = savedTheme;
+
+        await this._loadPalettes();
+
         this.applyPalette(savedTheme);
         this._bindPopupEvents();
+    }
+
+    /**
+     * Load palettes from API
+     * @private
+     */
+    async _loadPalettes() {
+        try {
+            const response = await fetch(API_ENDPOINTS.PALETTES);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const paletteList = data.palettes || [];
+
+            this._palettes = {};
+            paletteList.forEach(palette => {
+                this._palettes[palette.id] = palette;
+            });
+
+            this._isLoaded = true;
+        } catch (error) {
+            console.warn('Failed to load palettes from API, using fallback:', error);
+            this._palettes = { [FALLBACK_PALETTE.id]: FALLBACK_PALETTE };
+            this._isLoaded = true;
+        }
     }
 
     /**
@@ -34,7 +86,7 @@ export class ThemeManager extends EventTarget {
      * @returns {Array<Object>} Array of palette objects
      */
     getPalettes() {
-        return Object.values(PALETTES);
+        return Object.values(this._palettes);
     }
 
     /**
@@ -50,7 +102,7 @@ export class ThemeManager extends EventTarget {
      * @returns {Object} Current palette
      */
     getCurrentPalette() {
-        return PALETTES[this._currentPaletteId] || PALETTES[DEFAULT_PALETTE];
+        return this._palettes[this._currentPaletteId] || FALLBACK_PALETTE;
     }
 
     /**
@@ -58,12 +110,7 @@ export class ThemeManager extends EventTarget {
      * @param {string} paletteId - Palette identifier
      */
     applyPalette(paletteId) {
-        const palette = PALETTES[paletteId];
-        if (!palette) {
-            console.warn(`Unknown palette: ${paletteId}, falling back to ${DEFAULT_PALETTE}`);
-            this.applyPalette(DEFAULT_PALETTE);
-            return;
-        }
+        const palette = this._palettes[paletteId] || FALLBACK_PALETTE;
 
         const root = document.documentElement;
         Object.entries(palette.colors).forEach(([property, value]) => {
@@ -148,7 +195,7 @@ export class ThemeManager extends EventTarget {
     _loadSavedTheme() {
         try {
             const saved = localStorage.getItem(THEME_STORAGE_KEY);
-            if (saved && PALETTES[saved]) {
+            if (saved) {
                 return saved;
             }
         } catch (error) {

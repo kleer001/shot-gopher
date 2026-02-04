@@ -13,6 +13,7 @@ export const API = {
     UPLOAD: '/api/upload',
     PROJECTS: '/api/projects',
     SYSTEM_STATUS: '/api/system/status',
+    PALETTES: '/api/palettes',
     PROJECT_OUTPUTS: (id) => `/api/projects/${id}/outputs`,
     PROJECT_CANCEL: (id) => `/api/projects/${id}/stop`,  // Backend uses /stop endpoint
     PROJECT_START: (id) => `/api/projects/${id}/start`,
@@ -21,6 +22,13 @@ export const API = {
     PROJECT_VRAM: (id) => `/api/projects/${id}/vram`,
     PROJECT_VIDEO_INFO: (id) => `/api/projects/${id}/video-info`,
     PROJECT_INTERACTIVE_COMPLETE: (id) => `/api/projects/${id}/interactive-complete`,
+};
+
+/**
+ * API endpoints (flat structure for easy import)
+ */
+export const API_ENDPOINTS = {
+    PALETTES: '/api/palettes',
 };
 
 /**
@@ -125,87 +133,6 @@ export const EVENTS = {
     PIPELINE_COMPLETE: 'pipelineComplete',
     PIPELINE_FAILED: 'pipelineFailed',
     THEME_CHANGED: 'themeChanged',
-};
-
-/**
- * Color palettes for theming
- *
- * Each palette defines CSS custom property values.
- * To add a new palette, add a new key with the same structure.
- */
-export const PALETTES = {
-    dark: {
-        id: 'dark',
-        name: 'Dark',
-        icon: '🌙',
-        colors: {
-            '--bg': '#0a0e27',
-            '--bg-card': '#131b3a',
-            '--bg-hover': '#1a2547',
-            '--border': '#1e2d5f',
-            '--text': '#e0e7ff',
-            '--text-dim': '#6b7db8',
-            '--accent': '#3b82f6',
-            '--accent-glow': 'rgba(59, 130, 246, 0.3)',
-            '--success': '#10b981',
-            '--warning': '#f59e0b',
-            '--danger': '#ef4444',
-        },
-    },
-    light: {
-        id: 'light',
-        name: 'Light',
-        icon: '☀️',
-        colors: {
-            '--bg': '#f0f4f8',
-            '--bg-card': '#ffffff',
-            '--bg-hover': '#e8eef4',
-            '--border': '#d1dce6',
-            '--text': '#1a202c',
-            '--text-dim': '#64748b',
-            '--accent': '#2563eb',
-            '--accent-glow': 'rgba(37, 99, 235, 0.2)',
-            '--success': '#059669',
-            '--warning': '#d97706',
-            '--danger': '#dc2626',
-        },
-    },
-    midnight: {
-        id: 'midnight',
-        name: 'Midnight',
-        icon: '🌌',
-        colors: {
-            '--bg': '#0f0f1a',
-            '--bg-card': '#1a1a2e',
-            '--bg-hover': '#25254a',
-            '--border': '#2d2d5a',
-            '--text': '#eaeaff',
-            '--text-dim': '#8888bb',
-            '--accent': '#8b5cf6',
-            '--accent-glow': 'rgba(139, 92, 246, 0.3)',
-            '--success': '#10b981',
-            '--warning': '#f59e0b',
-            '--danger': '#ef4444',
-        },
-    },
-    forest: {
-        id: 'forest',
-        name: 'Forest',
-        icon: '🌲',
-        colors: {
-            '--bg': '#0d1f17',
-            '--bg-card': '#132b1f',
-            '--bg-hover': '#1a3a28',
-            '--border': '#2a5a3f',
-            '--text': '#e0f2e9',
-            '--text-dim': '#7fb89a',
-            '--accent': '#22c55e',
-            '--accent-glow': 'rgba(34, 197, 94, 0.3)',
-            '--success': '#22c55e',
-            '--warning': '#eab308',
-            '--danger': '#ef4444',
-        },
-    },
 };
 
 /**

@@ -46,7 +46,7 @@ class Application {
             await this.loadConfiguration();
 
             // Initialize controllers
-            this.initializeControllers();
+            await this.initializeControllers();
 
             // Mark as initialized
             this.isInitialized = true;
@@ -82,11 +82,11 @@ class Application {
     /**
      * Initialize all controllers
      */
-    initializeControllers() {
+    async initializeControllers() {
         console.log('Initializing controllers...');
 
-        // Initialize theme manager first (applies saved theme immediately)
-        themeManager.init();
+        // Initialize theme manager first (loads palettes from API and applies saved theme)
+        await themeManager.init();
         themeManager.renderPaletteOptions();
         console.log('Theme manager initialized');
 

@@ -16,6 +16,7 @@ from web.services.project_service import ProjectService
 from web.services.pipeline_service import PipelineService
 from web.services.video_service import get_video_service
 from web.services.system_service import get_system_service
+from web.services.palette_service import get_palette_service
 from web.repositories.project_repository import ProjectRepository
 from web.repositories.job_repository import JobRepository
 from web.models.domain import JobStatus
@@ -576,3 +577,25 @@ async def signal_interactive_complete(
             status_code=500,
             detail=f"Failed to create signal file: {e}"
         )
+
+
+@router.get("/palettes")
+async def get_palettes():
+    """Get all available color palettes."""
+    palette_service = get_palette_service()
+    return {
+        "palettes": palette_service.get_palette_list(),
+        "default": palette_service.get_default_palette_id(),
+    }
+
+
+@router.get("/palettes/{palette_id}")
+async def get_palette(palette_id: str):
+    """Get a specific color palette by ID."""
+    palette_service = get_palette_service()
+    palette = palette_service.get_palette(palette_id)
+
+    if not palette:
+        raise HTTPException(status_code=404, detail=f"Palette '{palette_id}' not found")
+
+    return palette

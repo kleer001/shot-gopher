@@ -1,0 +1,18 @@
+# Midnight palette - Deep purple dark theme
+[palette]
+id = "midnight"
+name = "Midnight"
+icon = "stars"
+
+[colors]
+bg = "#0f0f1a"
+bg-card = "#1a1a2e"
+bg-hover = "#25254a"
+border = "#2d2d5a"
+text = "#eaeaff"
+text-dim = "#8888bb"
+accent = "#8b5cf6"
+accent-glow = "rgba(139, 92, 246, 0.3)"
+success = "#10b981"
+warning = "#f59e0b"
+danger = "#ef4444"
