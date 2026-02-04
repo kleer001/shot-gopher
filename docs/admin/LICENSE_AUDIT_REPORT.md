@@ -1,8 +1,5 @@
 # License Audit Report: VFX Pipeline (shot-gopher)
 
-**Report Date:** 2026-01-30
-**Project:** shot-gopher / VFX Pipeline
-**Report Type:** Executive Summary
 
 ---
 
