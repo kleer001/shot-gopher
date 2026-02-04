@@ -321,9 +321,10 @@ class InstallationWizard:
                     "ffmpeg", self.os_name, self.environment, self.pkg_manager
                 ))
 
-        # COLMAP
-        if check_command_available("colmap") or PlatformManager.find_tool("colmap"):
-            print_success("COLMAP available")
+        # COLMAP (use PlatformManager.find_tool to skip snap versions)
+        colmap_path = PlatformManager.find_tool("colmap")
+        if colmap_path:
+            print_success(f"COLMAP available at {colmap_path}")
         else:
             print_info("COLMAP not found - attempting automatic installation...")
             installed_path = PlatformManager.install_tool("colmap")

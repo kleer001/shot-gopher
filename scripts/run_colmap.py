@@ -1355,9 +1355,21 @@ def run_colmap_pipeline(
         True if reconstruction succeeded
     """
     if not check_colmap_available():
-        print("Error: COLMAP not found. Install with:", file=sys.stderr)
-        print("  Ubuntu: sudo apt install colmap", file=sys.stderr)
-        print("  Conda: conda install -c conda-forge colmap", file=sys.stderr)
+        snap_path = shutil.which("colmap")
+        if snap_path and "/snap/" in snap_path:
+            print("Error: Only snap COLMAP found, which cannot access mounted drives.", file=sys.stderr)
+            print(f"  Found: {snap_path}", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Snap apps have confinement that prevents writing to /media/, /mnt/, etc.", file=sys.stderr)
+            print("Install a non-snap version:", file=sys.stderr)
+            print("  Ubuntu: sudo apt install colmap", file=sys.stderr)
+            print("  Conda: conda install -c conda-forge colmap", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Or move your project to a non-mounted directory (e.g., ~/projects/)", file=sys.stderr)
+        else:
+            print("Error: COLMAP not found. Install with:", file=sys.stderr)
+            print("  Ubuntu: sudo apt install colmap", file=sys.stderr)
+            print("  Conda: conda install -c conda-forge colmap", file=sys.stderr)
         return False
 
     pipeline_start = time.time()

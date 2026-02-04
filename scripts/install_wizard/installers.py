@@ -138,10 +138,15 @@ class SystemPackageInstaller(ComponentInstaller):
         self.command = command or apt_package
 
     def check(self) -> bool:
-        """Check if command is available system-wide."""
-        import shutil
-        # Use shutil.which() - more reliable than running --version
-        self.installed = shutil.which(self.command) is not None
+        """Check if command is available system-wide.
+
+        Uses PlatformManager.find_tool() which properly skips snap versions
+        for tools with known confinement issues (e.g., COLMAP can't write
+        to mounted drives like /media/).
+        """
+        from .platform import PlatformManager
+        path = PlatformManager.find_tool(self.command)
+        self.installed = path is not None
         return self.installed
 
     def install(self) -> bool:
