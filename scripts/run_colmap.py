@@ -50,26 +50,36 @@ from transforms import (
 _colmap_path: Optional[str] = None
 
 
-def get_colmap_executable() -> str:
+def get_colmap_executable() -> Optional[str]:
     """Get the path to COLMAP executable.
 
-    Uses PlatformManager.find_tool() to locate COLMAP on Windows
-    even when not in PATH. Falls back to 'colmap' for Unix systems
-    where it's typically in PATH.
+    Search order:
+    1. Active conda environment bin directory
+    2. PlatformManager.find_tool() (repo-local, system PATH excluding snap, standard locations)
 
     Returns:
-        Path to COLMAP executable as string
+        Path to COLMAP executable as string, or None if not found
     """
     global _colmap_path
     if _colmap_path is not None:
         return _colmap_path
 
+    # Check active conda environment first
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        conda_colmap = Path(conda_prefix) / "bin" / "colmap"
+        if conda_colmap.exists():
+            _colmap_path = str(conda_colmap)
+            return _colmap_path
+
+    # Use PlatformManager which skips snap for COLMAP
     found = PlatformManager.find_tool("colmap")
     if found:
         _colmap_path = str(found)
-    else:
-        _colmap_path = "colmap"
-    return _colmap_path
+        return _colmap_path
+
+    # Don't fall back to bare "colmap" - it would find snap
+    return None
 
 
 # COLMAP quality presets
@@ -197,6 +207,8 @@ def check_colmap_available() -> bool:
     """Check if COLMAP is installed and accessible."""
     try:
         colmap_exe = get_colmap_executable()
+        if colmap_exe is None:
+            return False
         result = subprocess.run(
             [colmap_exe, "--help"],
             capture_output=True,
@@ -225,6 +237,11 @@ def diagnose_colmap_environment(verbose: bool = False) -> dict:
 
     try:
         colmap_exe = get_colmap_executable()
+        if colmap_exe is None:
+            if verbose:
+                print("    DIAG: COLMAP executable not found")
+            return info
+
         is_bat = colmap_exe.lower().endswith('.bat')
         result = subprocess.run(
             [colmap_exe, "feature_extractor", "--help"],
@@ -237,6 +254,7 @@ def diagnose_colmap_environment(verbose: bool = False) -> dict:
             info["gpu_sift_available"] = "SiftExtraction.use_gpu" in output
 
         if verbose:
+            print(f"    DIAG: COLMAP path: {colmap_exe}")
             print(f"    DIAG: COLMAP available: {info['colmap_available']}")
             print(f"    DIAG: GPU SIFT option available: {info['gpu_sift_available']}")
             print(f"    DIAG: DISPLAY={os.environ.get('DISPLAY', 'not set')}")
