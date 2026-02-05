@@ -876,6 +876,14 @@ def run_gsir_pipeline(
     materials_output = project_dir / "camera"
     successful_skip = None
 
+    # Clean up any stale fallback directories from previous runs
+    for skip in FRAME_SKIP_FACTORS:
+        if skip > 1:
+            cleanup_colmap_subset(project_dir, skip)
+            model_dir = project_dir / "gsir" / f"model_{skip}s"
+            if model_dir.exists():
+                shutil.rmtree(model_dir)
+
     # Try training with fallback to sparser sampling
     for skip_factor in FRAME_SKIP_FACTORS:
         gsir_data_dir = project_dir / "gsir" / f"data_{skip_factor}s" if skip_factor > 1 else project_dir / "gsir" / "data"
