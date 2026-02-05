@@ -1,0 +1,19 @@
+# Santa Fe palette - Southwestern desert tones
+# Turquoise, terracotta, and warm sand inspired by New Mexico
+[palette]
+id = "santa-fe"
+name = "Santa Fe"
+icon = "cactus"
+
+[colors]
+bg = "#d2a679"
+bg-card = "#f5deb3"
+bg-hover = "#deb887"
+border = "#8b4513"
+text = "#3d2314"
+text-dim = "#6b4423"
+accent = "#40e0d0"
+accent-glow = "rgba(64, 224, 208, 0.3)"
+success = "#40e0d0"
+warning = "#cd853f"
+danger = "#b22222"

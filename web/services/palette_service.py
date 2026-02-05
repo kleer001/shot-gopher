@@ -12,6 +12,9 @@ ICON_MAP = {
     "stars": "\U0001F30C",
     "tree": "\U0001F332",
     "window": "\U0001FA9F",
+    "hotdog": "\U0001F32D",
+    "cactus": "\U0001F335",
+    "snowflake": "\u2744\uFE0F",
 }
 
 

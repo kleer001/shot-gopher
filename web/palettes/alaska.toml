@@ -1,0 +1,19 @@
+# Alaska palette - Icy blues and pristine whites
+# Glacial tones inspired by the frozen north
+[palette]
+id = "alaska"
+name = "Alaska"
+icon = "snowflake"
+
+[colors]
+bg = "#e8f4f8"
+bg-card = "#ffffff"
+bg-hover = "#d4eaf0"
+border = "#87ceeb"
+text = "#1a3a4a"
+text-dim = "#4682b4"
+accent = "#4169e1"
+accent-glow = "rgba(65, 105, 225, 0.25)"
+success = "#20b2aa"
+warning = "#daa520"
+danger = "#cd5c5c"
