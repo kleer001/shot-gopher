@@ -183,11 +183,35 @@ def get_colmap_sparse_dir(project_dir: Path, skip_factor: int) -> Path:
     return project_dir / "colmap" / f"sparse_{skip_factor}s" / "0"
 
 
+def cleanup_colmap_subset(project_dir: Path, skip_factor: int) -> None:
+    """Clean up COLMAP files for a failed subset reconstruction.
+
+    Removes the database and sparse model directories for the given skip factor.
+    Does nothing for skip_factor=1 (the original reconstruction).
+
+    Args:
+        project_dir: Project directory
+        skip_factor: Frame skip factor
+    """
+    if skip_factor == 1:
+        return
+
+    colmap_base = project_dir / "colmap"
+    database_path = colmap_base / f"database_{skip_factor}s.db"
+    sparse_path = colmap_base / f"sparse_{skip_factor}s"
+
+    if database_path.exists():
+        database_path.unlink()
+    if sparse_path.exists():
+        shutil.rmtree(sparse_path)
+
+
 def run_colmap_on_subset(project_dir: Path, skip_factor: int) -> bool:
     """Run COLMAP reconstruction on a frame subset.
 
-    Runs COLMAP in a sandboxed way that doesn't pollute the original 1s
-    reconstruction. The original colmap/sparse/0/ is backed up and restored.
+    Runs COLMAP in completely isolated directories without touching the
+    original 1s reconstruction. Creates separate database and sparse
+    model directories for each skip factor.
 
     Args:
         project_dir: Project directory
@@ -196,69 +220,85 @@ def run_colmap_on_subset(project_dir: Path, skip_factor: int) -> bool:
     Returns:
         True if COLMAP succeeded
     """
-    from run_colmap import run_colmap_reconstruction
+    from run_colmap import (
+        extract_features,
+        match_features,
+        run_sparse_reconstruction,
+        VirtualDisplay,
+        QUALITY_PRESETS,
+    )
 
     frames_dir = get_frame_subset_dir(project_dir, skip_factor)
     if not frames_dir.exists():
         print(f"    Error: Frame subset not found: {frames_dir}", file=sys.stderr)
         return False
 
-    frame_count = len(list(frames_dir.glob("*.png")))
+    frame_count = len(list(frames_dir.glob("*.png"))) + len(list(frames_dir.glob("*.jpg")))
+    if frame_count == 0:
+        print(f"    Error: No images found in {frames_dir}", file=sys.stderr)
+        return False
+
     print(f"  → Running COLMAP on {skip_factor}s subset ({frame_count} frames)")
 
     colmap_base = project_dir / "colmap"
-    original_sparse = colmap_base / "sparse" / "0"
-    original_frames = project_dir / "source" / "frames"
+    database_path = colmap_base / f"database_{skip_factor}s.db"
+    sparse_path = colmap_base / f"sparse_{skip_factor}s"
 
-    temp_sparse_backup = colmap_base / "sparse_1s_backup"
-    temp_frames_backup = project_dir / "source" / "frames_1s_backup"
+    preset = QUALITY_PRESETS["medium"]
 
-    try:
-        if original_sparse.exists():
-            print(f"    Backing up original COLMAP sparse model...")
-            if temp_sparse_backup.exists():
-                shutil.rmtree(temp_sparse_backup)
-            shutil.copytree(original_sparse, temp_sparse_backup)
+    if database_path.exists():
+        database_path.unlink()
+    if sparse_path.exists():
+        shutil.rmtree(sparse_path)
 
-        if original_frames.exists():
-            original_frames.rename(temp_frames_backup)
-        frames_dir.rename(original_frames)
+    with VirtualDisplay():
+        try:
+            print(f"    [1/3] Feature Extraction ({skip_factor}s)")
+            extract_features(
+                database_path=database_path,
+                image_path=frames_dir,
+                camera_model="OPENCV",
+                max_features=preset["sift_max_features"],
+                single_camera=True,
+                mask_path=None,
+                use_gpu=True,
+            )
 
-        success = run_colmap_reconstruction(
-            project_dir=project_dir,
-            quality="medium",
-            run_dense=False,
-            run_mesh=False,
-            use_masks=False,
-        )
+            print(f"    [2/3] Feature Matching ({skip_factor}s)")
+            match_features(
+                database_path=database_path,
+                matcher_type=preset["matcher"],
+                sequential_overlap=preset.get("sequential_overlap", 10),
+                use_gpu=True,
+            )
 
-        if success:
-            dst_sparse = get_colmap_sparse_dir(project_dir, skip_factor)
-            if original_sparse.exists():
-                dst_sparse.parent.mkdir(parents=True, exist_ok=True)
-                if dst_sparse.exists():
-                    shutil.rmtree(dst_sparse)
-                shutil.copytree(original_sparse, dst_sparse)
-                print(f"    Saved {skip_factor}s reconstruction to {dst_sparse.parent.name}/")
+            print(f"    [3/3] Sparse Reconstruction ({skip_factor}s)")
+            success = run_sparse_reconstruction(
+                database_path=database_path,
+                image_path=frames_dir,
+                output_path=sparse_path,
+                refine_focal=preset["ba_refine_focal"],
+                min_tri_angle=preset.get("min_tri_angle", 1.5),
+                min_num_inliers=preset.get("min_num_inliers", 15),
+            )
 
-        return success
+            if success:
+                print(f"    COLMAP succeeded for {skip_factor}s sampling")
+                return True
+            else:
+                print(f"    COLMAP reconstruction failed for {skip_factor}s sampling")
+                return False
 
-    finally:
-        if original_frames.exists():
-            original_frames.rename(frames_dir)
-        if temp_frames_backup.exists():
-            temp_frames_backup.rename(original_frames)
-
-        if temp_sparse_backup.exists():
-            print(f"    Restoring original COLMAP sparse model...")
-            if original_sparse.exists():
-                shutil.rmtree(original_sparse)
-            shutil.copytree(temp_sparse_backup, original_sparse)
-            shutil.rmtree(temp_sparse_backup)
+        except subprocess.CalledProcessError as e:
+            print(f"    COLMAP command failed: {e}", file=sys.stderr)
+            return False
+        except subprocess.TimeoutExpired:
+            print(f"    COLMAP command timed out", file=sys.stderr)
+            return False
 
 
 def run_colmap_undistorter(
-    colmap_dir: Path,
+    sparse_model_path: Path,
     output_dir: Path,
     image_path: Path
 ) -> bool:
@@ -268,7 +308,7 @@ def run_colmap_undistorter(
     camera models. This function converts distorted COLMAP reconstructions.
 
     Args:
-        colmap_dir: Path to COLMAP reconstruction (containing sparse/0/)
+        sparse_model_path: Path to COLMAP sparse model directory (e.g., colmap/sparse/0/)
         output_dir: Path for undistorted output
         image_path: Path to original images
 
@@ -287,7 +327,7 @@ def run_colmap_undistorter(
     args = [
         colmap_exe, "image_undistorter",
         "--image_path", str(image_path),
-        "--input_path", str(colmap_dir / "sparse" / "0"),
+        "--input_path", str(sparse_model_path),
         "--output_path", str(output_dir),
         "--output_type", "COLMAP",
     ]
@@ -394,7 +434,7 @@ def setup_gsir_data_structure(
             print(f"    Undistorted data is stale ({undistorted_image_count} vs {source_image_count} images), regenerating...")
         else:
             print(f"    Undistorting images for GS-IR (PINHOLE camera required)...")
-        if not run_colmap_undistorter(colmap_dir, undistorted_dir, source_frames):
+        if not run_colmap_undistorter(colmap_sparse_model, undistorted_dir, source_frames):
             print(f"    Error: Failed to undistort images", file=sys.stderr)
             return False
 
@@ -749,6 +789,7 @@ def run_gsir_pipeline(
             print(f"\n[Fallback] Attempting with {skip_factor}s frame sampling")
             if not run_colmap_on_subset(project_dir, skip_factor):
                 print(f"  → COLMAP failed on {skip_factor}s subset, trying next")
+                cleanup_colmap_subset(project_dir, skip_factor)
                 continue
 
         if not colmap_sparse.exists():
@@ -784,9 +825,10 @@ def run_gsir_pipeline(
             if is_baseline_error(error_output):
                 print(f"  → Insufficient camera baseline with {skip_factor}s sampling")
                 print(f"  → Trying sparser frame sampling...")
-                # Clean up failed attempt
+                # Clean up failed GS-IR model and COLMAP subset
                 if gsir_model_dir.exists():
                     shutil.rmtree(gsir_model_dir)
+                cleanup_colmap_subset(project_dir, skip_factor)
                 continue
             else:
                 print(f"GS-IR training failed (non-baseline error)", file=sys.stderr)

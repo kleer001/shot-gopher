@@ -16,6 +16,10 @@ from run_gsir import (
     check_gsir_available,
     setup_gsir_data_structure,
     _verify_gsir_module_importable,
+    get_frame_subset_dir,
+    get_colmap_sparse_dir,
+    cleanup_colmap_subset,
+    is_baseline_error,
 )
 
 
@@ -188,7 +192,6 @@ class TestGsirMetadata:
         expected_keys = ["source", "checkpoint", "iteration", "outputs"]
         expected_outputs = ["materials", "normals", "depth", "environment"]
 
-        # This validates our expected output structure
         metadata = {
             "source": "gs-ir",
             "checkpoint": "/path/to/checkpoint.pth",
@@ -206,3 +209,94 @@ class TestGsirMetadata:
 
         for output_key in expected_outputs:
             assert output_key in metadata["outputs"]
+
+
+class TestFrameSubsetHelpers:
+    def test_frame_subset_dir_original(self):
+        """Test that skip_factor=1 returns original frames directory."""
+        project_dir = Path("/tmp/project")
+        result = get_frame_subset_dir(project_dir, 1)
+        assert result == project_dir / "source" / "frames"
+
+    def test_frame_subset_dir_4s(self):
+        """Test that skip_factor=4 returns frames_4s directory."""
+        project_dir = Path("/tmp/project")
+        result = get_frame_subset_dir(project_dir, 4)
+        assert result == project_dir / "source" / "frames_4s"
+
+    def test_colmap_sparse_dir_original(self):
+        """Test that skip_factor=1 returns original sparse directory."""
+        project_dir = Path("/tmp/project")
+        result = get_colmap_sparse_dir(project_dir, 1)
+        assert result == project_dir / "colmap" / "sparse" / "0"
+
+    def test_colmap_sparse_dir_4s(self):
+        """Test that skip_factor=4 returns sparse_4s directory."""
+        project_dir = Path("/tmp/project")
+        result = get_colmap_sparse_dir(project_dir, 4)
+        assert result == project_dir / "colmap" / "sparse_4s" / "0"
+
+
+class TestColmapSubsetCleanup:
+    def test_cleanup_does_nothing_for_original(self):
+        """Test that cleanup_colmap_subset doesn't touch original (skip_factor=1)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            colmap_dir = project_dir / "colmap"
+            colmap_dir.mkdir(parents=True)
+
+            original_db = colmap_dir / "database.db"
+            original_sparse = colmap_dir / "sparse" / "0"
+            original_db.touch()
+            original_sparse.mkdir(parents=True)
+
+            cleanup_colmap_subset(project_dir, 1)
+
+            assert original_db.exists()
+            assert original_sparse.exists()
+
+    def test_cleanup_removes_subset_files(self):
+        """Test that cleanup_colmap_subset removes subset database and sparse."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            colmap_dir = project_dir / "colmap"
+            colmap_dir.mkdir(parents=True)
+
+            subset_db = colmap_dir / "database_4s.db"
+            subset_sparse = colmap_dir / "sparse_4s" / "0"
+            subset_db.touch()
+            subset_sparse.mkdir(parents=True)
+
+            original_db = colmap_dir / "database.db"
+            original_sparse = colmap_dir / "sparse" / "0"
+            original_db.touch()
+            original_sparse.mkdir(parents=True)
+
+            cleanup_colmap_subset(project_dir, 4)
+
+            assert not subset_db.exists()
+            assert not (colmap_dir / "sparse_4s").exists()
+            assert original_db.exists()
+            assert original_sparse.exists()
+
+
+class TestBaselineErrorDetection:
+    def test_detects_invalid_gradient_error(self):
+        """Test that baseline error is detected from invalid gradient message."""
+        error = "RuntimeError: Function _RasterizeGaussiansBackward returned an invalid gradient at index 7"
+        assert is_baseline_error(error) is True
+
+    def test_detects_shape_mismatch_error(self):
+        """Test that baseline error is detected from shape mismatch."""
+        error = "got [0, 0, 3] but expected shape compatible with [0, 16, 3]"
+        assert is_baseline_error(error) is True
+
+    def test_ignores_unrelated_errors(self):
+        """Test that unrelated errors are not flagged as baseline errors."""
+        error = "RuntimeError: CUDA out of memory"
+        assert is_baseline_error(error) is False
+
+    def test_case_insensitive(self):
+        """Test that detection is case-insensitive."""
+        error = "INVALID GRADIENT error occurred"
+        assert is_baseline_error(error) is True
