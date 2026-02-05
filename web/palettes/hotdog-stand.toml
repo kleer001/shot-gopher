@@ -1,0 +1,19 @@
+# Hotdog Stand palette - The infamous Windows 3.1 high-contrast scheme
+# Bold red and yellow with maximum visual impact
+[palette]
+id = "hotdog-stand"
+name = "Hotdog Stand"
+icon = "hotdog"
+
+[colors]
+bg = "#ff0000"
+bg-card = "#ffff00"
+bg-hover = "#ff4444"
+border = "#000000"
+text = "#000000"
+text-dim = "#800000"
+accent = "#ffff00"
+accent-glow = "rgba(255, 255, 0, 0.5)"
+success = "#00ff00"
+warning = "#ffff00"
+danger = "#000000"

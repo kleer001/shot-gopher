@@ -1,0 +1,18 @@
+# Light palette - Clean light theme
+[palette]
+id = "light"
+name = "Light"
+icon = "sun"
+
+[colors]
+bg = "#f0f4f8"
+bg-card = "#ffffff"
+bg-hover = "#e8eef4"
+border = "#d1dce6"
+text = "#1a202c"
+text-dim = "#64748b"
+accent = "#2563eb"
+accent-glow = "rgba(37, 99, 235, 0.2)"
+success = "#059669"
+warning = "#d97706"
+danger = "#dc2626"

@@ -1,0 +1,18 @@
+# Forest palette - Nature-inspired green theme
+[palette]
+id = "forest"
+name = "Forest"
+icon = "tree"
+
+[colors]
+bg = "#0d1f17"
+bg-card = "#132b1f"
+bg-hover = "#1a3a28"
+border = "#2a5a3f"
+text = "#e0f2e9"
+text-dim = "#7fb89a"
+accent = "#22c55e"
+accent-glow = "rgba(34, 197, 94, 0.3)"
+success = "#22c55e"
+warning = "#eab308"
+danger = "#ef4444"

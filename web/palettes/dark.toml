@@ -1,0 +1,18 @@
+# Dark palette - Default dark theme
+[palette]
+id = "dark"
+name = "Dark"
+icon = "moon"
+
+[colors]
+bg = "#0a0e27"
+bg-card = "#131b3a"
+bg-hover = "#1a2547"
+border = "#1e2d5f"
+text = "#e0e7ff"
+text-dim = "#6b7db8"
+accent = "#3b82f6"
+accent-glow = "rgba(59, 130, 246, 0.3)"
+success = "#10b981"
+warning = "#f59e0b"
+danger = "#ef4444"
