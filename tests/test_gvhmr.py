@@ -168,8 +168,9 @@ class TestFindOrCreateVideo:
 class TestGvhmrOutputConversion:
     def test_conversion_smpl_params_global(self):
         pytest.importorskip("numpy")
+        pytest.importorskip("torch")
         import numpy as np
-        import pickle
+        import torch
 
         from run_mocap import save_motion_output
 
@@ -187,9 +188,8 @@ class TestGvhmrOutputConversion:
                 }
             }
 
-            gvhmr_output = gvhmr_dir / "output.pkl"
-            with open(gvhmr_output, 'wb') as f:
-                pickle.dump(gvhmr_data, f)
+            gvhmr_output = gvhmr_dir / "hmr4d_results.pt"
+            torch.save(gvhmr_data, gvhmr_output)
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 
@@ -263,8 +263,9 @@ class TestGvhmrOutputConversion:
     def test_conversion_direct_global_orient(self):
         """Test conversion when global_orient is at top level (not under smpl_params_global)."""
         pytest.importorskip("numpy")
+        pytest.importorskip("torch")
         import numpy as np
-        import pickle
+        import torch
 
         from run_mocap import save_motion_output
 
@@ -280,9 +281,8 @@ class TestGvhmrOutputConversion:
                 'betas': np.zeros(10),
             }
 
-            gvhmr_output = gvhmr_dir / "global_output.pkl"
-            with open(gvhmr_output, 'wb') as f:
-                pickle.dump(gvhmr_data, f)
+            gvhmr_output = gvhmr_dir / "hmr4d_results.pt"
+            torch.save(gvhmr_data, gvhmr_output)
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 
@@ -298,8 +298,9 @@ class TestGvhmrOutputConversion:
     def test_conversion_short_body_pose(self):
         """Test conversion when body_pose has fewer than 63 elements."""
         pytest.importorskip("numpy")
+        pytest.importorskip("torch")
         import numpy as np
-        import pickle
+        import torch
 
         from run_mocap import save_motion_output
 
@@ -317,9 +318,8 @@ class TestGvhmrOutputConversion:
                 }
             }
 
-            gvhmr_output = gvhmr_dir / "output.pkl"
-            with open(gvhmr_output, 'wb') as f:
-                pickle.dump(gvhmr_data, f)
+            gvhmr_output = gvhmr_dir / "hmr4d_results.pt"
+            torch.save(gvhmr_data, gvhmr_output)
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 
@@ -334,8 +334,9 @@ class TestGvhmrOutputConversion:
     def test_conversion_multi_person(self):
         """Test conversion with multiple person directories."""
         pytest.importorskip("numpy")
+        pytest.importorskip("torch")
         import numpy as np
-        import pickle
+        import torch
 
         from run_mocap import save_motion_output
 
@@ -357,9 +358,8 @@ class TestGvhmrOutputConversion:
                     }
                 }
 
-                gvhmr_output = person_dir / "output.pkl"
-                with open(gvhmr_output, 'wb') as f:
-                    pickle.dump(gvhmr_data, f)
+                gvhmr_output = person_dir / "hmr4d_results.pt"
+                torch.save(gvhmr_data, gvhmr_output)
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 
@@ -443,8 +443,9 @@ class TestSaveMotionOutputMultiPerson:
     def test_multi_person_defaults_to_first(self):
         """Test that multi-person output defaults to person_0 as primary."""
         pytest.importorskip("numpy")
+        pytest.importorskip("torch")
         import numpy as np
-        import pickle
+        import torch
 
         from run_mocap import save_motion_output
 
@@ -466,9 +467,8 @@ class TestSaveMotionOutputMultiPerson:
                     }
                 }
 
-                gvhmr_output = person_dir / "output.pkl"
-                with open(gvhmr_output, 'wb') as f:
-                    pickle.dump(gvhmr_data, f)
+                gvhmr_output = person_dir / "hmr4d_results.pt"
+                torch.save(gvhmr_data, gvhmr_output)
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 
