@@ -897,7 +897,20 @@ def run_gsir_pipeline(
                 print(f"  → Original COLMAP model not found, cannot create subset")
                 continue
 
+            # Check if frame subset needs regeneration (old naming vs new naming)
             frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+            if frame_files:
+                first_frame = sorted(frame_files)[0]
+                original_frames = project_dir / "source" / "frames"
+                expected_target = original_frames / first_frame.name
+                if first_frame.is_symlink():
+                    actual_target = first_frame.resolve()
+                    if actual_target.name != first_frame.name:
+                        print(f"  → Regenerating frame subset (old naming scheme detected)")
+                        from pipeline_utils import create_frame_subsets
+                        create_frame_subsets(original_frames, [skip_factor])
+                        frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+
             frame_names = {f.name for f in frame_files}
 
             if not extract_colmap_subset(original_sparse, colmap_sparse, frame_names):
