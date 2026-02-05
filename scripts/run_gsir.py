@@ -48,6 +48,16 @@ DEFAULT_ITERATIONS_STAGE1 = 30000
 DEFAULT_ITERATIONS_STAGE2 = 35000
 DEFAULT_SH_DEGREE = 3
 
+# Frame skip factors for fallback (try denser first)
+FRAME_SKIP_FACTORS = [1, 4, 8, 16]
+
+# Error patterns indicating insufficient camera baseline
+BASELINE_ERROR_PATTERNS = [
+    "invalid gradient",
+    "got [0, 0, 3] but expected shape compatible with [0,",
+    "got [0, 16, 3]",
+]
+
 
 def _verify_gsir_module_importable() -> bool:
     """Check if the gs_ir CUDA module is importable.
@@ -127,6 +137,126 @@ def check_gsir_available() -> tuple[bool, Optional[Path]]:
     return True, gsir_path
 
 
+def is_baseline_error(error_output: str) -> bool:
+    """Check if error output indicates insufficient camera baseline.
+
+    This error occurs when cameras are too close together (e.g., slow-moving
+    shots) causing all Gaussian points to be pruned during training.
+
+    Args:
+        error_output: stderr/stdout from GS-IR training
+
+    Returns:
+        True if the error is due to insufficient baseline
+    """
+    error_lower = error_output.lower()
+    return any(pattern.lower() in error_lower for pattern in BASELINE_ERROR_PATTERNS)
+
+
+def get_frame_subset_dir(project_dir: Path, skip_factor: int) -> Path:
+    """Get the frame directory for a given skip factor.
+
+    Args:
+        project_dir: Project directory
+        skip_factor: Frame skip factor (1 = all frames, 4 = every 4th, etc.)
+
+    Returns:
+        Path to frame directory
+    """
+    if skip_factor == 1:
+        return project_dir / "source" / "frames"
+    return project_dir / "source" / f"frames_{skip_factor}s"
+
+
+def get_colmap_sparse_dir(project_dir: Path, skip_factor: int) -> Path:
+    """Get the COLMAP sparse directory for a given skip factor.
+
+    Args:
+        project_dir: Project directory
+        skip_factor: Frame skip factor
+
+    Returns:
+        Path to COLMAP sparse directory
+    """
+    if skip_factor == 1:
+        return project_dir / "colmap" / "sparse" / "0"
+    return project_dir / "colmap" / f"sparse_{skip_factor}s" / "0"
+
+
+def run_colmap_on_subset(project_dir: Path, skip_factor: int) -> bool:
+    """Run COLMAP reconstruction on a frame subset.
+
+    Runs COLMAP in a sandboxed way that doesn't pollute the original 1s
+    reconstruction. The original colmap/sparse/0/ is backed up and restored.
+
+    Args:
+        project_dir: Project directory
+        skip_factor: Frame skip factor
+
+    Returns:
+        True if COLMAP succeeded
+    """
+    from run_colmap import run_colmap_reconstruction
+
+    frames_dir = get_frame_subset_dir(project_dir, skip_factor)
+    if not frames_dir.exists():
+        print(f"    Error: Frame subset not found: {frames_dir}", file=sys.stderr)
+        return False
+
+    frame_count = len(list(frames_dir.glob("*.png")))
+    print(f"  → Running COLMAP on {skip_factor}s subset ({frame_count} frames)")
+
+    colmap_base = project_dir / "colmap"
+    original_sparse = colmap_base / "sparse" / "0"
+    original_frames = project_dir / "source" / "frames"
+
+    temp_sparse_backup = colmap_base / "sparse_1s_backup"
+    temp_frames_backup = project_dir / "source" / "frames_1s_backup"
+
+    try:
+        if original_sparse.exists():
+            print(f"    Backing up original COLMAP sparse model...")
+            if temp_sparse_backup.exists():
+                shutil.rmtree(temp_sparse_backup)
+            shutil.copytree(original_sparse, temp_sparse_backup)
+
+        if original_frames.exists():
+            original_frames.rename(temp_frames_backup)
+        frames_dir.rename(original_frames)
+
+        success = run_colmap_reconstruction(
+            project_dir=project_dir,
+            quality="medium",
+            run_dense=False,
+            run_mesh=False,
+            use_masks=False,
+        )
+
+        if success:
+            dst_sparse = get_colmap_sparse_dir(project_dir, skip_factor)
+            if original_sparse.exists():
+                dst_sparse.parent.mkdir(parents=True, exist_ok=True)
+                if dst_sparse.exists():
+                    shutil.rmtree(dst_sparse)
+                shutil.copytree(original_sparse, dst_sparse)
+                print(f"    Saved {skip_factor}s reconstruction to {dst_sparse.parent.name}/")
+
+        return success
+
+    finally:
+        if original_frames.exists():
+            original_frames.rename(frames_dir)
+        if temp_frames_backup.exists():
+            temp_frames_backup.rename(original_frames)
+
+        if temp_sparse_backup.exists():
+            print(f"    Restoring original COLMAP sparse model...")
+            if original_sparse.exists():
+                shutil.rmtree(original_sparse)
+            shutil.copytree(temp_sparse_backup, original_sparse)
+            shutil.rmtree(temp_sparse_backup)
+
+
 def run_colmap_undistorter(
     colmap_dir: Path,
     output_dir: Path,
@@ -194,7 +324,8 @@ def run_colmap_undistorter(
 
 def setup_gsir_data_structure(
     project_dir: Path,
-    gsir_data_dir: Path
+    gsir_data_dir: Path,
+    skip_factor: int = 1
 ) -> bool:
     """Set up the data structure expected by GS-IR.
 
@@ -208,6 +339,7 @@ def setup_gsir_data_structure(
     Args:
         project_dir: Our project directory
         gsir_data_dir: Directory to set up for GS-IR
+        skip_factor: Frame skip factor (1 = all frames, 4 = every 4th, etc.)
 
     Returns:
         True if setup succeeded
@@ -215,9 +347,9 @@ def setup_gsir_data_structure(
     gsir_data_dir.mkdir(parents=True, exist_ok=True)
 
     colmap_dir = project_dir / "colmap"
-    colmap_sparse_model = colmap_dir / "sparse" / "0"
-    source_frames = project_dir / "source" / "frames"
-    undistorted_dir = colmap_dir / "undistorted"
+    colmap_sparse_model = get_colmap_sparse_dir(project_dir, skip_factor)
+    source_frames = get_frame_subset_dir(project_dir, skip_factor)
+    undistorted_dir = colmap_dir / f"undistorted_{skip_factor}s" if skip_factor > 1 else colmap_dir / "undistorted"
 
     if not colmap_sparse_model.exists():
         print(f"    Error: COLMAP sparse model not found: {colmap_sparse_model}", file=sys.stderr)
@@ -343,7 +475,7 @@ def run_gsir_training(
     iterations_stage2: int = DEFAULT_ITERATIONS_STAGE2,
     sh_degree: int = DEFAULT_SH_DEGREE,
     eval_mode: bool = True
-) -> bool:
+) -> tuple[bool, str]:
     """Run the two-stage GS-IR training process.
 
     Stage 1: Initial Gaussian Splatting reconstruction
@@ -360,7 +492,8 @@ def run_gsir_training(
         eval_mode: Enable evaluation mode
 
     Returns:
-        True if training succeeded
+        Tuple of (success, error_output) where error_output contains
+        stderr if training failed
     """
     model_path.mkdir(parents=True, exist_ok=True)
 
@@ -381,10 +514,12 @@ def run_gsir_training(
         if eval_mode:
             args["eval"] = True
 
-        run_gsir_command(
+        result = run_gsir_command(
             gsir_path, "train.py", args,
             f"Training stage 1 ({iterations_stage1} iterations)"
         )
+        if result.returncode != 0:
+            return False, result.stderr + result.stdout
 
     # Baking: Cache occlusions
     print("\n[GS-IR Baking: Caching Occlusions]")
@@ -397,10 +532,12 @@ def run_gsir_training(
             "checkpoint": str(checkpoint_stage1),
         }
 
-        run_gsir_command(
+        result = run_gsir_command(
             gsir_path, "baking.py", args,
             "Baking occlusions for indirect lighting"
         )
+        if result.returncode != 0:
+            return False, result.stderr + result.stdout
         baked_marker.touch()
 
     # Stage 2: Material decomposition
@@ -419,12 +556,14 @@ def run_gsir_training(
         if eval_mode:
             args["eval"] = True
 
-        run_gsir_command(
+        result = run_gsir_command(
             gsir_path, "train.py", args,
             f"Training stage 2 with PBR ({iterations_stage2} iterations)"
         )
+        if result.returncode != 0:
+            return False, result.stderr + result.stdout
 
-    return checkpoint_stage2.exists()
+    return checkpoint_stage2.exists(), ""
 
 
 def export_materials(
@@ -589,48 +728,99 @@ def run_gsir_pipeline(
     print()
 
     # Setup paths
-    gsir_data_dir = project_dir / "gsir" / "data"
-    gsir_model_dir = project_dir / "gsir" / "model"
-    materials_output = project_dir / "camera"  # Output alongside camera data
+    materials_output = project_dir / "camera"
+    successful_skip = None
 
-    # Setup data structure
-    print("[Setup] Preparing data structure")
-    if not setup_gsir_data_structure(project_dir, gsir_data_dir):
-        return False
+    # Try training with fallback to sparser sampling
+    for skip_factor in FRAME_SKIP_FACTORS:
+        gsir_data_dir = project_dir / "gsir" / f"data_{skip_factor}s" if skip_factor > 1 else project_dir / "gsir" / "data"
+        gsir_model_dir = project_dir / "gsir" / f"model_{skip_factor}s" if skip_factor > 1 else project_dir / "gsir" / "model"
 
-    # Run training
-    try:
+        # Check if COLMAP exists for this subset
+        colmap_sparse = get_colmap_sparse_dir(project_dir, skip_factor)
+        frames_dir = get_frame_subset_dir(project_dir, skip_factor)
+
+        if not frames_dir.exists():
+            print(f"  → Frame subset {skip_factor}s not found, skipping")
+            continue
+
+        # Run COLMAP on subset if needed (skip_factor > 1 and no sparse model)
+        if skip_factor > 1 and not colmap_sparse.exists():
+            print(f"\n[Fallback] Attempting with {skip_factor}s frame sampling")
+            if not run_colmap_on_subset(project_dir, skip_factor):
+                print(f"  → COLMAP failed on {skip_factor}s subset, trying next")
+                continue
+
+        if not colmap_sparse.exists():
+            print(f"  → COLMAP sparse model not found for {skip_factor}s, skipping")
+            continue
+
+        # Setup data structure for this subset
+        print(f"\n[Setup] Preparing data structure ({skip_factor}s sampling)")
+        if not setup_gsir_data_structure(project_dir, gsir_data_dir, skip_factor=skip_factor):
+            continue
+
         checkpoint = gsir_model_dir / f"chkpnt{iterations_stage2}.pth"
 
         if skip_training and checkpoint.exists():
             print("\n[Training] Skipping (checkpoint exists)")
-        else:
-            if not run_gsir_training(
+            successful_skip = skip_factor
+            break
+
+        try:
+            success, error_output = run_gsir_training(
                 gsir_path=gsir_path,
                 source_path=gsir_data_dir,
                 model_path=gsir_model_dir,
                 iterations_stage1=iterations_stage1,
                 iterations_stage2=iterations_stage2,
-            ):
-                print("GS-IR training failed", file=sys.stderr)
+            )
+
+            if success:
+                successful_skip = skip_factor
+                print(f"  → GS-IR training succeeded with {skip_factor}s sampling")
+                break
+
+            if is_baseline_error(error_output):
+                print(f"  → Insufficient camera baseline with {skip_factor}s sampling")
+                print(f"  → Trying sparser frame sampling...")
+                # Clean up failed attempt
+                if gsir_model_dir.exists():
+                    shutil.rmtree(gsir_model_dir)
+                continue
+            else:
+                print(f"GS-IR training failed (non-baseline error)", file=sys.stderr)
                 return False
 
-        # Export materials
-        if not export_materials(
-            gsir_path=gsir_path,
-            source_path=gsir_data_dir,
-            model_path=gsir_model_dir,
-            output_dir=materials_output,
-            checkpoint=checkpoint,
-        ):
-            print("GS-IR export failed", file=sys.stderr)
+        except subprocess.CalledProcessError as e:
+            print(f"\nGS-IR command failed: {e}", file=sys.stderr)
+            return False
+        except subprocess.TimeoutExpired:
+            print(f"\nGS-IR command timed out", file=sys.stderr)
             return False
 
-    except subprocess.CalledProcessError as e:
-        print(f"\nGS-IR command failed: {e}", file=sys.stderr)
+    if successful_skip is None:
+        print("GS-IR training failed with all frame sampling rates", file=sys.stderr)
         return False
-    except subprocess.TimeoutExpired:
-        print(f"\nGS-IR command timed out", file=sys.stderr)
+
+    # Use the successful model and data directories
+    gsir_data_dir = project_dir / "gsir" / f"data_{successful_skip}s" if successful_skip > 1 else project_dir / "gsir" / "data"
+    gsir_model_dir = project_dir / "gsir" / f"model_{successful_skip}s" if successful_skip > 1 else project_dir / "gsir" / "model"
+    checkpoint = gsir_model_dir / f"chkpnt{iterations_stage2}.pth"
+
+    # Record which sampling rate succeeded
+    skip_marker = project_dir / "gsir" / "selected_skip.txt"
+    skip_marker.write_text(f"{successful_skip}s\n")
+
+    # Export materials
+    if not export_materials(
+        gsir_path=gsir_path,
+        source_path=gsir_data_dir,
+        model_path=gsir_model_dir,
+        output_dir=materials_output,
+        checkpoint=checkpoint,
+    ):
+        print("GS-IR export failed", file=sys.stderr)
         return False
 
     # Validate outputs

@@ -23,6 +23,7 @@ from pipeline_constants import START_FRAME
 from pipeline_utils import (
     clear_gpu_memory,
     clear_output_directory,
+    create_frame_subsets,
     extract_frames,
     generate_preview_movie,
     run_command,
@@ -341,6 +342,9 @@ def run_stage_ingest(
 
     frame_count = extract_frames(config.input_path, ctx.source_frames, START_FRAME, ctx.fps)
     print(f"  → Extracted {frame_count} frames")
+
+    print("  → Creating frame subsets for GS-IR fallback")
+    create_frame_subsets(ctx.source_frames)
 
     _copy_source_preview(ctx, config)
     return True
