@@ -184,9 +184,14 @@ def get_colmap_sparse_dir(project_dir: Path, skip_factor: int) -> Path:
 
 
 def cleanup_colmap_subset(project_dir: Path, skip_factor: int) -> None:
-    """Clean up COLMAP files for a failed subset reconstruction.
+    """Clean up COLMAP and GS-IR files for a failed subset reconstruction.
 
-    Removes the database and sparse model directories for the given skip factor.
+    Removes all artifacts created for the given skip factor:
+    - database_Xs.db
+    - sparse_Xs/
+    - undistorted_Xs/
+    - gsir/data_Xs/
+
     Does nothing for skip_factor=1 (the original reconstruction).
 
     Args:
@@ -199,11 +204,17 @@ def cleanup_colmap_subset(project_dir: Path, skip_factor: int) -> None:
     colmap_base = project_dir / "colmap"
     database_path = colmap_base / f"database_{skip_factor}s.db"
     sparse_path = colmap_base / f"sparse_{skip_factor}s"
+    undistorted_path = colmap_base / f"undistorted_{skip_factor}s"
+    gsir_data_path = project_dir / "gsir" / f"data_{skip_factor}s"
 
     if database_path.exists():
         database_path.unlink()
     if sparse_path.exists():
         shutil.rmtree(sparse_path)
+    if undistorted_path.exists():
+        shutil.rmtree(undistorted_path)
+    if gsir_data_path.exists():
+        shutil.rmtree(gsir_data_path)
 
 
 def run_colmap_on_subset(project_dir: Path, skip_factor: int) -> bool:
@@ -799,6 +810,7 @@ def run_gsir_pipeline(
         # Setup data structure for this subset
         print(f"\n[Setup] Preparing data structure ({skip_factor}s sampling)")
         if not setup_gsir_data_structure(project_dir, gsir_data_dir, skip_factor=skip_factor):
+            cleanup_colmap_subset(project_dir, skip_factor)
             continue
 
         checkpoint = gsir_model_dir / f"chkpnt{iterations_stage2}.pth"

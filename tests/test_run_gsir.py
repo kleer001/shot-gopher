@@ -256,7 +256,7 @@ class TestColmapSubsetCleanup:
             assert original_sparse.exists()
 
     def test_cleanup_removes_subset_files(self):
-        """Test that cleanup_colmap_subset removes subset database and sparse."""
+        """Test that cleanup_colmap_subset removes all subset artifacts."""
         with tempfile.TemporaryDirectory() as tmpdir:
             project_dir = Path(tmpdir)
             colmap_dir = project_dir / "colmap"
@@ -264,20 +264,29 @@ class TestColmapSubsetCleanup:
 
             subset_db = colmap_dir / "database_4s.db"
             subset_sparse = colmap_dir / "sparse_4s" / "0"
+            subset_undistorted = colmap_dir / "undistorted_4s" / "images"
+            subset_gsir_data = project_dir / "gsir" / "data_4s"
             subset_db.touch()
             subset_sparse.mkdir(parents=True)
+            subset_undistorted.mkdir(parents=True)
+            subset_gsir_data.mkdir(parents=True)
 
             original_db = colmap_dir / "database.db"
             original_sparse = colmap_dir / "sparse" / "0"
+            original_undistorted = colmap_dir / "undistorted" / "images"
             original_db.touch()
             original_sparse.mkdir(parents=True)
+            original_undistorted.mkdir(parents=True)
 
             cleanup_colmap_subset(project_dir, 4)
 
             assert not subset_db.exists()
             assert not (colmap_dir / "sparse_4s").exists()
+            assert not (colmap_dir / "undistorted_4s").exists()
+            assert not (project_dir / "gsir" / "data_4s").exists()
             assert original_db.exists()
             assert original_sparse.exists()
+            assert original_undistorted.exists()
 
 
 class TestBaselineErrorDetection:
