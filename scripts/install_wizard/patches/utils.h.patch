@@ -1,0 +1,9 @@
+--- a/gs-ir/src/utils.h
++++ b/gs-ir/src/utils.h
+@@ -1,5 +1,6 @@
+ #pragma once
+
++#include <cstdint>
+ #include <math.h>
+ #include <torch/extension.h>
+

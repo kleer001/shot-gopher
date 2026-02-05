@@ -413,7 +413,25 @@ class GSIRInstaller(ComponentInstaller):
             return False
         train_py = self.install_dir / "train.py"
         gsir_module = self.install_dir / "gs-ir"
-        self.installed = train_py.exists() and gsir_module.exists()
+        if not (train_py.exists() and gsir_module.exists()):
+            self.installed = False
+            return False
+
+        if self.conda_manager and self.conda_manager.conda_exe:
+            success, _ = run_command([
+                self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                "python", "-c", "import gs_ir"
+            ], check=False, capture=True)
+        else:
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, "-c", "import gs_ir"],
+                capture_output=True,
+                timeout=10
+            )
+            success = result.returncode == 0
+
+        self.installed = success
         return self.installed
 
     def _run_pip(self, args: list) -> bool:
@@ -426,6 +444,48 @@ class GSIRInstaller(ComponentInstaller):
             cmd = [sys.executable, "-m", "pip"] + args
         success, _ = run_command(cmd, check=False)
         return success
+
+    def _apply_patches(self) -> bool:
+        """Apply patches to fix CUDA compilation issues in GS-IR.
+
+        The gs-ir CUDA source files are missing #include <cstdint> which
+        causes compilation to fail with 'uint32_t is undefined' errors.
+        This is a known issue (GS-IR GitHub issue #37).
+        """
+        gsir_src = self.install_dir / "gs-ir" / "src"
+        if not gsir_src.exists():
+            return True
+
+        patched_any = False
+        cuda_files = ["utils.h", "pbr_utils.cuh"]
+
+        for filename in cuda_files:
+            target_file = gsir_src / filename
+            if not target_file.exists():
+                continue
+
+            content = target_file.read_text()
+            if "#include <cstdint>" in content:
+                continue
+
+            lines = content.split("\n")
+            new_lines = []
+            inserted = False
+            for line in lines:
+                new_lines.append(line)
+                if not inserted and line.strip() == "#pragma once":
+                    new_lines.append("")
+                    new_lines.append("#include <cstdint>")
+                    inserted = True
+
+            if inserted:
+                target_file.write_text("\n".join(new_lines))
+                print_info(f"  Patched {filename} (added #include <cstdint>)")
+                patched_any = True
+
+        if patched_any:
+            print_success("Applied CUDA compatibility patches")
+        return True
 
     def install(self) -> bool:
         print(f"\nInstalling GS-IR from https://github.com/lzhnb/GS-IR.git...")
@@ -448,9 +508,14 @@ class GSIRInstaller(ComponentInstaller):
                 print_error("Failed to clone GS-IR")
                 return False
 
-        print("  Installing kornia...")
-        if not self._run_pip(["install", "kornia"]):
-            print_warning("Failed to install kornia")
+        print("  Applying CUDA compatibility patches...")
+        self._apply_patches()
+
+        print("  Installing Python dependencies...")
+        missing_deps = ["kornia", "tensorboard", "imageio", "lpips"]
+        for dep in missing_deps:
+            if not self._run_pip(["install", dep]):
+                print_warning(f"Failed to install {dep}")
 
         print("  Installing nvdiffrast...")
         if not self._run_pip(["install", "--no-build-isolation", "git+https://github.com/NVlabs/nvdiffrast.git"]):
@@ -484,7 +549,7 @@ class GSIRInstaller(ComponentInstaller):
         gsir_module = self.install_dir / "gs-ir"
         print("  Installing gs-ir module...")
         if gsir_module.exists():
-            if not self._run_pip(["install", "-e", str(gsir_module)]):
+            if not self._run_pip(["install", "--no-build-isolation", "-e", str(gsir_module)]):
                 print_warning("Failed to install gs-ir module (may work without it)")
         else:
             print_warning("gs-ir module directory not found")

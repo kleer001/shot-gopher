@@ -327,6 +327,55 @@ def get_video_info(input_path: Path) -> dict:
     return json.loads(result.stdout)
 
 
+GSIR_FRAME_SKIPS = [1, 4, 8, 16]
+
+
+def create_frame_subsets(
+    source_frames_dir: Path,
+    skip_factors: list[int] = None,
+) -> dict[int, Path]:
+    """Create subsampled frame directories using symlinks for GS-IR fallback.
+
+    For slow-moving camera shots, GS-IR may fail due to insufficient camera
+    baseline. This creates sparser frame subsets that can be tried as fallbacks.
+
+    Args:
+        source_frames_dir: Directory containing all extracted frames (frames/)
+        skip_factors: List of skip factors (e.g., [4, 8, 16] for every 4th, 8th, 16th frame)
+
+    Returns:
+        Dict mapping skip factor to subset directory path
+    """
+    if skip_factors is None:
+        skip_factors = [s for s in GSIR_FRAME_SKIPS if s > 1]
+
+    source_frames = sorted(source_frames_dir.glob("frame_*.png"))
+    if not source_frames:
+        return {}
+
+    subsets = {}
+    parent_dir = source_frames_dir.parent
+
+    for skip in skip_factors:
+        subset_dir = parent_dir / f"frames_{skip}s"
+        subset_dir.mkdir(parents=True, exist_ok=True)
+
+        for old_file in subset_dir.glob("*.png"):
+            old_file.unlink()
+
+        for i, frame_path in enumerate(source_frames):
+            if i % skip == 0:
+                link_path = subset_dir / frame_path.name
+                if not link_path.exists():
+                    link_path.symlink_to(frame_path.resolve())
+
+        subsets[skip] = subset_dir
+        frame_count = len(list(subset_dir.glob("*.png")))
+        print(f"    Created {subset_dir.name}/ with {frame_count} frames (every {skip}th)")
+
+    return subsets
+
+
 def generate_preview_movie(
     image_dir: Path,
     output_path: Path,
