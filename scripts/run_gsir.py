@@ -515,7 +515,7 @@ def run_gsir_command(
     )
     runner = ProcessRunner(progress_tracker=tracker, shell=True)
 
-    return runner.run([shell_cmd], description=description, timeout=timeout)
+    return runner.run([shell_cmd], description=description, timeout=timeout, check=False)
 
 
 def run_gsir_training(
@@ -649,10 +649,13 @@ def export_materials(
         "skip_test": True,
     }
 
-    run_gsir_command(
+    result = run_gsir_command(
         gsir_path, "render.py", args,
         "Rendering PBR material maps"
     )
+    if result.returncode != 0:
+        print(f"    Error: render.py failed", file=sys.stderr)
+        return False
 
     # Find the output directory created by GS-IR
     # Format: {model_path}/train/ours_{iteration}/ (COLMAP uses train split only)
@@ -846,9 +849,6 @@ def run_gsir_pipeline(
                 print(f"GS-IR training failed (non-baseline error)", file=sys.stderr)
                 return False
 
-        except subprocess.CalledProcessError as e:
-            print(f"\nGS-IR command failed: {e}", file=sys.stderr)
-            return False
         except subprocess.TimeoutExpired:
             print(f"\nGS-IR command timed out", file=sys.stderr)
             return False

@@ -337,6 +337,9 @@ def run_stage_ingest(
 
     if ctx.skip_existing and list(ctx.source_frames.glob("*.png")):
         print("  → Skipping (frames exist)")
+        if not (ctx.source_frames.parent / "frames_4s").exists():
+            print("  → Creating frame subsets for GS-IR fallback")
+            create_frame_subsets(ctx.source_frames)
         _copy_source_preview(ctx, config)
         return True
 
