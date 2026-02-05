@@ -40,49 +40,80 @@ Before implementing:
 
 **Minimum code that solves the problem. Nothing speculative.**
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Self-check: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+- No features beyond what was asked
+- No abstractions for single-use code
+- No "flexibility" or "configurability" that wasn't requested
+- No defensive code for scenarios the caller cannot produce
+- If 200 lines could be 50, rewrite it
 
 ### Surgical Changes
 
 **Touch only what you must. Clean up only your own mess.**
 
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it—don't delete it.
+- Don't "improve" adjacent code, comments, or formatting
+- Don't refactor things that aren't broken
+- Match existing style, even if you'd do it differently
+- If you notice unrelated dead code, mention it—don't delete it
+- Remove only imports/variables/functions that YOUR changes orphaned
 
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
+### No Unrequested Fallbacks
 
-The test: Every changed line should trace directly to the user's request.
+**Do one thing. If it fails, report—don't silently try alternatives.**
+
+Violations:
+- `try: primary() except: fallback()` — just call `primary()`
+- "If the file doesn't exist, create it" — if it should exist, raise
+- Retry loops for operations that aren't network calls
+- Multiple implementation strategies "for robustness"
+
+Unrequested fallbacks hide bugs, complicate debugging, and add untested code paths.
+
+**The rule:** One path. Let it fail loudly.
 
 ### Goal-Driven Execution
 
-**Define success criteria. Loop until verified.**
+**State success criteria before implementing. Verify after.**
 
 Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+- "Add validation" → "Tests for invalid inputs pass"
+- "Fix the bug" → "Regression test passes"
+- "Refactor X" → "Tests pass before and after"
 
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
+---
 
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+## Enforcement Checklist
 
-**Success indicator:** Fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+Before proposing code changes, pass these checks. Violations are grounds for rejection.
+
+### Scope Check
+- [ ] List files to modify: `[file1, file2, ...]`
+- [ ] Each file traces to user request or direct dependency
+- [ ] No "while I'm here" improvements
+
+**Violations:** Reformatting untouched code, adding types to unmodified functions, "cleaning up" adjacent code.
+
+### Complexity Check
+- [ ] No new classes/modules unless requested
+- [ ] No new abstractions for single use
+- [ ] No configuration options unless requested
+- [ ] No fallback/retry logic unless requested
+
+**Violations:** Creating `utils/helpers.py` for one function, adding `**kwargs` for flexibility, `try X except: Y` when only X was asked.
+
+### Diff Audit
+- [ ] Diff under 100 lines (excluding tests), or justification provided
+- [ ] No whitespace-only changes outside modified blocks
+- [ ] No comment changes unless behavior changed
+- [ ] Removed code: only YOUR orphans
+
+**Violations:** 50 files changed for a "small fix", deleted pre-existing unused imports, added docstrings to untouched functions.
+
+### Verification Gate
+- [ ] Success criteria stated before implementation
+- [ ] Verification method identified (test, type check, manual)
+- [ ] Verification ran and passed
+
+**Violations:** "I think this works" without running it, implementing without defining "done", skipping tests for "simple changes".
 
 ---
 
