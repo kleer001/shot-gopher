@@ -237,6 +237,7 @@ def run_colmap_on_subset(project_dir: Path, skip_factor: int) -> bool:
         run_sparse_reconstruction,
         VirtualDisplay,
         QUALITY_PRESETS,
+        count_model_images,
     )
 
     frames_dir = get_frame_subset_dir(project_dir, skip_factor)
@@ -294,7 +295,16 @@ def run_colmap_on_subset(project_dir: Path, skip_factor: int) -> bool:
             )
 
             if success:
-                print(f"    COLMAP succeeded for {skip_factor}s sampling")
+                model_path = sparse_path / "0"
+                registered = count_model_images(model_path) if model_path.exists() else 0
+                min_required = max(10, frame_count // 3)
+
+                if registered < min_required:
+                    print(f"    COLMAP registered only {registered}/{frame_count} images (need {min_required})")
+                    print(f"    Reconstruction quality too poor for GS-IR")
+                    return False
+
+                print(f"    COLMAP succeeded for {skip_factor}s ({registered}/{frame_count} images)")
                 return True
             else:
                 print(f"    COLMAP reconstruction failed for {skip_factor}s sampling")
@@ -846,7 +856,9 @@ def run_gsir_pipeline(
                 cleanup_colmap_subset(project_dir, skip_factor)
                 continue
             else:
-                print(f"GS-IR training failed (non-baseline error)", file=sys.stderr)
+                print(f"GS-IR training failed (non-baseline error):", file=sys.stderr)
+                for line in error_output.strip().split('\n')[-20:]:
+                    print(f"    {line}", file=sys.stderr)
                 return False
 
         except subprocess.TimeoutExpired:
