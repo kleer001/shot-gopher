@@ -359,6 +359,7 @@ This ensures:
 3. **No single-use abstractions.** No helpers for one call site.
 4. **Verify before done.** Run it. Test it. Don't guess.
 5. **Uncertain? Ask.** Don't pick silently between interpretations.
+6. **Re-read rules 1-5.**
 
 ---
 
