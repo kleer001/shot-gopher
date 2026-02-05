@@ -352,6 +352,16 @@ This ensures:
 
 ---
 
-**Version:** 1.3
+## Critical Rules (Summary)
+
+1. **One path, no fallbacks.** Don't `try X except: Y`. Let it fail.
+2. **Touch only what's asked.** No adjacent "improvements."
+3. **No single-use abstractions.** No helpers for one call site.
+4. **Verify before done.** Run it. Test it. Don't guess.
+5. **Uncertain? Ask.** Don't pick silently between interpretations.
+
+---
+
+**Version:** 1.4
 **Last Updated:** 2026-02-05
 **Maintained By:** Project Team
