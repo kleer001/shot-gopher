@@ -280,7 +280,7 @@ def _find_comfyui_pids_unix() -> list:
 
 
 def _find_comfyui_pids_windows() -> list:
-    """Find ComfyUI process PIDs on Windows using PowerShell (preferred) or wmic (fallback)."""
+    """Find ComfyUI process PIDs on Windows using PowerShell."""
     pids = []
     creation_flags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
 
@@ -289,58 +289,19 @@ def _find_comfyui_pids_windows() -> list:
         "Where-Object { $_.CommandLine -like '*main.py*' -and $_.CommandLine -like '*--listen*' } | "
         "Select-Object -ExpandProperty ProcessId"
     )
-    try:
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_cmd],
-            capture_output=True,
-            text=True,
-            creationflags=creation_flags
-        )
-        if result.returncode == 0:
-            for line in result.stdout.strip().split('\n'):
-                line = line.strip()
-                if line and line.isdigit():
-                    pids.append(line)
-    except Exception:
-        pass
-
-    if pids:
-        return pids
-
-    try:
-        result = subprocess.run(
-            ["wmic", "process", "where",
-             "CommandLine like '%main.py%' and CommandLine like '%--listen%'",
-             "get", "ProcessId"],
-            capture_output=True,
-            text=True,
-            creationflags=creation_flags
-        )
-        if result.returncode == 0:
-            for line in result.stdout.strip().split('\n'):
-                line = line.strip()
-                if line and line.isdigit():
-                    pids.append(line)
-    except Exception:
-        pass
-
-    if not pids:
-        try:
-            result = subprocess.run(
-                ["wmic", "process", "where",
-                 "CommandLine like '%ComfyUI%main.py%'",
-                 "get", "ProcessId"],
-                capture_output=True,
-                text=True,
-                creationflags=creation_flags
-            )
-            if result.returncode == 0:
-                for line in result.stdout.strip().split('\n'):
-                    line = line.strip()
-                    if line and line.isdigit():
-                        pids.append(line)
-        except Exception:
-            pass
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", ps_cmd],
+        capture_output=True,
+        text=True,
+        creationflags=creation_flags
+    )
+    if result.returncode == 0:
+        for line in result.stdout.strip().split('\n'):
+            line = line.strip()
+            if line and line.isdigit():
+                pids.append(line)
+    elif result.stderr.strip():
+        print(f"  Warning: PowerShell process search failed: {result.stderr.strip()}", file=sys.stderr)
 
     return pids
 

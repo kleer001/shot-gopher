@@ -47,7 +47,8 @@ def free_comfyui_memory(url: str = DEFAULT_COMFYUI_URL, unload_models: bool = Tr
         )
         with urllib.request.urlopen(req, timeout=30) as response:
             return response.status == 200
-    except Exception:
+    except Exception as e:
+        print(f"  Warning: Failed to free ComfyUI memory: {e}", file=sys.stderr)
         return False
 
 
@@ -155,51 +156,27 @@ def convert_workflow_to_api_format(
         # Skip connection-type inputs - they're handled via links
         widget_names = []
 
-        # Fallback widget names for common nodes when node_defs unavailable
-        fallback_widgets = {
-            "ImageToMask": ["channel"],
-            "ImageScale": ["upscale_method", "width", "height", "crop"],
-            "SaveImage": ["filename_prefix"],
-            "PreviewImage": [],
-            "VHS_LoadImagesPath": ["directory", "image_load_cap", "skip_first_images", "select_every_nth"],
-            "LoadVideoDepthAnythingModel": ["model"],
-            "VideoDepthAnythingProcess": ["input_size", "max_res", "precision"],
-            "VideoDepthAnythingOutput": ["colormap"],
-            "ProPainterInpaint": ["width", "height", "mask_dilates", "flow_mask_dilates", "ref_stride",
-                                  "neighbor_length", "subvideo_length", "raft_iter", "mode"],
-        }
-
-        if not node_def and node_type in fallback_widgets:
-            widget_names = fallback_widgets[node_type]
-        else:
-            for name, spec in required_inputs.items():
-                if isinstance(spec, list) and len(spec) > 0:
-                    first = spec[0]
-                    # If first element is a list, it's a dropdown (widget)
-                    # If first element is a string that's ALL_CAPS, it's likely a connection type
-                    if isinstance(first, list):
-                        widget_names.append(name)  # Dropdown widget
-                    elif isinstance(first, str):
-                        # Connection types are typically ALL_CAPS custom types
-                        # Widget types: INT, FLOAT, STRING, BOOLEAN, COMBO, or mixed-case
-                        # COMBO is used for dropdown/combo box widgets
-                        if first in ("INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"):
-                            widget_names.append(name)
-                        elif not first.isupper():
-                            # Mixed case = widget type
-                            widget_names.append(name)
-                        # else: ALL_CAPS = connection type, skip
-
-            for name, spec in optional_inputs.items():
-                if isinstance(spec, list) and len(spec) > 0:
-                    first = spec[0]
-                    if isinstance(first, list):
+        for name, spec in required_inputs.items():
+            if isinstance(spec, list) and len(spec) > 0:
+                first = spec[0]
+                if isinstance(first, list):
+                    widget_names.append(name)
+                elif isinstance(first, str):
+                    if first in ("INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"):
                         widget_names.append(name)
-                    elif isinstance(first, str):
-                        if first in ("INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"):
-                            widget_names.append(name)
-                        elif not first.isupper():
-                            widget_names.append(name)
+                    elif not first.isupper():
+                        widget_names.append(name)
+
+        for name, spec in optional_inputs.items():
+            if isinstance(spec, list) and len(spec) > 0:
+                first = spec[0]
+                if isinstance(first, list):
+                    widget_names.append(name)
+                elif isinstance(first, str):
+                    if first in ("INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"):
+                        widget_names.append(name)
+                    elif not first.isupper():
+                        widget_names.append(name)
 
         # Process linked inputs (connections)
         for inp in node_inputs:

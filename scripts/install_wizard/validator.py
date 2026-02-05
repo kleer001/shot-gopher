@@ -30,6 +30,7 @@ class InstallationValidator:
         self.conda_manager = conda_manager
         self.install_dir = install_dir
         self.base_dir = install_dir or INSTALL_DIR
+        self._checkpoint_issues: Dict[str, list] = {}
 
     def validate_python_imports(self) -> Dict[str, bool]:
         """Test importing key Python packages.
@@ -178,7 +179,6 @@ class InstallationValidator:
 
         results['gvhmr'] = gvhmr_valid
         if gvhmr_issues:
-            self._checkpoint_issues = getattr(self, '_checkpoint_issues', {})
             self._checkpoint_issues['gvhmr'] = gvhmr_issues
 
         econ_data_dir = base_dir / "ECON" / "data"
@@ -278,7 +278,7 @@ class InstallationValidator:
             if status:
                 print_success(f"{comp.upper()} checkpoints valid")
             else:
-                issues = getattr(self, '_checkpoint_issues', {}).get(comp, [])
+                issues = self._checkpoint_issues.get(comp, [])
                 if issues:
                     print_error(f"{comp.upper()} checkpoints invalid:")
                     for issue in issues:

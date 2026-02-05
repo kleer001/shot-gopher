@@ -5,7 +5,6 @@ and GPU memory management. No pipeline-specific logic.
 """
 
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -364,39 +363,13 @@ def generate_preview_movie(
         str(output_path)
     ]
 
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode == 0:
-            print(f"    → Created: {output_path.name}")
-            return True
-        else:
-            first_image = images[0]
-            match = re.search(r'(\d+)', first_image.stem)
-            if match:
-                num_digits = len(match.group(1))
-                prefix = first_image.stem[:match.start()]
-                suffix = first_image.suffix
-                input_pattern = str(image_dir / f"{prefix}%0{num_digits}d{suffix}")
-                start_num = int(match.group(1))
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"    → Created: {output_path.name}")
+        return True
 
-                cmd = [
-                    _get_ffmpeg(), "-y",
-                    "-framerate", str(fps),
-                    "-start_number", str(start_num),
-                    "-i", input_pattern,
-                    "-c:v", "libx264",
-                    "-crf", str(crf),
-                    "-pix_fmt", "yuv420p",
-                    "-movflags", "+faststart",
-                    str(output_path)
-                ]
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                if result.returncode == 0:
-                    print(f"    → Created: {output_path.name}")
-                    return True
-            return False
-    except Exception:
-        return False
+    print(f"    → FFmpeg failed: {result.stderr.strip()}", file=sys.stderr)
+    return False
 
 
 def get_image_dimensions(image_path: Path) -> tuple[int, int]:
