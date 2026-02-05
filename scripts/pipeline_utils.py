@@ -363,14 +363,11 @@ def create_frame_subsets(
         for old_file in subset_dir.glob("*.png"):
             old_file.unlink()
 
-        new_frame_num = 1
         for i, frame_path in enumerate(source_frames):
             if i % skip == 0:
-                new_name = f"frame_{new_frame_num:04d}.png"
-                link_path = subset_dir / new_name
+                link_path = subset_dir / frame_path.name
                 if not link_path.exists():
                     link_path.symlink_to(frame_path.resolve())
-                new_frame_num += 1
 
         subsets[skip] = subset_dir
         frame_count = len(list(subset_dir.glob("*.png")))

@@ -183,6 +183,87 @@ def get_colmap_sparse_dir(project_dir: Path, skip_factor: int) -> Path:
     return project_dir / "colmap" / f"sparse_{skip_factor}s" / "0"
 
 
+def extract_colmap_subset(
+    source_sparse: Path,
+    target_sparse: Path,
+    frame_names: set[str],
+) -> bool:
+    """Extract a subset of cameras from an existing COLMAP reconstruction.
+
+    Instead of re-running COLMAP on sparser frames (which often fails due to
+    poor feature matching), this extracts camera poses from the original
+    reconstruction for only the frames in the subset.
+
+    Args:
+        source_sparse: Path to source COLMAP sparse model (e.g., colmap/sparse/0/)
+        target_sparse: Path to write filtered model (e.g., colmap/sparse_4s/0/)
+        frame_names: Set of frame filenames to keep (e.g., {"frame_0001.png", "frame_0005.png"})
+
+    Returns:
+        True if extraction succeeded
+    """
+    import struct
+
+    cameras_bin = source_sparse / "cameras.bin"
+    images_bin = source_sparse / "images.bin"
+    points3D_bin = source_sparse / "points3D.bin"
+
+    if not all(f.exists() for f in [cameras_bin, images_bin, points3D_bin]):
+        print(f"    Error: Source COLMAP model incomplete", file=sys.stderr)
+        return False
+
+    target_sparse.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy(cameras_bin, target_sparse / "cameras.bin")
+    shutil.copy(points3D_bin, target_sparse / "points3D.bin")
+
+    with open(images_bin, "rb") as f:
+        num_images = struct.unpack("<Q", f.read(8))[0]
+
+        kept_images = []
+        for _ in range(num_images):
+            image_id = struct.unpack("<I", f.read(4))[0]
+            qvec = struct.unpack("<4d", f.read(32))
+            tvec = struct.unpack("<3d", f.read(24))
+            camera_id = struct.unpack("<I", f.read(4))[0]
+
+            name_bytes = b""
+            while True:
+                char = f.read(1)
+                if char == b"\x00":
+                    break
+                name_bytes += char
+            name = name_bytes.decode("utf-8")
+
+            num_points2D = struct.unpack("<Q", f.read(8))[0]
+            points2D_data = f.read(num_points2D * 24)
+
+            if name in frame_names:
+                kept_images.append({
+                    "image_id": image_id,
+                    "qvec": qvec,
+                    "tvec": tvec,
+                    "camera_id": camera_id,
+                    "name": name,
+                    "num_points2D": num_points2D,
+                    "points2D_data": points2D_data,
+                })
+
+    with open(target_sparse / "images.bin", "wb") as f:
+        f.write(struct.pack("<Q", len(kept_images)))
+        for img in kept_images:
+            f.write(struct.pack("<I", img["image_id"]))
+            f.write(struct.pack("<4d", *img["qvec"]))
+            f.write(struct.pack("<3d", *img["tvec"]))
+            f.write(struct.pack("<I", img["camera_id"]))
+            f.write(img["name"].encode("utf-8") + b"\x00")
+            f.write(struct.pack("<Q", img["num_points2D"]))
+            f.write(img["points2D_data"])
+
+    print(f"    Extracted {len(kept_images)}/{num_images} cameras from original reconstruction")
+    return len(kept_images) > 0
+
+
 def cleanup_colmap_subset(project_dir: Path, skip_factor: int) -> None:
     """Clean up COLMAP and GS-IR files for a failed subset reconstruction.
 
@@ -808,11 +889,19 @@ def run_gsir_pipeline(
             print(f"  → Frame subset {skip_factor}s not found, skipping")
             continue
 
-        # Run COLMAP on subset if needed (skip_factor > 1 and no sparse model)
+        # Extract camera subset from original COLMAP if needed
         if skip_factor > 1 and not colmap_sparse.exists():
             print(f"\n[Fallback] Attempting with {skip_factor}s frame sampling")
-            if not run_colmap_on_subset(project_dir, skip_factor):
-                print(f"  → COLMAP failed on {skip_factor}s subset, trying next")
+            original_sparse = get_colmap_sparse_dir(project_dir, 1)
+            if not original_sparse.exists():
+                print(f"  → Original COLMAP model not found, cannot create subset")
+                continue
+
+            frame_files = list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg"))
+            frame_names = {f.name for f in frame_files}
+
+            if not extract_colmap_subset(original_sparse, colmap_sparse, frame_names):
+                print(f"  → Failed to extract camera subset")
                 cleanup_colmap_subset(project_dir, skip_factor)
                 continue
 
