@@ -21,6 +21,7 @@ Examples:
     python scripts/install_wizard.py --component mocap_core # Install specific component
     python scripts/install_wizard.py --check-only     # Check status only
     python scripts/install_wizard.py --validate       # Run validation tests
+    python scripts/install_wizard.py --diagnose       # Show tool paths and GPU info
     python scripts/install_wizard.py --yolo           # Non-interactive full install
 """
     )
@@ -39,6 +40,11 @@ Examples:
         "--validate", "-v",
         action="store_true",
         help="Run validation tests on existing installation"
+    )
+    parser.add_argument(
+        "--diagnose", "-d",
+        action="store_true",
+        help="Show resolved tool paths, GPU info, and environment details"
     )
     parser.add_argument(
         "--resume", "-r",
@@ -63,6 +69,11 @@ Examples:
 
     if args.validate:
         wizard.validator.validate_and_report()
+        sys.exit(0)
+
+    if args.diagnose:
+        from diagnose import main as diagnose_main
+        diagnose_main()
         sys.exit(0)
 
     success = wizard.interactive_install(
