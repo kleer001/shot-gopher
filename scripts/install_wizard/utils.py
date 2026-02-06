@@ -198,9 +198,20 @@ def check_command_available(command: str) -> bool:
     return shutil.which(command) is not None
 
 
+def _find_nvidia_smi() -> str:
+    """Find nvidia-smi executable, checking PATH then known Windows locations."""
+    path = shutil.which("nvidia-smi")
+    if path:
+        return path
+    from .platform import PlatformManager
+    found = PlatformManager.find_tool("nvidia-smi")
+    return str(found) if found else "nvidia-smi"
+
+
 def check_gpu_available() -> Tuple[bool, str]:
     """Check if NVIDIA GPU is available."""
-    success, output = run_command(["nvidia-smi"], check=False, capture=True)
+    nvidia_smi = _find_nvidia_smi()
+    success, output = run_command([nvidia_smi], check=False, capture=True)
     if not success:
         return False, "No NVIDIA GPU detected (nvidia-smi failed)"
 
