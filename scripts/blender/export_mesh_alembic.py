@@ -43,7 +43,7 @@ def find_obj_files(input_dir: Path) -> list[Path]:
 def read_obj_vertices(filepath: Path) -> list[tuple[float, float, float]]:
     """Read vertex positions from OBJ file."""
     vertices = []
-    with open(filepath, 'r') as f:
+    with open(filepath, 'r', encoding='utf-8') as f:
         for line in f:
             if line.startswith('v '):
                 parts = line.split()

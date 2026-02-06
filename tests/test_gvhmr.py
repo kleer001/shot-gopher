@@ -114,6 +114,93 @@ class TestDetectStaticCamera:
             is_static = detect_static_camera(extrinsics_path)
             assert is_static is False
 
+    def test_verbose_warning_empty_extrinsics(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            extrinsics_path = Path(tmpdir) / "extrinsics.json"
+            with open(extrinsics_path, "w") as f:
+                json.dump([], f)
+
+            is_static = detect_static_camera(extrinsics_path, verbose=True)
+            assert is_static is False
+
+            captured = capsys.readouterr()
+            assert "empty" in captured.out.lower()
+
+    def test_verbose_warning_invalid_json(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            extrinsics_path = Path(tmpdir) / "extrinsics.json"
+            with open(extrinsics_path, "w") as f:
+                f.write("{not valid json")
+
+            is_static = detect_static_camera(extrinsics_path, verbose=True)
+            assert is_static is False
+
+            captured = capsys.readouterr()
+            assert "Invalid JSON" in captured.out
+
+    def test_verbose_suppressed(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            extrinsics_path = Path(tmpdir) / "extrinsics.json"
+            with open(extrinsics_path, "w") as f:
+                json.dump([], f)
+
+            is_static = detect_static_camera(extrinsics_path, verbose=False)
+            assert is_static is False
+
+            captured = capsys.readouterr()
+            assert captured.out == ""
+
+
+class TestColmapIntrinsicsWarnings:
+    def test_verbose_warning_missing_fx(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            intrinsics_path = Path(tmpdir) / "intrinsics.json"
+            with open(intrinsics_path, "w") as f:
+                json.dump({"fy": 1000}, f)
+
+            focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path, verbose=True)
+            assert focal_mm is None
+
+            captured = capsys.readouterr()
+            assert "fx" in captured.out.lower()
+
+    def test_verbose_warning_invalid_json(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            intrinsics_path = Path(tmpdir) / "intrinsics.json"
+            with open(intrinsics_path, "w") as f:
+                f.write("{not valid}")
+
+            focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path, verbose=True)
+            assert focal_mm is None
+
+            captured = capsys.readouterr()
+            assert "Invalid JSON" in captured.out
+
+    def test_verbose_warning_dir_exists_file_missing(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            camera_dir = Path(tmpdir) / "camera"
+            camera_dir.mkdir()
+            intrinsics_path = camera_dir / "intrinsics.json"
+
+            focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path, verbose=True)
+            assert focal_mm is None
+
+            captured = capsys.readouterr()
+            assert "directory exists" in captured.out.lower()
+            assert "intrinsics.json missing" in captured.out
+
+    def test_verbose_suppressed(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            intrinsics_path = Path(tmpdir) / "intrinsics.json"
+            with open(intrinsics_path, "w") as f:
+                json.dump({"fy": 1000}, f)
+
+            focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path, verbose=False)
+            assert focal_mm is None
+
+            captured = capsys.readouterr()
+            assert captured.out == ""
+
 
 class TestFindOrCreateVideo:
     def test_find_existing_video(self):
@@ -168,8 +255,9 @@ class TestFindOrCreateVideo:
 class TestGvhmrOutputConversion:
     def test_conversion_smpl_params_global(self):
         pytest.importorskip("numpy")
+        pytest.importorskip("torch")
         import numpy as np
-        import pickle
+        import torch
 
         from run_mocap import save_motion_output
 
@@ -187,9 +275,8 @@ class TestGvhmrOutputConversion:
                 }
             }
 
-            gvhmr_output = gvhmr_dir / "output.pkl"
-            with open(gvhmr_output, 'wb') as f:
-                pickle.dump(gvhmr_data, f)
+            gvhmr_output = gvhmr_dir / "hmr4d_results.pt"
+            torch.save(gvhmr_data, gvhmr_output)
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 
@@ -263,8 +350,9 @@ class TestGvhmrOutputConversion:
     def test_conversion_direct_global_orient(self):
         """Test conversion when global_orient is at top level (not under smpl_params_global)."""
         pytest.importorskip("numpy")
+        pytest.importorskip("torch")
         import numpy as np
-        import pickle
+        import torch
 
         from run_mocap import save_motion_output
 
@@ -280,9 +368,8 @@ class TestGvhmrOutputConversion:
                 'betas': np.zeros(10),
             }
 
-            gvhmr_output = gvhmr_dir / "global_output.pkl"
-            with open(gvhmr_output, 'wb') as f:
-                pickle.dump(gvhmr_data, f)
+            gvhmr_output = gvhmr_dir / "hmr4d_results.pt"
+            torch.save(gvhmr_data, gvhmr_output)
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 
@@ -298,8 +385,9 @@ class TestGvhmrOutputConversion:
     def test_conversion_short_body_pose(self):
         """Test conversion when body_pose has fewer than 63 elements."""
         pytest.importorskip("numpy")
+        pytest.importorskip("torch")
         import numpy as np
-        import pickle
+        import torch
 
         from run_mocap import save_motion_output
 
@@ -317,9 +405,8 @@ class TestGvhmrOutputConversion:
                 }
             }
 
-            gvhmr_output = gvhmr_dir / "output.pkl"
-            with open(gvhmr_output, 'wb') as f:
-                pickle.dump(gvhmr_data, f)
+            gvhmr_output = gvhmr_dir / "hmr4d_results.pt"
+            torch.save(gvhmr_data, gvhmr_output)
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 
@@ -334,8 +421,9 @@ class TestGvhmrOutputConversion:
     def test_conversion_multi_person(self):
         """Test conversion with multiple person directories."""
         pytest.importorskip("numpy")
+        pytest.importorskip("torch")
         import numpy as np
-        import pickle
+        import torch
 
         from run_mocap import save_motion_output
 
@@ -357,9 +445,8 @@ class TestGvhmrOutputConversion:
                     }
                 }
 
-                gvhmr_output = person_dir / "output.pkl"
-                with open(gvhmr_output, 'wb') as f:
-                    pickle.dump(gvhmr_data, f)
+                gvhmr_output = person_dir / "hmr4d_results.pt"
+                torch.save(gvhmr_data, gvhmr_output)
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 
@@ -443,8 +530,9 @@ class TestSaveMotionOutputMultiPerson:
     def test_multi_person_defaults_to_first(self):
         """Test that multi-person output defaults to person_0 as primary."""
         pytest.importorskip("numpy")
+        pytest.importorskip("torch")
         import numpy as np
-        import pickle
+        import torch
 
         from run_mocap import save_motion_output
 
@@ -466,9 +554,8 @@ class TestSaveMotionOutputMultiPerson:
                     }
                 }
 
-                gvhmr_output = person_dir / "output.pkl"
-                with open(gvhmr_output, 'wb') as f:
-                    pickle.dump(gvhmr_data, f)
+                gvhmr_output = person_dir / "hmr4d_results.pt"
+                torch.save(gvhmr_data, gvhmr_output)
 
             motion_output = Path(tmpdir) / "mocap" / "motion.pkl"
 

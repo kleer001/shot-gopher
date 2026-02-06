@@ -353,7 +353,7 @@ def export_alembic(
                 print(f"    Frame {frame_idx}/{len(meshes)}...")
 
             obj_path = obj_dir / f"frame_{frame_idx:05d}.obj"
-            with open(obj_path, 'w') as f:
+            with open(obj_path, 'w', encoding='utf-8') as f:
                 for v in vertices:
                     f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
                 for face in faces:
@@ -429,7 +429,7 @@ def export_usd(
                 print(f"    Frame {frame_idx}/{len(meshes)}...")
 
             obj_path = obj_dir / f"frame_{frame_idx:05d}.obj"
-            with open(obj_path, 'w') as f:
+            with open(obj_path, 'w', encoding='utf-8') as f:
                 for v in vertices:
                     f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
                 for face in faces:
@@ -486,7 +486,7 @@ def export_obj_sequence(
 
             obj_path = output_dir / f"{prefix}_{frame_idx:05d}.obj"
 
-            with open(obj_path, 'w') as f:
+            with open(obj_path, 'w', encoding='utf-8') as f:
                 for v in vertices:
                     f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
                 for face in faces:
@@ -580,7 +580,7 @@ def export_tpose(
         faces = model.faces
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, 'w') as f:
+        with open(output_path, 'w', encoding='utf-8') as f:
             f.write(f"# SMPL T-pose reference mesh\n")
             f.write(f"# Gender: {gender}\n")
             f.write(f"# Betas: {'custom' if betas is not None else 'default'}\n")

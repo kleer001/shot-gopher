@@ -709,6 +709,13 @@ def main():
         help="Euler rotation order: xyz (Maya/Houdini default), zxy (Nuke default), zyx. "
              "If not specified, uses format-appropriate default (zxy for Nuke, xyz for others)"
     )
+    parser.add_argument(
+        "--camera-dir",
+        type=Path,
+        default=None,
+        help="Camera data directory (default: <project_dir>/camera/). "
+             "Use for GVHMR camera at mocap/camera/"
+    )
 
     args = parser.parse_args()
 
@@ -718,7 +725,7 @@ def main():
         print(f"Error: Project directory not found: {project_dir}", file=sys.stderr)
         sys.exit(1)
 
-    camera_dir = project_dir / "camera"
+    camera_dir = args.camera_dir.resolve() if args.camera_dir else project_dir / "camera"
     if not camera_dir.exists():
         print(f"Error: Camera directory not found: {camera_dir}", file=sys.stderr)
         sys.exit(1)
