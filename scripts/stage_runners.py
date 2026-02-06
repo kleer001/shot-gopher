@@ -58,12 +58,17 @@ __all__ = [
 ]
 
 
-def run_export_camera(project_dir: Path, fps: float = 24.0) -> bool:
+def run_export_camera(
+    project_dir: Path,
+    fps: float = 24.0,
+    camera_dir: Optional[Path] = None,
+) -> bool:
     """Run camera export script.
 
     Args:
         project_dir: Project directory with camera data
         fps: Frames per second
+        camera_dir: Camera data directory (default: project_dir/camera/)
 
     Returns:
         True if export succeeded
@@ -80,6 +85,9 @@ def run_export_camera(project_dir: Path, fps: float = 24.0) -> bool:
         "--fps", str(fps),
         "--format", "all"
     ]
+
+    if camera_dir is not None:
+        cmd.extend(["--camera-dir", str(camera_dir)])
 
     try:
         run_command(cmd, "Exporting camera data")
@@ -894,6 +902,12 @@ def run_stage_mocap(
         ):
             print("  → Motion capture failed", file=sys.stderr)
 
+    mocap_camera_dir = ctx.project_dir / "mocap" / "camera"
+    colmap_camera_dir = ctx.project_dir / "camera"
+    if (mocap_camera_dir / "extrinsics.json").exists() and not (colmap_camera_dir / "extrinsics.json").exists():
+        print("\n  → GVHMR camera exported, running camera stage...")
+        run_stage_camera(ctx, config)
+
     clear_gpu_memory(ctx.comfyui_url)
     return True
 
@@ -941,6 +955,10 @@ def run_stage_camera(
 ) -> bool:
     """Run camera export stage.
 
+    Checks for camera data in order:
+    1. camera/ (COLMAP)
+    2. mocap/camera/ (GVHMR estimate)
+
     Args:
         ctx: Stage execution context
         config: Pipeline configuration
@@ -949,17 +967,24 @@ def run_stage_camera(
         True if successful
     """
     print("\n=== Stage: camera ===")
-    camera_dir = ctx.project_dir / "camera"
+    colmap_camera_dir = ctx.project_dir / "camera"
+    mocap_camera_dir = ctx.project_dir / "mocap" / "camera"
 
-    if not (camera_dir / "extrinsics.json").exists():
-        print("  → Skipping (no camera data - run colmap stage first)")
+    if (colmap_camera_dir / "extrinsics.json").exists():
+        camera_dir = colmap_camera_dir
+        print("  → Using COLMAP camera data")
+    elif (mocap_camera_dir / "extrinsics.json").exists():
+        camera_dir = mocap_camera_dir
+        print("  → Using GVHMR camera estimate")
+    else:
+        print("  → Skipping (no camera data - run colmap or mocap stage first)")
         return True
 
     if ctx.skip_existing and (camera_dir / "camera.abc").exists():
         print("  → Skipping (camera.abc exists)")
         return True
 
-    if not run_export_camera(ctx.project_dir, ctx.fps):
+    if not run_export_camera(ctx.project_dir, ctx.fps, camera_dir=camera_dir):
         print("  → Camera export failed", file=sys.stderr)
 
     return True

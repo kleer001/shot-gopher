@@ -349,7 +349,7 @@ Human motion capture using GVHMR.
 | | |
 |---|---|
 | **VRAM** | ~12 GB |
-| **Input** | `source/frames/*.png`, `camera/extrinsics.json` |
+| **Input** | `source/frames/*.png`, optionally `camera/extrinsics.json` |
 | **Output** | `mocap/<person>/motion.pkl`, `mocap/<person>/mesh_sequence/`, `mocap/<person>/export/` |
 | **Workflow** | None (GVHMR) |
 
@@ -359,11 +359,26 @@ Human motion capture using GVHMR.
 
 **Requirements:**
 - GVHMR installed ([Installation guide](../installation.md))
-- Camera data from `colmap` stage
+- Camera data from `colmap` stage (optional, improves accuracy)
 
 ```bash
+# With COLMAP camera data (best accuracy)
 python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
+
+# Without COLMAP (lock-off/static camera shots)
+python scripts/run_pipeline.py footage.mp4 -s ingest,mocap
 ```
+
+### Camera Data
+
+GVHMR can use camera intrinsics from two sources:
+
+| Source | Location | When Used |
+|--------|----------|-----------|
+| COLMAP | `camera/` | When COLMAP stage has run (moving camera shots) |
+| GVHMR estimate | `mocap/camera/` | Auto-exported when COLMAP not available (lock-off shots) |
+
+**Lock-off shot workflow:** For static camera shots where COLMAP fails (no parallax for triangulation), mocap automatically exports GVHMR's camera estimate to `mocap/camera/` and runs the camera export stage to generate Alembic/USD/etc formats. This gives you camera data even without running COLMAP.
 
 **Pipeline:**
 1. **GVHMR** — Extracts world-grounded pose from video (SMPL-X compatible)
@@ -389,6 +404,12 @@ The `--mocap-person` flag composites source frames with the corresponding roto m
 
 ```
 mocap/
+├── camera/              # GVHMR camera estimate (when COLMAP not run)
+│   ├── extrinsics.json  # Identity matrices (static camera)
+│   ├── intrinsics.json  # Estimated focal length, principal point
+│   ├── gvhmr_raw.json   # Source metadata
+│   ├── camera.abc       # Alembic camera
+│   └── camera.usd       # USD camera
 ├── person/              # Default output (single person)
 │   ├── motion.pkl       # Pose data (SMPL parameters)
 │   ├── mesh_sequence/   # OBJ mesh per frame
