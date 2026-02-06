@@ -193,6 +193,7 @@ def run_mocap(
     start_frame: Optional[int] = None,
     end_frame: Optional[int] = None,
     mocap_person: Optional[str] = None,
+    export_camera: bool = True,
 ) -> bool:
     """Run human motion capture with GVHMR.
 
@@ -205,6 +206,7 @@ def run_mocap(
         start_frame: Start frame (1-indexed, inclusive)
         end_frame: End frame (1-indexed, inclusive)
         mocap_person: Roto person folder to isolate (e.g., 'person_00')
+        export_camera: Export GVHMR camera estimate if COLMAP camera missing
 
     Returns:
         True if mocap succeeded
@@ -226,6 +228,9 @@ def run_mocap(
 
     if no_export:
         cmd.append("--no-export")
+
+    if not export_camera:
+        cmd.append("--no-camera-export")
 
     if fps is not None:
         cmd.extend(["--fps", str(fps)])

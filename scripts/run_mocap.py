@@ -211,6 +211,114 @@ def detect_static_camera(
         return False
 
 
+def export_gvhmr_camera(
+    gvhmr_output_dir: Path,
+    camera_output_dir: Path,
+    n_frames: int,
+    image_width: int,
+    image_height: int,
+) -> bool:
+    """Export GVHMR camera estimate in COLMAP-compatible format.
+
+    For lock-off shots where COLMAP fails, GVHMR can provide camera intrinsics.
+    Extrinsics are identity matrices (static camera assumption).
+
+    Creates the same output format as COLMAP's export_colmap_to_pipeline_format():
+    - camera/extrinsics.json: List of 4x4 identity matrices (one per frame)
+    - camera/intrinsics.json: {fx, fy, cx, cy, width, height, model, params}
+    - camera/gvhmr_raw.json: Source metadata
+
+    Args:
+        gvhmr_output_dir: Directory containing GVHMR output (hmr4d*.pt files)
+        camera_output_dir: Output directory (typically project/camera/)
+        n_frames: Total number of frames
+        image_width: Source image width
+        image_height: Source image height
+
+    Returns:
+        True if export succeeded
+    """
+    import json
+
+    try:
+        import numpy as np
+        import torch
+    except ImportError:
+        print("Error: numpy and torch required for GVHMR camera export", file=sys.stderr)
+        return False
+
+    gvhmr_files = list(gvhmr_output_dir.rglob("hmr4d*.pt"))
+    if not gvhmr_files:
+        print(f"  No GVHMR output found in {gvhmr_output_dir}", file=sys.stderr)
+        return False
+
+    gvhmr_file = gvhmr_files[0]
+
+    try:
+        gvhmr_data = torch.load(gvhmr_file, map_location='cpu', weights_only=False)
+
+        K_fullimg = None
+        if 'K_fullimg' in gvhmr_data:
+            K_fullimg = gvhmr_data['K_fullimg']
+            if hasattr(K_fullimg, 'numpy'):
+                K_fullimg = K_fullimg.numpy()
+            K_fullimg = np.array(K_fullimg)
+
+        if K_fullimg is None or K_fullimg.size == 0:
+            print("  Warning: No K_fullimg in GVHMR output, using default intrinsics")
+            fx = fy = max(image_width, image_height)
+            cx = image_width / 2.0
+            cy = image_height / 2.0
+        else:
+            if K_fullimg.ndim == 3:
+                K_fullimg = K_fullimg[0]
+            fx = float(K_fullimg[0, 0])
+            fy = float(K_fullimg[1, 1])
+            cx = float(K_fullimg[0, 2])
+            cy = float(K_fullimg[1, 2])
+
+        camera_output_dir.mkdir(parents=True, exist_ok=True)
+
+        identity = np.eye(4).tolist()
+        extrinsics = [identity for _ in range(n_frames)]
+
+        with open(camera_output_dir / "extrinsics.json", "w", encoding='utf-8') as f:
+            json.dump(extrinsics, f, indent=2)
+
+        intrinsics = {
+            "fx": fx,
+            "fy": fy,
+            "cx": cx,
+            "cy": cy,
+            "width": image_width,
+            "height": image_height,
+            "model": "GVHMR_ESTIMATED",
+            "params": [fx, fy, cx, cy],
+        }
+        with open(camera_output_dir / "intrinsics.json", "w", encoding='utf-8') as f:
+            json.dump(intrinsics, f, indent=2)
+
+        gvhmr_raw = {
+            "source": "gvhmr",
+            "source_file": str(gvhmr_file.name),
+            "total_frames": n_frames,
+            "static_camera": True,
+            "K_fullimg": K_fullimg.tolist() if K_fullimg is not None else None,
+            "note": "Camera estimated by GVHMR. Extrinsics are identity (static camera assumption).",
+        }
+        with open(camera_output_dir / "gvhmr_raw.json", "w", encoding='utf-8') as f:
+            json.dump(gvhmr_raw, f, indent=2)
+
+        print(f"  → Exported GVHMR camera to {camera_output_dir}")
+        print(f"    Intrinsics: fx={fx:.1f}, fy={fy:.1f}, cx={cx:.1f}, cy={cy:.1f}")
+        print(f"    Extrinsics: {n_frames} identity matrices (static camera)")
+        return True
+
+    except Exception as e:
+        print(f"Error exporting GVHMR camera: {e}", file=sys.stderr)
+        return False
+
+
 def composite_frames_with_matte(
     frames_dir: Path,
     matte_dir: Path,
@@ -862,6 +970,7 @@ def run_mocap_pipeline(
     start_frame: Optional[int] = None,
     end_frame: Optional[int] = None,
     mocap_person: Optional[str] = None,
+    export_camera: bool = True,
 ) -> bool:
     """Run motion capture pipeline with GVHMR.
 
@@ -872,6 +981,7 @@ def run_mocap_pipeline(
         start_frame: Start frame (1-indexed, inclusive)
         end_frame: End frame (1-indexed, inclusive)
         mocap_person: Roto person folder to isolate (e.g., 'person_00')
+        export_camera: Export GVHMR camera estimate if COLMAP camera missing
 
     Returns:
         True if successful
@@ -941,6 +1051,35 @@ def run_mocap_pipeline(
         return False
 
     gvhmr_output = mocap_person_dir / "gvhmr"
+
+    camera_dir = project_dir / "camera"
+    colmap_camera_exists = (camera_dir / "extrinsics.json").exists()
+
+    if export_camera and not colmap_camera_exists:
+        print("\n--- Exporting GVHMR Camera ---")
+        print("  (No COLMAP camera found, using GVHMR estimate)")
+
+        source_frames = project_dir / "source" / "frames"
+        frame_files = sorted(source_frames.glob("*.png")) + sorted(source_frames.glob("*.jpg"))
+        n_frames = len(frame_files)
+
+        image_width, image_height = 1920, 1080
+        if frame_files:
+            try:
+                from PIL import Image
+                with Image.open(frame_files[0]) as img:
+                    image_width, image_height = img.size
+            except Exception:
+                pass
+
+        if n_frames > 0:
+            export_gvhmr_camera(
+                gvhmr_output_dir=gvhmr_output,
+                camera_output_dir=camera_dir,
+                n_frames=n_frames,
+                image_width=image_width,
+                image_height=image_height,
+            )
 
     print(f"\n{'=' * 60}")
     print("Motion Capture Complete")
@@ -1098,6 +1237,11 @@ def main():
         action="store_true",
         help="List detected persons from existing GVHMR output and exit"
     )
+    parser.add_argument(
+        "--no-camera-export",
+        action="store_true",
+        help="Don't export GVHMR camera estimate when COLMAP camera is missing"
+    )
 
     args = parser.parse_args()
 
@@ -1142,6 +1286,7 @@ def main():
         start_frame=args.start_frame,
         end_frame=args.end_frame,
         mocap_person=args.mocap_person,
+        export_camera=not args.no_camera_export,
     )
 
     if not success:
