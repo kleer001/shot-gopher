@@ -1,6 +1,11 @@
 """Palette service for loading color themes from TOML files."""
 
-import tomllib
+import sys
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 from pathlib import Path
 from typing import Dict, List, Optional
 
