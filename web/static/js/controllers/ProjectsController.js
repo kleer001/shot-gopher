@@ -114,6 +114,9 @@ export class ProjectsController {
             if ('gpuAvailableVramGb' in e.detail.updates) {
                 this.updateVramDisplay();
             }
+            if ('comfyuiOnline' in e.detail.updates) {
+                this.updateComfyUIAvailability();
+            }
         };
         stateManager.addEventListener(EVENTS.UPLOAD_COMPLETE, this._boundHandlers.onUploadComplete);
         stateManager.addEventListener(EVENTS.STATE_CHANGED, this._boundHandlers.onStateChange);
@@ -288,11 +291,17 @@ export class ProjectsController {
         }
     }
 
+    stageRequiresComfyUI(stage) {
+        const config = stateManager.get('config');
+        return config?.stages?.[stage]?.requiresComfyUI === true;
+    }
+
     renderStagesStatus(projectData, outputsData, vramData) {
         if (!this.elements.detailStages) return;
 
         const outputs = outputsData?.outputs || {};
         const vramStages = vramData?.analysis?.stages || {};
+        const comfyuiOnline = stateManager.get('comfyuiOnline');
 
         const stageLabels = {
             ingest: 'Ingest',
@@ -350,13 +359,19 @@ export class ProjectsController {
                 }
             }
 
+            const needsComfyUI = this.stageRequiresComfyUI(stage);
+            const comfyUnavailable = needsComfyUI && !comfyuiOnline;
+            const wrapperClass = comfyUnavailable ? 'comfyui-unavailable' : '';
+            const comfyBadge = comfyUnavailable ? '<span class="stage-comfyui-badge" title="ComfyUI is offline">GPU</span>' : '';
+
             const safeStage = dom.escapeHTML(stage);
             const optionsHtml = this.renderStageOptionsHtml(stage);
             return `
-            <div class="stage-wrapper" data-stage="${safeStage}">
+            <div class="stage-wrapper ${wrapperClass}" data-stage="${safeStage}">
                 <div class="stage-status-item selectable ${stageClass}" data-stage="${safeStage}">
                     <div class="stage-marker"></div>
                     <span class="stage-status-name">${dom.escapeHTML(label)}</span>
+                    ${comfyBadge}
                     <span class="stage-vram ${vramStatusClass}" title="${dom.escapeHTML(vramTitle)}">${vramDisplay}</span>
                     <span class="stage-file-count">${fileCountDisplay}</span>
                     <span class="stage-file-size">${fileSizeDisplay}</span>
@@ -382,6 +397,11 @@ export class ProjectsController {
         const stage = item.dataset.stage;
         const wrapper = item.closest('.stage-wrapper');
         const optionsPanel = wrapper?.querySelector('.stage-options-panel');
+
+        if (!this.selectedStages.has(stage) && this.stageRequiresComfyUI(stage) && !stateManager.get('comfyuiOnline')) {
+            stateManager.showError(`${stage} requires ComfyUI (GPU). ComfyUI is offline.`);
+            return;
+        }
 
         if (this.selectedStages.has(stage)) {
             this.selectedStages.delete(stage);
@@ -546,6 +566,40 @@ export class ProjectsController {
         dom.setHTML(this.elements.vramInfo, html);
     }
 
+    updateComfyUIAvailability() {
+        if (!this.elements.detailStages) return;
+
+        const comfyuiOnline = stateManager.get('comfyuiOnline');
+
+        ALL_STAGES.forEach(stage => {
+            const wrapper = this.elements.detailStages.querySelector(`.stage-wrapper[data-stage="${stage}"]`);
+            if (!wrapper) return;
+
+            const needsComfyUI = this.stageRequiresComfyUI(stage);
+            if (!needsComfyUI) return;
+
+            if (comfyuiOnline) {
+                wrapper.classList.remove('comfyui-unavailable');
+                const badge = wrapper.querySelector('.stage-comfyui-badge');
+                if (badge) badge.remove();
+            } else {
+                wrapper.classList.add('comfyui-unavailable');
+                const nameEl = wrapper.querySelector('.stage-status-name');
+                if (nameEl && !wrapper.querySelector('.stage-comfyui-badge')) {
+                    nameEl.insertAdjacentHTML('afterend', '<span class="stage-comfyui-badge" title="ComfyUI is offline">GPU</span>');
+                }
+                if (this.selectedStages.has(stage)) {
+                    this.selectedStages.delete(stage);
+                    const item = wrapper.querySelector('.stage-status-item');
+                    if (item) item.classList.remove('selected');
+                    wrapper.classList.remove('selected');
+                }
+            }
+        });
+
+        this.updateProcessButton();
+    }
+
     async openFolder() {
         if (!this.selectedProjectId) return;
 
@@ -628,6 +682,8 @@ export class ProjectsController {
             btn.classList.remove('processing');
             btn.textContent = 'FAILED';
             btn.disabled = false;
+
+            stateManager.showError(error.message);
 
             setTimeout(() => {
                 this.updateProcessButton();

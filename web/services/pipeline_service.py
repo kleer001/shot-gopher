@@ -12,6 +12,7 @@ from web.models.dto import JobDTO, JobStartRequest, JobStartResponse
 from web.repositories.job_repository import JobRepository
 from web.repositories.project_repository import ProjectRepository
 from web.services.config_service import get_config_service
+from web.services.system_service import get_system_service
 
 
 class PipelineService:
@@ -64,6 +65,22 @@ class PipelineService:
         invalid_stages = set(request.stages) - valid_stages
         if invalid_stages:
             raise ValueError(f"Invalid stages: {invalid_stages}. Valid: {valid_stages}")
+
+        stages_config = self.config_service.get_stages()
+        comfyui_stages = [
+            s for s in request.stages
+            if stages_config.get(s, {}).get("requiresComfyUI", False)
+        ]
+        if comfyui_stages:
+            system_service = get_system_service()
+            if not system_service.check_comfyui_status():
+                stage_names = ", ".join(comfyui_stages)
+                raise ValueError(
+                    f"ComfyUI is not running. "
+                    f"Stages requiring ComfyUI: {stage_names}. "
+                    f"ComfyUI needs a CUDA-capable GPU to start. "
+                    f"Non-ComfyUI stages (ingest, colmap, mocap, gsir) can still run."
+                )
 
         now = datetime.now()
         job = PipelineJob(

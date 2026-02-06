@@ -788,6 +788,24 @@ body {
     color: var(--accent);
 }
 
+.stage-wrapper.comfyui-unavailable {
+    opacity: 0.45;
+}
+
+.stage-wrapper.comfyui-unavailable .stage-status-item {
+    cursor: not-allowed;
+}
+
+.stage-comfyui-badge {
+    font-size: 9px;
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.15);
+    padding: 1px 5px;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 /* VRAM Display */
 .vram-display {
     padding: 12px;

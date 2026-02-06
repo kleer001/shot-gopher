@@ -8,7 +8,8 @@
       "estimatedTimePerFrame": 0.05,
       "required": false,
       "dependencies": [],
-      "defaultEnabled": false
+      "defaultEnabled": false,
+      "requiresComfyUI": false
     },
     "interactive": {
       "name": "Interactive",
@@ -19,7 +20,8 @@
       "required": false,
       "dependencies": [],
       "defaultEnabled": false,
-      "note": "Use for manual selection instead of automatic roto"
+      "note": "Use for manual selection instead of automatic roto",
+      "requiresComfyUI": true
     },
     "depth": {
       "name": "Depth Maps",
@@ -29,7 +31,8 @@
       "estimatedTimePerFrame": 0.5,
       "required": false,
       "dependencies": [],
-      "defaultEnabled": true
+      "defaultEnabled": true,
+      "requiresComfyUI": true
     },
     "roto": {
       "name": "Roto",
@@ -42,7 +45,8 @@
       "defaultEnabled": true,
       "hasPrompt": true,
       "promptLabel": "Roto Prompt",
-      "promptPlaceholder": "person, car, building..."
+      "promptPlaceholder": "person, car, building...",
+      "requiresComfyUI": true
     },
     "mama": {
       "name": "Refine Mattes",
@@ -53,7 +57,8 @@
       "required": false,
       "dependencies": ["roto"],
       "defaultEnabled": false,
-      "note": "Requires Roto with person masks"
+      "note": "Requires Roto with person masks",
+      "requiresComfyUI": false
     },
     "cleanplate": {
       "name": "Clean Plate",
@@ -63,7 +68,8 @@
       "estimatedTimePerFrame": 0.3,
       "required": false,
       "dependencies": [],
-      "defaultEnabled": false
+      "defaultEnabled": false,
+      "requiresComfyUI": true
     },
     "colmap": {
       "name": "Camera Tracking",
@@ -74,7 +80,8 @@
       "required": false,
       "dependencies": [],
       "defaultEnabled": false,
-      "enables": ["gsir", "mocap"]
+      "enables": ["gsir", "mocap"],
+      "requiresComfyUI": false
     },
     "gsir": {
       "name": "Materials",
@@ -84,7 +91,8 @@
       "estimatedTimePerFrame": 1.5,
       "required": false,
       "dependencies": ["colmap"],
-      "defaultEnabled": false
+      "defaultEnabled": false,
+      "requiresComfyUI": false
     },
     "mocap": {
       "name": "Motion Capture",
@@ -94,7 +102,8 @@
       "estimatedTimePerFrame": 1.2,
       "required": false,
       "dependencies": ["colmap"],
-      "defaultEnabled": false
+      "defaultEnabled": false,
+      "requiresComfyUI": false
     }
   },
   "presets": {
