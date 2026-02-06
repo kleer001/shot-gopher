@@ -1115,8 +1115,8 @@ def run_mocap_pipeline(
                 from PIL import Image
                 with Image.open(frame_files[0]) as img:
                     image_width, image_height = img.size
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"  Warning: Could not read image dimensions, using defaults: {e}")
 
         if n_frames > 0:
             export_gvhmr_camera(
