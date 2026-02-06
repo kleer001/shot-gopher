@@ -163,6 +163,34 @@
             </div>
         </div>
 
+        <!-- Bug Report Button -->
+        <button type="button" id="bug-report-btn" class="bug-report-btn" title="Report a bug">
+            Report Bug
+        </button>
+
+        <!-- Bug Report Dialog -->
+        <div id="bug-report-dialog" class="dialog-overlay hidden">
+            <div class="dialog-box bug-report-dialog">
+                <div class="bug-report-header">Report a Bug</div>
+                <div class="bug-report-body">
+                    <label class="bug-report-label" for="bug-description">What happened?</label>
+                    <textarea id="bug-description" class="bug-report-textarea" rows="4" placeholder="Describe what you were doing and what went wrong..."></textarea>
+                    <label class="bug-report-label" for="bug-expected">What did you expect?</label>
+                    <textarea id="bug-expected" class="bug-report-textarea" rows="2" placeholder="What should have happened instead..."></textarea>
+                    <div id="bug-system-info" class="bug-system-info">
+                        System info will be included automatically
+                    </div>
+                </div>
+                <div class="dialog-buttons">
+                    <div class="dialog-buttons-row">
+                        <button type="button" id="bug-report-copy" class="dialog-btn dialog-btn-primary">Copy Report</button>
+                        <button type="button" id="bug-report-email" class="dialog-btn">Email Report</button>
+                    </div>
+                    <button type="button" id="bug-report-cancel" class="dialog-btn dialog-btn-cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Error Toast -->
         <div id="error-toast" class="toast hidden">
             <span class="toast-icon">⚠</span>

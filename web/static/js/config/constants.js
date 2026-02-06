@@ -105,6 +105,16 @@ export const ELEMENTS = {
     THEME_PICKER_POPUP: 'theme-picker-popup',
     THEME_OPTIONS: 'theme-options',
     CURRENT_THEME_ICON: 'current-theme-icon',
+
+    // Bug Report
+    BUG_REPORT_BTN: 'bug-report-btn',
+    BUG_REPORT_DIALOG: 'bug-report-dialog',
+    BUG_DESCRIPTION: 'bug-description',
+    BUG_EXPECTED: 'bug-expected',
+    BUG_REPORT_COPY: 'bug-report-copy',
+    BUG_REPORT_EMAIL: 'bug-report-email',
+    BUG_REPORT_CANCEL: 'bug-report-cancel',
+    BUG_SYSTEM_INFO: 'bug-system-info',
 };
 
 /**

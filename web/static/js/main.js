@@ -20,6 +20,7 @@ import { wsService } from './services/WebSocketService.js';
 import { UploadController } from './controllers/UploadController.js';
 import { ProjectsController } from './controllers/ProjectsController.js';
 import { SystemController } from './controllers/SystemController.js';
+import { BugReportController } from './controllers/BugReportController.js';
 
 /**
  * Application class - manages application lifecycle
@@ -98,6 +99,9 @@ class Application {
 
         // Projects controller (handles projects list and detail view)
         this.controllers.projects = new ProjectsController();
+
+        // Bug report controller (handles bug report button and dialog)
+        this.controllers.bugReport = new BugReportController();
 
         console.log('Controllers initialized');
     }
