@@ -559,8 +559,15 @@ class GVHMRInstaller(ComponentInstaller):
             return ("darwin", False)
 
         has_cuda = False
-        if shutil.which("nvidia-smi"):
-            success, _ = run_command(["nvidia-smi"], check=False, capture=True)
+        nvidia_smi = shutil.which("nvidia-smi")
+        if not nvidia_smi:
+            from .platform import PlatformManager
+            found = PlatformManager.find_tool("nvidia-smi")
+            if found:
+                nvidia_smi = str(found)
+
+        if nvidia_smi:
+            success, _ = run_command([nvidia_smi], check=False, capture=True)
             has_cuda = success
 
         if system == "windows":
