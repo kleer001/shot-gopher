@@ -130,12 +130,14 @@ def install_instructions():
 def colmap_intrinsics_to_focal_mm(
     intrinsics_path: Path,
     sensor_width_mm: Optional[float] = None,
+    verbose: bool = True,
 ) -> Optional[float]:
     """Convert COLMAP intrinsics to focal length in mm.
 
     Args:
         intrinsics_path: Path to camera/intrinsics.json
         sensor_width_mm: Sensor width in mm (None = assume 36mm full-frame)
+        verbose: Print warning messages for errors
 
     Returns:
         Focal length in millimeters, or None if conversion fails
@@ -143,6 +145,10 @@ def colmap_intrinsics_to_focal_mm(
     import json
 
     if not intrinsics_path.exists():
+        if verbose:
+            camera_dir = intrinsics_path.parent
+            if camera_dir.exists():
+                print(f"  Warning: Camera directory exists but intrinsics.json missing: {camera_dir}")
         return None
 
     try:
@@ -153,6 +159,8 @@ def colmap_intrinsics_to_focal_mm(
         width = intrinsics.get("width", 1920)
 
         if fx is None:
+            if verbose:
+                print(f"  Warning: intrinsics.json missing 'fx' or 'focal_x' field: {intrinsics_path}")
             return None
 
         if sensor_width_mm is None:
@@ -161,13 +169,20 @@ def colmap_intrinsics_to_focal_mm(
         focal_mm = fx * sensor_width_mm / width
         return focal_mm
 
-    except (json.JSONDecodeError, KeyError, TypeError):
+    except json.JSONDecodeError as e:
+        if verbose:
+            print(f"  Warning: Invalid JSON in intrinsics.json: {e}")
+        return None
+    except (KeyError, TypeError) as e:
+        if verbose:
+            print(f"  Warning: Error reading intrinsics.json: {e}")
         return None
 
 
 def detect_static_camera(
     extrinsics_path: Path,
-    threshold_meters: float = 0.01
+    threshold_meters: float = 0.01,
+    verbose: bool = True,
 ) -> bool:
     """Detect if camera is static from COLMAP extrinsics.
 
@@ -176,6 +191,7 @@ def detect_static_camera(
     Args:
         extrinsics_path: Path to extrinsics.json
         threshold_meters: Max camera movement variance to consider "static"
+        verbose: Print warning messages for errors
 
     Returns:
         True if camera appears static
@@ -183,6 +199,10 @@ def detect_static_camera(
     import json
 
     if not extrinsics_path.exists():
+        if verbose:
+            camera_dir = extrinsics_path.parent
+            if camera_dir.exists():
+                print(f"  Warning: Camera directory exists but extrinsics.json missing: {camera_dir}")
         return False
 
     try:
@@ -191,15 +211,34 @@ def detect_static_camera(
         with open(extrinsics_path, encoding='utf-8') as f:
             extrinsics = json.load(f)
 
-        if not extrinsics or len(extrinsics) < 2:
+        if not extrinsics:
+            if verbose:
+                print(f"  Warning: extrinsics.json is empty: {extrinsics_path}")
+            return False
+
+        if not isinstance(extrinsics, list):
+            if verbose:
+                print(f"  Warning: extrinsics.json should be a list of matrices: {extrinsics_path}")
+            return False
+
+        if len(extrinsics) < 2:
+            if verbose:
+                print(f"  Warning: extrinsics.json has only {len(extrinsics)} frame(s), need 2+ for motion detection")
             return False
 
         translations = []
-        for matrix_data in extrinsics:
+        for i, matrix_data in enumerate(extrinsics):
             if isinstance(matrix_data, list) and len(matrix_data) >= 3:
-                translations.append([matrix_data[0][3], matrix_data[1][3], matrix_data[2][3]])
+                try:
+                    translations.append([matrix_data[0][3], matrix_data[1][3], matrix_data[2][3]])
+                except (IndexError, TypeError):
+                    if verbose:
+                        print(f"  Warning: Invalid matrix format at frame {i} in extrinsics.json")
+                    return False
 
         if not translations:
+            if verbose:
+                print(f"  Warning: No valid 4x4 matrices found in extrinsics.json")
             return False
 
         translations = np.array(translations)
@@ -207,7 +246,13 @@ def detect_static_camera(
 
         return bool(variance < threshold_meters)
 
-    except Exception:
+    except json.JSONDecodeError as e:
+        if verbose:
+            print(f"  Warning: Invalid JSON in extrinsics.json: {e}")
+        return False
+    except Exception as e:
+        if verbose:
+            print(f"  Warning: Error reading extrinsics.json: {e}")
         return False
 
 

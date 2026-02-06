@@ -114,6 +114,93 @@ class TestDetectStaticCamera:
             is_static = detect_static_camera(extrinsics_path)
             assert is_static is False
 
+    def test_verbose_warning_empty_extrinsics(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            extrinsics_path = Path(tmpdir) / "extrinsics.json"
+            with open(extrinsics_path, "w") as f:
+                json.dump([], f)
+
+            is_static = detect_static_camera(extrinsics_path, verbose=True)
+            assert is_static is False
+
+            captured = capsys.readouterr()
+            assert "empty" in captured.out.lower()
+
+    def test_verbose_warning_invalid_json(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            extrinsics_path = Path(tmpdir) / "extrinsics.json"
+            with open(extrinsics_path, "w") as f:
+                f.write("{not valid json")
+
+            is_static = detect_static_camera(extrinsics_path, verbose=True)
+            assert is_static is False
+
+            captured = capsys.readouterr()
+            assert "Invalid JSON" in captured.out
+
+    def test_verbose_suppressed(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            extrinsics_path = Path(tmpdir) / "extrinsics.json"
+            with open(extrinsics_path, "w") as f:
+                json.dump([], f)
+
+            is_static = detect_static_camera(extrinsics_path, verbose=False)
+            assert is_static is False
+
+            captured = capsys.readouterr()
+            assert captured.out == ""
+
+
+class TestColmapIntrinsicsWarnings:
+    def test_verbose_warning_missing_fx(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            intrinsics_path = Path(tmpdir) / "intrinsics.json"
+            with open(intrinsics_path, "w") as f:
+                json.dump({"fy": 1000}, f)
+
+            focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path, verbose=True)
+            assert focal_mm is None
+
+            captured = capsys.readouterr()
+            assert "fx" in captured.out.lower()
+
+    def test_verbose_warning_invalid_json(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            intrinsics_path = Path(tmpdir) / "intrinsics.json"
+            with open(intrinsics_path, "w") as f:
+                f.write("{not valid}")
+
+            focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path, verbose=True)
+            assert focal_mm is None
+
+            captured = capsys.readouterr()
+            assert "Invalid JSON" in captured.out
+
+    def test_verbose_warning_dir_exists_file_missing(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            camera_dir = Path(tmpdir) / "camera"
+            camera_dir.mkdir()
+            intrinsics_path = camera_dir / "intrinsics.json"
+
+            focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path, verbose=True)
+            assert focal_mm is None
+
+            captured = capsys.readouterr()
+            assert "directory exists" in captured.out.lower()
+            assert "intrinsics.json missing" in captured.out
+
+    def test_verbose_suppressed(self, capsys):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            intrinsics_path = Path(tmpdir) / "intrinsics.json"
+            with open(intrinsics_path, "w") as f:
+                json.dump({"fy": 1000}, f)
+
+            focal_mm = colmap_intrinsics_to_focal_mm(intrinsics_path, verbose=False)
+            assert focal_mm is None
+
+            captured = capsys.readouterr()
+            assert captured.out == ""
+
 
 class TestFindOrCreateVideo:
     def test_find_existing_video(self):
