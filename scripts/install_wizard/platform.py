@@ -95,14 +95,27 @@ class PlatformManager:
             return "scoop"
         return "unknown"
 
+    # Tools that have known snap confinement issues with external filesystems
+    # Snap apps can't write to mounted drives like /media/, /mnt/, etc.
+    SNAP_RESTRICTED_TOOLS = {"colmap"}
+
+    @staticmethod
+    def _is_snap_path(path: str) -> bool:
+        """Check if a path is a snap-confined binary."""
+        return "/snap/" in path or path.startswith("snap/")
+
     @staticmethod
     def find_tool(tool_name: str) -> Optional[Path]:
         """Find a tool executable with cross-platform path search.
 
         Search order (sandboxed tools take priority):
         1. Repo-local tools directory (.vfx_pipeline/tools/)
-        2. System PATH
+        2. System PATH (excluding snap for tools with confinement issues)
         3. Platform-specific standard locations
+
+        Note: For tools in SNAP_RESTRICTED_TOOLS (like COLMAP), snap versions
+        are skipped because they can't access mounted filesystems (/media/, etc.)
+        due to snap confinement.
 
         Args:
             tool_name: Name of the tool (e.g., 'colmap', 'ffmpeg', '7z')
@@ -119,7 +132,16 @@ class PlatformManager:
         # 2. Check system PATH
         path_result = shutil.which(tool_name)
         if path_result:
-            return Path(path_result)
+            # Skip snap versions for tools with known confinement issues
+            if (
+                tool_name in PlatformManager.SNAP_RESTRICTED_TOOLS
+                and PlatformManager._is_snap_path(path_result)
+            ):
+                # Snap COLMAP can't write to /media/, /mnt/, etc.
+                # Fall through to check standard Unix paths
+                pass
+            else:
+                return Path(path_result)
 
         # 3. Check platform-specific standard locations (fallback)
         if _is_windows():
@@ -537,10 +559,15 @@ Run: python scripts/install_wizard.py
     # =========================================================================
 
     # Tool download URLs - GitHub releases and official builds
+    # NOTE: COLMAP only provides Windows pre-built binaries
+    # Linux users should use: conda install -c conda-forge colmap (for GPU)
+    #                     or: sudo apt install colmap (CPU-only)
     TOOL_DOWNLOADS: Dict[str, Dict[str, str]] = {
         "colmap": {
-            "windows": "https://github.com/colmap/colmap/releases/download/3.9.1/COLMAP-3.9.1-windows-cuda.zip",
-            "linux": "https://github.com/colmap/colmap/releases/download/3.9.1/COLMAP-3.9.1-linux-no-cuda.tar.gz",
+            # Windows: CUDA-enabled pre-built binary from GitHub
+            "windows": "https://github.com/colmap/colmap/releases/download/3.11.1/colmap-x64-windows-cuda.zip",
+            # Linux: No pre-built binaries available from COLMAP
+            # Recommend conda for GPU support, apt for CPU-only
         },
         "ffmpeg": {
             "windows": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",

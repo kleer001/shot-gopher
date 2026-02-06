@@ -49,27 +49,83 @@ from transforms import (
 # Cache for COLMAP executable path
 _colmap_path: Optional[str] = None
 
+# Dedicated conda environment for COLMAP (avoids solver conflicts)
+COLMAP_CONDA_ENV = "colmap"
 
-def get_colmap_executable() -> str:
+
+def _find_conda_base() -> Optional[Path]:
+    """Find the conda base directory."""
+    # Check CONDA_EXE first (most reliable)
+    conda_exe = os.environ.get("CONDA_EXE")
+    if conda_exe:
+        # CONDA_EXE is like /home/user/anaconda3/bin/conda
+        return Path(conda_exe).parent.parent
+
+    # Check common locations
+    for base_name in ["anaconda3", "miniconda3", "miniforge3"]:
+        conda_base = Path.home() / base_name
+        if conda_base.exists():
+            return conda_base
+
+    return None
+
+
+def _get_conda_colmap_path(env_path: Path) -> Optional[Path]:
+    """Get the colmap executable path within a conda environment."""
+    if sys.platform == "win32":
+        candidates = [
+            env_path / "Scripts" / "colmap.exe",
+            env_path / "Library" / "bin" / "colmap.exe",
+        ]
+    else:
+        candidates = [env_path / "bin" / "colmap"]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def get_colmap_executable() -> Optional[str]:
     """Get the path to COLMAP executable.
 
-    Uses PlatformManager.find_tool() to locate COLMAP on Windows
-    even when not in PATH. Falls back to 'colmap' for Unix systems
-    where it's typically in PATH.
+    Search order:
+    1. Dedicated 'colmap' conda environment (recommended)
+    2. Active conda environment (CONDA_PREFIX)
+    3. PlatformManager.find_tool() (repo-local, system PATH excluding snap)
 
     Returns:
-        Path to COLMAP executable as string
+        Path to COLMAP executable as string, or None if not found
     """
     global _colmap_path
     if _colmap_path is not None:
         return _colmap_path
 
+    # 1. Check dedicated colmap conda environment
+    conda_base = _find_conda_base()
+    if conda_base:
+        dedicated_env = conda_base / "envs" / COLMAP_CONDA_ENV
+        colmap_path = _get_conda_colmap_path(dedicated_env)
+        if colmap_path:
+            _colmap_path = str(colmap_path)
+            return _colmap_path
+
+    # 2. Check active conda environment
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        colmap_path = _get_conda_colmap_path(Path(conda_prefix))
+        if colmap_path:
+            _colmap_path = str(colmap_path)
+            return _colmap_path
+
+    # 3. Use PlatformManager which skips snap for COLMAP
     found = PlatformManager.find_tool("colmap")
     if found:
         _colmap_path = str(found)
-    else:
-        _colmap_path = "colmap"
-    return _colmap_path
+        return _colmap_path
+
+    # Don't fall back to bare "colmap" - it would find snap
+    return None
 
 
 # COLMAP quality presets
@@ -197,6 +253,8 @@ def check_colmap_available() -> bool:
     """Check if COLMAP is installed and accessible."""
     try:
         colmap_exe = get_colmap_executable()
+        if colmap_exe is None:
+            return False
         result = subprocess.run(
             [colmap_exe, "--help"],
             capture_output=True,
@@ -225,6 +283,11 @@ def diagnose_colmap_environment(verbose: bool = False) -> dict:
 
     try:
         colmap_exe = get_colmap_executable()
+        if colmap_exe is None:
+            if verbose:
+                print("    DIAG: COLMAP executable not found")
+            return info
+
         is_bat = colmap_exe.lower().endswith('.bat')
         result = subprocess.run(
             [colmap_exe, "feature_extractor", "--help"],
@@ -237,6 +300,7 @@ def diagnose_colmap_environment(verbose: bool = False) -> dict:
             info["gpu_sift_available"] = "SiftExtraction.use_gpu" in output
 
         if verbose:
+            print(f"    DIAG: COLMAP path: {colmap_exe}")
             print(f"    DIAG: COLMAP available: {info['colmap_available']}")
             print(f"    DIAG: GPU SIFT option available: {info['gpu_sift_available']}")
             print(f"    DIAG: DISPLAY={os.environ.get('DISPLAY', 'not set')}")
@@ -343,6 +407,68 @@ def run_colmap_command(
     )
 
     return runner.run(cmd, description=description, timeout=timeout)
+
+
+def prepare_colmap_masks(
+    roto_dir: Path,
+    frames_dir: Path,
+    colmap_dir: Path,
+) -> Optional[Path]:
+    """Prepare masks with COLMAP-compatible naming convention.
+
+    COLMAP expects masks to be named {image_filename}.png - so for an image
+    named 'frame_0001.png', the mask must be 'frame_0001.png.png'.
+
+    This function maps masks from roto/ to the frames in frames_dir by
+    sequence order (not by filename matching).
+
+    Args:
+        roto_dir: Directory containing mask images (any naming convention)
+        frames_dir: Directory containing source images
+        colmap_dir: COLMAP working directory (masks will be placed in colmap/masks/)
+
+    Returns:
+        Path to prepared masks directory, or None if no masks available
+    """
+    if not roto_dir.exists():
+        return None
+
+    mask_files = sorted(
+        list(roto_dir.glob("*.png")) + list(roto_dir.glob("*.jpg"))
+    )
+    if not mask_files:
+        return None
+
+    frame_files = sorted(
+        list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg")) + list(frames_dir.glob("*.jpeg"))
+    )
+    if not frame_files:
+        return None
+
+    if len(mask_files) != len(frame_files):
+        print(f"    Warning: Mask count ({len(mask_files)}) != frame count ({len(frame_files)})")
+        print(f"    Masks will be matched by sequence order")
+
+    masks_output_dir = colmap_dir / "masks"
+    if masks_output_dir.exists():
+        shutil.rmtree(masks_output_dir)
+    masks_output_dir.mkdir(parents=True)
+
+    copied_count = 0
+    for i, frame_file in enumerate(frame_files):
+        if i >= len(mask_files):
+            break
+
+        colmap_mask_name = f"{frame_file.name}.png"
+        dest_path = masks_output_dir / colmap_mask_name
+        shutil.copy2(mask_files[i], dest_path)
+        copied_count += 1
+
+    if copied_count > 0:
+        print(f"    Prepared {copied_count} masks for COLMAP (renamed to {frame_files[0].name}.png format)")
+        return masks_output_dir
+
+    return None
 
 
 def extract_features(
@@ -479,7 +605,6 @@ def match_features(
             args = {
                 "database_path": str(database_path),
                 "SequentialMatching.overlap": sequential_overlap,
-                "SiftMatching.max_num_matches": 32768,
             }
             if gpu_sift_available:
                 args["SiftMatching.use_gpu"] = 1 if gpu else 0
@@ -490,7 +615,6 @@ def match_features(
         elif matcher_type == "exhaustive":
             args = {
                 "database_path": str(database_path),
-                "SiftMatching.max_num_matches": 32768,
             }
             if gpu_sift_available:
                 args["SiftMatching.use_gpu"] = 1 if gpu else 0
@@ -1355,9 +1479,24 @@ def run_colmap_pipeline(
         True if reconstruction succeeded
     """
     if not check_colmap_available():
-        print("Error: COLMAP not found. Install with:", file=sys.stderr)
-        print("  Ubuntu: sudo apt install colmap", file=sys.stderr)
-        print("  Conda: conda install -c conda-forge colmap", file=sys.stderr)
+        snap_path = shutil.which("colmap")
+        if snap_path and "/snap/" in snap_path:
+            print("Error: Only snap COLMAP found, which cannot access mounted drives.", file=sys.stderr)
+            print(f"  Found: {snap_path}", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Snap apps have confinement that prevents writing to /media/, /mnt/, etc.", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Install a non-snap version:", file=sys.stderr)
+            print("  GPU support: conda install -c conda-forge colmap", file=sys.stderr)
+            print("  CPU only:    sudo apt install colmap", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Or move your project to a non-mounted directory (e.g., ~/projects/)", file=sys.stderr)
+        else:
+            print("Error: COLMAP not found.", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Install with:", file=sys.stderr)
+            print("  GPU support: conda install -c conda-forge colmap", file=sys.stderr)
+            print("  CPU only:    sudo apt install colmap", file=sys.stderr)
         return False
 
     pipeline_start = time.time()
@@ -1389,24 +1528,27 @@ def run_colmap_pipeline(
         print(f"  Warning: Slow-camera mode uses aggressive settings for minimal motion")
         print(f"           Results may be jittery due to low parallax")
 
-    # Check for segmentation masks
-    mask_dir = project_dir / "roto"
-    mask_path = None
-    if use_masks and mask_dir.exists():
-        mask_count = len(list(mask_dir.glob("*.png"))) + len(list(mask_dir.glob("*.jpg")))
-        if mask_count > 0:
-            mask_path = mask_dir
-            print(f"Dynamic scene segmentation: Enabled ({mask_count} masks)")
-            print(f"  → Excluding dynamic regions from feature extraction")
-        else:
-            print(f"Dynamic scene segmentation: Disabled (no masks found)")
-    else:
-        print(f"Dynamic scene segmentation: Disabled")
-    print()
-
     # Setup paths
     colmap_dir = project_dir / "colmap"
     colmap_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check for segmentation masks and prepare with COLMAP-compatible naming
+    roto_dir = project_dir / "roto"
+    mask_path = None
+    if use_masks and roto_dir.exists():
+        roto_mask_count = len(list(roto_dir.glob("*.png"))) + len(list(roto_dir.glob("*.jpg")))
+        if roto_mask_count > 0:
+            mask_path = prepare_colmap_masks(roto_dir, frames_dir, colmap_dir)
+            if mask_path:
+                print(f"Dynamic scene segmentation: Enabled ({roto_mask_count} masks)")
+                print(f"  → Excluding dynamic regions from feature extraction")
+            else:
+                print(f"Dynamic scene segmentation: Disabled (mask preparation failed)")
+        else:
+            print(f"Dynamic scene segmentation: Disabled (no masks found in roto/)")
+    else:
+        print(f"Dynamic scene segmentation: Disabled")
+    print()
 
     database_path = colmap_dir / "database.db"
     sparse_path = colmap_dir / "sparse"
@@ -1541,6 +1683,10 @@ def run_colmap_pipeline(
         except subprocess.TimeoutExpired:
             print(f"\nCOLMAP command timed out", file=sys.stderr)
             return False
+        finally:
+            temp_masks_dir = colmap_dir / "masks"
+            if temp_masks_dir.exists():
+                shutil.rmtree(temp_masks_dir)
 
 
 def main():

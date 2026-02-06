@@ -13,6 +13,7 @@ export const API = {
     UPLOAD: '/api/upload',
     PROJECTS: '/api/projects',
     SYSTEM_STATUS: '/api/system/status',
+    PALETTES: '/api/palettes',
     PROJECT_OUTPUTS: (id) => `/api/projects/${id}/outputs`,
     PROJECT_CANCEL: (id) => `/api/projects/${id}/stop`,  // Backend uses /stop endpoint
     PROJECT_START: (id) => `/api/projects/${id}/start`,
@@ -21,6 +22,13 @@ export const API = {
     PROJECT_VRAM: (id) => `/api/projects/${id}/vram`,
     PROJECT_VIDEO_INFO: (id) => `/api/projects/${id}/video-info`,
     PROJECT_INTERACTIVE_COMPLETE: (id) => `/api/projects/${id}/interactive-complete`,
+};
+
+/**
+ * API endpoints (flat structure for easy import)
+ */
+export const API_ENDPOINTS = {
+    PALETTES: '/api/palettes',
 };
 
 /**
@@ -91,6 +99,12 @@ export const ELEMENTS = {
     OVERWRITE_YES: 'overwrite-yes',
     OVERWRITE_NO: 'overwrite-no',
     OVERWRITE_CANCEL: 'overwrite-cancel',
+
+    // Theme Picker
+    THEME_PICKER_TRIGGER: 'theme-picker-trigger',
+    THEME_PICKER_POPUP: 'theme-picker-popup',
+    THEME_OPTIONS: 'theme-options',
+    CURRENT_THEME_ICON: 'current-theme-icon',
 };
 
 /**
@@ -118,4 +132,15 @@ export const EVENTS = {
     CONFIG_LOADED: 'configLoaded',
     PIPELINE_COMPLETE: 'pipelineComplete',
     PIPELINE_FAILED: 'pipelineFailed',
+    THEME_CHANGED: 'themeChanged',
 };
+
+/**
+ * Default palette ID
+ */
+export const DEFAULT_PALETTE = 'dark';
+
+/**
+ * LocalStorage key for theme preference
+ */
+export const THEME_STORAGE_KEY = 'shot-gopher-theme';
