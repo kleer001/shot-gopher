@@ -224,13 +224,13 @@ def export_gvhmr_camera(
     Extrinsics are identity matrices (static camera assumption).
 
     Creates the same output format as COLMAP's export_colmap_to_pipeline_format():
-    - camera/extrinsics.json: List of 4x4 identity matrices (one per frame)
-    - camera/intrinsics.json: {fx, fy, cx, cy, width, height, model, params}
-    - camera/gvhmr_raw.json: Source metadata
+    - extrinsics.json: List of 4x4 identity matrices (one per frame)
+    - intrinsics.json: {fx, fy, cx, cy, width, height, model, params}
+    - gvhmr_raw.json: Source metadata
 
     Args:
         gvhmr_output_dir: Directory containing GVHMR output (hmr4d*.pt files)
-        camera_output_dir: Output directory (typically project/camera/)
+        camera_output_dir: Output directory (typically project/mocap/camera/)
         n_frames: Total number of frames
         image_width: Source image width
         image_height: Source image height
@@ -1053,6 +1053,7 @@ def run_mocap_pipeline(
     gvhmr_output = mocap_person_dir / "gvhmr"
 
     camera_dir = project_dir / "camera"
+    mocap_camera_dir = project_dir / "mocap" / "camera"
     colmap_camera_exists = (camera_dir / "extrinsics.json").exists()
 
     if export_camera and not colmap_camera_exists:
@@ -1075,7 +1076,7 @@ def run_mocap_pipeline(
         if n_frames > 0:
             export_gvhmr_camera(
                 gvhmr_output_dir=gvhmr_output,
-                camera_output_dir=camera_dir,
+                camera_output_dir=mocap_camera_dir,
                 n_frames=n_frames,
                 image_width=image_width,
                 image_height=image_height,
