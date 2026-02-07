@@ -430,6 +430,7 @@ def main():
         roto_start_frame=args.start_frame,
         separate_instances=args.separate_instances,
         gpu_profile=args.gpu_profile,
+        cleanplate_use_median=args.cleanplate_median,
     )
 
     print(f"Stages to run: {', '.join(config.stages)}")
