@@ -37,7 +37,7 @@ from subprocess_utils import (
     ProcessResult,
     ProcessRunner,
     ProgressTracker,
-    create_colmap_patterns,
+    create_mmcam_patterns,
 )
 from transforms import (
     quaternion_to_rotation_matrix,
@@ -400,7 +400,7 @@ def run_colmap_command(
             cmd.extend([f"--{key}", str(value)])
 
     is_bat = colmap_exe.lower().endswith('.bat')
-    tracker = ProgressTracker(patterns=create_colmap_patterns())
+    tracker = ProgressTracker(patterns=create_mmcam_patterns())
     runner = ProcessRunner(
         progress_tracker=tracker,
         shell=is_bat,

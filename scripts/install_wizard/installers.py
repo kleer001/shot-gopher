@@ -338,10 +338,6 @@ class ComfyUICustomNodesInstaller(ComponentInstaller):
             "name": "ComfyUI-SAM3",
             "url": "https://github.com/PozzettiAndrea/ComfyUI-SAM3.git",
         },
-        {
-            "name": "ComfyUI_ProPainter_Nodes",
-            "url": "https://github.com/daniabib/ComfyUI_ProPainter_Nodes.git",
-        },
     ]
 
     def __init__(self, install_dir: Optional[Path] = None, size_gb: float = 0.5):

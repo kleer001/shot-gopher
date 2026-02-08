@@ -19,8 +19,8 @@ Run the VFX pipeline from a single command.
 | [depth](stages.md#depth) | Depth maps | 7 GB |
 | [roto](stages.md#roto) | Roto masks | 4 GB |
 | [mama](stages.md#mama) | Matte refinement | 12 GB |
-| [cleanplate](stages.md#cleanplate) | Object removal | 6 GB |
-| [colmap](stages.md#colmap) | Camera tracking | 2-4 GB |
+| [cleanplate](stages.md#cleanplate) | Clean plate (static camera) | ~2 GB |
+| [matchmove_camera](stages.md#matchmove_camera) | Camera tracking | 2-4 GB |
 | [mocap](stages.md#mocap) | Motion capture | 12 GB |
 | [gsir](stages.md#gsir) | PBR materials | 8 GB |
 
@@ -55,7 +55,7 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 |-------|------|-------------|
 | `-n` | `--name` | Project name (default: filename) |
 | `-p` | `--projects-dir` | Output directory (default: `../vfx_projects`) |
-| `-s` | `--stages` | Stages to run, comma-separated or `all` |
+| `-s` | `--stages` | Stages to run, comma-separated |
 | `-f` | `--fps` | Override frame rate (default: auto-detect) |
 | `-e` | `--skip-existing` | Skip stages with existing output |
 | | `--list-stages` | List available stages and exit |
@@ -70,21 +70,15 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 | `--no-separate-instances` | Combine all instances into single mask |
 | `--start-frame` | Frame to start roto from (enables bidirectional propagation). Use when subject isn't visible on first frame |
 
-### Cleanplate Options
-
-| Long | Description |
-|------|-------------|
-| `--cleanplate-median` | Use temporal median instead of ProPainter (faster, requires static camera) |
-
-### COLMAP Options
+### Matchmove Camera Options
 
 | Short | Long | Description |
 |-------|------|-------------|
-| `-q` | `--colmap-quality` | `low`, `medium` (default), `high`, or `slow` |
-| `-d` | `--colmap-dense` | Run dense reconstruction |
-| `-m` | `--colmap-mesh` | Generate mesh (requires `-d`) |
-| `-M` | `--colmap-no-masks` | Don't use roto masks for tracking |
-| | `--colmap-max-size` | Max image dimension (downscales larger, use 1000-2000 for speed) |
+| `-q` | `--matchmove-camera-quality` | `low`, `medium` (default), `high`, or `slow` |
+| `-d` | `--matchmove-camera-dense` | Run dense reconstruction |
+| `-m` | `--matchmove-camera-mesh` | Generate mesh (requires `-d`) |
+| `-M` | `--matchmove-camera-no-masks` | Don't use roto masks for tracking |
+| | `--matchmove-camera-max-size` | Max image dimension (downscales larger, use 1000-2000 for speed) |
 
 ### GS-IR Options
 
@@ -134,7 +128,7 @@ Opens ComfyUI in browser for manual point/box selection of objects.
 ### Matchmove Only
 
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s colmap
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera
 ```
 
 ### Object Removal
@@ -181,16 +175,16 @@ python scripts/run_mocap.py ./projects/MyShot --mocap-person person_01 \
 
 Creates separate output folders: `mocap/person_00/`, `mocap/person_01/`
 
-### High-Quality COLMAP
+### High-Quality Matchmove Camera
 
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s colmap -q high -d -m
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera -q high -d -m
 ```
 
 ### Resume After Interruption
 
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s all -e
+python scripts/run_pipeline.py footage.mp4 -s depth,roto,cleanplate -e
 ```
 
 ### Generate Preview Movies
@@ -219,7 +213,7 @@ Pipeline creates this directory structure:
 │   ├── person_00/
 │   └── person_01/
 ├── cleanplate/          # Clean plates
-├── colmap/
+├── mmcam/
 │   ├── sparse/0/        # Sparse reconstruction
 │   ├── dense/           # Dense point cloud (optional)
 │   └── meshed/          # Mesh (optional)
@@ -234,7 +228,7 @@ Pipeline creates this directory structure:
 ├── gsir/
 │   ├── model/           # Checkpoints
 │   └── materials/       # Albedo, roughness, metallic
-├── camera/              # From COLMAP stage
+├── camera/              # From matchmove_camera stage
 │   ├── extrinsics.json  # 4x4 matrices per frame
 │   ├── intrinsics.json  # fx, fy, cx, cy
 │   ├── camera.abc       # Alembic export
@@ -247,7 +241,7 @@ Pipeline creates this directory structure:
 
 ## ComfyUI
 
-Pipeline auto-starts ComfyUI for depth, roto, and cleanplate stages.
+Pipeline auto-starts ComfyUI for depth and roto stages.
 
 **Manual control:**
 ```bash
@@ -267,7 +261,7 @@ python scripts/run_pipeline.py footage.mp4 -c http://192.168.1.100:8188
 ### Individual Scripts
 
 ```bash
-python scripts/run_colmap.py MyShot -q high
+python scripts/run_matchmove_camera.py MyShot -q high
 python scripts/run_mocap.py MyShot
 python scripts/export_camera.py MyShot --fps 24
 ```
@@ -277,7 +271,7 @@ python scripts/export_camera.py MyShot --fps 24
 ```bash
 for video in footage/*.mp4; do
     name=$(basename "$video" .mp4)
-    python scripts/run_pipeline.py "$video" -n "$name" -s all -e
+    python scripts/run_pipeline.py "$video" -n "$name" -s depth,roto,cleanplate -e
 done
 ```
 

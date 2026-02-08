@@ -49,7 +49,7 @@ projects/Test_Shot/
 # Extract frames from test footage
 python scripts/run_pipeline.py test_footage.mp4 \
   --name Test_Shot \
-  --stages ingest,colmap
+  --stages ingest,matchmove_camera
 
 # This creates:
 # - source/frames/ (frame extraction)

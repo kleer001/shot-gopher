@@ -1,14 +1,14 @@
 #!/bin/bash
 # =============================================================================
-# Run Pipeline - Auto-activating wrapper
+# Run COLMAP - Auto-activating wrapper
 # =============================================================================
-# Activates the vfx-pipeline conda environment and runs run_pipeline.py
+# Activates the vfx-pipeline conda environment and runs run_colmap.py
 #
 # Usage:
-#   ./src/run-pipeline.sh <input_movie> [options]
+#   ./src/run-colmap.sh <project_dir> [options]
 #
 # Example:
-#   ./src/run-pipeline.sh /path/to/footage.mp4 --name "My_Shot" --stages depth,roto,cleanplate
+#   ./src/run-colmap.sh /path/to/projects/My_Shot --dense --mesh
 # =============================================================================
 
 set -e
@@ -20,4 +20,4 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 _saved_args=("$@")
 source "$REPO_ROOT/scripts/activate_env.sh" || exit 1
 
-python "$REPO_ROOT/scripts/run_pipeline.py" "${_saved_args[@]}"
+python "$REPO_ROOT/scripts/run_matchmove_camera.py" "${_saved_args[@]}"

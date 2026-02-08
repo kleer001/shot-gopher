@@ -59,7 +59,7 @@ REST API for managing VFX pipeline projects and executing stages.
 ## Features
 - Create and manage projects
 - Upload video files
-- Execute pipeline stages (ingest, depth, roto, colmap, mocap, etc.)
+- Execute pipeline stages (ingest, depth, roto, matchmove_camera, mocap, etc.)
 - Real-time progress updates via WebSocket
 - Video metadata extraction
 

@@ -15,7 +15,7 @@ from subprocess_utils import (
     ProcessResult,
     ProgressTracker,
     ProcessRunner,
-    create_colmap_patterns,
+    create_mmcam_patterns,
     create_training_patterns,
     create_generic_patterns,
 )
@@ -255,8 +255,8 @@ class TestProcessRunner:
 
 
 class TestPatternFactories:
-    def test_create_colmap_patterns(self):
-        patterns = create_colmap_patterns()
+    def test_create_mmcam_patterns(self):
+        patterns = create_mmcam_patterns()
 
         assert len(patterns) >= 3
         assert all(isinstance(p, ProgressPattern) for p in patterns)
@@ -266,7 +266,7 @@ class TestPatternFactories:
         assert "Matching" in names
 
     def test_colmap_patterns_match_examples(self):
-        patterns = create_colmap_patterns()
+        patterns = create_mmcam_patterns()
 
         for pattern in patterns:
             if "feature" in pattern.name.lower():

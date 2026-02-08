@@ -33,7 +33,7 @@ class TestOutputKeyNormalization:
             "roto": "roto",
             "mama": "matte",
             "cleanplate": "cleanplate",
-            "colmap": "colmap",
+            "matchmove_camera": "mmcam",
             "gsir": "gsir",
             "mocap": "mocap",
             "camera": "camera",
@@ -47,7 +47,7 @@ class TestOutputKeyNormalization:
             "roto": "roto",
             "mama": "matte",
             "cleanplate": "cleanplate",
-            "colmap": "colmap",
+            "matchmove_camera": "mmcam",
             "gsir": "gsir",
             "mocap": "mocap",
             "camera": "camera",
@@ -143,13 +143,13 @@ class TestOutputsAPILogic:
 
     def test_rglob_finds_nested_files(self, tmp_path):
         """rglob should find files in subdirectories."""
-        # Create nested structure like colmap outputs
-        (tmp_path / "colmap" / "sparse").mkdir(parents=True)
-        (tmp_path / "colmap" / "sparse" / "cameras.bin").touch()
-        (tmp_path / "colmap" / "sparse" / "images.bin").touch()
-        (tmp_path / "colmap" / "sparse" / "points3D.bin").touch()
+        # Create nested structure like matchmove_camera outputs
+        (tmp_path / "mmcam" / "sparse").mkdir(parents=True)
+        (tmp_path / "mmcam" / "sparse" / "cameras.bin").touch()
+        (tmp_path / "mmcam" / "sparse" / "images.bin").touch()
+        (tmp_path / "mmcam" / "sparse" / "points3D.bin").touch()
 
-        dir_path = tmp_path / "colmap"
+        dir_path = tmp_path / "mmcam"
         all_files = list(dir_path.rglob("*"))
         files = [f for f in all_files if f.is_file()]
 
@@ -212,7 +212,7 @@ class TestFrontendBackendConsistency:
             'depth': 'depth',
             'roto': 'roto',
             'cleanplate': 'cleanplate',
-            'colmap': 'colmap',
+            'matchmove_camera': 'mmcam',
             'interactive': 'roto',
             'mama': 'matte',
             'mocap': 'mocap',
@@ -226,7 +226,7 @@ class TestFrontendBackendConsistency:
             'depth': 'depth',
             'roto': 'roto',
             'cleanplate': 'cleanplate',
-            'colmap': 'colmap',
+            'matchmove_camera': 'mmcam',
             'interactive': 'roto',
             'mama': 'matte',
             'mocap': 'mocap',
@@ -247,14 +247,14 @@ class TestFrontendBackendConsistency:
         """ALL_STAGES in frontend should include all pipeline stages."""
         # From ProjectsController.js
         frontend_all_stages = [
-            'ingest', 'depth', 'roto', 'cleanplate', 'colmap',
+            'ingest', 'depth', 'roto', 'cleanplate', 'matchmove_camera',
             'interactive', 'mama', 'mocap', 'gsir', 'camera'
         ]
 
         # From pipeline_config.json
         backend_stages = [
             'ingest', 'interactive', 'depth', 'roto', 'mama',
-            'cleanplate', 'colmap', 'gsir', 'mocap', 'camera'
+            'cleanplate', 'matchmove_camera', 'gsir', 'mocap', 'camera'
         ]
 
         # Both should have the same stages (order doesn't matter)

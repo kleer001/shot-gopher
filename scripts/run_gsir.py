@@ -29,7 +29,7 @@ import sys
 import time
 from pathlib import Path
 
-from run_colmap import get_colmap_executable
+from run_matchmove_camera import get_colmap_executable
 from typing import Optional
 
 from env_config import require_conda_env, INSTALL_DIR
@@ -180,7 +180,7 @@ def setup_gsir_data_structure(
     """
     gsir_data_dir.mkdir(parents=True, exist_ok=True)
 
-    colmap_dir = project_dir / "colmap"
+    colmap_dir = project_dir / "mmcam"
     colmap_sparse_model = colmap_dir / "sparse" / "0"
     source_frames = project_dir / "source" / "frames"
     undistorted_dir = colmap_dir / "undistorted"

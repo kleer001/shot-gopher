@@ -214,7 +214,7 @@ def run_pipeline_thread(
         if opts.get("separate_instances"):
             cmd.append("--separate-instances")
 
-        opts = stage_options.get("colmap", {})
+        opts = stage_options.get("matchmove_camera", {})
         if opts.get("quality"):
             cmd.extend(["-q", opts["quality"]])
         if opts.get("dense"):
@@ -223,10 +223,6 @@ def run_pipeline_thread(
             cmd.append("-m")
         if opts.get("no_masks"):
             cmd.append("-M")
-
-        opts = stage_options.get("cleanplate", {})
-        if opts.get("method") == "median":
-            cmd.append("--cleanplate-median")
 
         opts = stage_options.get("gsir", {})
         if opts.get("iterations"):

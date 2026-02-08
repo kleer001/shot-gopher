@@ -38,7 +38,7 @@ A dichotomous key to find the right pipeline stages for your footage.
 ### 4. Does your scene have good texture and detail?
 
 **Yes** → Go to [6](#6-do-you-need-motion-capture)
-- Available: `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `gsir`, `mocap`
+- Available: `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `matchmove_camera`, `gsir`, `mocap`
 
 **No** → Go to [7](#7-do-you-need-separate-masks-for-multiple-similar-objects)
 - Available: `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`
@@ -51,14 +51,14 @@ A dichotomous key to find the right pipeline stages for your footage.
 - Available: `ingest`, `depth`
 
 **No** → Go to [6](#6-do-you-need-motion-capture)
-- Available: `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `mocap`
+- Available: `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `matchmove_camera`, `mocap`
 
 ---
 
 ### 6. Do you need motion capture?
 
 **Yes** → Go to [7](#7-do-you-need-separate-masks-for-multiple-similar-objects)
-- Requires full body visible; add `mocap` after `colmap`
+- Requires full body visible; add `mocap` after `matchmove_camera`
 
 **No** → Go to [7](#7-do-you-need-separate-masks-for-multiple-similar-objects)
 
@@ -95,9 +95,9 @@ See [Interactive Roto Guide](reference/interactive-segmentation.md)
 | Your Situation | Available Stages |
 |----------------|------------------|
 | Static camera | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate` |
-| Smooth moving + textured | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `gsir`, `mocap` |
+| Smooth moving + textured | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `matchmove_camera`, `gsir`, `mocap` |
 | Smooth moving + low texture | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate` |
-| Handheld + no fast motion | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `colmap`, `mocap` |
+| Handheld + no fast motion | `ingest`, `depth`, `roto`, `interactive`, `mama`, `cleanplate`, `matchmove_camera`, `mocap` |
 | Handheld + fast motion | `ingest`, `depth` |
 
 ---
@@ -111,12 +111,12 @@ python scripts/run_pipeline.py video.mp4 -s ingest,roto,mama,cleanplate --prompt
 
 **Camera track for CGI:**
 ```bash
-python scripts/run_pipeline.py video.mp4 -s ingest,colmap -q high
+python scripts/run_pipeline.py video.mp4 -s ingest,matchmove_camera -q high
 ```
 
 **Motion capture:**
 ```bash
-python scripts/run_pipeline.py video.mp4 -s ingest,colmap,mocap
+python scripts/run_pipeline.py video.mp4 -s ingest,matchmove_camera,mocap
 ```
 
 **Quick depth + roto preview:**

@@ -30,7 +30,6 @@ from pipeline_utils import (
 from workflow_utils import (
     refresh_workflow_from_template,
     update_segmentation_prompt,
-    update_cleanplate_resolution,
     update_workflow_resolution,
 )
 
@@ -39,7 +38,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "run_export_camera",
-    "run_colmap_reconstruction",
+    "run_matchmove_camera",
     "export_camera_to_vfx_formats",
     "run_mocap",
     "run_gsir_materials",
@@ -50,7 +49,7 @@ __all__ = [
     "run_stage_roto",
     "run_stage_mama",
     "run_stage_cleanplate",
-    "run_stage_colmap",
+    "run_stage_matchmove_camera",
     "run_stage_mocap",
     "run_stage_gsir",
     "run_stage_camera",
@@ -96,7 +95,7 @@ def run_export_camera(
         return False
 
 
-def run_colmap_reconstruction(
+def run_matchmove_camera(
     project_dir: Path,
     quality: str = "medium",
     run_dense: bool = False,
@@ -117,10 +116,10 @@ def run_colmap_reconstruction(
     Returns:
         True if reconstruction succeeded
     """
-    script_path = Path(__file__).parent / "run_colmap.py"
+    script_path = Path(__file__).parent / "run_matchmove_camera.py"
 
     if not script_path.exists():
-        print("    Error: run_colmap.py not found", file=sys.stderr)
+        print("    Error: run_matchmove_camera.py not found", file=sys.stderr)
         return False
 
     cmd = [
@@ -471,7 +470,6 @@ def run_stage_interactive(
             ctx.source_height,
             update_loaders=True,
             update_scales=False,
-            update_propainter=False,
         )
 
     print("  → Opening interactive segmentation in ComfyUI")
@@ -532,7 +530,6 @@ def run_stage_depth(
             ctx.source_height,
             update_loaders=True,
             update_scales=False,
-            update_propainter=False,
         )
 
     if not run_comfyui_workflow(
@@ -584,7 +581,6 @@ def run_stage_roto(
             ctx.source_height,
             update_loaders=True,
             update_scales=False,
-            update_propainter=False,
         )
 
     if ctx.skip_existing and (list(roto_dir.glob("*.png")) or list(roto_dir.glob("*/*.png"))):
@@ -747,7 +743,7 @@ def run_stage_cleanplate(
     ctx: "StageContext",
     config: "PipelineConfig",
 ) -> bool:
-    """Run cleanplate generation stage.
+    """Run cleanplate generation stage (temporal median, static camera).
 
     Args:
         ctx: Stage execution context
@@ -756,8 +752,7 @@ def run_stage_cleanplate(
     Returns:
         True if successful
     """
-    print("\n=== Stage: cleanplate ===")
-    workflow_path = ctx.project_dir / "workflows" / "03_cleanplate.json"
+    print("\n=== Stage: cleanplate (median-only) ===")
     cleanplate_dir = ctx.project_dir / "cleanplate"
     roto_dir = ctx.project_dir / "roto"
 
@@ -772,12 +767,6 @@ def run_stage_cleanplate(
         print("")
         return True
 
-    refresh_workflow_from_template(workflow_path, "03_cleanplate.json")
-
-    if not workflow_path.exists():
-        print("  → Skipping (workflow not found)")
-        return True
-
     if ctx.skip_existing and list(cleanplate_dir.glob("*.png")):
         print("  → Skipping (cleanplates exist)")
         return True
@@ -787,33 +776,9 @@ def run_stage_cleanplate(
 
     print(f"  → {roto_message}")
 
-    if ctx.cleanplate_use_median:
-        print("  → Using temporal median (static camera mode)")
-        if not run_cleanplate_median(ctx.project_dir):
-            print("  → Temporal median cleanplate failed", file=sys.stderr)
-            return False
-    else:
-        if ctx.source_width > 0 and ctx.source_height > 0:
-            update_workflow_resolution(
-                workflow_path,
-                ctx.source_width,
-                ctx.source_height,
-                update_loaders=True,
-                update_scales=True,
-                update_propainter=True,
-            )
-        else:
-            update_cleanplate_resolution(workflow_path, ctx.source_frames)
-
-        if not run_comfyui_workflow(
-            workflow_path, ctx.comfyui_url,
-            output_dir=cleanplate_dir,
-            total_frames=ctx.total_frames,
-            stage_name="cleanplate",
-        ):
-            print("  → Cleanplate stage failed", file=sys.stderr)
-
-        clear_gpu_memory(ctx.comfyui_url)
+    if not run_cleanplate_median(ctx.project_dir):
+        print("  → Temporal median cleanplate failed", file=sys.stderr)
+        return False
 
     if ctx.auto_movie and list(cleanplate_dir.glob("*.png")):
         generate_preview_movie(cleanplate_dir, ctx.project_dir / "preview" / "cleanplate.mp4", ctx.fps)
@@ -821,7 +786,7 @@ def run_stage_cleanplate(
     return True
 
 
-def run_stage_colmap(
+def run_stage_matchmove_camera(
     ctx: "StageContext",
     config: "PipelineConfig",
 ) -> bool:
@@ -834,19 +799,20 @@ def run_stage_colmap(
     Returns:
         True if successful
     """
-    print("\n=== Stage: colmap ===")
-    colmap_sparse = ctx.project_dir / "colmap" / "sparse" / "0"
+    print("\n=== Stage: matchmove_camera ===")
+    mmcam_sparse = ctx.project_dir / "mmcam" / "sparse" / "0"
+    assert "colmap" not in str(mmcam_sparse), f"BREADCRUMB: path still contains 'colmap': {mmcam_sparse}"
 
-    if ctx.skip_existing and colmap_sparse.exists():
+    if ctx.skip_existing and mmcam_sparse.exists():
         print("  → Skipping (COLMAP sparse model exists)")
     else:
-        if not run_colmap_reconstruction(
+        if not run_matchmove_camera(
             ctx.project_dir,
-            quality=config.colmap_quality,
-            run_dense=config.colmap_dense,
-            run_mesh=config.colmap_mesh,
-            use_masks=config.colmap_use_masks,
-            max_image_size=config.colmap_max_size
+            quality=config.mmcam_quality,
+            run_dense=config.mmcam_dense,
+            run_mesh=config.mmcam_mesh,
+            use_masks=config.mmcam_use_masks,
+            max_image_size=config.mmcam_max_image_size
         ):
             print("  → COLMAP reconstruction failed", file=sys.stderr)
 
@@ -881,7 +847,7 @@ def run_stage_mocap(
         print("  → Skipping (mocap data exists)")
     else:
         if has_camera:
-            print(f"  → Using COLMAP camera data for improved accuracy")
+            print(f"  → Using matchmove camera data for improved accuracy")
         print(f"  → Gender: {config.mocap_gender}")
         if config.mocap_start_frame or config.mocap_end_frame:
             range_str = f"{config.mocap_start_frame or 1}-{config.mocap_end_frame or 'end'}"
@@ -926,7 +892,7 @@ def run_stage_gsir(
         True if successful
     """
     print("\n=== Stage: gsir ===")
-    colmap_sparse = ctx.project_dir / "colmap" / "sparse" / "0"
+    colmap_sparse = ctx.project_dir / "mmcam" / "sparse" / "0"
     gsir_checkpoint = ctx.project_dir / "gsir" / "model" / f"chkpnt{config.gsir_iterations}.pth"
 
     if not colmap_sparse.exists():
@@ -972,12 +938,12 @@ def run_stage_camera(
 
     if (colmap_camera_dir / "extrinsics.json").exists():
         camera_dir = colmap_camera_dir
-        print("  → Using COLMAP camera data")
+        print("  → Using matchmove camera data")
     elif (mocap_camera_dir / "extrinsics.json").exists():
         camera_dir = mocap_camera_dir
         print("  → Using GVHMR camera estimate")
     else:
-        print("  → Skipping (no camera data - run colmap or mocap stage first)")
+        print("  → Skipping (no camera data - run matchmove_camera or mocap stage first)")
         return True
 
     if ctx.skip_existing and (camera_dir / "camera.abc").exists():
@@ -997,7 +963,7 @@ STAGE_HANDLERS: dict[str, Callable[["StageContext", "PipelineConfig"], bool]] = 
     "roto": run_stage_roto,
     "mama": run_stage_mama,
     "cleanplate": run_stage_cleanplate,
-    "colmap": run_stage_colmap,
+    "matchmove_camera": run_stage_matchmove_camera,
     "mocap": run_stage_mocap,
     "gsir": run_stage_gsir,
     "camera": run_stage_camera,

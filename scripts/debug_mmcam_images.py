@@ -27,7 +27,7 @@ def _get_colmap() -> str:
 
 
 def debug_images_bin(project_dir: Path) -> None:
-    sparse_dir = project_dir / "colmap" / "sparse" / "0"
+    sparse_dir = project_dir / "mmcam" / "sparse" / "0"
     images_bin = sparse_dir / "images.bin"
 
     if not images_bin.exists():

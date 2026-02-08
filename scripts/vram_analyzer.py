@@ -51,7 +51,7 @@ STAGE_VRAM_REQUIREMENTS: dict[str, StageVramConfig] = {
         chunk_formula="vram_to_chunk_size"
     ),
     "cleanplate": StageVramConfig(base_vram_gb=2, gb_per_mpx_frame=0.09),
-    "colmap": StageVramConfig(base_vram_gb=2),
+    "matchmove_camera": StageVramConfig(base_vram_gb=2),
     "gsir": StageVramConfig(base_vram_gb=4, gb_per_mpx_frame=0.04),
     "mocap": StageVramConfig(base_vram_gb=6),
     "camera": StageVramConfig(base_vram_gb=0),

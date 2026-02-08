@@ -120,7 +120,7 @@ def show_email_instructions(log_file: Path = None) -> None:
 
   I'm having trouble running the pipeline. Here's what happened:
 
-  Command: python run_pipeline.py my_video.mp4 --stages all
+  Command: python run_pipeline.py my_video.mp4 --stages depth,roto
   Expected: Pipeline completes successfully
   Actual: Pipeline crashes at depth stage with CUDA error
 

@@ -1,4 +1,4 @@
-"""Tests for run_colmap.py"""
+"""Tests for run_matchmove_camera.py"""
 
 import json
 import tempfile
@@ -11,7 +11,7 @@ import pytest
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from run_colmap import (
+from run_matchmove_camera import (
     check_colmap_available,
     quaternion_to_rotation_matrix,
     colmap_to_camera_matrices,

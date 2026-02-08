@@ -62,20 +62,20 @@
     },
     "cleanplate": {
       "name": "Clean Plate",
-      "displayName": "Generate Clean Plates",
-      "description": "Create background without objects",
+      "displayName": "Clean Plate (Static Camera)",
+      "description": "Clean plate via temporal median (static camera)",
       "outputDir": "cleanplate",
       "estimatedTimePerFrame": 0.3,
       "required": false,
       "dependencies": [],
       "defaultEnabled": false,
-      "requiresComfyUI": true
+      "requiresComfyUI": false
     },
-    "colmap": {
+    "matchmove_camera": {
       "name": "Camera Tracking",
       "displayName": "Track Camera (COLMAP)",
       "description": "Calculate camera movement",
-      "outputDir": "colmap",
+      "outputDir": "mmcam",
       "estimatedTimePerFrame": 2.0,
       "required": false,
       "dependencies": [],
@@ -90,7 +90,7 @@
       "outputDir": "gsir",
       "estimatedTimePerFrame": 1.5,
       "required": false,
-      "dependencies": ["colmap"],
+      "dependencies": ["matchmove_camera"],
       "defaultEnabled": false,
       "requiresComfyUI": false
     },
@@ -101,7 +101,7 @@
       "outputDir": "mocap",
       "estimatedTimePerFrame": 1.2,
       "required": false,
-      "dependencies": ["colmap"],
+      "dependencies": ["matchmove_camera"],
       "defaultEnabled": false,
       "requiresComfyUI": false
     }
@@ -116,11 +116,6 @@
       "name": "Full VFX",
       "description": "Complete VFX pipeline without 3D",
       "stages": ["depth", "roto", "cleanplate"]
-    },
-    "all": {
-      "name": "Everything",
-      "description": "All available stages including 3D reconstruction",
-      "stages": ["depth", "roto", "mama", "cleanplate", "colmap", "gsir", "mocap"]
     }
   },
   "supportedVideoFormats": [

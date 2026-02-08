@@ -24,7 +24,7 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 - **Depth estimation** - Monocular depth maps with temporal consistency (Video Depth Anything)
 - **Rotoscoping** - Text-prompted roto for dynamic object masking (SAM3)
 - **Matte refinement** - Alpha matte generation for human subjects (VideoMaMa)
-- **Clean plate generation** - Automated inpainting to remove objects from footage (ProPainter)
+- **Clean plate generation** - Temporal median clean plates for static camera shots
 - **Camera tracking** - Structure-from-Motion camera solves with bundle adjustment (COLMAP)
 - **3D reconstruction** - Dense point clouds and mesh generation from multi-view footage
 - **Scene material decomposition** - Extract PBR material properties from multi-view footage via GS-IR (outputs EXR format)
@@ -48,7 +48,6 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 - [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything) - Temporally consistent depth estimation
 - [Segment Anything Model 3](https://github.com/facebookresearch/sam2) - Text-prompted rotoscoping
 - [VideoMaMa](https://github.com/hywang66/VideoMaMa) - Video matting for human alpha mattes
-- [ProPainter](https://github.com/sczhou/ProPainter) - Video inpainting for clean plates
 - [COLMAP](https://colmap.github.io/) - Structure-from-Motion and Multi-View Stereo
 - [FFmpeg](https://ffmpeg.org/) - Video/image processing
 
@@ -162,7 +161,7 @@ Output follows VFX production conventions:
 ├── matte/              # Refined alpha mattes (person_00/, person_01/, etc.)
 ├── cleanplate/         # Inpainted backgrounds
 ├── camera/             # Camera data (Alembic, JSON, point clouds, meshes)
-└── colmap/             # COLMAP reconstruction data
+└── mmcam/              # COLMAP reconstruction data
 ```
 
 **Note on frame numbering:** Frame sequences start at 0001 rather than the VFX industry standard of 1001. ComfyUI's SaveImage node output constraints make custom start frame numbering infeasible.
@@ -184,7 +183,6 @@ Output follows VFX production conventions:
 | ComfyUI + nodes | — | 2.5 GB |
 | Video Depth Anything | ~7 GB | 1.5 GB |
 | SAM3 (roto) | ~4 GB | 0.9 GB |
-| ProPainter (clean plates) | ~6 GB | 0.5 GB |
 | Blender 4.2 LTS | — | 0.5 GB |
 | COLMAP (camera) | CPU | 0.2 GB |
 | VideoMaMa (matte) | 12+ GB | 10.0 GB |

@@ -58,7 +58,7 @@ cp workflow_templates/*.json MyShot/workflows/
 
 ### COLMAP Reconstruction Failed
 
-**Symptom:** Empty `colmap/sparse/0/` or reconstruction error
+**Symptom:** Empty `mmcam/sparse/0/` or reconstruction error
 
 **Common causes:**
 
@@ -69,7 +69,7 @@ cp workflow_templates/*.json MyShot/workflows/
 | Minimal camera motion | Use `-q slow` preset |
 | Motion blur | No easy fix — need sharper frames |
 
-**Debug:** `cat MyShot/colmap.log`
+**Debug:** `cat MyShot/mmcam.log`
 
 ---
 
@@ -81,7 +81,7 @@ cp workflow_templates/*.json MyShot/workflows/
 
 **Fix:**
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera,mocap
 ```
 
 **Verify:** `ls MyShot/camera/` should show `extrinsics.json`
@@ -101,7 +101,7 @@ python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
 | roto | 4 GB |
 | mama | 12 GB |
 | cleanplate | 6 GB |
-| colmap | 2-4 GB |
+| matchmove_camera | 2-4 GB |
 | mocap | 12 GB |
 | gsir | 8 GB |
 
@@ -153,7 +153,7 @@ ingest ─┬─► depth
         │
         ├─► roto ─► mama ─► cleanplate
         │
-        └─► colmap ─┬─► mocap
+        └─► matchmove_camera ─┬─► mocap
                     └─► gsir
 ```
 
@@ -173,7 +173,7 @@ python scripts/run_pipeline.py footage.mp4 -s roto
 Avoid re-processing with `-e`:
 
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s all -e
+python scripts/run_pipeline.py footage.mp4 -s depth,roto,cleanplate -e
 ```
 
 Checks for existing output in each stage directory before running.
@@ -184,9 +184,9 @@ Checks for existing output in each stage directory before running.
 
 | Workflow | Command | Use Case |
 |----------|---------|----------|
-| Fast preview | `-s depth,colmap -q low` | Quick check |
-| Balanced | `-s all` | Default |
-| Production | `-s all -q high -d -m` | Final delivery |
+| Fast preview | `-s depth,matchmove_camera -q low` | Quick check |
+| Balanced | `-s depth,roto,cleanplate` | Standard workflow |
+| Production | `-s depth,roto,matchmove_camera,gsir -q high -d -m` | Final delivery |
 
 ---
 
@@ -200,8 +200,8 @@ Checks for existing output in each stage directory before running.
 | Depth maps | 1-2 GB |
 | Roto masks | 500 MB |
 | Clean plates | 2-5 GB |
-| COLMAP sparse | 50-200 MB |
-| COLMAP dense | 5-20 GB |
+| Matchmove camera sparse | 50-200 MB |
+| Matchmove camera dense | 5-20 GB |
 | Mocap | 0.5-2 GB |
 | GS-IR | 2-5 GB |
 

@@ -77,7 +77,7 @@ class GsirValidationReport:
         return "\n".join(lines)
 
 
-def count_colmap_images(sparse_model: Path) -> int:
+def count_mmcam_images(sparse_model: Path) -> int:
     """Count registered images in a COLMAP sparse model.
 
     Args:
@@ -492,9 +492,9 @@ def validate_gsir_output(project_dir: Path) -> GsirValidationReport:
     """
     report = GsirValidationReport(project_dir=project_dir)
     output_dir = project_dir / "camera"
-    colmap_undistorted = project_dir / "colmap" / "undistorted" / "sparse" / "0"
+    colmap_undistorted = project_dir / "mmcam" / "undistorted" / "sparse" / "0"
 
-    expected_frame_count = count_colmap_images(colmap_undistorted)
+    expected_frame_count = count_mmcam_images(colmap_undistorted)
 
     report.add_check("directories", check_output_directories(output_dir))
     report.add_check("metadata", check_metadata(output_dir))

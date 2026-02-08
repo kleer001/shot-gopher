@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from validate_gsir import (
     ValidationResult,
     GsirValidationReport,
-    count_colmap_images,
+    count_mmcam_images,
     check_output_directories,
     check_file_counts,
     check_image_validity,
@@ -79,10 +79,10 @@ class TestGsirValidationReport:
         assert "1/2" in summary
 
 
-class TestCountColmapImages:
+class TestCountMmcamImages:
     def test_returns_zero_for_missing_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            assert count_colmap_images(Path(tmpdir)) == 0
+            assert count_mmcam_images(Path(tmpdir)) == 0
 
     def test_reads_image_count_from_binary(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -90,7 +90,7 @@ class TestCountColmapImages:
             with open(images_bin, "wb") as f:
                 f.write(struct.pack("<Q", 42))
                 f.write(b"\x00" * 100)
-            assert count_colmap_images(Path(tmpdir)) == 42
+            assert count_mmcam_images(Path(tmpdir)) == 42
 
 
 class TestCheckOutputDirectories:
@@ -397,7 +397,7 @@ class TestValidateGsirOutput:
             env_img = Image.new("RGB", (512, 256), color=(128, 128, 200))
             env_img.save(output_dir / "environment.png")
 
-            colmap_undistorted = project_dir / "colmap" / "undistorted" / "sparse" / "0"
+            colmap_undistorted = project_dir / "mmcam" / "undistorted" / "sparse" / "0"
             colmap_undistorted.mkdir(parents=True)
             with open(colmap_undistorted / "images.bin", "wb") as f:
                 f.write(struct.pack("<Q", 5))
