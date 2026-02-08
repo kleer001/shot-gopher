@@ -106,6 +106,8 @@ The underlying tool is still COLMAP — only the public-facing name changes.
 | File | Changes Required |
 |------|------------------|
 | `tests/test_run_colmap.py` | Rename to `tests/test_run_matchmove_camera.py`, update internal references |
+| `tests/test_run_gsir.py:13,49,71,78,86-93,114,122-127,138,155-161` | Rename `colmap` paths → `mmcam`, update `COLMAP_AVAILABLE` variable name, update stage ordering test `"colmap"` → `"matchmove_camera"` |
+| `tests/test_validate_gsir.py:17,85,93,400-402` | Rename `count_colmap_images` → `count_mmcam_images`, update `colmap/` paths → `mmcam/` |
 | `web/tests/unit/test_outputs_api.py:36,50,146-152,215,229,250,257` | Rename `"colmap"` → `"matchmove_camera"` and paths → `"mmcam"` |
 | `web/tests/integration/test_outputs_api.py:52-56,104,123-124` | Rename `"colmap"` → `"matchmove_camera"` and paths → `"mmcam"` |
 
