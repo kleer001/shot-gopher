@@ -812,7 +812,7 @@ def run_stage_matchmove_camera(
             run_dense=config.mmcam_dense,
             run_mesh=config.mmcam_mesh,
             use_masks=config.mmcam_use_masks,
-            max_image_size=config.mmcam_max_image_size
+            max_image_size=config.mmcam_max_size
         ):
             print("  → COLMAP reconstruction failed", file=sys.stderr)
 
