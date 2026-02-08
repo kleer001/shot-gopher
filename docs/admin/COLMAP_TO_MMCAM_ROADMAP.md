@@ -142,6 +142,80 @@ These are internal implementation details and should NOT be renamed:
 - COLMAP-specific function internals in `run_matchmove_camera.py`
 - COLMAP file format references (`cameras.bin`, `images.bin`, `points3D.bin`)
 
+## Breadcrumbs (temporary debugging aids)
+
+Add during refactor. Remove before merging to main.
+
+### 1. Output directory assertion in stage runner
+
+In `run_stage_matchmove_camera()`, add an assertion that confirms the output dir is
+correct:
+
+```python
+def run_stage_matchmove_camera(ctx, config):
+    print("\n=== Stage: matchmove_camera ===")
+    mmcam_sparse = ctx.project_dir / "mmcam" / "sparse" / "0"
+    assert "colmap" not in str(mmcam_sparse), \
+        f"BREADCRUMB: path still contains 'colmap': {mmcam_sparse}"  # remove after verifying
+```
+
+**Why:** The rename touches 23 files. If any path construction still concatenates
+`"colmap"` instead of `"mmcam"`, this blows up at stage entry, not deep inside COLMAP
+processing where the error would be `FileNotFoundError` on a missing directory.
+
+### 2. Config field guard in run_pipeline.py
+
+After renaming the config fields, temporarily add a guard in config construction:
+
+```python
+config = PipelineConfig(
+    ...
+    mmcam_quality=args.mmcam_quality,
+    ...
+)
+# BREADCRUMB: remove after verifying all callers use mmcam_ fields
+assert not hasattr(args, 'colmap_quality'), \
+    "BREADCRUMB: argparse still defines --colmap-quality"
+```
+
+**Why:** If one of the 5 argparse arguments was missed during rename, this catches it
+at startup rather than silently using a default value.
+
+### 3. Downstream consumer path checks
+
+In each of the three downstream consumers, add a path existence check with a
+rename-aware message:
+
+```python
+# In run_gsir.py, run_mocap.py, validate_gsir.py:
+mmcam_dir = project_dir / "mmcam"
+if not mmcam_dir.exists():
+    colmap_dir = project_dir / "colmap"
+    if colmap_dir.exists():
+        print("BREADCRUMB: Found 'colmap/' but expected 'mmcam/'. "
+              "This project may predate the rename.", file=sys.stderr)  # remove after verifying
+```
+
+**Why:** During the transition, existing project directories on disk still have `colmap/`.
+This message clearly tells the user (and developer) what happened, rather than a generic
+"no camera data found" error. Particularly useful when running the refactored code against
+existing test fixtures.
+
+### 4. Shell launcher tombstones
+
+After renaming the shell launchers, leave tombstone scripts at the old paths:
+
+```bash
+# src/run-colmap.sh
+#!/bin/bash
+echo "ERROR: run-colmap.sh has been renamed to run-matchmove-camera.sh" >&2
+echo "See: docs/admin/COLMAP_TO_MMCAM_ROADMAP.md" >&2
+exit 1
+```
+
+**Why:** Anyone with the old script in their PATH or aliases gets an actionable error.
+Delete after one release cycle.
+
 ## Verification Checklist
 
 - [ ] `python scripts/run_pipeline.py --list-stages` shows `matchmove_camera` (not `colmap`)
@@ -155,3 +229,10 @@ These are internal implementation details and should NOT be renamed:
 - [ ] Camera export stage finds mmcam extrinsics correctly
 - [ ] All tests pass: `pytest tests/`
 - [ ] Web UI shows "Camera Tracking" with correct stage key
+
+## Breadcrumb Removal Checklist
+
+- [ ] Remove `assert "colmap" not in str(mmcam_sparse)` from `run_stage_matchmove_camera()`
+- [ ] Remove `assert not hasattr(args, 'colmap_quality')` from `run_pipeline.py`
+- [ ] Remove `colmap_dir.exists()` breadcrumb messages from `run_gsir.py`, `run_mocap.py`, `validate_gsir.py`
+- [ ] Delete tombstone scripts `src/run-colmap.sh` and `src/run-colmap.bat`

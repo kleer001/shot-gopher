@@ -119,12 +119,66 @@ are removed. The function becomes significantly simpler.
 - `_calculate_processing_resolution()` (still useful for other stages)
 - `_get_max_processing_dimensions()` (still used for general resolution capping)
 
+## Breadcrumbs (temporary debugging aids)
+
+Add these during the refactor. Remove before merging to main.
+
+### 1. Cleanplate stage entry confirmation
+
+In `run_stage_cleanplate()`, add a print at the top to confirm the new code path runs:
+
+```python
+def run_stage_cleanplate(ctx, config):
+    print("\n=== Stage: cleanplate (median-only) ===")  # BREADCRUMB: remove after verifying
+```
+
+**Why:** Confirms the old ProPainter branch is truly gone. If you ever see
+`=== Stage: cleanplate ===` without `(median-only)`, stale code is running.
+
+### 2. Guard against phantom update_propainter kwarg
+
+After removing `update_propainter` from `update_workflow_resolution()`, temporarily add
+this at the top of the function body:
+
+```python
+def update_workflow_resolution(workflow_path, width, height, *, update_loaders=True, update_scales=True, **kwargs):
+    if "update_propainter" in kwargs:
+        raise RuntimeError(
+            "BREADCRUMB: update_propainter was passed to update_workflow_resolution() "
+            f"— caller still using old API. kwargs={kwargs}"
+        )
+```
+
+**Why:** Any lingering call site that still passes `update_propainter=True/False` will
+explode immediately with a traceback pointing to the exact caller, instead of silently
+being ignored. Remove the `**kwargs` guard once all 4 call sites are confirmed clean.
+
+### 3. Workflow template tombstone
+
+After deleting the three `03_cleanplate*.json` files, place a single file:
+
+```
+workflow_templates/03_cleanplate_REMOVED.txt
+```
+
+Contents: `ProPainter cleanplate removed. See docs/admin/PROPAINTER_DEPRECATION_ROADMAP.md`
+
+**Why:** If any code still tries to `refresh_workflow_from_template("03_cleanplate.json")`,
+the file-not-found will be immediate and obvious. The tombstone tells the developer *why*
+and *where to look*. Delete after merging.
+
 ## Verification Checklist
 
 - [ ] `python scripts/run_pipeline.py --help` shows no `--cleanplate-median` flag
 - [ ] `python scripts/run_pipeline.py --list-stages` shows updated cleanplate description
 - [ ] `grep -ri "propainter" scripts/` returns no results
-- [ ] `grep -ri "propainter" workflow_templates/` returns no results
+- [ ] `grep -ri "propainter" workflow_templates/` returns no results (tombstone .txt is fine)
 - [ ] `grep -ri "cleanplate_use_median" scripts/` returns no results
 - [ ] All tests pass: `pytest tests/`
 - [ ] Cleanplate stage runs temporal median without any flags
+
+## Breadcrumb Removal Checklist
+
+- [ ] Remove `(median-only)` from cleanplate stage banner
+- [ ] Remove `**kwargs` / `update_propainter` guard from `update_workflow_resolution()`
+- [ ] Delete `workflow_templates/03_cleanplate_REMOVED.txt` tombstone

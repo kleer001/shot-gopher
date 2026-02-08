@@ -107,12 +107,41 @@ stages = sanitize_stages(stages)
   checkboxes remain.
 - **`sanitize_stages()`** — No change needed. It still reorders and injects `ingest`.
 
+## Breadcrumbs (temporary debugging aids)
+
+Add during refactor. Remove before merging to main.
+
+### 1. Explicit rejection of "all"
+
+In the new stage validation block, temporarily add a specific error message for "all":
+
+```python
+if not args.stages:
+    ...  # print usage, exit 0
+    sys.exit(0)
+
+stages = [s.strip() for s in args.stages.split(",")]
+
+if "all" in stages:
+    print("Error: '--stages all' is no longer supported.", file=sys.stderr)  # BREADCRUMB
+    print("Select stages individually: --stages depth,roto,cleanplate", file=sys.stderr)
+    sys.exit(1)
+```
+
+**Why:** Users (and scripts/aliases) that still pass `-s all` get a clear migration
+message instead of `Error: Invalid stages: {'all'}`. Keep this for one release cycle,
+then let it fall through to the generic invalid-stage error.
+
 ## Verification Checklist
 
 - [ ] `python scripts/run_pipeline.py` (no args) prints stage list and exits cleanly
 - [ ] `python scripts/run_pipeline.py input.mp4` (no `-s`) prints stage list and exits cleanly
 - [ ] `python scripts/run_pipeline.py input.mp4 -s depth,roto` works as before
-- [ ] `python scripts/run_pipeline.py input.mp4 -s all` prints "Invalid stages: {'all'}"
+- [ ] `python scripts/run_pipeline.py input.mp4 -s all` prints specific migration message
 - [ ] `python scripts/run_pipeline.py --list-stages` still works
-- [ ] `grep -r '"all"' scripts/run_pipeline.py` returns no stage-related matches
+- [ ] `grep -r '"all"' scripts/run_pipeline.py` returns only the BREADCRUMB migration message
 - [ ] All tests pass: `pytest tests/`
+
+## Breadcrumb Removal Checklist
+
+- [ ] Remove explicit `"all"` migration message (let generic invalid-stage error handle it)
