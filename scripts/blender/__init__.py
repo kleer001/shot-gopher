@@ -520,3 +520,101 @@ def export_gsir_materials_to_usd(
     print(f"  Material: {material_name}")
 
     return _run_blender_script(cmd, output_path, timeout, "USD material")
+
+
+def export_ply_to_alembic(
+    input_path: Path,
+    output_path: Path,
+    fps: float = 24.0,
+    blender_path: Optional[Path] = None,
+    timeout: int = 600,
+) -> bool:
+    """Export a PLY file to Alembic using Blender.
+
+    Args:
+        input_path: Input PLY file path
+        output_path: Output .abc file path
+        fps: Frames per second
+        blender_path: Optional path to Blender executable
+        timeout: Maximum time in seconds (default: 10 minutes)
+
+    Returns:
+        True if export succeeded
+
+    Raises:
+        FileNotFoundError: If Blender is not installed or input file not found
+        RuntimeError: If export fails
+    """
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input PLY not found: {input_path}")
+
+    blender_path = _ensure_blender(blender_path)
+
+    script_path = SCRIPTS_DIR / "export_ply_alembic.py"
+    if not script_path.exists():
+        raise FileNotFoundError(f"Export script not found: {script_path}")
+
+    cmd = [
+        str(blender_path),
+        "-b",
+        "--python", str(script_path),
+        "--",
+        "--input", str(input_path),
+        "--output", str(output_path),
+        "--fps", str(fps),
+    ]
+
+    print(f"Running Blender headless PLY → Alembic export...")
+    print(f"  Input: {input_path}")
+    print(f"  Output: {output_path}")
+
+    return _run_blender_script(cmd, output_path, timeout, "PLY Alembic")
+
+
+def export_ply_to_usd(
+    input_path: Path,
+    output_path: Path,
+    fps: float = 24.0,
+    blender_path: Optional[Path] = None,
+    timeout: int = 600,
+) -> bool:
+    """Export a PLY file to USD using Blender.
+
+    Args:
+        input_path: Input PLY file path
+        output_path: Output .usd file path
+        fps: Frames per second
+        blender_path: Optional path to Blender executable
+        timeout: Maximum time in seconds (default: 10 minutes)
+
+    Returns:
+        True if export succeeded
+
+    Raises:
+        FileNotFoundError: If Blender is not installed or input file not found
+        RuntimeError: If export fails
+    """
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input PLY not found: {input_path}")
+
+    blender_path = _ensure_blender(blender_path)
+
+    script_path = SCRIPTS_DIR / "export_ply_usd.py"
+    if not script_path.exists():
+        raise FileNotFoundError(f"Export script not found: {script_path}")
+
+    cmd = [
+        str(blender_path),
+        "-b",
+        "--python", str(script_path),
+        "--",
+        "--input", str(input_path),
+        "--output", str(output_path),
+        "--fps", str(fps),
+    ]
+
+    print(f"Running Blender headless PLY → USD export...")
+    print(f"  Input: {input_path}")
+    print(f"  Output: {output_path}")
+
+    return _run_blender_script(cmd, output_path, timeout, "PLY USD")

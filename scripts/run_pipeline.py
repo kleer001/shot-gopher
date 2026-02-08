@@ -41,7 +41,8 @@ def sanitize_stages(stages: list[str]) -> list[str]:
     """Deduplicate, inject dependencies, and reorder stages.
 
     Automatically adds 'ingest' if any frame-dependent stage is requested,
-    ensuring frames are extracted before processing.
+    ensuring frames are extracted before processing. Adds 'matchmove_camera'
+    if 'dense' is requested (dense requires a sparse solve first).
 
     Args:
         stages: List of stage names (may have duplicates or wrong order)
@@ -50,6 +51,9 @@ def sanitize_stages(stages: list[str]) -> list[str]:
         Deduplicated list in correct execution order with dependencies
     """
     requested = set(stages)
+
+    if "dense" in requested:
+        requested.add("matchmove_camera")
 
     if requested & STAGES_REQUIRING_FRAMES:
         requested.add("ingest")
@@ -240,18 +244,6 @@ def parse_arguments() -> argparse.Namespace:
         help="matchmove camera quality preset: low, medium, high, or 'slow' for minimal camera motion (default: medium)"
     )
     parser.add_argument(
-        "-d", "--matchmove-camera-dense", "--mmcam-dense",
-        dest="mmcam_dense",
-        action="store_true",
-        help="Run matchmove camera dense reconstruction (slower, produces point cloud)"
-    )
-    parser.add_argument(
-        "-m", "--matchmove-camera-mesh", "--mmcam-mesh",
-        dest="mmcam_mesh",
-        action="store_true",
-        help="Generate mesh from matchmove camera dense reconstruction (requires --matchmove-camera-dense)"
-    )
-    parser.add_argument(
         "-M", "--matchmove-camera-no-masks", "--mmcam-no-masks",
         dest="mmcam_no_masks",
         action="store_true",
@@ -432,8 +424,6 @@ def main():
         auto_movie=args.auto_movie,
         auto_start_comfyui=not args.no_auto_comfyui,
         mmcam_quality=args.mmcam_quality,
-        mmcam_dense=args.mmcam_dense,
-        mmcam_mesh=args.mmcam_mesh,
         mmcam_use_masks=not args.mmcam_no_masks,
         mmcam_max_size=args.mmcam_max_size,
         gsir_iterations=args.gsir_iterations,
