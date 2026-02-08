@@ -68,7 +68,7 @@ class TestSetupGsirDataStructure:
             project_dir.mkdir()
 
             # Create COLMAP output but no source frames
-            (project_dir / "colmap" / "sparse" / "0").mkdir(parents=True)
+            (project_dir / "mmcam" / "sparse" / "0").mkdir(parents=True)
 
             gsir_data_dir = project_dir / "gsir" / "data"
 
@@ -83,14 +83,14 @@ class TestSetupGsirDataStructure:
             project_dir.mkdir()
 
             # Create COLMAP output
-            colmap_sparse = project_dir / "colmap" / "sparse" / "0"
+            colmap_sparse = project_dir / "mmcam" / "sparse" / "0"
             colmap_sparse.mkdir(parents=True)
             (colmap_sparse / "cameras.bin").touch()
             (colmap_sparse / "images.bin").touch()
             (colmap_sparse / "points3D.bin").touch()
 
             # Create undistorted output (as if colmap already ran)
-            undistorted = project_dir / "colmap" / "undistorted"
+            undistorted = project_dir / "mmcam" / "undistorted"
             undistorted.mkdir(parents=True)
             (undistorted / "sparse" / "0").mkdir(parents=True)
             (undistorted / "images").mkdir()
@@ -119,12 +119,12 @@ class TestSetupGsirDataStructure:
             project_dir.mkdir()
 
             # Create valid structure
-            colmap_sparse = project_dir / "colmap" / "sparse" / "0"
+            colmap_sparse = project_dir / "mmcam" / "sparse" / "0"
             colmap_sparse.mkdir(parents=True)
             (colmap_sparse / "cameras.bin").touch()
 
             # Create undistorted output
-            undistorted = project_dir / "colmap" / "undistorted"
+            undistorted = project_dir / "mmcam" / "undistorted"
             undistorted.mkdir(parents=True)
             (undistorted / "sparse" / "0").mkdir(parents=True)
             (undistorted / "images").mkdir()
@@ -152,13 +152,13 @@ class TestGsirPipelineIntegration:
         assert "gsir" in STAGES
         assert "material" in STAGES["gsir"].lower() or "GS-IR" in STAGES["gsir"]
 
-    def test_gsir_comes_after_colmap(self):
-        """Test that gsir stage is ordered after colmap."""
+    def test_gsir_comes_after_matchmove_camera(self):
+        """Test that gsir stage is ordered after matchmove_camera."""
         from run_pipeline import STAGES
         stage_list = list(STAGES.keys())
-        colmap_idx = stage_list.index("colmap")
+        matchmove_camera_idx = stage_list.index("matchmove_camera")
         gsir_idx = stage_list.index("gsir")
-        assert gsir_idx > colmap_idx
+        assert gsir_idx > matchmove_camera_idx
 
     def test_gsir_comes_before_camera(self):
         """Test that gsir stage is ordered before camera export."""

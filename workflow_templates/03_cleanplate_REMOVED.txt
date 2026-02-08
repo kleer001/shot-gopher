@@ -1,0 +1,1 @@
+ProPainter cleanplate removed. See docs/admin/PROPAINTER_DEPRECATION_ROADMAP.md

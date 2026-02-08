@@ -634,7 +634,7 @@ python scripts/install_wizard.py --component gvhmr
 
 ```bash
 python scripts/janitor.py -H  # Ensure everything works
-python scripts/run_pipeline.py footage.mp4 -s all
+python scripts/run_pipeline.py footage.mp4 -s depth,roto,cleanplate
 ```
 
 **After long processing**:

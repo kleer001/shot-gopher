@@ -11,7 +11,7 @@ While `run_pipeline.py` orchestrates the full pipeline, each component can also 
 | Script | Purpose | Input | Output |
 |--------|---------|-------|--------|
 | `setup_project.py` | Initialize project structure | Project path | Directory tree |
-| `run_colmap.py` | COLMAP reconstruction | Frames | 3D model |
+| `run_matchmove_camera.py` | COLMAP reconstruction | Frames | 3D model |
 | `run_segmentation.py` | Dynamic scene roto | Frames | Masks |
 | `run_mocap.py` | Human motion capture (GVHMR) | Frames + camera | Mesh sequences |
 | `export_mocap.py` | Export mocap to VFX formats | motion.pkl | Alembic/USD/OBJ |
@@ -53,7 +53,7 @@ MyShot/
 ├── depth/               # Depth maps output
 ├── roto/                # Roto masks output
 ├── cleanplate/          # Clean plates output
-├── colmap/              # COLMAP reconstruction output
+├── mmcam/               # COLMAP reconstruction output
 ├── mocap/               # Motion capture output
 ├── gsir/                # GS-IR materials output
 └── camera/              # Camera export output
@@ -67,14 +67,14 @@ MyShot/
 
 ---
 
-## run_colmap.py
+## run_matchmove_camera.py
 
 COLMAP Structure-from-Motion reconstruction with automatic configuration.
 
 ### Usage
 
 ```bash
-python scripts/run_colmap.py <project_dir> [options]
+python scripts/run_matchmove_camera.py <project_dir> [options]
 ```
 
 ### Arguments
@@ -98,17 +98,17 @@ python scripts/run_colmap.py <project_dir> [options]
 
 **Basic reconstruction**:
 ```bash
-python scripts/run_colmap.py ./projects/Shot01
+python scripts/run_matchmove_camera.py ./projects/Shot01
 ```
 
 **High quality with dense + mesh**:
 ```bash
-python scripts/run_colmap.py ./projects/Shot01 -q high -d -m
+python scripts/run_matchmove_camera.py ./projects/Shot01 -q high -d -m
 ```
 
 **Without roto masks**:
 ```bash
-python scripts/run_colmap.py ./projects/Shot01 --no-masks
+python scripts/run_matchmove_camera.py ./projects/Shot01 --no-masks
 ```
 
 ### Input
@@ -118,13 +118,13 @@ python scripts/run_colmap.py ./projects/Shot01 --no-masks
 
 ### Output
 
-- `colmap/sparse/0/` - Sparse 3D reconstruction
+- `mmcam/sparse/0/` - Sparse 3D reconstruction
   - `cameras.bin` - Camera parameters
   - `images.bin` - Camera poses
   - `points3D.bin` - 3D points
-- `colmap/dense/` - Dense point cloud (if `--dense`)
+- `mmcam/dense/` - Dense point cloud (if `--dense`)
   - `fused.ply` - Fused point cloud
-- `colmap/meshed/` - Mesh (if `--mesh`)
+- `mmcam/meshed/` - Mesh (if `--mesh`)
   - `meshed-poisson.ply` - Poisson surface reconstruction
 
 ### Quality Presets
@@ -432,7 +432,7 @@ python scripts/run_gsir.py ./projects/Shot01 --skip-training
 
 ### Input
 
-- `colmap/sparse/0/` - COLMAP sparse reconstruction (required)
+- `mmcam/sparse/0/` - COLMAP sparse reconstruction (required)
 - `source/frames/*.png` - Input frames
 
 ### Output
@@ -900,7 +900,7 @@ python scripts/setup_project.py ./projects/MyShot
 # 2. Place frames in source/frames/
 
 # 3. Run COLMAP
-python scripts/run_colmap.py ./projects/MyShot -q high
+python scripts/run_matchmove_camera.py ./projects/MyShot -q high
 
 # 4. Export camera
 python scripts/export_camera.py ./projects/MyShot
@@ -919,7 +919,7 @@ Process multiple projects:
 ```bash
 for project in ./projects/*; do
     echo "Processing $project"
-    python scripts/run_colmap.py "$project" -q medium
+    python scripts/run_matchmove_camera.py "$project" -q medium
     python scripts/export_camera.py "$project"
 done
 ```
@@ -930,10 +930,10 @@ Test one component:
 
 ```bash
 # Test COLMAP only
-python scripts/run_colmap.py ./projects/Test -q low
+python scripts/run_matchmove_camera.py ./projects/Test -q low
 
 # Check output
-ls ./projects/Test/colmap/sparse/0/
+ls ./projects/Test/mmcam/sparse/0/
 ```
 
 ## See Also

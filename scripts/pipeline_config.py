@@ -23,7 +23,7 @@ class PipelineConfig:
     input_path: Optional[Path] = None
     project_name: Optional[str] = None
     projects_dir: Path = field(default_factory=lambda: DEFAULT_PROJECTS_DIR)
-    stages: list[str] = field(default_factory=lambda: STAGE_ORDER.copy())
+    stages: list[str] = field(default_factory=list)
     comfyui_url: str = DEFAULT_COMFYUI_URL
     fps: Optional[float] = None
     skip_existing: bool = False
@@ -31,11 +31,11 @@ class PipelineConfig:
     auto_movie: bool = False
     auto_start_comfyui: bool = True
 
-    colmap_quality: str = "medium"
-    colmap_dense: bool = False
-    colmap_mesh: bool = False
-    colmap_use_masks: bool = True
-    colmap_max_size: int = -1
+    mmcam_quality: str = "medium"
+    mmcam_dense: bool = False
+    mmcam_mesh: bool = False
+    mmcam_use_masks: bool = True
+    mmcam_max_size: int = -1
 
     gsir_iterations: int = 35000
     gsir_path: Optional[str] = None
@@ -46,8 +46,6 @@ class PipelineConfig:
     mocap_start_frame: Optional[int] = None
     mocap_end_frame: Optional[int] = None
     mocap_person: Optional[str] = None
-
-    cleanplate_use_median: bool = False
 
     roto_prompt: Optional[str] = None
     roto_start_frame: Optional[int] = None
@@ -72,18 +70,18 @@ class PipelineConfig:
                 input_path=None,
                 project_name=project_dir.name,
                 projects_dir=project_dir.parent,
-                stages=args.stages if hasattr(args, 'stages') and isinstance(args.stages, list) else STAGE_ORDER.copy(),
+                stages=args.stages if hasattr(args, 'stages') and isinstance(args.stages, list) else [],
                 comfyui_url=args.comfyui_url,
                 fps=args.fps,
                 skip_existing=args.skip_existing,
                 overwrite=not args.no_overwrite,
                 auto_movie=args.auto_movie,
                 auto_start_comfyui=not args.no_auto_comfyui,
-                colmap_quality=args.colmap_quality,
-                colmap_dense=args.colmap_dense,
-                colmap_mesh=args.colmap_mesh,
-                colmap_use_masks=not args.colmap_no_masks,
-                colmap_max_size=args.colmap_max_size,
+                mmcam_quality=args.mmcam_quality,
+                mmcam_dense=args.mmcam_dense,
+                mmcam_mesh=args.mmcam_mesh,
+                mmcam_use_masks=not args.mmcam_no_masks,
+                mmcam_max_size=args.mmcam_max_size,
                 gsir_iterations=args.gsir_iterations,
                 gsir_path=args.gsir_path,
                 mocap_gender=getattr(args, 'mocap_gender', 'neutral'),
@@ -92,7 +90,6 @@ class PipelineConfig:
                 mocap_start_frame=getattr(args, 'mocap_start_frame', None),
                 mocap_end_frame=getattr(args, 'mocap_end_frame', None),
                 mocap_person=getattr(args, 'mocap_person', None),
-                cleanplate_use_median=args.cleanplate_median,
                 roto_prompt=args.prompt,
                 roto_start_frame=args.start_frame,
                 separate_instances=args.separate_instances,
@@ -123,7 +120,6 @@ class PipelineConfig:
             mocap_start_frame=getattr(args, 'mocap_start_frame', None),
             mocap_end_frame=getattr(args, 'mocap_end_frame', None),
             mocap_person=getattr(args, 'mocap_person', None),
-            cleanplate_use_median=args.cleanplate_median,
             roto_prompt=args.prompt,
             roto_start_frame=args.start_frame,
             separate_instances=args.separate_instances,
@@ -149,7 +145,6 @@ class StageContext:
     auto_movie: bool
     source_width: int = 0
     source_height: int = 0
-    cleanplate_use_median: bool = False
 
     @classmethod
     def from_config(
@@ -186,5 +181,4 @@ class StageContext:
             auto_movie=config.auto_movie,
             source_width=width,
             source_height=height,
-            cleanplate_use_median=config.cleanplate_use_median,
         )

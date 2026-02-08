@@ -8,8 +8,8 @@ Usage:
     python run_pipeline.py <input_movie> [options]
 
 Example:
-    python run_pipeline.py /path/to/footage.mp4 --name "My_Shot" --stages all
-    python run_pipeline.py /path/to/footage.mp4 --stages depth,roto,cleanplate
+    python run_pipeline.py /path/to/footage.mp4 --name "My_Shot" --stages depth,roto,cleanplate
+    python run_pipeline.py /path/to/footage.mp4 --stages matchmove_camera,mocap
 """
 
 import argparse
@@ -67,7 +67,7 @@ def run_pipeline(config: PipelineConfig) -> bool:
         True if all stages successful
     """
     gpu_monitor = None
-    comfyui_stages = {"depth", "roto", "cleanplate"}
+    comfyui_stages = {"depth", "roto"}
     needs_comfyui = bool(comfyui_stages & set(config.stages))
 
     comfyui_was_started = False
@@ -205,8 +205,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--stages", "-s",
         type=str,
-        default="all",
-        help=f"Comma-separated stages to run: {','.join(STAGES.keys())} or 'all'"
+        default=None,
+        help=f"Comma-separated stages to run: {','.join(STAGES.keys())}"
     )
     parser.add_argument(
         "--comfyui-url", "-c",
@@ -233,31 +233,36 @@ def parse_arguments() -> argparse.Namespace:
 
 
     parser.add_argument(
-        "--colmap-quality", "-q",
+        "-q", "--matchmove-camera-quality", "--mmcam-quality",
+        dest="mmcam_quality",
         choices=["low", "medium", "high", "slow"],
         default="medium",
-        help="COLMAP quality preset: low, medium, high, or 'slow' for minimal camera motion (default: medium)"
+        help="matchmove camera quality preset: low, medium, high, or 'slow' for minimal camera motion (default: medium)"
     )
     parser.add_argument(
-        "--colmap-dense", "-d",
+        "-d", "--matchmove-camera-dense", "--mmcam-dense",
+        dest="mmcam_dense",
         action="store_true",
-        help="Run COLMAP dense reconstruction (slower, produces point cloud)"
+        help="Run matchmove camera dense reconstruction (slower, produces point cloud)"
     )
     parser.add_argument(
-        "--colmap-mesh", "-m",
+        "-m", "--matchmove-camera-mesh", "--mmcam-mesh",
+        dest="mmcam_mesh",
         action="store_true",
-        help="Generate mesh from COLMAP dense reconstruction (requires --colmap-dense)"
+        help="Generate mesh from matchmove camera dense reconstruction (requires --matchmove-camera-dense)"
     )
     parser.add_argument(
-        "--colmap-no-masks", "-M",
+        "-M", "--matchmove-camera-no-masks", "--mmcam-no-masks",
+        dest="mmcam_no_masks",
         action="store_true",
-        help="Disable automatic use of segmentation masks for COLMAP (default: use masks if available)"
+        help="Disable automatic use of segmentation masks for matchmove camera (default: use masks if available)"
     )
     parser.add_argument(
-        "--colmap-max-size",
+        "--matchmove-camera-max-size", "--mmcam-max-size",
+        dest="mmcam_max_size",
         type=int,
         default=-1,
-        help="Max image dimension for COLMAP (downscales larger images). Use 1000-2000 for faster processing."
+        help="Max image dimension for matchmove camera (downscales larger images). Use 1000-2000 for faster processing."
     )
 
     parser.add_argument(
@@ -309,11 +314,6 @@ def parse_arguments() -> argparse.Namespace:
         help="Roto person folder to isolate (e.g., 'person_00'). Composites frames with roto matte for single-person tracking."
     )
 
-    parser.add_argument(
-        "--cleanplate-median",
-        action="store_true",
-        help="Use temporal median for cleanplate instead of ProPainter (faster, requires static camera)"
-    )
     parser.add_argument(
         "--no-auto-comfyui",
         action="store_true",
@@ -372,16 +372,29 @@ def main():
         print("Install with: python scripts/install_wizard.py", file=sys.stderr)
         sys.exit(1)
 
-    if args.stages.lower() == "all":
-        stages = STAGE_ORDER.copy()
-    else:
-        stages = [s.strip() for s in args.stages.split(",")]
-        invalid = set(stages) - set(STAGES.keys())
-        if invalid:
-            print(f"Error: Invalid stages: {invalid}", file=sys.stderr)
-            print(f"Valid stages: {', '.join(STAGE_ORDER)}")
-            sys.exit(1)
-        stages = sanitize_stages(stages)
+    if not args.stages:
+        print("No stages specified. Use --stages/-s to select stages to run.")
+        print()
+        print("Available stages:")
+        for name, desc in STAGES.items():
+            print(f"  {name}: {desc}")
+        print()
+        print("Example: --stages depth,roto,cleanplate")
+        sys.exit(0)
+
+    stages = [s.strip() for s in args.stages.split(",")]
+
+    if "all" in stages:
+        print("Error: '--stages all' is no longer supported.", file=sys.stderr)  # BREADCRUMB
+        print("Select stages individually: --stages depth,roto,cleanplate", file=sys.stderr)
+        sys.exit(1)
+
+    invalid = set(stages) - set(STAGES.keys())
+    if invalid:
+        print(f"Error: Invalid stages: {invalid}", file=sys.stderr)
+        print(f"Valid stages: {', '.join(STAGE_ORDER)}")
+        sys.exit(1)
+    stages = sanitize_stages(stages)
 
     input_path = None
     project_dir = None
@@ -405,6 +418,8 @@ def main():
             project_dir = input_path
             print(f"Using existing project: {project_dir.name}")
 
+    assert not hasattr(args, 'colmap_quality'), "BREADCRUMB: argparse still defines --colmap-quality"
+
     config = PipelineConfig(
         input_path=input_path if not project_dir else None,
         project_name=project_dir.name if project_dir else args.name,
@@ -416,11 +431,11 @@ def main():
         overwrite=not args.no_overwrite,
         auto_movie=args.auto_movie,
         auto_start_comfyui=not args.no_auto_comfyui,
-        colmap_quality=args.colmap_quality,
-        colmap_dense=args.colmap_dense,
-        colmap_mesh=args.colmap_mesh,
-        colmap_use_masks=not args.colmap_no_masks,
-        colmap_max_size=args.colmap_max_size,
+        mmcam_quality=args.mmcam_quality,
+        mmcam_dense=args.mmcam_dense,
+        mmcam_mesh=args.mmcam_mesh,
+        mmcam_use_masks=not args.mmcam_no_masks,
+        mmcam_max_size=args.mmcam_max_size,
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
         mocap_gender=args.mocap_gender,

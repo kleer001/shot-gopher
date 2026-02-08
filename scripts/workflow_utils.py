@@ -14,7 +14,6 @@ __all__ = [
     "get_comfyui_output_dir",
     "refresh_workflow_from_template",
     "update_segmentation_prompt",
-    "update_cleanplate_resolution",
     "update_workflow_resolution",
 ]
 
@@ -24,34 +23,6 @@ def _get_max_processing_dimensions() -> tuple[int, int]:
     max_width = int(os.environ.get("CLEANPLATE_MAX_WIDTH", "1920"))
     max_height = int(os.environ.get("CLEANPLATE_MAX_HEIGHT", "1080"))
     return max_width, max_height
-
-
-def _get_propainter_internal_scale() -> float:
-    """Get ProPainter internal resolution scale factor from environment.
-
-    ProPainter processes at reduced resolution internally, then upscales.
-    Default is 0.5 (half resolution) for stable VRAM usage.
-
-    Returns:
-        Scale factor between 0.1 and 1.0
-    """
-    scale = float(os.environ.get("PROPAINTER_INTERNAL_SCALE", "0.5"))
-    return max(0.1, min(1.0, scale))
-
-
-def _get_propainter_quality_params() -> tuple[int, int]:
-    """Get ProPainter quality parameters from environment.
-
-    These parameters improve inpainting quality with minimal VRAM impact:
-    - num_refine_iters: Refinement iterations (compute-bound, not VRAM)
-    - num_flows: Optical flow frames for temporal consistency (minor VRAM)
-
-    Returns:
-        Tuple of (num_refine_iters, num_flows)
-    """
-    num_refine_iters = int(os.environ.get("PROPAINTER_REFINE_ITERS", "16"))
-    num_flows = int(os.environ.get("PROPAINTER_NUM_FLOWS", "20"))
-    return num_refine_iters, num_flows
 
 
 def _calculate_processing_resolution(
@@ -213,66 +184,17 @@ def update_segmentation_prompt(
         json.dump(workflow, f, indent=2)
 
 
-def update_cleanplate_resolution(
-    workflow_path: Path,
-    source_frames_dir: Path,
-    max_processing_width: int = None,
-    max_processing_height: int = None
-) -> None:
-    """Update ProPainterInpaint resolution by detecting from source frames.
-
-    This is a convenience wrapper that detects resolution from frames, then
-    delegates to update_workflow_resolution. Use update_workflow_resolution
-    directly when you already have the source dimensions.
-
-    Args:
-        workflow_path: Path to workflow JSON
-        source_frames_dir: Directory containing source frames
-        max_processing_width: Max internal width (default: from env or 1920)
-        max_processing_height: Max internal height (default: from env or 1080)
-    """
-    frames = sorted(source_frames_dir.glob("*.png"))
-    if not frames:
-        frames = sorted(source_frames_dir.glob("*.jpg"))
-    if not frames:
-        frames = sorted(source_frames_dir.glob("*.exr"))
-    if not frames:
-        print("  → Warning: No source frames found, skipping resolution update")
-        return
-
-    source_width, source_height = get_image_dimensions(frames[0])
-
-    if source_width == 0 or source_height == 0:
-        print("  → Warning: Could not determine source resolution, skipping workflow update")
-        return
-
-    update_workflow_resolution(
-        workflow_path,
-        source_width,
-        source_height,
-        update_loaders=False,
-        update_scales=False,
-        update_propainter=True,
-        max_processing_width=max_processing_width,
-        max_processing_height=max_processing_height,
-    )
-
-
 def update_workflow_resolution(
     workflow_path: Path,
     width: int,
     height: int,
     update_loaders: bool = True,
     update_scales: bool = True,
-    update_propainter: bool = True,
-    max_processing_width: int = None,
-    max_processing_height: int = None,
+    **kwargs,
 ) -> None:
     """Update resolution-dependent nodes in a ComfyUI workflow.
 
-    Patches VHS_LoadImagesPath, ImageScale, and ProPainterInpaint nodes
-    to use the specified resolution. For ProPainter, respects VRAM limits
-    by capping internal processing resolution while maintaining aspect ratio.
+    Patches VHS_LoadImagesPath and ImageScale nodes to use the specified resolution.
 
     Args:
         workflow_path: Path to workflow JSON
@@ -280,26 +202,16 @@ def update_workflow_resolution(
         height: Source video height in pixels
         update_loaders: Update VHS_LoadImagesPath force_size values
         update_scales: Update ImageScale width/height values
-        update_propainter: Update ProPainterInpaint internal resolution
-        max_processing_width: Max width for ProPainter (default: from env or 1920)
-        max_processing_height: Max height for ProPainter (default: from env or 1080)
     """
+    if "update_propainter" in kwargs:  # BREADCRUMB: guard against old API
+        raise RuntimeError(
+            "BREADCRUMB: update_propainter was passed to update_workflow_resolution() "
+            f"— caller still using old API. kwargs={kwargs}"
+        )
+
     if width <= 0 or height <= 0:
         print("  → Warning: Invalid resolution, skipping workflow update")
         return
-
-    if max_processing_width is None or max_processing_height is None:
-        default_max_w, default_max_h = _get_max_processing_dimensions()
-        max_processing_width = max_processing_width or default_max_w
-        max_processing_height = max_processing_height or default_max_h
-
-    proc_width, proc_height = _calculate_processing_resolution(
-        width, height, max_processing_width, max_processing_height
-    )
-
-    propainter_scale = _get_propainter_internal_scale()
-    propainter_width = _align_to_8(int(proc_width * propainter_scale))
-    propainter_height = _align_to_8(int(proc_height * propainter_scale))
 
     width_8 = _align_to_8(width)
     height_8 = _align_to_8(height)
@@ -327,20 +239,6 @@ def update_workflow_resolution(
                 node["widgets_values"] = widgets
                 title = node.get("title", "ImageScale")
                 nodes_updated.append(f"{title} ({width_8}x{height_8})")
-
-        elif update_propainter and node_type == "ProPainterInpaint":
-            if len(widgets) >= 5:
-                num_refine_iters, num_flows = _get_propainter_quality_params()
-                widgets[0] = propainter_width
-                widgets[1] = propainter_height
-                widgets[3] = num_refine_iters
-                widgets[4] = num_flows
-                node["widgets_values"] = widgets
-                scale_pct = int(propainter_scale * 100)
-                nodes_updated.append(
-                    f"ProPainterInpaint (internal: {propainter_width}x{propainter_height} @ {scale_pct}%, "
-                    f"refine={num_refine_iters}, flows={num_flows})"
-                )
 
     with open(workflow_path, 'w', encoding='utf-8') as f:
         json.dump(workflow, f, indent=2)

@@ -49,11 +49,11 @@ def test_project_with_outputs(tmp_path, monkeypatch):
     for i in range(5):
         (project_dir / "roto" / f"mask_{i:04d}.png").touch()
 
-    # colmap with nested structure
-    (project_dir / "colmap" / "sparse").mkdir(parents=True)
-    (project_dir / "colmap" / "sparse" / "cameras.bin").touch()
-    (project_dir / "colmap" / "sparse" / "images.bin").touch()
-    (project_dir / "colmap" / "sparse" / "points3D.bin").touch()
+    # matchmove_camera with nested structure
+    (project_dir / "mmcam" / "sparse").mkdir(parents=True)
+    (project_dir / "mmcam" / "sparse" / "cameras.bin").touch()
+    (project_dir / "mmcam" / "sparse" / "images.bin").touch()
+    (project_dir / "mmcam" / "sparse" / "points3D.bin").touch()
 
     # Create project state file
     import json
@@ -101,7 +101,7 @@ class TestOutputsAPIEndpoint:
         assert "source" in outputs, "Should have 'source' key (from source/frames)"
         assert "depth" in outputs, "Should have 'depth' key"
         assert "roto" in outputs, "Should have 'roto' key"
-        assert "colmap" in outputs, "Should have 'colmap' key"
+        assert "mmcam" in outputs, "Should have 'mmcam' key"
 
         # Check that 'source/frames' is NOT a key
         assert "source/frames" not in outputs, "Should NOT have 'source/frames' key"
@@ -120,8 +120,8 @@ class TestOutputsAPIEndpoint:
         # source should have 5 files (from source/frames)
         assert outputs["source"]["count"] == 5
 
-        # colmap should have 3 files (from colmap/sparse/)
-        assert outputs["colmap"]["count"] == 3
+        # matchmove_camera should have 3 files (from mmcam/sparse/)
+        assert outputs["mmcam"]["count"] == 3
 
     def test_outputs_empty_project(self, tmp_path):
         """API should handle project with no outputs gracefully."""

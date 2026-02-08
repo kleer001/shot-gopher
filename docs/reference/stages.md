@@ -17,8 +17,8 @@ Detailed documentation for each processing stage.
 | [depth](#depth) | Depth maps | 7 GB | Frames → Depth |
 | [roto](#roto) | Roto masks | 4 GB | Frames → Masks |
 | [mama](#mama) | Matte refinement | 12 GB | Roto masks → Alpha mattes |
-| [cleanplate](#cleanplate) | Object removal | 6 GB | Frames + masks → Clean plates |
-| [colmap](#colmap) | Camera tracking | 2-4 GB | Frames → 3D reconstruction |
+| [cleanplate](#cleanplate) | Clean plate (static camera) | ~2 GB | Frames + masks → Clean plates |
+| [matchmove_camera](#matchmove_camera) | Camera tracking | 2-4 GB | Frames → 3D reconstruction |
 | [mocap](#mocap) | Motion capture | 12 GB | Frames + camera → Pose + mesh |
 | [gsir](#gsir) | PBR materials | 8 GB | COLMAP → Albedo, roughness, metallic |
 
@@ -105,7 +105,7 @@ python scripts/run_pipeline.py footage.mp4 -s depth
 
 **Notes:**
 - Generates temporally consistent depth maps for compositing
-- For camera tracking, use the [colmap](#colmap) stage instead
+- For camera tracking, use the [matchmove_camera](#matchmove_camera) stage instead
 
 ---
 
@@ -184,7 +184,7 @@ roto/
 
 Use `--separate-instances` to explicitly enable this behavior (enabled by default when multiple instances detected).
 
-**Use cases:** Object removal, selective grading, COLMAP masking, per-person mocap
+**Use cases:** Object removal, selective grading, matchmove_camera masking, per-person mocap
 
 ---
 
@@ -230,68 +230,34 @@ python scripts/run_pipeline.py footage.mp4 -s roto,mama
 
 ## cleanplate
 
-Removes masked objects from footage. Two methods available:
-
-| Method | Best For | VRAM |
-|--------|----------|------|
-| **ProPainter** (default) | Moving cameras, complex scenes | ~6 GB (peak ~18 GB) |
-| **Temporal Median** | Static cameras, fast turnaround | ~2 GB |
+Generates clean plates by computing per-pixel temporal median using only unmasked (background) samples.
 
 | | |
 |---|---|
+| **VRAM** | ~2 GB |
 | **Input** | `source/frames/*.png`, `roto/*/*.png`, optionally `matte/*.png` |
 | **Output** | `cleanplate/*.png` |
-| **Workflow** | `03_cleanplate.json` (ProPainter only) |
+| **Workflow** | None (NumPy temporal median) |
 
 **Requirements:**
-- ComfyUI server running (ProPainter only)
 - Roto masks from roto stage
+- **Static camera** (locked-off tripod shot)
+- **Moving foreground** (subject must move enough to reveal all background pixels)
 
 ```bash
-# ProPainter (default) - handles moving cameras
 python scripts/run_pipeline.py footage.mp4 -s roto,cleanplate
-
-# Temporal median - fast, static camera only
-python scripts/run_pipeline.py footage.mp4 -s roto,cleanplate --cleanplate-median
 ```
 
 **Mask handling:**
 1. Collects all masks from `roto/` subdirectories
 2. Uses VideoMaMa refined mattes if available (from `matte/` directory)
-3. Combines into single mask for inpainting
-
-### ProPainter Method
-
-AI-powered video inpainting that handles camera motion and complex occlusions.
-
-**Quality tuning (environment variables):**
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PROPAINTER_INTERNAL_SCALE` | `0.5` | Internal processing resolution (0.1-1.0). Higher = sharper but more VRAM |
-| `PROPAINTER_REFINE_ITERS` | `16` | Refinement iterations (compute-bound, not VRAM) |
-| `PROPAINTER_NUM_FLOWS` | `20` | Optical flow frames for temporal consistency |
-
-**Example:**
-```bash
-PROPAINTER_REFINE_ITERS=20 python scripts/run_pipeline.py footage.mp4 -s cleanplate
-```
-
-### Temporal Median Method
-
-Computes per-pixel temporal median using only unmasked (background) samples. Fast but requires:
-- **Static camera** (locked-off tripod shot)
-- **Moving foreground** (subject must move enough to reveal all background pixels)
-
-```bash
-python scripts/run_pipeline.py footage.mp4 -s cleanplate --cleanplate-median
-```
+3. Combines into single mask for median computation
 
 **GPU profiling:** Use `--gpu-profile` to log VRAM usage per stage to `project/gpu_profile.log`.
 
 ---
 
-## colmap
+## matchmove_camera
 
 Structure-from-Motion camera tracking and 3D reconstruction.
 
@@ -299,7 +265,7 @@ Structure-from-Motion camera tracking and 3D reconstruction.
 |---|---|
 | **VRAM** | ~2-4 GB |
 | **Input** | `source/frames/*.png`, optionally `roto/*.png` |
-| **Output** | `colmap/sparse/0/`, `camera/*.abc`, `.chan`, `.csv`, `.jsx`, `.clip` |
+| **Output** | `mmcam/sparse/0/`, `camera/*.abc`, `.chan`, `.csv`, `.jsx`, `.clip` |
 | **Workflow** | None (COLMAP binary) |
 
 **Automatic camera export:** After COLMAP completes, camera data is automatically exported to VFX formats:
@@ -331,14 +297,14 @@ Structure-from-Motion camera tracking and 3D reconstruction.
 
 ```bash
 # High quality with dense reconstruction
-python scripts/run_pipeline.py footage.mp4 -s colmap -q high -d
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera -q high -d
 ```
 
 **Mask integration:** If `roto/` masks exist, COLMAP uses them to ignore moving objects. Disable with `-M` if masks cause issues.
 
 **Troubleshooting:** See [COLMAP issues](troubleshooting.md#colmap-reconstruction-failed)
 
-**Technical note — mask file naming:** COLMAP requires masks to be named `{image_filename}.png` (e.g., `frame_0001.png.png` for image `frame_0001.png`). The pipeline automatically copies masks from `roto/` to a temporary `colmap/masks/` directory with the required naming convention, then cleans up after reconstruction completes.
+**Technical note — mask file naming:** COLMAP requires masks to be named `{image_filename}.png` (e.g., `frame_0001.png.png` for image `frame_0001.png`). The pipeline automatically copies masks from `roto/` to a temporary `mmcam/masks/` directory with the required naming convention, then cleans up after reconstruction completes.
 
 ---
 
@@ -359,11 +325,11 @@ Human motion capture using GVHMR.
 
 **Requirements:**
 - GVHMR installed ([Installation guide](../installation.md))
-- Camera data from `colmap` stage (optional, improves accuracy)
+- Camera data from `matchmove_camera` stage (optional, improves accuracy)
 
 ```bash
 # With COLMAP camera data (best accuracy)
-python scripts/run_pipeline.py footage.mp4 -s colmap,mocap
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera,mocap
 
 # Without COLMAP (lock-off/static camera shots)
 python scripts/run_pipeline.py footage.mp4 -s ingest,mocap
@@ -375,10 +341,10 @@ GVHMR can use camera intrinsics from two sources:
 
 | Source | Location | When Used |
 |--------|----------|-----------|
-| COLMAP | `camera/` | When COLMAP stage has run (moving camera shots) |
+| COLMAP | `camera/` | When matchmove_camera stage has run (moving camera shots) |
 | GVHMR estimate | `mocap/camera/` | Auto-exported when COLMAP not available (lock-off shots) |
 
-**Lock-off shot workflow:** For static camera shots where COLMAP fails (no parallax for triangulation), mocap automatically exports GVHMR's camera estimate to `mocap/camera/` and runs the camera export stage to generate Alembic/USD/etc formats. This gives you camera data even without running COLMAP.
+**Lock-off shot workflow:** For static camera shots where COLMAP fails (no parallax for triangulation), mocap automatically exports GVHMR's camera estimate to `mocap/camera/` and runs the camera export stage to generate Alembic/USD/etc formats. This gives you camera data even without running matchmove_camera.
 
 **Pipeline:**
 1. **GVHMR** — Extracts world-grounded pose from video (SMPL-X compatible)
@@ -467,7 +433,7 @@ PBR material extraction using Gaussian Splatting Inverse Rendering.
 | | |
 |---|---|
 | **VRAM** | ~8 GB |
-| **Input** | `colmap/sparse/0/` |
+| **Input** | `mmcam/sparse/0/` |
 | **Output** | `gsir/model/`, `gsir/materials/` (albedo, roughness, metallic) |
 | **Workflow** | None (GS-IR training) |
 
@@ -476,7 +442,7 @@ PBR material extraction using Gaussian Splatting Inverse Rendering.
 - `-g PATH` — GS-IR installation path
 
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s colmap,gsir -i 50000
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera,gsir -i 50000
 ```
 
 **Training time:**

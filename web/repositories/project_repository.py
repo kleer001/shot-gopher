@@ -160,7 +160,7 @@ class ProjectRepository(Repository[Project]):
             'roto': project_path / 'roto',
             'matte': project_path / 'matte',
             'cleanplate': project_path / 'cleanplate',
-            'colmap': project_path / 'colmap',
+            'matchmove_camera': project_path / 'mmcam',
             'gsir': project_path / 'gsir',
             'mocap': project_path / 'mocap',
             'camera': project_path / 'camera',

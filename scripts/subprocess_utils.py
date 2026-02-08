@@ -275,7 +275,7 @@ class ProcessRunner:
         )
 
 
-def create_colmap_patterns() -> list[ProgressPattern]:
+def create_mmcam_patterns() -> list[ProgressPattern]:
     """Create progress patterns for COLMAP operations."""
     return [
         ProgressPattern(

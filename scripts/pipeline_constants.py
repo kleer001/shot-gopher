@@ -27,8 +27,8 @@ STAGES = {
     "depth": "Run depth analysis (01_analysis.json)",
     "roto": "Run roto (02_segmentation.json)",
     "mama": "Refine mattes with VideoMaMa diffusion",
-    "cleanplate": "Run clean plate generation (03_cleanplate.json)",
-    "colmap": "Run COLMAP SfM reconstruction",
+    "cleanplate": "Clean plate via temporal median (static camera)",
+    "matchmove_camera": "Run camera tracking (COLMAP SfM)",
     "mocap": "Run human motion capture (GVHMR)",
     "gsir": "Run GS-IR material decomposition",
     "camera": "Export camera to Alembic",
@@ -36,12 +36,12 @@ STAGES = {
 
 STAGE_ORDER = [
     "ingest", "interactive", "depth", "roto", "mama", "cleanplate",
-    "colmap", "mocap", "gsir", "camera"
+    "matchmove_camera", "mocap", "gsir", "camera"
 ]
 
 STAGES_REQUIRING_FRAMES = {
     "interactive", "depth", "roto", "mama", "cleanplate",
-    "colmap", "mocap", "gsir", "camera"
+    "matchmove_camera", "mocap", "gsir", "camera"
 }
 
 WORKFLOW_TEMPLATES_DIR = Path(__file__).parent.parent / "workflow_templates"

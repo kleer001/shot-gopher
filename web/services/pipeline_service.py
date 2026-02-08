@@ -79,7 +79,7 @@ class PipelineService:
                     f"ComfyUI is not running. "
                     f"Stages requiring ComfyUI: {stage_names}. "
                     f"ComfyUI needs a CUDA-capable GPU to start. "
-                    f"Non-ComfyUI stages (ingest, colmap, mocap, gsir) can still run."
+                    f"Non-ComfyUI stages (ingest, matchmove_camera, mocap, gsir) can still run."
                 )
 
         now = datetime.now()

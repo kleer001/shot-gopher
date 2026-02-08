@@ -13,14 +13,14 @@ import { apiService } from '../services/APIService.js';
 import * as dom from '../utils/dom.js';
 import { ELEMENTS, EVENTS, CSS_CLASSES, UI } from '../config/constants.js';
 
-const ALL_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'colmap', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
+const ALL_STAGES = ['ingest', 'depth', 'roto', 'cleanplate', 'matchmove_camera', 'interactive', 'mama', 'mocap', 'gsir', 'camera'];
 
 const STAGE_OUTPUT_DIRS = {
     ingest: 'source',
     depth: 'depth',
     roto: 'roto',
     cleanplate: 'cleanplate',
-    colmap: 'colmap',
+    matchmove_camera: 'mmcam',
     interactive: 'roto',
     mama: 'matte',
     mocap: 'mocap',
@@ -36,10 +36,8 @@ const STAGE_OPTIONS = {
         { id: 'prompt', label: 'Prompt', type: 'text', default: 'person', placeholder: 'person,car,ball' },
         { id: 'separate_instances', label: 'Separate Instances', type: 'checkbox', default: true },
     ],
-    cleanplate: [
-        { id: 'method', label: 'Method', type: 'select', default: 'propainter', options: ['propainter', 'median'] },
-    ],
-    colmap: [
+    cleanplate: [],
+    matchmove_camera: [
         { id: 'quality', label: 'Quality', type: 'select', default: 'medium', options: ['low', 'medium', 'high', 'slow'] },
         { id: 'dense', label: 'Dense', type: 'checkbox', default: false },
         { id: 'mesh', label: 'Mesh', type: 'checkbox', default: false },
@@ -308,7 +306,7 @@ export class ProjectsController {
             depth: 'ZDepth',
             roto: 'Auto Roto',
             cleanplate: 'Clean Plate',
-            colmap: 'Camera Tracking',
+            matchmove_camera: 'Camera Tracking',
             interactive: 'Interactive Roto',
             mama: 'Roto Refinement',
             mocap: 'Human Mocap',

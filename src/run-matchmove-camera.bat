@@ -1,14 +1,14 @@
 @echo off
 REM =============================================================================
-REM Run Pipeline - Auto-activating wrapper (Windows)
+REM Run COLMAP - Auto-activating wrapper (Windows)
 REM =============================================================================
-REM Activates the vfx-pipeline conda environment and runs run_pipeline.py
+REM Activates the vfx-pipeline conda environment and runs run_colmap.py
 REM
 REM Usage:
-REM   src\run-pipeline.bat <input_movie> [options]
+REM   src\run-colmap.bat <project_dir> [options]
 REM
 REM Example:
-REM   src\run-pipeline.bat C:\path\to\footage.mp4 --name "My_Shot" --stages depth,roto,cleanplate
+REM   src\run-colmap.bat C:\path\to\projects\My_Shot --dense --mesh
 REM =============================================================================
 
 setlocal EnableDelayedExpansion
@@ -30,5 +30,5 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-python "%REPO_ROOT%\scripts\run_pipeline.py" %*
+python "%REPO_ROOT%\scripts\run_matchmove_camera.py" %*
 exit /b %ERRORLEVEL%

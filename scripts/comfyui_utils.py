@@ -165,8 +165,6 @@ def convert_workflow_to_api_format(
             "LoadVideoDepthAnythingModel": ["model"],
             "VideoDepthAnythingProcess": ["input_size", "max_res", "precision"],
             "VideoDepthAnythingOutput": ["colormap"],
-            "ProPainterInpaint": ["width", "height", "mask_dilates", "flow_mask_dilates", "ref_stride",
-                                  "neighbor_length", "subvideo_length", "raft_iter", "mode"],
         }
 
         if not node_def and node_type in fallback_widgets:

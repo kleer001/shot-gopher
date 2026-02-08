@@ -30,8 +30,8 @@ Each pipeline stage uses specific components. This matrix shows which licenses a
 | **depth** | ComfyUI, Depth Anything V3 | GPL-3.0, Apache-2.0 or CC BY-NC 4.0 ⚠️ |
 | **roto** | ComfyUI, SAM3 | GPL-3.0, Apache-2.0 ✅ |
 | **mama** | VideoMaMa | CC BY-NC 4.0 + Stability AI ❌ |
-| **cleanplate** | ComfyUI, ProPainter | GPL-3.0, NTU S-Lab ❌ |
-| **colmap** | COLMAP | BSD-3-Clause ✅ |
+| **cleanplate** | Temporal median (NumPy) | BSD-3-Clause ✅ |
+| **matchmove_camera** | COLMAP | BSD-3-Clause ✅ |
 | **mocap** | GVHMR, SMPL-X | MIT, MPI Academic ⚠️ |
 | **gsir** | GS-IR (→3DGS) | MIT, INRIA Non-Commercial ❌ |
 | **camera** | Blender (Alembic export) | GPL-2.0+ ✅ |
@@ -67,7 +67,6 @@ Each pipeline stage uses specific components. This matrix shows which licenses a
 
 | Component | License | Commercial Use |
 |-----------|---------|----------------|
-| **ProPainter** | NTU S-Lab License 1.0 | ❌ Non-commercial only |
 | **Depth Anything V3** (Giant/Nested models) | CC BY-NC 4.0 | ❌ Non-commercial only |
 | **3D Gaussian Splatting** (INRIA) | INRIA Non-Commercial | ❌ Non-commercial only |
 | **VideoMaMa** (code) | CC BY-NC 4.0 | ❌ Non-commercial only |
@@ -149,27 +148,6 @@ Each pipeline stage uses specific components. This matrix shows which licenses a
 **Non-commercial only models:**
 - DA3-Giant: CC BY-NC 4.0 ❌
 - DA3Nested series: CC BY-NC 4.0 ❌
-
----
-
-### ProPainter (Clean Plates)
-
-**License:** [NTU S-Lab License 1.0](https://github.com/sczhou/ProPainter/blob/main/LICENSE)
-**Source:** [sczhou/ProPainter](https://github.com/sczhou/ProPainter)
-
-**Permitted uses:**
-- Academic research
-- Teaching and education
-- Public demonstrations
-- Personal experimentation
-
-**Prohibited uses:**
-- Running business operations
-- Licensing, leasing, or selling
-- Use in commercial products
-- Any activity for commercial gain
-
-**Commercial licensing:** Contact Dr. Shangchen Zhou (shangchenzhou@gmail.com)
 
 ---
 
@@ -329,7 +307,6 @@ Each pipeline stage uses specific components. This matrix shows which licenses a
 
 | Component | Contact |
 |-----------|---------|
-| ProPainter | shangchenzhou@gmail.com |
 | SMPL-X | ps-licensing@tue.mpg.de or sales@meshcapade.com |
 | 3D Gaussian Splatting | stip-sophia.transfert@inria.fr |
 | Depth Anything V3 (Giant/Nested) | Contact via [GitHub](https://github.com/ByteDance-Seed/Depth-Anything-3) |
@@ -343,7 +320,6 @@ Each pipeline stage uses specific components. This matrix shows which licenses a
 - [ComfyUI License](https://github.com/comfyanonymous/ComfyUI/blob/master/LICENSE)
 - [SAM3 License](https://github.com/1038lab/ComfyUI-SAM3/blob/main/LICENSE)
 - [Depth Anything V3](https://github.com/ByteDance-Seed/Depth-Anything-3)
-- [ProPainter License](https://github.com/sczhou/ProPainter/blob/main/LICENSE)
 - [SMPL-X License](https://smpl-x.is.tue.mpg.de/modellicense.html)
 - [GVHMR](https://github.com/zju3dv/GVHMR)
 - [GS-IR](https://github.com/lzhnb/GS-IR)
