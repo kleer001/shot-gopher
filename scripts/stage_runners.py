@@ -50,6 +50,7 @@ __all__ = [
     "run_stage_mama",
     "run_stage_cleanplate",
     "run_stage_matchmove_camera",
+    "run_stage_dense",
     "run_stage_mocap",
     "run_stage_gsir",
     "run_stage_camera",
@@ -98,18 +99,14 @@ def run_export_camera(
 def run_matchmove_camera(
     project_dir: Path,
     quality: str = "medium",
-    run_dense: bool = False,
-    run_mesh: bool = False,
     use_masks: bool = True,
     max_image_size: int = -1
 ) -> bool:
-    """Run COLMAP Structure-from-Motion reconstruction.
+    """Run COLMAP Structure-from-Motion sparse reconstruction.
 
     Args:
         project_dir: Project directory containing source/frames/
-        quality: Quality preset ('low', 'medium', 'high')
-        run_dense: Whether to run dense reconstruction
-        run_mesh: Whether to generate mesh
+        quality: Quality preset ('low', 'medium', 'high', 'slow')
         use_masks: If True, use segmentation masks from roto/ (if available)
         max_image_size: Maximum image dimension (-1 for no limit)
 
@@ -128,10 +125,6 @@ def run_matchmove_camera(
         "--quality", quality,
     ]
 
-    if run_dense:
-        cmd.append("--dense")
-    if run_mesh:
-        cmd.append("--mesh")
     if not use_masks:
         cmd.append("--no-masks")
     if max_image_size > 0:
@@ -809,8 +802,6 @@ def run_stage_matchmove_camera(
         if not run_matchmove_camera(
             ctx.project_dir,
             quality=config.mmcam_quality,
-            run_dense=config.mmcam_dense,
-            run_mesh=config.mmcam_mesh,
             use_masks=config.mmcam_use_masks,
             max_image_size=config.mmcam_max_size
         ):
@@ -821,6 +812,175 @@ def run_stage_matchmove_camera(
     run_stage_camera(ctx, config)
 
     return True
+
+
+def run_stage_dense(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run dense reconstruction stage.
+
+    Produces geometry (point clouds, mesh), depth maps, and normal maps
+    from a completed COLMAP sparse reconstruction. Exports to VFX-native
+    formats (PLY, EXR, and optionally ABC/USD via Blender).
+
+    Output directories (parallel to camera/):
+        geometry/ — sparse/dense point clouds and mesh (PLY, ABC, USD)
+        depth/    — per-frame 32-bit float EXR depth maps
+        normals/  — per-frame 32-bit float EXR normal maps
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: dense ===")
+
+    colmap_dir = ctx.project_dir / "colmap"
+    sparse_model = colmap_dir / "sparse" / "0"
+    dense_path = colmap_dir / "dense"
+    geometry_dir = ctx.project_dir / "geometry"
+    depth_dir = ctx.project_dir / "depth"
+    normals_dir = ctx.project_dir / "normals"
+
+    if not sparse_model.exists():
+        print("  Error: No sparse model found. Run matchmove_camera first.", file=sys.stderr)
+        return False
+
+    from run_matchmove_camera import (
+        export_sparse_ply,
+        run_dense_reconstruction,
+        run_mesh_reconstruction,
+        convert_depth_maps_to_exr,
+        convert_normal_maps_to_exr,
+        QUALITY_PRESETS,
+    )
+
+    preset = QUALITY_PRESETS.get(config.mmcam_quality, QUALITY_PRESETS["medium"])
+    geometry_dir.mkdir(parents=True, exist_ok=True)
+
+    print("  [1/6] Exporting sparse point cloud")
+    sparse_ply = geometry_dir / "sparse_pointcloud.ply"
+    if ctx.skip_existing and sparse_ply.exists():
+        print("    → Skipping (exists)")
+    else:
+        if export_sparse_ply(sparse_model, sparse_ply):
+            print(f"    → {sparse_ply.name}")
+        else:
+            print("    → Sparse PLY export failed", file=sys.stderr)
+
+    print("  [2/6] Dense reconstruction")
+    fused_ply = dense_path / "fused.ply"
+    if ctx.skip_existing and fused_ply.exists():
+        print("    → Skipping (exists)")
+    else:
+        frames_dir = ctx.project_dir / "source" / "frames"
+        if not run_dense_reconstruction(
+            image_path=frames_dir,
+            sparse_path=sparse_model,
+            output_path=dense_path,
+            max_image_size=preset["dense_max_size"],
+        ):
+            print("    Dense reconstruction failed", file=sys.stderr)
+            return False
+
+    print("  [3/6] Copying dense point cloud")
+    dense_ply = geometry_dir / "dense_pointcloud.ply"
+    if fused_ply.exists() and not (ctx.skip_existing and dense_ply.exists()):
+        shutil.copy(fused_ply, dense_ply)
+        print(f"    → {dense_ply.name}")
+
+    print("  [4/6] Generating mesh")
+    mesh_ply = geometry_dir / "mesh.ply"
+    if ctx.skip_existing and mesh_ply.exists():
+        print("    → Skipping (exists)")
+    else:
+        if run_mesh_reconstruction(dense_path, mesh_ply):
+            print(f"    → {mesh_ply.name}")
+        else:
+            print("    → Mesh generation failed (continuing)", file=sys.stderr)
+
+    print("  [5/6] Converting depth maps to EXR")
+    if ctx.skip_existing and list(depth_dir.glob("*.exr")):
+        print("    → Skipping (exists)")
+    else:
+        count = convert_depth_maps_to_exr(dense_path, depth_dir)
+        if count > 0:
+            print(f"    → {count} depth maps → {depth_dir.name}/")
+        else:
+            print("    → No depth maps to convert", file=sys.stderr)
+
+    print("  [6/6] Converting normal maps to EXR")
+    if ctx.skip_existing and list(normals_dir.glob("*.exr")):
+        print("    → Skipping (exists)")
+    else:
+        count = convert_normal_maps_to_exr(dense_path, normals_dir)
+        if count > 0:
+            print(f"    → {count} normal maps → {normals_dir.name}/")
+        else:
+            print("    → No normal maps to convert", file=sys.stderr)
+
+    _export_geometry_to_interchange(geometry_dir, ctx.fps)
+
+    clear_gpu_memory(ctx.comfyui_url)
+
+    return True
+
+
+def _export_geometry_to_interchange(geometry_dir: Path, fps: float) -> None:
+    """Export PLY geometry files to ABC and USD via Blender (if available).
+
+    Args:
+        geometry_dir: Directory containing PLY files
+        fps: Frames per second for export
+    """
+    try:
+        from blender import (
+            export_ply_to_alembic,
+            export_ply_to_usd,
+            check_blender_available,
+        )
+    except ImportError:
+        return
+
+    if not check_blender_available():
+        print("    Note: Blender not available, skipping ABC/USD geometry export")
+        return
+
+    ply_targets = [
+        ("dense_pointcloud.ply", "pointcloud"),
+        ("mesh.ply", "mesh"),
+    ]
+
+    for ply_name, output_stem in ply_targets:
+        ply_path = geometry_dir / ply_name
+        if not ply_path.exists():
+            continue
+
+        abc_path = geometry_dir / f"{output_stem}.abc"
+        usd_path = geometry_dir / f"{output_stem}.usd"
+
+        try:
+            export_ply_to_alembic(
+                input_path=ply_path,
+                output_path=abc_path,
+                fps=fps,
+            )
+            print(f"    → {abc_path.name}")
+        except Exception as e:
+            print(f"    → ABC export failed for {ply_name}: {e}", file=sys.stderr)
+
+        try:
+            export_ply_to_usd(
+                input_path=ply_path,
+                output_path=usd_path,
+                fps=fps,
+            )
+            print(f"    → {usd_path.name}")
+        except Exception as e:
+            print(f"    → USD export failed for {ply_name}: {e}", file=sys.stderr)
 
 
 def run_stage_mocap(
@@ -964,6 +1124,7 @@ STAGE_HANDLERS: dict[str, Callable[["StageContext", "PipelineConfig"], bool]] = 
     "mama": run_stage_mama,
     "cleanplate": run_stage_cleanplate,
     "matchmove_camera": run_stage_matchmove_camera,
+    "dense": run_stage_dense,
     "mocap": run_stage_mocap,
     "gsir": run_stage_gsir,
     "camera": run_stage_camera,

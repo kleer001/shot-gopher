@@ -939,6 +939,176 @@ def run_mesh_reconstruction(
     return output_path.exists()
 
 
+def export_sparse_ply(sparse_model_path: Path, output_path: Path) -> bool:
+    """Export sparse reconstruction as PLY point cloud.
+
+    Uses COLMAP's model_converter to convert the sparse model
+    (cameras.bin, images.bin, points3D.bin) to a colored PLY file.
+
+    Args:
+        sparse_model_path: Path to sparse model directory (e.g., colmap/sparse/0/)
+        output_path: Output PLY file path
+
+    Returns:
+        True if export succeeded
+    """
+    if not (sparse_model_path / "points3D.bin").exists():
+        txt_path = sparse_model_path / "points3D.txt"
+        if not txt_path.exists():
+            print(f"    Error: No points3D found in {sparse_model_path}", file=sys.stderr)
+            return False
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    args = {
+        "input_path": str(sparse_model_path),
+        "output_path": str(output_path),
+        "output_type": "PLY",
+    }
+    run_colmap_command("model_converter", args, "Exporting sparse point cloud to PLY")
+
+    return output_path.exists()
+
+
+def read_colmap_array(path: Path) -> np.ndarray:
+    """Read a COLMAP dense map binary file (depth or normal map).
+
+    COLMAP binary format: text header 'width&height&channels&' followed
+    by float32 data in column-major (Fortran) order.
+
+    Args:
+        path: Path to .geometric.bin or .photometric.bin file
+
+    Returns:
+        numpy array of shape (height, width) for depth or (height, width, 3) for normals
+    """
+    with open(path, "rb") as f:
+        line = b""
+        ampersand_count = 0
+        while ampersand_count < 3:
+            byte = f.read(1)
+            if byte == b"&":
+                ampersand_count += 1
+            line += byte
+
+        header = line.decode("ascii").strip("&").split("&")
+        width = int(header[0])
+        height = int(header[1])
+        channels = int(header[2])
+
+        data = np.fromfile(f, dtype=np.float32)
+
+    data = data.reshape((width, height, channels), order="F")
+    data = data.transpose((1, 0, 2))
+
+    return data.squeeze()
+
+
+def convert_depth_maps_to_exr(
+    dense_path: Path,
+    output_dir: Path,
+) -> int:
+    """Convert COLMAP depth maps from binary format to 32-bit float EXR.
+
+    Reads .geometric.bin files from dense/stereo/depth_maps/ and writes
+    single-channel float32 EXR files.
+
+    Args:
+        dense_path: Path to COLMAP dense reconstruction directory
+        output_dir: Output directory for EXR files
+
+    Returns:
+        Number of depth maps converted
+    """
+    depth_maps_dir = dense_path / "stereo" / "depth_maps"
+    if not depth_maps_dir.exists():
+        print(f"    No depth maps directory found: {depth_maps_dir}", file=sys.stderr)
+        return 0
+
+    geometric_files = sorted(depth_maps_dir.glob("*.geometric.bin"))
+    if not geometric_files:
+        print(f"    No geometric depth maps found in {depth_maps_dir}", file=sys.stderr)
+        return 0
+
+    import OpenEXR
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    converted = 0
+
+    for bin_path in geometric_files:
+        frame_name = bin_path.name.replace(".geometric.bin", "")
+        frame_stem = Path(frame_name).stem
+        exr_path = output_dir / f"{frame_stem}.exr"
+
+        depth = read_colmap_array(bin_path)
+        height, width = depth.shape[:2]
+
+        depth_rgb = np.stack([depth, depth, depth], axis=-1).astype(np.float32)
+        header = {
+            "compression": OpenEXR.ZIP_COMPRESSION,
+            "type": OpenEXR.scanlineimage,
+        }
+        with OpenEXR.File(header, {"RGB": depth_rgb}) as out:
+            out.write(str(exr_path))
+
+        converted += 1
+
+    return converted
+
+
+def convert_normal_maps_to_exr(
+    dense_path: Path,
+    output_dir: Path,
+) -> int:
+    """Convert COLMAP normal maps from binary format to 32-bit float EXR.
+
+    Reads .geometric.bin files from dense/stereo/normal_maps/ and writes
+    RGB float32 EXR files where XYZ normals map to RGB channels.
+
+    Args:
+        dense_path: Path to COLMAP dense reconstruction directory
+        output_dir: Output directory for EXR files
+
+    Returns:
+        Number of normal maps converted
+    """
+    normal_maps_dir = dense_path / "stereo" / "normal_maps"
+    if not normal_maps_dir.exists():
+        print(f"    No normal maps directory found: {normal_maps_dir}", file=sys.stderr)
+        return 0
+
+    geometric_files = sorted(normal_maps_dir.glob("*.geometric.bin"))
+    if not geometric_files:
+        print(f"    No geometric normal maps found in {normal_maps_dir}", file=sys.stderr)
+        return 0
+
+    import OpenEXR
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    converted = 0
+
+    for bin_path in geometric_files:
+        frame_name = bin_path.name.replace(".geometric.bin", "")
+        frame_stem = Path(frame_name).stem
+        exr_path = output_dir / f"{frame_stem}.exr"
+
+        normals = read_colmap_array(bin_path)
+        if normals.ndim == 2:
+            normals = np.stack([normals, normals, normals], axis=-1)
+        normals = normals.astype(np.float32)
+
+        header = {
+            "compression": OpenEXR.ZIP_COMPRESSION,
+            "type": OpenEXR.scanlineimage,
+        }
+        with OpenEXR.File(header, {"RGB": normals}) as out:
+            out.write(str(exr_path))
+
+        converted += 1
+
+    return converted
+
+
 def read_colmap_cameras(cameras_path: Path) -> dict:
     """Read COLMAP cameras.bin or cameras.txt file.
 
@@ -1456,20 +1626,19 @@ def export_colmap_to_pipeline_format(
 def run_colmap_pipeline(
     project_dir: Path,
     quality: str = "medium",
-    run_dense: bool = False,
-    run_mesh: bool = False,
     camera_model: str = "OPENCV",
     use_masks: bool = True,
     max_gap: int = 12,
     max_image_size: int = -1,
 ) -> bool:
-    """Run the complete COLMAP reconstruction pipeline.
+    """Run the COLMAP sparse reconstruction pipeline.
+
+    Produces camera poses (extrinsics/intrinsics) and a sparse point cloud.
+    Dense reconstruction is handled separately by the 'dense' pipeline stage.
 
     Args:
         project_dir: Project directory containing source/frames/
         quality: Quality preset ('low', 'medium', 'high', 'slow')
-        run_dense: Whether to run dense reconstruction
-        run_mesh: Whether to generate mesh (requires dense)
         camera_model: COLMAP camera model to use
         use_masks: If True, automatically use segmentation masks from roto/ (if available)
         max_gap: Maximum frame gap to interpolate if COLMAP misses frames (default: 12)
@@ -1630,34 +1799,6 @@ def run_colmap_pipeline(
                 print("Camera export failed", file=sys.stderr)
                 return False
 
-            # Optional: Dense reconstruction
-            if run_dense:
-                print("\n[Dense] Running Dense Reconstruction")
-                if run_dense_reconstruction(
-                    image_path=frames_dir,
-                    sparse_path=sparse_model,
-                    output_path=dense_path,
-                    max_image_size=preset["dense_max_size"],
-                ):
-                    # Copy point cloud to project
-                    if (dense_path / "fused.ply").exists():
-                        shutil.copy(
-                            dense_path / "fused.ply",
-                            project_dir / "camera" / "pointcloud.ply"
-                        )
-                        print(f"    Point cloud saved to camera/pointcloud.ply")
-                else:
-                    print("    Dense reconstruction failed (continuing)", file=sys.stderr)
-
-            # Optional: Mesh generation
-            if run_mesh and run_dense:
-                print("\n[Mesh] Generating Mesh")
-                mesh_path = project_dir / "camera" / "mesh.ply"
-                if run_mesh_reconstruction(dense_path, mesh_path):
-                    print(f"    Mesh saved to camera/mesh.ply")
-                else:
-                    print("    Mesh generation failed (continuing)", file=sys.stderr)
-
             # Calculate timing
             pipeline_end = time.time()
             total_seconds = pipeline_end - pipeline_start
@@ -1669,8 +1810,6 @@ def run_colmap_pipeline(
             print(f"{'='*60}")
             print(f"Sparse model: {sparse_model}")
             print(f"Camera data: {camera_dir}")
-            if run_dense:
-                print(f"Dense model: {dense_path}")
             print()
             print(f"TOTAL TIME: {total_minutes:.1f} minutes ({per_frame_seconds:.2f}s per frame)")
             print()
@@ -1705,16 +1844,6 @@ def main():
         choices=["low", "medium", "high", "slow"],
         default="medium",
         help="Quality preset: low, medium, high, or 'slow' for minimal camera motion (default: medium)"
-    )
-    parser.add_argument(
-        "--dense", "-d",
-        action="store_true",
-        help="Run dense reconstruction (slower, produces point cloud)"
-    )
-    parser.add_argument(
-        "--mesh", "-m",
-        action="store_true",
-        help="Generate mesh from dense reconstruction (requires --dense)"
     )
     parser.add_argument(
         "--camera-model", "-c",
@@ -1766,8 +1895,6 @@ def main():
     success = run_colmap_pipeline(
         project_dir=project_dir,
         quality=args.quality,
-        run_dense=args.dense,
-        run_mesh=args.mesh,
         camera_model=args.camera_model,
         use_masks=not args.no_masks,
         max_gap=args.max_gap,

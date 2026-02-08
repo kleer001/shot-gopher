@@ -32,8 +32,6 @@ class PipelineConfig:
     auto_start_comfyui: bool = True
 
     mmcam_quality: str = "medium"
-    mmcam_dense: bool = False
-    mmcam_mesh: bool = False
     mmcam_use_masks: bool = True
     mmcam_max_size: int = -1
 
@@ -78,8 +76,6 @@ class PipelineConfig:
                 auto_movie=args.auto_movie,
                 auto_start_comfyui=not args.no_auto_comfyui,
                 mmcam_quality=args.mmcam_quality,
-                mmcam_dense=args.mmcam_dense,
-                mmcam_mesh=args.mmcam_mesh,
                 mmcam_use_masks=not args.mmcam_no_masks,
                 mmcam_max_size=args.mmcam_max_size,
                 gsir_iterations=args.gsir_iterations,
@@ -107,11 +103,9 @@ class PipelineConfig:
             overwrite=not args.no_overwrite,
             auto_movie=args.auto_movie,
             auto_start_comfyui=not args.no_auto_comfyui,
-            colmap_quality=args.colmap_quality,
-            colmap_dense=args.colmap_dense,
-            colmap_mesh=args.colmap_mesh,
-            colmap_use_masks=not args.colmap_no_masks,
-            colmap_max_size=args.colmap_max_size,
+            mmcam_quality=args.mmcam_quality,
+            mmcam_use_masks=not args.mmcam_no_masks,
+            mmcam_max_size=args.mmcam_max_size,
             gsir_iterations=args.gsir_iterations,
             gsir_path=args.gsir_path,
             mocap_gender=getattr(args, 'mocap_gender', 'neutral'),
