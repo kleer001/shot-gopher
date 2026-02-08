@@ -27,9 +27,10 @@ class TestCheckColmapAvailable:
             assert check_colmap_available() is False
 
     def test_colmap_found(self):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
-            assert check_colmap_available() is True
+        with patch("run_matchmove_camera.get_colmap_executable", return_value="/usr/bin/colmap"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                assert check_colmap_available() is True
 
     def test_colmap_timeout(self):
         with patch("subprocess.run") as mock_run:
