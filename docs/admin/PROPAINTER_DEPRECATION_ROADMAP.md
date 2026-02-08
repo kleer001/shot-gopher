@@ -73,13 +73,22 @@ All `update_propainter=False` and `update_propainter=True` call sites in `stage_
 | `stage_runners.py:535` (depth) | Remove `update_propainter=False` arg |
 | `stage_runners.py:587` (roto) | Remove `update_propainter=False` arg |
 
-### Phase 6: Web UI
+### Phase 6: Dead Code Removal
+
+| File | Changes Required |
+|------|------------------|
+| `scripts/run_cleanplate_batched.py` | Delete (batched processing was for ProPainter VRAM management — median processes all frames in-memory, no chunking needed) |
+| `tests/test_run_cleanplate_batched.py` | Delete (tests for dead code) |
+
+### Phase 7: Web UI
 
 | File | Changes Required |
 |------|------------------|
 | `web/config/pipeline_config.json:63-72` | Update cleanplate stage: `requiresComfyUI: false`, update description |
+| `web/pipeline_runner.py:227-229` | Remove `--cleanplate-median` flag logic (median is now implicit, flag no longer exists) |
+| `web/static/js/controllers/ProjectsController.js:39-40` | Remove cleanplate method picker (`default: 'propainter', options: ['propainter', 'median']`) — no method choice needed |
 
-### Phase 7: Documentation
+### Phase 8: Documentation
 
 | File | Changes Required |
 |------|------------------|

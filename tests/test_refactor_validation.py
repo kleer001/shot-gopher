@@ -149,6 +149,31 @@ class TestProPainterRemoval:
             "web pipeline_config.json still has cleanplate requiresComfyUI=true"
         )
 
+    def test_batched_cleanplate_removed(self) -> None:
+        """run_cleanplate_batched.py is dead code after ProPainter removal."""
+        assert not (REPO_ROOT / "scripts" / "run_cleanplate_batched.py").exists(), (
+            "run_cleanplate_batched.py still exists (dead code: batching was for ProPainter VRAM)"
+        )
+        assert not (REPO_ROOT / "tests" / "test_run_cleanplate_batched.py").exists(), (
+            "test_run_cleanplate_batched.py still exists (tests dead code)"
+        )
+
+    def test_web_pipeline_runner_no_cleanplate_median_flag(self) -> None:
+        """web/pipeline_runner.py should not append --cleanplate-median (flag removed)."""
+        runner_path = REPO_ROOT / "web" / "pipeline_runner.py"
+        text = runner_path.read_text()
+        assert "--cleanplate-median" not in text, (
+            "web/pipeline_runner.py still appends --cleanplate-median flag"
+        )
+
+    def test_web_js_no_propainter_option(self) -> None:
+        """Frontend cleanplate options should not offer 'propainter' as a method."""
+        js_path = REPO_ROOT / "web" / "static" / "js" / "controllers" / "ProjectsController.js"
+        text = js_path.read_text()
+        assert "propainter" not in text, (
+            "ProjectsController.js still references 'propainter' as cleanplate method"
+        )
+
 
 # ===================================================================
 # 2. Remove -s all

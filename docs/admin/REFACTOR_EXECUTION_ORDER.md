@@ -38,7 +38,7 @@ Each phase should be **one atomic commit** (or a small series within a branch).
 This lets us bisect if something breaks.
 
 ```
-commit 1: ProPainter deprecation (all 7 phases from that roadmap)
+commit 1: ProPainter deprecation (all 8 phases from that roadmap)
 commit 2: COLMAP → mmcam rename (all 9 phases from that roadmap)
 commit 3: Remove -s all (all 5 phases from that roadmap)
 commit 4: Remove breadcrumbs (all three roadmaps' breadcrumb removal checklists)
@@ -46,11 +46,9 @@ commit 4: Remove breadcrumbs (all three roadmaps' breadcrumb removal checklists)
 
 ## Test Baseline (pre-refactor)
 
-Captured on `claude/deprecate-propainter-refactor-4XPBZ` at commit `1f3d797`:
-
 ```
 Existing suite:  433 passed, 3 failed (pre-existing), 7 skipped
-Refactor suite:  1 passed, 38 failed (expected — these are the refactor targets)
+Refactor suite:  1 passed, 41 failed (expected — these are the refactor targets)
 ```
 
 Pre-existing failures (not ours, do not fix during this refactor):
@@ -60,12 +58,12 @@ Pre-existing failures (not ours, do not fix during this refactor):
 
 ### After each phase, the target is:
 
-| Phase | Existing suite | Refactor suite |
-|-------|---------------|----------------|
-| 1 (ProPainter) | 433 pass, 3 fail, 7 skip | ~13 pass, 26 fail |
-| 2 (COLMAP rename) | 433 pass, 3 fail, 7 skip | ~35 pass, 4 fail |
-| 3 (Remove -s all) | 433 pass, 3 fail, 7 skip | 39 pass, 0 fail |
-| 4 (Breadcrumb removal) | 433 pass, 3 fail, 7 skip | delete file |
+| Phase | Existing suite | Refactor suite (42 total) |
+|-------|---------------|--------------------------|
+| 1 (ProPainter) | 431 pass, 3 fail, 7 skip (-2 deleted tests) | ~16 pass, 26 fail |
+| 2 (COLMAP rename) | 431 pass, 3 fail, 7 skip | ~38 pass, 4 fail |
+| 3 (Remove -s all) | 431 pass, 3 fail, 7 skip | 42 pass, 0 fail |
+| 4 (Breadcrumb removal) | 431 pass, 3 fail, 7 skip | delete file |
 
 ## Cross-Cutting Files (touch in multiple phases)
 
