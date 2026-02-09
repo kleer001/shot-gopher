@@ -203,10 +203,11 @@ def analyze_stage(
             message="Minimal VRAM required",
         )
 
-    headroom = vram_gb - estimated_vram
-
     if config.chunked:
         chunk_size = get_mama_chunk_size(vram_gb, resolution)
+        estimated_vram = calculate_estimated_vram(config, chunk_size, resolution)
+        headroom = vram_gb - estimated_vram
+
         if headroom >= 4:
             status = VramStatus.OK
             message = f"Chunk size: {chunk_size} frames"
@@ -215,7 +216,10 @@ def analyze_stage(
             message = f"Will process in small chunks ({chunk_size} frames) - slower but works"
         else:
             status = VramStatus.WARNING
-            message = f"Needs ~{estimated_vram:.1f}GB for {frame_count} frames, will use small chunks"
+            message = (
+                f"Needs ~{estimated_vram:.1f}GB even at {chunk_size} frames/chunk, "
+                f"you have {vram_gb:.1f}GB"
+            )
 
         return StageAnalysis(
             stage=stage,
@@ -227,6 +231,8 @@ def analyze_stage(
             chunk_size=chunk_size,
             scales_with_frames=scales_with_frames,
         )
+
+    headroom = vram_gb - estimated_vram
 
     if scales_with_frames:
         if headroom >= 4:

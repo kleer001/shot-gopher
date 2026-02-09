@@ -30,7 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from env_config import INSTALL_DIR
-from pipeline_utils import get_gpu_vram_gb
+from pipeline_utils import get_gpu_vram_gb, get_image_dimensions
 
 VIDEOMAMA_ENV_NAME = "videomama"
 VIDEOMAMA_TOOLS_DIR = INSTALL_DIR / "tools" / "VideoMaMa"
@@ -94,6 +94,30 @@ def check_installation() -> bool:
 
 
 REFERENCE_MEGAPIXELS = (1024 * 576) / 1_000_000
+FALLBACK_WIDTH = 1024
+FALLBACK_HEIGHT = 576
+
+
+def detect_source_resolution(source_frames_dir: Path) -> tuple[int, int]:
+    """Detect resolution from the first source frame.
+
+    Args:
+        source_frames_dir: Directory containing source frame images
+
+    Returns:
+        (width, height) from first frame, or fallback (1024, 576) if undetectable
+    """
+    frames = sorted(source_frames_dir.glob("*.png"))
+    if not frames:
+        frames = sorted(source_frames_dir.glob("*.jpg"))
+    if frames:
+        w, h = get_image_dimensions(frames[0])
+        if w > 0 and h > 0:
+            return w, h
+    print_warning(
+        f"Could not detect source resolution, falling back to {FALLBACK_WIDTH}x{FALLBACK_HEIGHT}"
+    )
+    return FALLBACK_WIDTH, FALLBACK_HEIGHT
 
 
 def get_optimal_chunk_size(
@@ -273,8 +297,8 @@ def process_project(
     project_dir: Path,
     chunk_size: int | None = None,
     overlap: int = 2,
-    width: int = 1024,
-    height: int = 576,
+    width: int | None = None,
+    height: int | None = None,
 ) -> bool:
     """Process a project's roto/person masks with VideoMaMa.
 
@@ -282,14 +306,23 @@ def process_project(
         project_dir: Project directory containing source/frames and roto/person
         chunk_size: Number of frames per chunk (None = auto-detect from VRAM)
         overlap: Frame overlap between chunks for smoother transitions
-        width: Processing width
-        height: Processing height
+        width: Processing width (None = auto-detect from source frames)
+        height: Processing height (None = auto-detect from source frames)
 
     Returns:
         True if successful
     """
     print(f"\n=== VideoMaMa Processing ===")
     print(f"  Project: {project_dir}")
+
+    source_frames = project_dir / "source" / "frames"
+    mask_dir = project_dir / "roto" / "person"
+    output_dir = project_dir / "roto" / "person_mama"
+
+    if width is None or height is None:
+        detected_w, detected_h = detect_source_resolution(source_frames)
+        width = width or detected_w
+        height = height or detected_h
 
     vram_gb = get_gpu_vram_gb()
     if chunk_size is None:
@@ -298,10 +331,6 @@ def process_project(
             print_info(f"Detected GPU VRAM: {vram_gb:.1f}GB @ {width}x{height} → chunk size: {chunk_size}")
         else:
             print_info(f"Could not detect VRAM, using default chunk size: {chunk_size}")
-
-    source_frames = project_dir / "source" / "frames"
-    mask_dir = project_dir / "roto" / "person"
-    output_dir = project_dir / "roto" / "person_mama"
 
     if not source_frames.exists():
         print_error(f"Source frames not found: {source_frames}")
@@ -429,8 +458,8 @@ def process_roto_directory(
     output_dir: Path,
     chunk_size: int | None = None,
     overlap: int = 2,
-    width: int = 1024,
-    height: int = 576,
+    width: int | None = None,
+    height: int | None = None,
 ) -> bool:
     """Process a specific roto subdirectory with VideoMaMa.
 
@@ -442,13 +471,21 @@ def process_roto_directory(
         output_dir: Output directory for refined mattes (e.g., matte/person_00/)
         chunk_size: Frames per chunk (None = auto-detect from VRAM)
         overlap: Frame overlap between chunks
-        width: Processing width
-        height: Processing height
+        width: Processing width (None = auto-detect from source frames)
+        height: Processing height (None = auto-detect from source frames)
 
     Returns:
         True if successful
     """
     print(f"\n=== VideoMaMa: {roto_subdir} ===")
+
+    source_frames = project_dir / "source" / "frames"
+    mask_dir = project_dir / "roto" / roto_subdir
+
+    if width is None or height is None:
+        detected_w, detected_h = detect_source_resolution(source_frames)
+        width = width or detected_w
+        height = height or detected_h
 
     vram_gb = get_gpu_vram_gb()
     if chunk_size is None:
@@ -457,9 +494,6 @@ def process_roto_directory(
             print_info(f"Detected GPU VRAM: {vram_gb:.1f}GB @ {width}x{height} → chunk size: {chunk_size}")
         else:
             print_info(f"Could not detect VRAM, using default chunk size: {chunk_size}")
-
-    source_frames = project_dir / "source" / "frames"
-    mask_dir = project_dir / "roto" / roto_subdir
 
     if not source_frames.exists():
         print_error(f"Source frames not found: {source_frames}")
@@ -616,14 +650,14 @@ def main() -> int:
     parser.add_argument(
         "--width",
         type=int,
-        default=1024,
-        help="Processing width (default: 1024)"
+        default=None,
+        help="Processing width (default: auto-detect from source frames)"
     )
     parser.add_argument(
         "--height",
         type=int,
-        default=576,
-        help="Processing height (default: 576)"
+        default=None,
+        help="Processing height (default: auto-detect from source frames)"
     )
 
     args = parser.parse_args()
