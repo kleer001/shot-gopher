@@ -23,7 +23,7 @@ from env_config import require_conda_env, DEFAULT_PROJECTS_DIR, INSTALL_DIR
 from gpu_monitor import start_pipeline_monitor, stop_pipeline_monitor, log_stage
 from log_manager import LogCapture
 from pipeline_config import PipelineConfig, StageContext
-from pipeline_constants import STAGES, STAGE_ORDER, STAGES_REQUIRING_FRAMES
+from pipeline_constants import STAGES, STAGE_ALIASES, STAGE_ORDER, STAGES_REQUIRING_FRAMES
 from pipeline_utils import get_image_dimensions, get_video_info
 from project_utils import ProjectMetadata, save_last_project, get_last_project
 from stage_runners import setup_project, STAGE_HANDLERS
@@ -211,6 +211,7 @@ def parse_arguments() -> argparse.Namespace:
         type=str,
         default=None,
         help=f"Comma-separated stages to run: {','.join(STAGES.keys())}"
+             f" (aliases: {', '.join(f'{a}={t}' for a, t in STAGE_ALIASES.items())})"
     )
     parser.add_argument(
         "--comfyui-url", "-c",
@@ -368,13 +369,16 @@ def main():
         print("No stages specified. Use --stages/-s to select stages to run.")
         print()
         print("Available stages:")
+        aliases_by_target = {t: a for a, t in STAGE_ALIASES.items()}
         for name, desc in STAGES.items():
-            print(f"  {name}: {desc}")
+            alias = aliases_by_target.get(name)
+            suffix = f" (alias: {alias})" if alias else ""
+            print(f"  {name}{suffix}: {desc}")
         print()
         print("Example: --stages depth,roto,cleanplate")
         sys.exit(0)
 
-    stages = [s.strip() for s in args.stages.split(",")]
+    stages = [STAGE_ALIASES.get(s.strip(), s.strip()) for s in args.stages.split(",")]
 
     if "all" in stages:
         print("Error: '--stages all' is no longer supported.", file=sys.stderr)  # BREADCRUMB

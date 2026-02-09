@@ -9,6 +9,7 @@ __all__ = [
     "START_FRAME",
     "SUPPORTED_FORMATS",
     "STAGES",
+    "STAGE_ALIASES",
     "STAGE_ORDER",
     "STAGES_REQUIRING_FRAMES",
     "WORKFLOW_TEMPLATES_DIR",
@@ -33,6 +34,10 @@ STAGES = {
     "mocap": "Run human motion capture (GVHMR)",
     "gsir": "Run GS-IR material decomposition",
     "camera": "Export camera to Alembic",
+}
+
+STAGE_ALIASES: dict[str, str] = {
+    "mmcam": "matchmove_camera",
 }
 
 STAGE_ORDER = [

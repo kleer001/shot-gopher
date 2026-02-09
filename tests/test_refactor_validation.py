@@ -284,6 +284,20 @@ class TestColmapToMmcam:
         assert "matchmove_camera" in STAGE_HANDLERS, "matchmove_camera handler missing"
         assert "colmap" not in STAGE_HANDLERS, "colmap handler still registered"
 
+    def test_mmcam_alias_resolves_to_matchmove_camera(self) -> None:
+        """STAGE_ALIASES should map 'mmcam' to 'matchmove_camera'."""
+        from pipeline_constants import STAGE_ALIASES
+
+        assert STAGE_ALIASES.get("mmcam") == "matchmove_camera"
+
+    def test_mmcam_alias_resolves_in_cli_parsing(self) -> None:
+        """'-s mmcam' should resolve to matchmove_camera before validation."""
+        from pipeline_constants import STAGE_ALIASES
+
+        raw = "mmcam"
+        resolved = STAGE_ALIASES.get(raw, raw)
+        assert resolved == "matchmove_camera"
+
     def test_run_matchmove_camera_script_exists(self) -> None:
         """run_matchmove_camera.py should exist, run_colmap.py should not."""
         scripts_dir = REPO_ROOT / "scripts"
