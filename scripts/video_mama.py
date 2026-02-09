@@ -260,7 +260,8 @@ def run_videomama_chunk(
 
         output_lines: list[str] = []
         for line in process.stdout:
-            print(line, end="", flush=True)
+            if "Loading weights:" not in line:
+                print(line, end="", flush=True)
             output_lines.append(line)
 
         process.wait()
