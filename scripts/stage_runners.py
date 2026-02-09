@@ -14,7 +14,7 @@ from pathlib import Path
 
 if sys.platform != "win32":
     import select
-from typing import Optional, Callable, TYPE_CHECKING
+from typing import Any, Optional, Callable, TYPE_CHECKING
 
 from comfyui_utils import run_comfyui_workflow
 from cleanplate_median import run_cleanplate_median
@@ -709,11 +709,16 @@ def run_stage_mama(
         else:
             print(f"  → Processing: {roto_subdir.name}")
 
-        success = process_roto_directory(
-            project_dir=ctx.project_dir,
-            roto_subdir=roto_subdir.name,
-            output_dir=out_dir,
-        )
+        mama_kwargs: dict[str, Any] = {
+            "project_dir": ctx.project_dir,
+            "roto_subdir": roto_subdir.name,
+            "output_dir": out_dir,
+        }
+        if ctx.source_width > 0 and ctx.source_height > 0:
+            mama_kwargs["width"] = ctx.source_width
+            mama_kwargs["height"] = ctx.source_height
+
+        success = process_roto_directory(**mama_kwargs)
 
         if not success:
             print(f"  → VideoMaMa failed for {roto_subdir.name}", file=sys.stderr)
