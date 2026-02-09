@@ -58,12 +58,28 @@ STAGE_VRAM_REQUIREMENTS: dict[str, StageVramConfig] = {
 }
 
 
-def get_mama_chunk_size(vram_gb: float) -> int:
+MAMA_REFERENCE_MEGAPIXELS = (1024 * 576) / 1_000_000
+
+
+def get_mama_chunk_size(
+    vram_gb: float,
+    resolution: tuple[int, int] = (1024, 576),
+) -> int:
     """Calculate optimal chunk size for VideoMaMa based on available VRAM.
 
+    VRAM thresholds were calibrated at 1024x576 (~0.59 megapixels). For higher
+    resolutions, effective VRAM is scaled down proportionally since each frame
+    requires more memory.
+
     Mirrors the logic in video_mama.py for consistency.
+
+    Args:
+        vram_gb: Total GPU VRAM in gigabytes
+        resolution: Processing resolution as (width, height)
     """
-    available_vram = vram_gb * 0.9
+    actual_mpx = (resolution[0] * resolution[1]) / 1_000_000
+    scale = MAMA_REFERENCE_MEGAPIXELS / actual_mpx if actual_mpx > 0 else 1.0
+    available_vram = vram_gb * 0.9 * scale
 
     if available_vram >= 43:
         return 20
@@ -190,7 +206,7 @@ def analyze_stage(
     headroom = vram_gb - estimated_vram
 
     if config.chunked:
-        chunk_size = get_mama_chunk_size(vram_gb)
+        chunk_size = get_mama_chunk_size(vram_gb, resolution)
         if headroom >= 4:
             status = VramStatus.OK
             message = f"Chunk size: {chunk_size} frames"

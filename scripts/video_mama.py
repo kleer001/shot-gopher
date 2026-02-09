@@ -93,15 +93,26 @@ def check_installation() -> bool:
     return True
 
 
-def get_optimal_chunk_size(vram_gb: float | None) -> int:
-    """Get optimal chunk size based on GPU VRAM.
+REFERENCE_MEGAPIXELS = (1024 * 576) / 1_000_000
+
+
+def get_optimal_chunk_size(
+    vram_gb: float | None,
+    resolution: tuple[int, int] = (1024, 576),
+) -> int:
+    """Get optimal chunk size based on GPU VRAM and processing resolution.
 
     VideoMaMa uses Stable Video Diffusion which has significant VRAM requirements.
     These are conservative estimates - the diffusion model needs substantial headroom.
     Assumes ~10% VRAM is used by system/drivers.
 
+    VRAM thresholds were calibrated at 1024x576 (~0.59 megapixels). For higher
+    resolutions, effective VRAM is scaled down proportionally since each frame
+    requires more memory.
+
     Args:
         vram_gb: GPU VRAM in gigabytes, or None if unknown
+        resolution: Processing resolution as (width, height)
 
     Returns:
         Recommended chunk size (number of frames per batch)
@@ -109,7 +120,9 @@ def get_optimal_chunk_size(vram_gb: float | None) -> int:
     if vram_gb is None:
         return 8
 
-    available_vram = vram_gb * 0.9
+    actual_mpx = (resolution[0] * resolution[1]) / 1_000_000
+    scale = REFERENCE_MEGAPIXELS / actual_mpx if actual_mpx > 0 else 1.0
+    available_vram = vram_gb * 0.9 * scale
 
     if available_vram >= 43:
         return 20
@@ -280,9 +293,9 @@ def process_project(
 
     vram_gb = get_gpu_vram_gb()
     if chunk_size is None:
-        chunk_size = get_optimal_chunk_size(vram_gb)
+        chunk_size = get_optimal_chunk_size(vram_gb, (width, height))
         if vram_gb:
-            print_info(f"Detected GPU VRAM: {vram_gb:.1f}GB → chunk size: {chunk_size}")
+            print_info(f"Detected GPU VRAM: {vram_gb:.1f}GB @ {width}x{height} → chunk size: {chunk_size}")
         else:
             print_info(f"Could not detect VRAM, using default chunk size: {chunk_size}")
 
@@ -439,9 +452,9 @@ def process_roto_directory(
 
     vram_gb = get_gpu_vram_gb()
     if chunk_size is None:
-        chunk_size = get_optimal_chunk_size(vram_gb)
+        chunk_size = get_optimal_chunk_size(vram_gb, (width, height))
         if vram_gb:
-            print_info(f"Detected GPU VRAM: {vram_gb:.1f}GB → chunk size: {chunk_size}")
+            print_info(f"Detected GPU VRAM: {vram_gb:.1f}GB @ {width}x{height} → chunk size: {chunk_size}")
         else:
             print_info(f"Could not detect VRAM, using default chunk size: {chunk_size}")
 
