@@ -662,7 +662,7 @@ def run_stage_mama(
     print("\n=== Stage: mama ===")
     roto_dir = ctx.project_dir / "roto"
     matte_dir = ctx.project_dir / "matte"
-    combined_dir = roto_dir / "combined"
+    combined_dir = matte_dir / "combined"
 
     numbered_pattern = re.compile(r"^.+_\d{2}$")
     skip_dirs = {"person", "combined", "mask"}
@@ -726,7 +726,7 @@ def run_stage_mama(
     valid_output_dirs = [d for d in output_dirs if d.exists() and list(d.glob("*.png"))]
     if valid_output_dirs:
         if ctx.skip_existing and combined_dir.exists() and list(combined_dir.glob("*.png")):
-            print(f"  → Skipping combine (roto/combined/ exists)")
+            print(f"  → Skipping combine (matte/combined/ exists)")
         else:
             print("\n  --- Combining mattes ---")
             combine_mattes(valid_output_dirs, combined_dir, "combined")
