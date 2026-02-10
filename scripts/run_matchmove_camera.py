@@ -936,7 +936,11 @@ def run_mesh_reconstruction(
         "input_path": str(input_ply),
         "output_path": str(output_path),
     }
-    run_colmap_command("poisson_mesher", args, "Generating mesh")
+    try:
+        run_colmap_command("poisson_mesher", args, "Generating mesh")
+    except subprocess.CalledProcessError as exc:
+        print(f"    Poisson mesher failed (exit code {exc.returncode})", file=sys.stderr)
+        return False
 
     return output_path.exists()
 
