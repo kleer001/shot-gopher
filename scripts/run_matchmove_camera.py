@@ -395,8 +395,10 @@ def run_colmap_command(
     cmd = [colmap_exe, command]
     for key, value in args.items():
         if value is True:
-            cmd.append(f"--{key}")
-        elif value is not False and value is not None:
+            cmd.extend([f"--{key}", "true"])
+        elif value is False:
+            cmd.extend([f"--{key}", "false"])
+        elif value is not None:
             cmd.extend([f"--{key}", str(value)])
 
     is_bat = colmap_exe.lower().endswith('.bat')
