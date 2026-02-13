@@ -346,3 +346,63 @@ class TestPipelineService:
         assert len(result) == 2
         assert result[0].project_name == "project1"
         assert result[1].project_name == "project2"
+
+    def test_start_job_skips_comfyui_stages_when_unavailable(self):
+        """Test that ComfyUI stages are filtered out when ComfyUI is not running."""
+        mock_job_repo = Mock()
+        mock_project_repo = Mock()
+
+        project = Project(
+            name="test_project",
+            path=Path("/workspace/test_project"),
+            status=ProjectStatus.CREATED,
+            video_path=Path("/workspace/test_project/source/input.mp4"),
+            stages=["ingest", "depth"],
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+        mock_project_repo.get.return_value = project
+        mock_job_repo.get.return_value = None
+
+        service = PipelineService(mock_job_repo, mock_project_repo)
+        request = JobStartRequest(stages=["ingest", "depth"])
+
+        mock_system = Mock()
+        mock_system.check_comfyui_status.return_value = False
+
+        with patch("web.services.pipeline_service.get_system_service", return_value=mock_system), \
+             patch("web.pipeline_runner.start_pipeline") as mock_start:
+            response = service.start_job("test_project", request)
+
+        assert response.status == "started"
+        assert request.stages == ["ingest"]
+        started_stages = mock_start.call_args[1]["stages"]
+        assert started_stages == ["ingest"]
+        assert "depth" not in started_stages
+
+    def test_start_job_raises_when_only_comfyui_stages_and_unavailable(self):
+        """Test that job fails when only ComfyUI stages requested and ComfyUI is down."""
+        mock_job_repo = Mock()
+        mock_project_repo = Mock()
+
+        project = Project(
+            name="test_project",
+            path=Path("/workspace/test_project"),
+            status=ProjectStatus.CREATED,
+            video_path=None,
+            stages=["depth", "roto"],
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+        mock_project_repo.get.return_value = project
+        mock_job_repo.get.return_value = None
+
+        service = PipelineService(mock_job_repo, mock_project_repo)
+        request = JobStartRequest(stages=["depth", "roto"])
+
+        mock_system = Mock()
+        mock_system.check_comfyui_status.return_value = False
+
+        with patch("web.services.pipeline_service.get_system_service", return_value=mock_system):
+            with pytest.raises(ValueError, match="ComfyUI is not running"):
+                service.start_job("test_project", request)

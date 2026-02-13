@@ -75,12 +75,18 @@ class PipelineService:
             system_service = get_system_service()
             if not system_service.check_comfyui_status():
                 stage_names = ", ".join(comfyui_stages)
-                raise ValueError(
-                    f"ComfyUI is not running. "
-                    f"Stages requiring ComfyUI: {stage_names}. "
-                    f"ComfyUI needs a CUDA-capable GPU to start. "
-                    f"Non-ComfyUI stages (ingest, matchmove_camera, mocap, gsir) can still run."
+                remaining = [s for s in request.stages if s not in comfyui_stages]
+                if not remaining:
+                    raise ValueError(
+                        f"ComfyUI is not running. "
+                        f"Stages requiring ComfyUI: {stage_names}. "
+                        f"ComfyUI needs a CUDA-capable GPU to start."
+                    )
+                print(
+                    f"Warning: ComfyUI not available - skipping stages: {stage_names}. "
+                    f"Proceeding with: {', '.join(remaining)}"
                 )
+                request.stages = remaining
 
         now = datetime.now()
         job = PipelineJob(

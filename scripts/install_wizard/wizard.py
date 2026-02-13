@@ -15,7 +15,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import COLMAPInstaller, CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VideoMaMaInstaller
+from .installers import COLMAPInstaller, CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, PyTorchInstaller, SystemPackageInstaller, ToolInstaller, VideoMaMaInstaller
 from .platform import PlatformManager
 from .state import InstallationStateManager
 from .utils import (
@@ -101,12 +101,12 @@ class InstallationWizard:
             ]
         }
 
-        # PyTorch (special handling for CUDA)
+        # PyTorch (CUDA-aware: detects GPU and installs correct variant)
         self.components['pytorch'] = {
             'name': 'PyTorch',
             'required': True,
             'installers': [
-                PythonPackageInstaller('PyTorch', 'torch', size_gb=6.0),  # With CUDA
+                PyTorchInstaller('PyTorch', 'torch', size_gb=6.0),
             ]
         }
 
