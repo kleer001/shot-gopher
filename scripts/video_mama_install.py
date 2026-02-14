@@ -163,7 +163,7 @@ def install_dependencies(conda_exe: str) -> bool:
     """Install VideoMaMa dependencies."""
     print_info("Installing PyTorch...")
     if not run_in_env(conda_exe, [
-        "pip", "install", "torch", "torchvision", "torchaudio",
+        "pip", "install", "torch", "torchvision",
         "--index-url", "https://download.pytorch.org/whl/cu121"
     ]):
         print_error("Failed to install PyTorch")
