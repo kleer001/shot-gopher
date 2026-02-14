@@ -4,14 +4,43 @@ This module provides installer classes for different types of components
 including Python packages and Git repositories.
 """
 
+import platform as _platform_mod
 import shutil
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Tuple
 
 from env_config import INSTALL_DIR
 
 from .utils import check_python_package, print_error, print_info, print_success, print_warning, run_command
+
+
+def detect_platform_and_gpu() -> Tuple[str, bool]:
+    """Detect platform and GPU availability.
+
+    Returns:
+        Tuple of (platform, has_cuda) where platform is 'linux', 'darwin', or 'windows'
+    """
+    system = _platform_mod.system().lower()
+
+    if system == "darwin":
+        return ("darwin", False)
+
+    has_cuda = False
+    nvidia_smi = shutil.which("nvidia-smi")
+    if not nvidia_smi:
+        from .platform import PlatformManager
+        found = PlatformManager.find_tool("nvidia-smi")
+        if found:
+            nvidia_smi = str(found)
+
+    if nvidia_smi:
+        success, _ = run_command([nvidia_smi], check=False, capture=True)
+        has_cuda = success
+
+    if system == "windows":
+        return ("windows", has_cuda)
+    return ("linux", has_cuda)
 
 if TYPE_CHECKING:
     from .conda import CondaEnvironmentManager
@@ -81,6 +110,69 @@ class PythonPackageInstaller(ComponentInstaller):
         else:
             print_error(f"Failed to install {self.name}")
         return success
+
+
+class PyTorchInstaller(PythonPackageInstaller):
+    """CUDA-aware PyTorch installer.
+
+    Detects platform and GPU to install the correct PyTorch variant
+    (CUDA, MPS, or CPU-only) instead of relying on generic pip install.
+    """
+
+    CUDA_INDEX_URL = "https://download.pytorch.org/whl/cu121"
+    CPU_INDEX_URL = "https://download.pytorch.org/whl/cpu"
+
+    def install(self) -> bool:
+        platform_name, has_cuda = detect_platform_and_gpu()
+        packages, index_url = self._get_pytorch_args(platform_name, has_cuda)
+
+        pip_cmd = ["pip", "install"] + packages
+        if index_url:
+            pip_cmd.extend(["--index-url", index_url])
+
+        print(f"\nInstalling {self.name}...")
+
+        if self.conda_manager and self.conda_manager.conda_exe:
+            if self.conda_manager.conda_exe == "pip-only":
+                success, _ = run_command(pip_cmd)
+            else:
+                full_cmd = [
+                    self.conda_manager.conda_exe, "run", "-n",
+                    self.conda_manager.env_name,
+                ] + pip_cmd
+                success, _ = run_command(full_cmd)
+        else:
+            print_warning("No conda environment configured, using system pip")
+            success, _ = run_command(
+                [sys.executable, "-m"] + pip_cmd
+            )
+
+        if success:
+            print_success(f"{self.name} installed")
+            self.installed = True
+        else:
+            print_error(f"Failed to install {self.name}")
+        return success
+
+    @staticmethod
+    def _get_pytorch_args(platform_name: str, has_cuda: bool) -> Tuple[list, Optional[str]]:
+        """Get PyTorch packages and index URL for the platform.
+
+        Returns:
+            Tuple of (packages_list, index_url_or_none)
+        """
+        if platform_name == "darwin":
+            print_info("macOS detected - installing PyTorch with MPS support")
+            return (["torch", "torchvision"], None)
+
+        if has_cuda:
+            print_info(f"{platform_name.title()} with CUDA detected - installing PyTorch with CUDA 12.1")
+            return (["torch", "torchvision"], PyTorchInstaller.CUDA_INDEX_URL)
+
+        print_warning(f"{platform_name.title()} without CUDA - installing CPU-only PyTorch")
+        if platform_name == "linux":
+            return (["torch", "torchvision"], PyTorchInstaller.CPU_INDEX_URL)
+        return (["torch", "torchvision"], None)
 
 
 class CondaPackageInstaller(ComponentInstaller):
@@ -542,37 +634,9 @@ class GVHMRInstaller(ComponentInstaller):
         success, _ = run_command(full_cmd, check=False, cwd=cwd)
         return success
 
-    def _detect_platform_and_gpu(self) -> tuple:
-        """Detect platform and GPU availability.
-
-        Returns:
-            Tuple of (platform, has_cuda) where platform is 'linux', 'darwin', or 'windows'
-        """
-        import platform as plat
-        system = plat.system().lower()
-
-        if system == "darwin":
-            return ("darwin", False)
-
-        has_cuda = False
-        nvidia_smi = shutil.which("nvidia-smi")
-        if not nvidia_smi:
-            from .platform import PlatformManager
-            found = PlatformManager.find_tool("nvidia-smi")
-            if found:
-                nvidia_smi = str(found)
-
-        if nvidia_smi:
-            success, _ = run_command([nvidia_smi], check=False, capture=True)
-            has_cuda = success
-
-        if system == "windows":
-            return ("windows", has_cuda)
-        return ("linux", has_cuda)
-
     def _get_pytorch_install_cmd(self) -> list:
         """Get the appropriate PyTorch installation command for the platform."""
-        platform, has_cuda = self._detect_platform_and_gpu()
+        platform, has_cuda = detect_platform_and_gpu()
 
         if platform == "darwin":
             print_info("macOS detected - installing PyTorch with MPS support")

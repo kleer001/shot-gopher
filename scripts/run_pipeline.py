@@ -76,9 +76,15 @@ def run_pipeline(config: PipelineConfig) -> bool:
 
     comfyui_was_started = False
     if needs_comfyui:
-        if not prepare_comfyui_for_processing(url=config.comfyui_url, auto_start=config.auto_start_comfyui):
-            return False
-        comfyui_was_started = config.auto_start_comfyui
+        if prepare_comfyui_for_processing(url=config.comfyui_url, auto_start=config.auto_start_comfyui):
+            comfyui_was_started = config.auto_start_comfyui
+        else:
+            skipped = sorted(comfyui_stages & set(config.stages))
+            print(f"Warning: ComfyUI not available - skipping stages: {', '.join(skipped)}", file=sys.stderr)
+            config.stages = [s for s in config.stages if s not in comfyui_stages]
+            if not config.stages:
+                print("Error: No stages remaining after skipping ComfyUI stages", file=sys.stderr)
+                return False
 
     project_name = config.project_name
     if not project_name:

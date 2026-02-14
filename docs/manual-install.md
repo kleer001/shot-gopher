@@ -71,12 +71,12 @@ Visit [pytorch.org](https://pytorch.org/get-started/locally/) for the correct co
 
 **CUDA 12.1:**
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 ```
 
 **CUDA 11.8:**
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 ```
 
 **Verify:**
