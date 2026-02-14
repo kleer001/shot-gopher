@@ -74,11 +74,9 @@ def run_pipeline(config: PipelineConfig) -> bool:
     comfyui_stages = {"depth", "roto"}
     needs_comfyui = bool(comfyui_stages & set(config.stages))
 
-    comfyui_available = False
     comfyui_was_started = False
     if needs_comfyui:
         if prepare_comfyui_for_processing(url=config.comfyui_url, auto_start=config.auto_start_comfyui):
-            comfyui_available = True
             comfyui_was_started = config.auto_start_comfyui
         else:
             skipped = sorted(comfyui_stages & set(config.stages))
