@@ -673,10 +673,32 @@ class GVHMRInstaller(ComponentInstaller):
         inputs_dir.mkdir(exist_ok=True)
         outputs_dir.mkdir(exist_ok=True)
 
+        self._patch_demo_argparse()
+
         self.installed = True
         print_success(f"GVHMR installed to {self.install_dir}")
         print_info(f"Activate with: conda activate {self.env_name}")
         return True
+
+    def _patch_demo_argparse(self) -> None:
+        """Patch demo.py to accept float focal lengths.
+
+        Upstream GVHMR defines --f_mm as type=int, but focal lengths from
+        camera solves (e.g. COLMAP) are floats. The downstream math in
+        create_camera_sensor is pure multiplication — no int required.
+        """
+        demo_script = self.install_dir / "tools" / "demo" / "demo.py"
+        if not demo_script.exists():
+            return
+
+        content = demo_script.read_text()
+        patched = content.replace(
+            '"--f_mm", type=int',
+            '"--f_mm", type=float',
+        )
+        if patched != content:
+            demo_script.write_text(patched)
+            print_info("Patched demo.py: --f_mm now accepts float values")
 
 
 class VideoMaMaInstaller(ComponentInstaller):

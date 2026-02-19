@@ -667,6 +667,20 @@ def _find_conda() -> Optional[str]:
     return None
 
 
+def _patch_gvhmr_f_mm_type(demo_script: Path) -> None:
+    """Patch GVHMR demo.py to accept float focal lengths if needed.
+
+    Upstream defines --f_mm as type=int, but camera solves produce floats.
+    The downstream math (create_camera_sensor) is pure multiplication.
+    """
+    if not demo_script.exists():
+        return
+    content = demo_script.read_text()
+    if '"--f_mm", type=int' not in content:
+        return
+    demo_script.write_text(content.replace('"--f_mm", type=int', '"--f_mm", type=float'))
+
+
 def run_gvhmr_motion_tracking(
     project_dir: Path,
     focal_mm: Optional[float] = None,
@@ -735,6 +749,8 @@ def run_gvhmr_motion_tracking(
         if not demo_script.exists():
             demo_script = gvhmr_dir / "demo.py"
 
+        _patch_gvhmr_f_mm_type(demo_script)
+
         gvhmr_args = [
             "python", str(demo_script),
             "--video", str(video_path),
@@ -745,7 +761,7 @@ def run_gvhmr_motion_tracking(
             gvhmr_args.append("--static_cam")
 
         if focal_mm:
-            gvhmr_args.extend(["--f_mm", str(int(focal_mm))])
+            gvhmr_args.extend(["--f_mm", str(focal_mm)])
 
         cmd = [conda_exe, "run", "-n", "gvhmr", "--no-capture-output"] + gvhmr_args
 
