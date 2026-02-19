@@ -745,7 +745,7 @@ def run_gvhmr_motion_tracking(
             gvhmr_args.append("--static_cam")
 
         if focal_mm:
-            gvhmr_args.extend(["--f_mm", str(focal_mm)])
+            gvhmr_args.extend(["--f_mm", str(int(focal_mm))])
 
         cmd = [conda_exe, "run", "-n", "gvhmr", "--no-capture-output"] + gvhmr_args
 
