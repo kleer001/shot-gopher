@@ -23,6 +23,7 @@ Example:
 """
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -676,9 +677,13 @@ def _patch_gvhmr_f_mm_type(demo_script: Path) -> None:
     if not demo_script.exists():
         return
     content = demo_script.read_text()
-    if '"--f_mm", type=int' not in content:
-        return
-    demo_script.write_text(content.replace('"--f_mm", type=int', '"--f_mm", type=float'))
+    patched = re.sub(
+        r'("--f_mm",\s*)type=int',
+        r'\1type=float',
+        content,
+    )
+    if patched != content:
+        demo_script.write_text(patched)
 
 
 def run_gvhmr_motion_tracking(

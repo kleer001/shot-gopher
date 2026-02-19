@@ -4,6 +4,7 @@ This module provides installer classes for different types of components
 including Python packages and Git repositories.
 """
 
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -692,9 +693,10 @@ class GVHMRInstaller(ComponentInstaller):
             return
 
         content = demo_script.read_text()
-        patched = content.replace(
-            '"--f_mm", type=int',
-            '"--f_mm", type=float',
+        patched = re.sub(
+            r'("--f_mm",\s*)type=int',
+            r'\1type=float',
+            content,
         )
         if patched != content:
             demo_script.write_text(patched)
