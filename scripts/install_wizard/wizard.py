@@ -15,7 +15,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import COLMAPInstaller, CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VideoMaMaInstaller
+from .installers import COLMAPInstaller, CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VGGSfMInstaller, VideoMaMaInstaller
 from .platform import PlatformManager
 from .state import InstallationStateManager
 from .utils import (
@@ -118,6 +118,18 @@ class InstallationWizard:
                 COLMAPInstaller(size_gb=1.5),
             ],
             'size_gb': 1.5,
+        }
+
+        # VGGSfM (alternative SfM engine for narrow-baseline video sequences)
+        self.components['vggsfm'] = {
+            'name': 'VGGSfM',
+            'required': False,
+            'installers': [
+                VGGSfMInstaller(
+                    install_dir=self.install_dir / "tools" / "vggsfm",
+                    size_gb=2.0,
+                )
+            ]
         }
 
         # Motion capture dependencies
@@ -608,7 +620,7 @@ class InstallationWizard:
         elif yolo:
             # YOLO mode: auto-select full stack (option 3)
             print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture + GS-IR)")
-            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -623,13 +635,13 @@ class InstallationWizard:
             while True:
                 choice = tty_input("\nChoice [1-5]: ").strip()
                 if choice == '1':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm']
                     break
                 elif choice == '2':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
                     break
                 elif choice == '4':
                     to_install = []

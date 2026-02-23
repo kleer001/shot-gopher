@@ -31,6 +31,7 @@ class PipelineConfig:
     auto_movie: bool = False
     auto_start_comfyui: bool = True
 
+    mmcam_engine: str = "vggsfm"
     mmcam_quality: str = "medium"
     mmcam_use_masks: bool = True
     mmcam_max_size: int = -1
@@ -75,6 +76,7 @@ class PipelineConfig:
                 overwrite=not args.no_overwrite,
                 auto_movie=args.auto_movie,
                 auto_start_comfyui=not args.no_auto_comfyui,
+                mmcam_engine=getattr(args, 'mmcam_engine', 'vggsfm'),
                 mmcam_quality=args.mmcam_quality,
                 mmcam_use_masks=not args.mmcam_no_masks,
                 mmcam_max_size=args.mmcam_max_size,
@@ -103,6 +105,7 @@ class PipelineConfig:
             overwrite=not args.no_overwrite,
             auto_movie=args.auto_movie,
             auto_start_comfyui=not args.no_auto_comfyui,
+            mmcam_engine=getattr(args, 'mmcam_engine', 'vggsfm'),
             mmcam_quality=args.mmcam_quality,
             mmcam_use_masks=not args.mmcam_no_masks,
             mmcam_max_size=args.mmcam_max_size,

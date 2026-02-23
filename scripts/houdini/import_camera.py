@@ -13,22 +13,35 @@ import os
 import hou
 
 
+def opencv_to_opengl(matrix):
+    """Convert c2w from OpenCV (Y-down, Z-forward) to OpenGL (Y-up, Z-back)."""
+    result = [[0.0] * 4 for _ in range(4)]
+    flip = [1.0, -1.0, -1.0, 1.0]
+    for i in range(4):
+        for j in range(4):
+            result[i][j] = matrix[i][j] * flip[j]
+    return result
+
+
 def decompose_matrix(matrix):
-    """Decompose 4x4 matrix to translation, rotation (euler XYZ), scale."""
-    # Extract translation
-    tx = matrix[0][3]
-    ty = matrix[1][3]
-    tz = matrix[2][3]
+    """Decompose 4x4 c2w matrix to translation, rotation (euler XYZ), scale.
 
-    # Extract 3x3 rotation/scale
-    m = [[matrix[i][j] for j in range(3)] for i in range(3)]
+    Applies OpenCV-to-OpenGL conversion before decomposing, since
+    extrinsics.json stores c2w in OpenCV convention (Y-down, Z-forward)
+    but Houdini uses OpenGL convention (Y-up, Z-back).
+    """
+    gl = opencv_to_opengl(matrix)
 
-    # Compute scale
+    tx = gl[0][3]
+    ty = gl[1][3]
+    tz = gl[2][3]
+
+    m = [[gl[i][j] for j in range(3)] for i in range(3)]
+
     sx = math.sqrt(m[0][0]**2 + m[1][0]**2 + m[2][0]**2)
     sy = math.sqrt(m[0][1]**2 + m[1][1]**2 + m[2][1]**2)
     sz = math.sqrt(m[0][2]**2 + m[1][2]**2 + m[2][2]**2)
 
-    # Normalize to get rotation matrix
     if sx > 1e-8:
         m[0][0] /= sx; m[1][0] /= sx; m[2][0] /= sx
     if sy > 1e-8:
@@ -36,7 +49,6 @@ def decompose_matrix(matrix):
     if sz > 1e-8:
         m[0][2] /= sz; m[1][2] /= sz; m[2][2] /= sz
 
-    # Convert rotation matrix to Euler XYZ (degrees)
     sy_check = math.sqrt(m[0][0]**2 + m[1][0]**2)
 
     if sy_check > 1e-6:

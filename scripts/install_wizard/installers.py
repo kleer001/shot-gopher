@@ -776,6 +776,176 @@ class VideoMaMaInstaller(ComponentInstaller):
         return success
 
 
+class VGGSfMInstaller(ComponentInstaller):
+    """Installer for VGGSfM v2 (learned SfM for narrow-baseline video).
+
+    VGGSfM requires:
+    - Separate conda environment (vggsfm) with Python 3.10
+    - PyTorch 2.1+ with CUDA 12.1
+    - LightGlue (specific fork), pycolmap, poselib
+    - Model weights auto-download from HuggingFace (~200MB)
+
+    See: https://github.com/facebookresearch/vggsfm
+    """
+
+    REPO_URL = "https://github.com/facebookresearch/vggsfm.git"
+    LIGHTGLUE_URL = "https://github.com/jytime/LightGlue.git"
+
+    def __init__(self, install_dir: Path = None, size_gb: float = 2.0):
+        super().__init__("VGGSfM", size_gb)
+        self.install_dir = install_dir or INSTALL_DIR / "tools" / "vggsfm"
+        self.env_name = "vggsfm"
+
+    def check(self) -> bool:
+        """Check if VGGSfM repo and conda environment exist."""
+        repo_exists = self.install_dir.exists() and (self.install_dir / "demo.py").exists()
+
+        conda_exe = self._find_conda()
+        env_exists = False
+        if conda_exe:
+            success, output = run_command(
+                [conda_exe, "env", "list"], check=False, capture=True
+            )
+            env_exists = success and self.env_name in output
+
+        self.installed = repo_exists and env_exists
+        return self.installed
+
+    def _find_conda(self) -> Optional[str]:
+        import os
+        for cmd in ["conda", "mamba"]:
+            if shutil.which(cmd):
+                return cmd
+        conda_exe = os.environ.get("CONDA_EXE")
+        if conda_exe and Path(conda_exe).exists():
+            return str(conda_exe)
+        return None
+
+    def _run_in_env(self, cmd: list, cwd: str = None) -> bool:
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            print_error("Conda not found")
+            return False
+        full_cmd = [conda_exe, "run", "-n", self.env_name] + cmd
+        success, _ = run_command(full_cmd, check=False, cwd=cwd)
+        return success
+
+    def _conda_install(self, packages: list, channels: list = None) -> bool:
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            print_error("Conda not found")
+            return False
+        cmd = [conda_exe, "install", "-n", self.env_name, "-y"]
+        for ch in (channels or []):
+            cmd.extend(["-c", ch])
+        cmd.extend(packages)
+        success, _ = run_command(cmd, check=False)
+        return success
+
+    def install(self) -> bool:
+        """Install VGGSfM in a dedicated conda environment.
+
+        Follows the official install.sh from the VGGSfM repository:
+        https://github.com/facebookresearch/vggsfm/blob/main/install.sh
+        """
+        print(f"\nInstalling VGGSfM v2 (learned SfM for narrow-baseline video)...")
+        print_info("This will create a separate conda environment 'vggsfm' with Python 3.10")
+
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            print_error("Conda not found - required for VGGSfM installation")
+            return False
+
+        success, output = run_command([conda_exe, "env", "list"], check=False, capture=True)
+        if success and self.env_name in output:
+            print_info(f"Conda environment '{self.env_name}' already exists")
+        else:
+            print(f"  Creating conda environment '{self.env_name}' with Python 3.10...")
+            success, _ = run_command([
+                conda_exe, "create", "-y", "-n", self.env_name, "python=3.10"
+            ])
+            if not success:
+                print_error(f"Failed to create conda environment '{self.env_name}'")
+                return False
+            print_success(f"Created conda environment '{self.env_name}'")
+
+        self.install_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        if self.install_dir.exists() and (self.install_dir / ".git").exists():
+            print_info("VGGSfM repository already cloned, updating...")
+            run_command(["git", "-C", str(self.install_dir), "pull"], check=False)
+        else:
+            print(f"  Cloning VGGSfM repository...")
+            if self.install_dir.exists():
+                shutil.rmtree(self.install_dir)
+            success, _ = run_command(["git", "clone", self.REPO_URL, str(self.install_dir)])
+            if not success:
+                print_error("Failed to clone VGGSfM repository")
+                return False
+            print_success("VGGSfM repository cloned")
+
+        print("  Installing PyTorch 2.1 with CUDA 12.1 (via conda)...")
+        if not self._conda_install(
+            ["pytorch=2.1.0", "torchvision", "pytorch-cuda=12.1"],
+            channels=["pytorch", "nvidia"],
+        ):
+            print_warning("PyTorch conda install failed, trying pip fallback...")
+            self._run_in_env([
+                "pip", "install",
+                "torch==2.1.0+cu121", "torchvision==0.16.0+cu121",
+                "--index-url", "https://download.pytorch.org/whl/cu121",
+            ])
+
+        print("  Installing fvcore and iopath (via conda)...")
+        self._conda_install(
+            ["fvcore", "iopath"],
+            channels=["fvcore", "iopath", "conda-forge"],
+        )
+
+        print("  Pinning MKL to avoid PyTorch symbol conflicts...")
+        self._conda_install(["mkl<2024", "intel-openmp<2024"])
+
+        print("  Installing core dependencies...")
+        self._run_in_env([
+            "pip", "install",
+            "hydra-core", "omegaconf", "opencv-python", "einops",
+            "kornia", "tqdm", "scipy", "scikit-learn",
+            "imageio[ffmpeg]", "trimesh", "huggingface_hub", "plotly",
+            "numpy==1.26.3",
+        ])
+
+        print("  Installing visdom (build requires --no-build-isolation)...")
+        self._run_in_env(["pip", "install", "--no-build-isolation", "visdom"])
+
+        print("  Installing pycolmap and poselib...")
+        self._run_in_env(["pip", "install", "pycolmap==3.10.0", "pyceres==2.3", "poselib==2.0.2"])
+
+        lightglue_dir = self.install_dir / "dependency" / "LightGlue"
+        if lightglue_dir.exists() and (lightglue_dir / ".git").exists():
+            print_info("LightGlue already cloned")
+        else:
+            print("  Cloning LightGlue (VGGSfM fork)...")
+            lightglue_dir.parent.mkdir(parents=True, exist_ok=True)
+            success, _ = run_command([
+                "git", "clone", self.LIGHTGLUE_URL, str(lightglue_dir)
+            ])
+            if not success:
+                print_warning("Failed to clone LightGlue")
+
+        if lightglue_dir.exists():
+            print("  Installing LightGlue...")
+            self._run_in_env(["pip", "install", "-e", "."], cwd=str(lightglue_dir))
+
+        print("  Installing VGGSfM package...")
+        self._run_in_env(["pip", "install", "-e", "."], cwd=str(self.install_dir))
+
+        self.installed = True
+        print_success(f"VGGSfM installed to {self.install_dir}")
+        print_info(f"Conda environment: {self.env_name}")
+        print_info("Model weights (~200MB) will auto-download on first run")
+        return True
+
+
 class COLMAPInstaller(ComponentInstaller):
     """Installer for COLMAP in a dedicated conda environment.
 

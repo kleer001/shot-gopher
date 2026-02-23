@@ -266,9 +266,9 @@ Structure-from-Motion camera tracking and 3D reconstruction.
 | **VRAM** | ~2-4 GB |
 | **Input** | `source/frames/*.png`, optionally `roto/*.png` |
 | **Output** | `mmcam/sparse/0/`, `camera/*.abc`, `.chan`, `.csv`, `.jsx`, `.clip` |
-| **Workflow** | None (COLMAP binary) |
+| **Workflow** | None (COLMAP or VGGSfM) |
 
-**Automatic camera export:** After COLMAP completes, camera data is automatically exported to VFX formats:
+**Automatic camera export:** After reconstruction completes, camera data is automatically exported to VFX formats:
 
 | Format | Application | Notes |
 |--------|-------------|-------|
@@ -282,29 +282,58 @@ Structure-from-Motion camera tracking and 3D reconstruction.
 - [COLMAP Documentation](https://colmap.github.io/tutorial.html) — Official tutorial and parameter reference
 - [COLMAP SfM Workflow (YouTube)](https://www.youtube.com/watch?v=P-EC0DzeVEU) — Visual walkthrough of the reconstruction process
 - [Understanding SfM for VFX](https://www.fxguide.com/fxfeatured/the-art-of-photogrammetry-introduction-to-structure-from-motion/) — FXGuide's photogrammetry guide
+- [VGGSfM GitHub](https://github.com/facebookresearch/vggsfm) — VGGSfM v2 repository
 
-**Options:**
+### SfM Engine Selection
+
+Two SfM engines are available via `--mmcam-engine`:
+
+| Engine | Flag | Best For |
+|--------|------|----------|
+| **COLMAP** (default) | `--mmcam-engine colmap` | Orbital shots, wide baseline, distorted lenses |
+| **VGGSfM** | `--mmcam-engine vggsfm` | Handheld tracking, narrow baseline, large dynamic foreground |
+
+**When to use VGGSfM:**
+- Handheld walking shots where COLMAP drops frame registration
+- Shots with 30%+ of the frame occupied by moving subjects (with masks)
+- Narrow-baseline sequences with forward/backward camera motion
+- COLMAP fails or registers <70% of frames
+
+**VGGSfM limitations:**
+- PINHOLE camera model only (no distortion estimation) — use COLMAP for distorted lenses
+- Non-commercial license (CC BY-NC 4.0)
+- Requires separate conda environment and ~200MB model weights (auto-downloaded)
+- Long sequences are auto-subsampled (every Nth frame) to fit in VRAM; missing cameras are interpolated
+
+```bash
+# COLMAP (default)
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera -q high
+
+# VGGSfM (learned features)
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera --mmcam-engine vggsfm
+
+# VGGSfM with downscaling for faster processing
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera --mmcam-engine vggsfm --mmcam-max-size 1500
+```
+
+### Options
 
 | Flag | Description |
 |------|-------------|
-| `-q low` | Fast preview |
-| `-q medium` | Default quality |
-| `-q high` | Production quality |
-| `-q slow` | Minimal camera motion |
-| `-d` | Dense reconstruction |
-| `-m` | Generate mesh (requires `-d`) |
-| `-M` | Disable mask usage |
+| `--mmcam-engine` | SfM engine: `colmap` (default) or `vggsfm` |
+| `-q low` | Fast preview (COLMAP only) |
+| `-q medium` | Default quality (COLMAP only) |
+| `-q high` | Production quality (COLMAP only) |
+| `-q slow` | Minimal camera motion (COLMAP only) |
+| `--mmcam-max-size N` | Downscale images to max dimension N (both engines) |
+| `-M` | Disable mask usage (both engines) |
+| `-d` | Dense reconstruction (COLMAP only) |
 
-```bash
-# High quality with dense reconstruction
-python scripts/run_pipeline.py footage.mp4 -s matchmove_camera -q high -d
-```
-
-**Mask integration:** If `roto/` masks exist, COLMAP uses them to ignore moving objects. Disable with `-M` if masks cause issues.
+**Mask integration:** If `roto/` or `matte/` masks exist, both engines use them to ignore moving objects. Disable with `-M` if masks cause issues.
 
 **Troubleshooting:** See [COLMAP issues](troubleshooting.md#colmap-reconstruction-failed)
 
-**Technical note — mask file naming:** COLMAP requires masks to be named `{image_filename}.png` (e.g., `frame_0001.png.png` for image `frame_0001.png`). The pipeline automatically copies masks from `roto/` to a temporary `mmcam/masks/` directory with the required naming convention, then cleans up after reconstruction completes.
+**Technical note — mask file naming:** COLMAP requires masks to be named `{image_filename}.png` (e.g., `frame_0001.png.png` for image `frame_0001.png`). The pipeline automatically copies masks from `roto/` to a temporary `mmcam/masks/` directory with the required naming convention, then cleans up after reconstruction completes. VGGSfM uses its own mask directory convention (`masks/*.png`) and handles this internally.
 
 ---
 

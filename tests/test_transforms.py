@@ -14,6 +14,7 @@ from transforms import (
     rotation_matrix_to_quaternion,
     rotation_matrix_to_euler,
     euler_to_rotation_matrix,
+    axis_angle_to_rotation_matrix,
     slerp,
     lerp,
     cubic_bezier,
@@ -181,6 +182,51 @@ class TestEulerRotation:
         rotation = np.eye(3)
         with pytest.raises(ValueError, match="Unsupported rotation order"):
             rotation_matrix_to_euler(rotation, "yxz")
+
+
+class TestAxisAngleToRotationMatrix:
+    def test_zero_vector_gives_identity(self):
+        R = axis_angle_to_rotation_matrix(np.array([0.0, 0.0, 0.0]))
+        np.testing.assert_array_almost_equal(R, np.eye(3))
+
+    def test_90deg_around_z(self):
+        angle = np.pi / 2
+        R = axis_angle_to_rotation_matrix(np.array([0.0, 0.0, angle]))
+        expected = np.array([
+            [0, -1, 0],
+            [1, 0, 0],
+            [0, 0, 1],
+        ])
+        np.testing.assert_array_almost_equal(R, expected, decimal=5)
+
+    def test_180deg_around_x(self):
+        R = axis_angle_to_rotation_matrix(np.array([np.pi, 0.0, 0.0]))
+        expected = np.array([
+            [1, 0, 0],
+            [0, -1, 0],
+            [0, 0, -1],
+        ])
+        np.testing.assert_array_almost_equal(R, expected, decimal=5)
+
+    def test_result_is_valid_rotation(self):
+        aa = np.array([0.3, -0.7, 1.2])
+        R = axis_angle_to_rotation_matrix(aa)
+        np.testing.assert_array_almost_equal(R @ R.T, np.eye(3), decimal=10)
+        assert abs(np.linalg.det(R) - 1.0) < 1e-10
+
+    def test_consistent_with_quaternion(self):
+        angle = 1.23
+        axis = np.array([1.0, 2.0, 3.0])
+        axis = axis / np.linalg.norm(axis)
+        aa = axis * angle
+
+        R_aa = axis_angle_to_rotation_matrix(aa)
+
+        half = angle / 2
+        quat = np.array([np.cos(half), *(axis * np.sin(half))])
+        R_quat = quaternion_to_rotation_matrix(quat)
+
+        np.testing.assert_array_almost_equal(R_aa, R_quat, decimal=10)
 
 
 class TestSlerp:

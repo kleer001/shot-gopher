@@ -404,6 +404,116 @@ def fov_to_focal_length(fov_degrees: float, sensor_size_mm: float) -> float:
     return (sensor_size_mm / 2) / np.tan(np.radians(fov_degrees / 2))
 
 
+def axis_angle_to_rotation_matrix(axis_angle: np.ndarray) -> np.ndarray:
+    """Convert axis-angle representation to 3x3 rotation matrix (Rodrigues' formula).
+
+    Args:
+        axis_angle: 3D axis-angle vector (direction = axis, magnitude = angle in radians)
+
+    Returns:
+        3x3 rotation matrix
+    """
+    theta = np.linalg.norm(axis_angle)
+    if theta < 1e-10:
+        return np.eye(3)
+
+    k = axis_angle / theta
+    K = np.array([
+        [0, -k[2], k[1]],
+        [k[2], 0, -k[0]],
+        [-k[1], k[0], 0],
+    ])
+    return np.eye(3) + np.sin(theta) * K + (1 - np.cos(theta)) * (K @ K)
+
+
+def axis_angle_to_rotation_matrix_batch(axis_angles: np.ndarray) -> np.ndarray:
+    """Convert a batch of axis-angle vectors to rotation matrices (Rodrigues).
+
+    Vectorised version of :func:`axis_angle_to_rotation_matrix`.
+
+    Args:
+        axis_angles: (N, 3) array of axis-angle vectors.
+
+    Returns:
+        (N, 3, 3) array of rotation matrices.
+    """
+    N = axis_angles.shape[0]
+    theta = np.linalg.norm(axis_angles, axis=-1, keepdims=True)
+    safe = (theta > 1e-10).squeeze(-1)
+
+    k = np.zeros_like(axis_angles)
+    k[safe] = axis_angles[safe] / theta[safe]
+
+    K = np.zeros((N, 3, 3), dtype=axis_angles.dtype)
+    K[:, 0, 1] = -k[:, 2]
+    K[:, 0, 2] = k[:, 1]
+    K[:, 1, 0] = k[:, 2]
+    K[:, 1, 2] = -k[:, 0]
+    K[:, 2, 0] = -k[:, 1]
+    K[:, 2, 1] = k[:, 0]
+
+    sin_t = np.sin(theta).reshape(N, 1, 1)
+    cos_t = (1 - np.cos(theta)).reshape(N, 1, 1)
+    I = np.eye(3, dtype=axis_angles.dtype).reshape(1, 3, 3)
+    KK = np.einsum("nij,njk->nik", K, K)
+
+    return I + sin_t * K + cos_t * KK
+
+
+def rotation_matrix_to_axis_angle(R: np.ndarray) -> np.ndarray:
+    """Convert 3x3 rotation matrix to axis-angle representation (inverse Rodrigues).
+
+    Args:
+        R: 3x3 rotation matrix
+
+    Returns:
+        3D axis-angle vector (direction = axis, magnitude = angle in radians)
+    """
+    theta = np.arccos(np.clip((np.trace(R) - 1) / 2, -1.0, 1.0))
+    if theta < 1e-10:
+        return np.zeros(3)
+
+    axis = np.array([
+        R[2, 1] - R[1, 2],
+        R[0, 2] - R[2, 0],
+        R[1, 0] - R[0, 1],
+    ])
+    axis = axis / (2 * np.sin(theta))
+    return axis * theta
+
+
+def rotation_matrix_to_axis_angle_batch(R: np.ndarray) -> np.ndarray:
+    """Convert a batch of rotation matrices to axis-angle vectors (inverse Rodrigues).
+
+    Vectorised version of :func:`rotation_matrix_to_axis_angle`.
+
+    Args:
+        R: (N, 3, 3) array of rotation matrices.
+
+    Returns:
+        (N, 3) array of axis-angle vectors.
+    """
+    N = R.shape[0]
+    trace = np.trace(R, axis1=-2, axis2=-1)
+    theta = np.arccos(np.clip((trace - 1) / 2, -1.0, 1.0))
+
+    axis = np.stack([
+        R[:, 2, 1] - R[:, 1, 2],
+        R[:, 0, 2] - R[:, 2, 0],
+        R[:, 1, 0] - R[:, 0, 1],
+    ], axis=-1)
+
+    sin_theta = np.sin(theta)
+    safe = np.abs(sin_theta) > 1e-10
+
+    result = np.zeros((N, 3), dtype=R.dtype)
+    if np.any(safe):
+        axis[safe] /= (2 * sin_theta[safe, None])
+        result[safe] = axis[safe] * theta[safe, None]
+
+    return result
+
+
 def normalize_quaternion(q: np.ndarray) -> np.ndarray:
     """Normalize a quaternion to unit length.
 

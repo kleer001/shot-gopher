@@ -26,7 +26,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -411,63 +411,127 @@ def run_colmap_command(
     return runner.run(cmd, description=description, timeout=timeout)
 
 
+def _find_colmap_mask_sources(project_dir: Path) -> Tuple[List[Path], str]:
+    """Find the best mask source directories for COLMAP feature exclusion.
+
+    Priority order:
+    1. matte/ numbered dirs (refined alpha mattes from mama stage)
+    2. roto/mask/ (pre-combined from instance separation)
+    3. roto/person/ (combined single-person mask)
+    4. roto/*.png flat files (legacy)
+
+    Returns:
+        Tuple of (list of directories containing mask images, source description).
+        Empty list if no masks found.
+    """
+    matte_dir = project_dir / "matte"
+    if matte_dir.exists():
+        matte_subdirs = sorted(
+            d for d in matte_dir.iterdir()
+            if d.is_dir()
+            and re.match(r".+_\d+$", d.name)
+            and (list(d.glob("*.png")) or list(d.glob("*.jpg")))
+        )
+        if matte_subdirs:
+            names = ", ".join(d.name for d in matte_subdirs)
+            return matte_subdirs, f"matte ({names})"
+
+    roto_dir = project_dir / "roto"
+    if not roto_dir.exists():
+        return [], ""
+
+    roto_mask_dir = roto_dir / "mask"
+    if roto_mask_dir.exists():
+        if list(roto_mask_dir.glob("*.png")) or list(roto_mask_dir.glob("*.jpg")):
+            return [roto_mask_dir], "roto/mask (combined instances)"
+
+    roto_person_dir = roto_dir / "person"
+    if roto_person_dir.exists():
+        if list(roto_person_dir.glob("*.png")) or list(roto_person_dir.glob("*.jpg")):
+            return [roto_person_dir], "roto/person"
+
+    flat_masks = list(roto_dir.glob("*.png")) + list(roto_dir.glob("*.jpg"))
+    if flat_masks:
+        return [roto_dir], "roto/ (flat)"
+
+    return [], ""
+
+
 def prepare_colmap_masks(
-    roto_dir: Path,
+    project_dir: Path,
     frames_dir: Path,
     colmap_dir: Path,
 ) -> Optional[Path]:
-    """Prepare masks with COLMAP-compatible naming convention.
+    """Prepare inverted, unioned masks with COLMAP-compatible naming.
 
-    COLMAP expects masks to be named {image_filename}.png - so for an image
-    named 'frame_0001.png', the mask must be 'frame_0001.png.png'.
+    COLMAP expects masks named {image_filename}.png (e.g., frame_0001.png.png)
+    where black pixels (0) are EXCLUDED from feature extraction and white
+    pixels (255) are INCLUDED.
 
-    This function maps masks from roto/ to the frames in frames_dir by
-    sequence order (not by filename matching).
+    Roto/matte masks use the opposite convention (white=subject), so this
+    function inverts them. For multi-person shots with multiple mask dirs,
+    all instance masks are unioned before inversion.
 
     Args:
-        roto_dir: Directory containing mask images (any naming convention)
+        project_dir: Project root directory
         frames_dir: Directory containing source images
-        colmap_dir: COLMAP working directory (masks will be placed in colmap/masks/)
+        colmap_dir: COLMAP working directory (masks placed in colmap/masks/)
 
     Returns:
         Path to prepared masks directory, or None if no masks available
     """
-    if not roto_dir.exists():
-        return None
+    from PIL import Image
 
-    mask_files = sorted(
-        list(roto_dir.glob("*.png")) + list(roto_dir.glob("*.jpg"))
-    )
-    if not mask_files:
+    mask_sources, source_desc = _find_colmap_mask_sources(project_dir)
+    if not mask_sources:
         return None
 
     frame_files = sorted(
-        list(frames_dir.glob("*.png")) + list(frames_dir.glob("*.jpg")) + list(frames_dir.glob("*.jpeg"))
+        list(frames_dir.glob("*.png"))
+        + list(frames_dir.glob("*.jpg"))
+        + list(frames_dir.glob("*.jpeg"))
     )
     if not frame_files:
         return None
 
-    if len(mask_files) != len(frame_files):
-        print(f"    Warning: Mask count ({len(mask_files)}) != frame count ({len(frame_files)})")
-        print(f"    Masks will be matched by sequence order")
+    masks_per_source = [
+        sorted(list(d.glob("*.png")) + list(d.glob("*.jpg")))
+        for d in mask_sources
+    ]
+    primary_count = len(masks_per_source[0])
+    print(f"    Mask source: {source_desc} ({primary_count} frames)")
+
+    if primary_count != len(frame_files):
+        print(f"    Warning: Mask count ({primary_count}) != frame count ({len(frame_files)})")
 
     masks_output_dir = colmap_dir / "masks"
     if masks_output_dir.exists():
         shutil.rmtree(masks_output_dir)
     masks_output_dir.mkdir(parents=True)
 
+    single_source = len(masks_per_source) == 1
     copied_count = 0
     for i, frame_file in enumerate(frame_files):
-        if i >= len(mask_files):
+        if i >= primary_count:
             break
+
+        gray = np.array(Image.open(masks_per_source[0][i]).convert("L"))
+
+        if not single_source:
+            for source_masks in masks_per_source[1:]:
+                if i < len(source_masks):
+                    instance = np.array(Image.open(source_masks[i]).convert("L"))
+                    np.maximum(gray, instance, out=gray)
+
+        inverted = np.uint8(255) - gray
 
         colmap_mask_name = f"{frame_file.name}.png"
         dest_path = masks_output_dir / colmap_mask_name
-        shutil.copy2(mask_files[i], dest_path)
+        Image.fromarray(inverted).save(dest_path)
         copied_count += 1
 
     if copied_count > 0:
-        print(f"    Prepared {copied_count} masks for COLMAP (renamed to {frame_files[0].name}.png format)")
+        print(f"    Prepared {copied_count} masks for COLMAP (inverted for COLMAP convention)")
         return masks_output_dir
 
     return None
@@ -1546,6 +1610,57 @@ def colmap_to_camera_matrices(images: dict, cameras: dict) -> tuple[list, dict]:
     return extrinsics, intrinsics
 
 
+def _gravity_align_extrinsics(extrinsics: list[np.ndarray]) -> list[np.ndarray]:
+    """Align camera-to-world extrinsics so world +Y points up (against gravity).
+
+    SfM reconstructions (COLMAP, VGGSfM) produce cameras in an arbitrary world
+    frame. This averages each camera's local Y axis (which points "down" in
+    OpenCV convention) to find the dominant gravity direction, then rotates
+    all cameras so that direction maps to world -Y.
+
+    Args:
+        extrinsics: List of 4x4 camera-to-world matrices (OpenCV convention)
+
+    Returns:
+        Gravity-aligned list of 4x4 camera-to-world matrices
+    """
+    if not extrinsics:
+        return extrinsics
+
+    gravity_samples = []
+    for mat in extrinsics:
+        cam_y_in_world = mat[:3, 1]
+        gravity_samples.append(cam_y_in_world)
+
+    gravity_dir = np.mean(gravity_samples, axis=0)
+    gravity_dir = gravity_dir / np.linalg.norm(gravity_dir)
+
+    target = np.array([0.0, -1.0, 0.0])
+
+    dot = np.clip(np.dot(gravity_dir, target), -1.0, 1.0)
+    if abs(dot - 1.0) < 1e-8:
+        return extrinsics
+
+    if abs(dot + 1.0) < 1e-8:
+        R_align = np.diag([1.0, -1.0, -1.0])
+    else:
+        axis = np.cross(gravity_dir, target)
+        axis = axis / np.linalg.norm(axis)
+        angle = np.arccos(dot)
+
+        K = np.array([
+            [0, -axis[2], axis[1]],
+            [axis[2], 0, -axis[0]],
+            [-axis[1], axis[0], 0],
+        ])
+        R_align = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * (K @ K)
+
+    R4 = np.eye(4)
+    R4[:3, :3] = R_align
+
+    return [R4 @ mat for mat in extrinsics]
+
+
 def export_colmap_to_pipeline_format(
     sparse_path: Path,
     output_dir: Path,
@@ -1599,6 +1714,8 @@ def export_colmap_to_pipeline_format(
     else:
         # Use only registered frames
         extrinsics, intrinsics = colmap_to_camera_matrices(images, cameras)
+
+    extrinsics = _gravity_align_extrinsics(extrinsics)
 
     # Save extrinsics (list of 4x4 matrices)
     extrinsics_data = [m.tolist() if isinstance(m, np.ndarray) else m for m in extrinsics]
@@ -1707,20 +1824,14 @@ def run_colmap_pipeline(
     colmap_dir = project_dir / "colmap"
     colmap_dir.mkdir(parents=True, exist_ok=True)
 
-    # Check for segmentation masks and prepare with COLMAP-compatible naming
-    roto_dir = project_dir / "roto"
     mask_path = None
-    if use_masks and roto_dir.exists():
-        roto_mask_count = len(list(roto_dir.glob("*.png"))) + len(list(roto_dir.glob("*.jpg")))
-        if roto_mask_count > 0:
-            mask_path = prepare_colmap_masks(roto_dir, frames_dir, colmap_dir)
-            if mask_path:
-                print(f"Dynamic scene segmentation: Enabled ({roto_mask_count} masks)")
-                print(f"  → Excluding dynamic regions from feature extraction")
-            else:
-                print(f"Dynamic scene segmentation: Disabled (mask preparation failed)")
+    if use_masks:
+        mask_path = prepare_colmap_masks(project_dir, frames_dir, colmap_dir)
+        if mask_path:
+            print(f"Dynamic scene segmentation: Enabled")
+            print(f"  → Excluding dynamic regions from feature extraction")
         else:
-            print(f"Dynamic scene segmentation: Disabled (no masks found in roto/)")
+            print(f"Dynamic scene segmentation: Disabled (no masks found)")
     else:
         print(f"Dynamic scene segmentation: Disabled")
     print()

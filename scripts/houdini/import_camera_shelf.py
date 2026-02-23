@@ -15,9 +15,20 @@ import os
 import hou
 
 
+def opencv_to_opengl(matrix):
+    """Convert c2w from OpenCV (Y-down, Z-forward) to OpenGL (Y-up, Z-back)."""
+    result = [[0.0] * 4 for _ in range(4)]
+    flip = [1.0, -1.0, -1.0, 1.0]
+    for i in range(4):
+        for j in range(4):
+            result[i][j] = matrix[i][j] * flip[j]
+    return result
+
+
 def decompose_matrix(matrix):
-    tx, ty, tz = matrix[0][3], matrix[1][3], matrix[2][3]
-    m = [[matrix[i][j] for j in range(3)] for i in range(3)]
+    gl = opencv_to_opengl(matrix)
+    tx, ty, tz = gl[0][3], gl[1][3], gl[2][3]
+    m = [[gl[i][j] for j in range(3)] for i in range(3)]
     sx = math.sqrt(m[0][0]**2 + m[1][0]**2 + m[2][0]**2)
     sy = math.sqrt(m[0][1]**2 + m[1][1]**2 + m[2][1]**2)
     sz = math.sqrt(m[0][2]**2 + m[1][2]**2 + m[2][2]**2)

@@ -74,9 +74,10 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 
 | Short | Long | Description |
 |-------|------|-------------|
-| `-q` | `--matchmove-camera-quality` | `low`, `medium` (default), `high`, or `slow` |
-| `-d` | `--matchmove-camera-dense` | Run dense reconstruction |
-| `-m` | `--matchmove-camera-mesh` | Generate mesh (requires `-d`) |
+| | `--matchmove-camera-engine` | SfM engine: `colmap` (default) or `vggsfm` (learned features) |
+| `-q` | `--matchmove-camera-quality` | `low`, `medium` (default), `high`, or `slow` (COLMAP only) |
+| `-d` | `--matchmove-camera-dense` | Run dense reconstruction (COLMAP only) |
+| `-m` | `--matchmove-camera-mesh` | Generate mesh (requires `-d`, COLMAP only) |
 | `-M` | `--matchmove-camera-no-masks` | Don't use roto masks for tracking |
 | | `--matchmove-camera-max-size` | Max image dimension (downscales larger, use 1000-2000 for speed) |
 

@@ -238,6 +238,13 @@ def parse_arguments() -> argparse.Namespace:
 
 
     parser.add_argument(
+        "--matchmove-camera-engine", "--mmcam-engine",
+        dest="mmcam_engine",
+        choices=["colmap", "vggsfm"],
+        default="vggsfm",
+        help="SfM engine for matchmove camera: vggsfm (default, learned features) or colmap (traditional SIFT)"
+    )
+    parser.add_argument(
         "-q", "--matchmove-camera-quality", "--mmcam-quality",
         dest="mmcam_quality",
         choices=["low", "medium", "high", "slow"],
@@ -427,6 +434,7 @@ def main():
         overwrite=not args.no_overwrite,
         auto_movie=args.auto_movie,
         auto_start_comfyui=not args.no_auto_comfyui,
+        mmcam_engine=args.mmcam_engine,
         mmcam_quality=args.mmcam_quality,
         mmcam_use_masks=not args.mmcam_no_masks,
         mmcam_max_size=args.mmcam_max_size,

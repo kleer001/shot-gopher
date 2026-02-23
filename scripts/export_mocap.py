@@ -62,11 +62,16 @@ def load_motion_data(motion_path: Path) -> Optional[dict]:
         return None
 
 
-def convert_gvhmr_to_motion(gvhmr_dir: Path, output_path: Path, gender: str = "neutral") -> bool:
+def convert_gvhmr_to_motion(
+    gvhmr_dir: Path,
+    output_path: Path,
+    gender: str = "neutral",
+) -> bool:
     """Convert GVHMR output (hmr4d_results.pt) to motion.pkl format.
 
-    This function runs in gvhmr environment where numpy versions match,
-    avoiding pickle compatibility issues.
+    Always uses smpl_params_global for body pose/translation, which
+    places the mesh in GVHMR-global coordinates — consistent with the
+    body-aligned camera exported by export_gvhmr_camera().
 
     Args:
         gvhmr_dir: Directory containing GVHMR output (e.g., mocap/person/gvhmr)
@@ -96,119 +101,107 @@ def convert_gvhmr_to_motion(gvhmr_dir: Path, output_path: Path, gender: str = "n
             return [to_numpy(v) for v in obj]
         return obj
 
-    try:
-        gvhmr_data = torch.load(gvhmr_file, map_location='cpu', weights_only=False)
-        gvhmr_data = to_numpy(gvhmr_data)
+    gvhmr_data = torch.load(gvhmr_file, map_location='cpu', weights_only=False)
+    gvhmr_data = to_numpy(gvhmr_data)
 
-        if 'smpl_params_global' in gvhmr_data:
-            params = gvhmr_data['smpl_params_global']
-        elif 'global_orient' in gvhmr_data:
-            params = gvhmr_data
-        else:
-            params = gvhmr_data
+    if 'smpl_params_global' in gvhmr_data:
+        params = gvhmr_data['smpl_params_global']
+    elif 'global_orient' in gvhmr_data:
+        params = gvhmr_data
+    else:
+        params = gvhmr_data
 
-        body_pose = params.get('body_pose', params.get('poses'))
-        global_orient = params.get('global_orient')
-        transl = params.get('transl', params.get('trans'))
-        betas = params.get('betas')
+    body_pose = params.get('body_pose', params.get('poses'))
+    global_orient = params.get('global_orient')
+    transl = params.get('transl', params.get('trans'))
+    betas = params.get('betas')
 
-        if body_pose is None:
-            print(f"Error: Could not find body_pose in {gvhmr_file.name}", file=sys.stderr)
-            return False
-
-        body_pose = np.array(body_pose)
-        if body_pose.ndim < 2 or body_pose.shape[0] == 0:
-            print(f"Error: Invalid body_pose shape in {gvhmr_file.name}", file=sys.stderr)
-            return False
-
-        n_frames = len(body_pose)
-
-        if global_orient is not None:
-            global_orient = np.array(global_orient)
-            if global_orient.ndim == 1:
-                global_orient = global_orient.reshape(1, -1)
-            if len(global_orient) == 1 and n_frames > 1:
-                global_orient = np.tile(global_orient, (n_frames, 1))
-        else:
-            global_orient = np.zeros((n_frames, 3))
-
-        if body_pose.shape[1] == 63:
-            poses = np.concatenate([
-                global_orient,
-                body_pose,
-                np.zeros((n_frames, 6))
-            ], axis=1)
-        elif body_pose.shape[1] > 63:
-            poses = np.concatenate([
-                global_orient,
-                body_pose[:, :63],
-                np.zeros((n_frames, 6))
-            ], axis=1)
-        else:
-            padding_needed = 69 - body_pose.shape[1]
-            poses = np.concatenate([
-                global_orient,
-                body_pose,
-                np.zeros((n_frames, padding_needed))
-            ], axis=1)
-
-        if transl is not None:
-            transl = np.array(transl)
-        else:
-            transl = np.zeros((n_frames, 3))
-
-        if betas is not None:
-            betas = np.array(betas)
-            if betas.ndim > 1:
-                betas = betas[0]
-        else:
-            betas = np.zeros(10)
-
-        motion_format = {
-            'poses': poses,
-            'trans': transl,
-            'betas': betas,
-            'gender': gender
-        }
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, 'wb') as f:
-            pickle.dump(motion_format, f)
-
-        print(f"  OK Converted {n_frames} frames to {output_path.name}")
-        return True
-
-    except Exception as e:
-        print(f"Error converting GVHMR output: {e}", file=sys.stderr)
+    if body_pose is None:
+        print(f"Error: Could not find body_pose in {gvhmr_file.name}", file=sys.stderr)
         return False
 
+    body_pose = np.array(body_pose)
+    if body_pose.ndim < 2 or body_pose.shape[0] == 0:
+        print(f"Error: Invalid body_pose shape in {gvhmr_file.name}", file=sys.stderr)
+        return False
 
-def get_smpl_model_path(gender: str) -> Optional[Path]:
-    """Get path to SMPL model for specified gender.
+    n_frames = len(body_pose)
+
+    if global_orient is not None:
+        global_orient = np.array(global_orient)
+        if global_orient.ndim == 1:
+            global_orient = global_orient.reshape(1, -1)
+        if len(global_orient) == 1 and n_frames > 1:
+            global_orient = np.tile(global_orient, (n_frames, 1))
+    else:
+        global_orient = np.zeros((n_frames, 3))
+
+    if transl is not None:
+        transl = np.array(transl)
+    else:
+        transl = np.zeros((n_frames, 3))
+
+    if betas is not None:
+        betas = np.array(betas)
+        if betas.ndim > 1:
+            betas = betas[0]
+    else:
+        betas = np.zeros(10)
+
+    if body_pose.shape[1] >= 63:
+        poses = np.concatenate([
+            global_orient,
+            body_pose[:, :63],
+        ], axis=1)
+    else:
+        padding_needed = 63 - body_pose.shape[1]
+        poses = np.concatenate([
+            global_orient,
+            body_pose,
+            np.zeros((n_frames, padding_needed))
+        ], axis=1)
+
+    motion_format = {
+        'poses': poses,
+        'trans': transl,
+        'betas': betas,
+        'gender': gender
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, 'wb') as f:
+        pickle.dump(motion_format, f)
+
+    print(f"  OK Converted {n_frames} frames to {output_path.name}")
+    return True
+
+
+def get_body_model_path(gender: str) -> Optional[Path]:
+    """Get path to SMPL-X body model for specified gender.
 
     Args:
         gender: neutral, male, or female
 
     Returns:
-        Path to SMPL pkl file or None if not found
+        Path to SMPL-X npz file or None if not found
     """
     body_models_dir = INSTALL_DIR / "GVHMR" / "inputs" / "checkpoints" / "body_models"
-    smpl_dir = body_models_dir / "smpl"
+    smplx_dir = body_models_dir / "smplx"
 
     gender_map = {
-        'neutral': 'SMPL_NEUTRAL.pkl',
-        'male': 'SMPL_MALE.pkl',
-        'female': 'SMPL_FEMALE.pkl',
+        'neutral': 'SMPLX_NEUTRAL.npz',
+        'male': 'SMPLX_MALE.npz',
+        'female': 'SMPLX_FEMALE.npz',
     }
 
     if gender not in gender_map:
         print(f"Error: Invalid gender '{gender}'", file=sys.stderr)
         return None
 
-    model_path = smpl_dir / gender_map[gender]
+    model_path = smplx_dir / gender_map[gender]
     if not model_path.exists():
-        print(f"Error: SMPL model not found: {model_path}", file=sys.stderr)
-        print("Run the installation wizard to download SMPL models", file=sys.stderr)
+        print(f"Error: SMPL-X model not found: {model_path}", file=sys.stderr)
+        print("Run the installation wizard to download SMPL-X models", file=sys.stderr)
         return None
 
     return model_path
@@ -253,7 +246,7 @@ def generate_meshes(
 
         model = smplx.create(
             model_path=str(model_path.parent.parent),
-            model_type='smpl',
+            model_type='smplx',
             gender=gender,
             num_betas=10,
             batch_size=1,
@@ -273,14 +266,10 @@ def generate_meshes(
                 print(f"    Frame {i}/{n_frames}...")
 
             pose = poses[i]
-            if pose.shape[0] >= 72:
-                global_orient = pose[:3]
-                body_pose = pose[3:72]
-            else:
-                global_orient = pose[:3] if pose.shape[0] >= 3 else np.zeros(3)
-                body_pose = pose[3:] if pose.shape[0] > 3 else np.zeros(69)
-                if body_pose.shape[0] < 69:
-                    body_pose = np.pad(body_pose, (0, 69 - body_pose.shape[0]))
+            global_orient = pose[:3] if pose.shape[0] >= 3 else np.zeros(3)
+            body_pose = pose[3:66] if pose.shape[0] >= 66 else np.zeros(63)
+            if body_pose.shape[0] < 63:
+                body_pose = np.pad(body_pose, (0, 63 - body_pose.shape[0]))
 
             global_orient_t = torch.tensor(global_orient, dtype=torch.float32, device=device).unsqueeze(0)
             body_pose_t = torch.tensor(body_pose, dtype=torch.float32, device=device).unsqueeze(0)
@@ -548,7 +537,7 @@ def export_tpose(
 
         model = smplx.create(
             model_path=str(model_path.parent.parent),
-            model_type='smpl',
+            model_type='smplx',
             gender=gender,
             num_betas=10,
             batch_size=1,
@@ -565,7 +554,7 @@ def export_tpose(
             betas_t = torch.zeros(1, 10, dtype=torch.float32, device=device)
 
         global_orient_t = torch.zeros(1, 3, dtype=torch.float32, device=device)
-        body_pose_t = torch.zeros(1, 69, dtype=torch.float32, device=device)
+        body_pose_t = torch.zeros(1, 63, dtype=torch.float32, device=device)
         transl_t = torch.zeros(1, 3, dtype=torch.float32, device=device)
 
         with torch.no_grad():
@@ -660,7 +649,7 @@ def run_export(
     print(f"Gender: {gender}")
     print(f"Frames: {len(motion_data['poses'])}")
 
-    model_path = get_smpl_model_path(gender)
+    model_path = get_body_model_path(gender)
     if model_path is None:
         return False
 

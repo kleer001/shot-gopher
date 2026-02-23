@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 __all__ = [
     "run_export_camera",
     "run_matchmove_camera",
+    "run_vggsfm",
     "export_camera_to_vfx_formats",
     "run_mocap",
     "run_gsir_materials",
@@ -132,6 +133,40 @@ def run_matchmove_camera(
 
     try:
         run_command(cmd, "Running COLMAP reconstruction")
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def run_vggsfm(
+    project_dir: Path,
+    max_image_size: int = -1,
+) -> bool:
+    """Run VGGSfM Structure-from-Motion reconstruction.
+
+    Args:
+        project_dir: Project directory containing source/frames/
+        max_image_size: Maximum image dimension (-1 for default 1024)
+
+    Returns:
+        True if reconstruction succeeded
+    """
+    script_path = Path(__file__).parent / "run_vggsfm.py"
+
+    if not script_path.exists():
+        print("    Error: run_vggsfm.py not found", file=sys.stderr)
+        return False
+
+    cmd = [
+        sys.executable, str(script_path),
+        str(project_dir),
+    ]
+
+    if max_image_size > 0:
+        cmd.extend(["--max-size", str(max_image_size)])
+
+    try:
+        run_command(cmd, "Running VGGSfM reconstruction")
         return True
     except subprocess.CalledProcessError:
         return False
@@ -788,7 +823,7 @@ def run_stage_matchmove_camera(
     ctx: "StageContext",
     config: "PipelineConfig",
 ) -> bool:
-    """Run COLMAP reconstruction stage.
+    """Run SfM reconstruction stage (COLMAP or VGGSfM).
 
     Args:
         ctx: Stage execution context
@@ -802,15 +837,24 @@ def run_stage_matchmove_camera(
     assert "colmap" not in str(mmcam_sparse), f"BREADCRUMB: path still contains 'colmap': {mmcam_sparse}"
 
     if ctx.skip_existing and mmcam_sparse.exists():
-        print("  → Skipping (COLMAP sparse model exists)")
+        print("  → Skipping (sparse model exists)")
     else:
-        if not run_matchmove_camera(
-            ctx.project_dir,
-            quality=config.mmcam_quality,
-            use_masks=config.mmcam_use_masks,
-            max_image_size=config.mmcam_max_size
-        ):
-            print("  → COLMAP reconstruction failed", file=sys.stderr)
+        if config.mmcam_engine == "vggsfm":
+            print(f"  → Engine: VGGSfM")
+            if not run_vggsfm(
+                ctx.project_dir,
+                max_image_size=config.mmcam_max_size,
+            ):
+                print("  → VGGSfM reconstruction failed", file=sys.stderr)
+        else:
+            print(f"  → Engine: COLMAP")
+            if not run_matchmove_camera(
+                ctx.project_dir,
+                quality=config.mmcam_quality,
+                use_masks=config.mmcam_use_masks,
+                max_image_size=config.mmcam_max_size,
+            ):
+                print("  → COLMAP reconstruction failed", file=sys.stderr)
 
     clear_gpu_memory(ctx.comfyui_url)
 
@@ -843,9 +887,9 @@ def run_stage_dense(
     """
     print("\n=== Stage: dense ===")
 
-    colmap_dir = ctx.project_dir / "colmap"
-    sparse_model = colmap_dir / "sparse" / "0"
-    dense_path = colmap_dir / "dense"
+    mmcam_dir = ctx.project_dir / "mmcam"
+    sparse_model = mmcam_dir / "sparse" / "0"
+    dense_path = mmcam_dir / "dense"
     geometry_dir = ctx.project_dir / "geometry"
     depth_dir = ctx.project_dir / "depth"
     normals_dir = ctx.project_dir / "normals"
@@ -1033,11 +1077,10 @@ def run_stage_mocap(
         ):
             print("  → Motion capture failed", file=sys.stderr)
 
-    mocap_camera_dir = ctx.project_dir / "mocap" / "camera"
-    colmap_camera_dir = ctx.project_dir / "camera"
-    if (mocap_camera_dir / "extrinsics.json").exists() and not (colmap_camera_dir / "extrinsics.json").exists():
-        print("\n  → GVHMR camera exported, running camera stage...")
-        run_stage_camera(ctx, config)
+    mocap_camera_dir = ctx.project_dir / "mocap_camera"
+    if (mocap_camera_dir / "extrinsics.json").exists():
+        print("\n  → Exporting GVHMR camera to Alembic/USD...")
+        run_export_camera(ctx.project_dir, ctx.fps, camera_dir=mocap_camera_dir)
 
     clear_gpu_memory(ctx.comfyui_url)
     return True
@@ -1088,7 +1131,7 @@ def run_stage_camera(
 
     Checks for camera data in order:
     1. camera/ (COLMAP)
-    2. mocap/camera/ (GVHMR estimate)
+    2. mocap_camera/ (GVHMR estimate)
 
     Args:
         ctx: Stage execution context
@@ -1099,7 +1142,7 @@ def run_stage_camera(
     """
     print("\n=== Stage: camera ===")
     colmap_camera_dir = ctx.project_dir / "camera"
-    mocap_camera_dir = ctx.project_dir / "mocap" / "camera"
+    mocap_camera_dir = ctx.project_dir / "mocap_camera"
 
     if (colmap_camera_dir / "extrinsics.json").exists():
         camera_dir = colmap_camera_dir

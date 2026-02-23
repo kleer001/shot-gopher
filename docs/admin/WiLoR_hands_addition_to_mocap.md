@@ -1,0 +1,314 @@
+# Roadmap: WiLoR Hand Pose Integration into Mocap Pipeline
+
+**Status:** Proposed
+**Date:** 2026-02-22
+**Tracking:** [GitHub Issue TBD]
+
+---
+
+## Problem Statement
+
+GVHMR outputs SMPL body parameters (21 joints, 63 DoF) with no hand articulation.
+The exported Alembic mesh (`body_motion.abc`) has flat, T-pose hands regardless of
+what the performer's hands are doing on camera. GVHMR's preview video (`1_incam.mp4`)
+misleadingly shows curled fingers — this comes from the renderer's cosmetic hand pose,
+not from actual estimated data.
+
+## Proposed Solution
+
+Run **WiLoR** (CVPR 2025) as a dedicated hand estimator alongside GVHMR, then merge
+the hand poses into SMPL-X parameters before mesh generation.
+
+- **GVHMR** provides: world-space body motion, camera parameters, body shape
+- **WiLoR** provides: per-frame MANO hand poses (left and right)
+- **SMPL-X** consumes both: body_pose from GVHMR + hand_pose from WiLoR
+
+### Why WiLoR
+
+| Criteria | WiLoR | HaMeR | Dyn-HaMeR |
+|----------|-------|-------|-----------|
+| Speed | ~130 FPS detection | ~1.3 FPS (ViTDet) | Slower (adds SLAM) |
+| Accuracy | Equal or better | Baseline | Best (temporal) |
+| Built-in detector | Yes (DarkNet) | No (needs ViTDet) | No (uses HaMeR) |
+| Model size | ~25 MB | ~819 MB | Larger |
+| Output format | MANO (45 per hand) | MANO (45 per hand) | MANO (45 per hand) |
+| Temporal smoothing | No | No | Yes |
+| Complexity | Low | Medium | High |
+
+WiLoR gives the best speed/accuracy/simplicity tradeoff. If temporal jitter becomes
+a problem, Dyn-HaMeR can be evaluated later as it uses HaMeR internally and the
+output format is identical.
+
+### Why This Works
+
+SMPL-X's hand parameterization is literally MANO embedded inside SMPL-X. The smplx
+library maintainers confirm: "The hand poses are the same" and "there is no need for
+an offset R because MANO shares a coordinate system with SMPLX." The 45-value
+`hand_pose` from WiLoR maps directly to SMPL-X `left_hand_pose` / `right_hand_pose`
+with zero conversion.
+
+Critical detail: we keep GVHMR's wrist rotation (from `body_pose` joints 20-21) and
+only take WiLoR's 15 finger joint rotations per hand. This avoids any wrist alignment
+issues between the two estimators.
+
+Reference implementation: `VincentHu19/Mano2Smpl-X` on GitHub — tested specifically
+with GVHMR + HaMeR, MIT license.
+
+---
+
+## Prerequisites
+
+### Already Available
+
+- SMPL-X model files already installed at:
+  - `.vfx_pipeline/GVHMR/inputs/checkpoints/body_models/smplx/`
+  - `.vfx_pipeline/models/smplx/models/smplx/`
+- The `smplx` Python package is already in the GVHMR conda environment
+- Blender ABC export pipeline is topology-agnostic (reads OBJ vertex positions)
+
+### Needs Investigation
+
+- WiLoR's exact conda/pip dependency footprint — can it share the `gvhmr` env or
+  does it need its own?
+- WiLoR's GPU memory usage — can it coexist with GVHMR in a single pipeline run,
+  or does it need sequential execution with GPU memory clearing between stages?
+- Whether WiLoR handles left/right hand flipping internally or if we need the
+  manual axis-angle sign flip (negate y,z components for left hands)
+
+---
+
+## Implementation Phases
+
+### Phase 1: WiLoR Installation
+
+**Goal:** WiLoR runs standalone on a test video and produces MANO hand poses.
+
+**Tasks:**
+
+1. Install WiLoR into `.vfx_pipeline/tools/wilor/` following the sandboxed install
+   pattern (never install to user home directories)
+2. Create a conda environment — either extend `gvhmr` or create `wilor` depending
+   on dependency conflicts
+3. Add WiLoR to the install wizard (`scripts/install_wizard/installers.py`) following
+   the existing `ComponentInstaller` pattern
+4. Verify WiLoR runs on sample frames and produces MANO parameters:
+   - `hand_pose` (45 values per hand, axis-angle)
+   - `global_orient` (3 values per hand — we will discard this)
+   - Left/right hand classification
+
+**Validation:** Run WiLoR on a few frames from an existing test project, confirm
+sensible-looking hand poses are produced.
+
+---
+
+### Phase 2: Hand Estimation Pipeline Step
+
+**Goal:** A new script estimates hand poses for every frame of a mocap sequence and
+saves them alongside the existing GVHMR output.
+
+**Tasks:**
+
+1. Create `scripts/run_hand_estimation.py` — standalone script that:
+   - Takes a project directory and person identifier
+   - Reads the source video frames (same frames GVHMR used)
+   - Runs WiLoR per frame to detect hands and estimate MANO parameters
+   - Associates detected hands with left/right based on WiLoR's classifier
+   - Outputs `hand_poses.npz` with arrays `left_hand_pose[N, 45]` and
+     `right_hand_pose[N, 45]`, where N matches the frame count from GVHMR
+   - Handles missing detections by writing zeros for occluded frames
+
+2. Output location: `mocap/<person>/hand_poses.npz` (sibling to `hmr4d_results.pt`)
+
+3. Frame alignment: GVHMR may subsample frames (based on `mocap_fps`). The hand
+   estimator must process the same frames at the same indices. Read the frame list
+   from GVHMR's output metadata to ensure alignment.
+
+**Validation:** Spot-check a few frames — verify the hand_pose values are non-zero
+when hands are visible and zero when occluded. Verify array shapes match GVHMR's
+frame count.
+
+---
+
+### Phase 3: SMPL to SMPL-X Migration in Export
+
+**Goal:** `export_mocap.py` generates meshes using SMPL-X (10475 vertices) instead
+of SMPL (6890 vertices), incorporating hand poses.
+
+This is the most invasive phase. The changes are concentrated in `export_mocap.py`
+but the topology change ripples downstream.
+
+**Tasks:**
+
+1. **Modify `convert_gvhmr_to_motion()`** (`export_mocap.py`, lines 65-243):
+   - Load `hand_poses.npz` if it exists alongside the GVHMR output
+   - Change the pose concatenation (lines 207-225) from:
+     `[global_orient(3) + body_pose(63) + zeros(6)]` = 72 dims
+     to:
+     `[global_orient(3) + body_pose(63) + left_hand(45) + right_hand(45)]` = 156 dims
+   - If hand_poses.npz is missing, fall back to zeros (preserves backward compat)
+   - Store left/right hand poses as separate keys in `motion.pkl` for clarity
+
+2. **Modify `generate_meshes()`** (`export_mocap.py`, lines 277-359):
+   - Change `smplx.create()` call (line 314) from `model_type='smpl'` to
+     `model_type='smplx'`
+   - Set `flat_hand_mean=True` — this makes zero-pose hands flat (matching current
+     behavior) rather than using MANO's slightly-curled mean pose
+   - Set `use_pca=False` — we're passing raw axis-angle rotations, not PCA components
+   - Update the model forward call to pass `left_hand_pose` and `right_hand_pose`
+     as separate tensor arguments
+   - Update the SMPL-X model path resolution in `get_smpl_model_path()` (lines 246-274)
+
+3. **Update Blender export validation** (`scripts/blender/export_mesh_alembic.py`,
+   lines 85-101):
+   - The script validates all OBJ frames have identical vertex counts. This will
+     still work since all frames will be 10475 — the check is for inter-frame
+     consistency, not for a specific vertex count
+   - Verify UV mapping still works. SMPL-X has different UVs than SMPL — confirm
+     the OBJ export includes correct UV coordinates
+
+4. **Add config option** (`scripts/pipeline_config.py`):
+   - New field: `mocap_hand_estimation: bool = False`
+   - When True, Phase 2 runs and Phase 3 uses SMPL-X
+   - When False, current behavior is preserved exactly (SMPL, flat hands)
+   - This keeps the feature opt-in until validated
+
+**Validation:**
+- Generate meshes from an existing GVHMR result + hand_poses.npz
+- Visually inspect in Blender: fingers should be articulated, body pose unchanged
+- Verify vertex count is 10475 throughout the OBJ sequence
+- Verify Alembic export completes without errors
+- Compare body motion between SMPL and SMPL-X outputs — body should be identical
+
+---
+
+### Phase 4: Pipeline Integration
+
+**Goal:** Hand estimation runs automatically as part of the mocap stage when enabled.
+
+**Tasks:**
+
+1. **Wire into `run_mocap.py`** (lines 1141-1278):
+   - After `run_gvhmr_motion_tracking()` (line 1227) and before `run_export_pipeline()`
+     (line 1281), add a call to the hand estimation script
+   - Run in the WiLoR conda environment (same pattern as GVHMR conda execution)
+   - Pass through project_dir, person identifier, and frame range
+
+2. **Wire into `stage_runners.py`** (lines 1035-1086):
+   - `run_stage_mocap()` already calls `run_mocap()` which will include hand estimation
+   - No changes needed at the stage runner level unless hand estimation becomes a
+     separate stage (not recommended for v1)
+
+3. **GPU memory management:**
+   - GVHMR and WiLoR should run sequentially, not concurrently
+   - Call `clear_gpu_memory()` between GVHMR and WiLoR if sharing a GPU
+   - WiLoR is small (~25 MB model) so memory pressure should be minimal
+
+4. **CLI passthrough:**
+   - `run_pipeline.py` needs `--hand-estimation` flag or reads from project config
+   - `run_mocap.py` needs the same flag for standalone mocap runs
+
+**Validation:**
+- Run full mocap stage on a test project with `mocap_hand_estimation=True`
+- Verify the pipeline completes end-to-end: GVHMR → WiLoR → SMPL-X mesh → ABC
+- Verify the pipeline still works with `mocap_hand_estimation=False` (no regression)
+
+---
+
+### Phase 5: Temporal Smoothing (Optional)
+
+**Goal:** Reduce frame-to-frame hand jitter for cleaner animation.
+
+WiLoR is per-frame with no temporal model. Hand poses may jitter, especially for
+partially occluded or fast-moving hands.
+
+**Tasks:**
+
+1. Apply a simple smoothing filter (e.g., Savitzky-Golay or exponential moving
+   average) to the `hand_poses.npz` arrays before merging into motion.pkl
+2. Interpolate across short occlusion gaps (hands missing for <N frames) using
+   the neighboring detected poses
+3. For long occlusion gaps, keep zeros (flat hands are better than hallucinated
+   poses)
+
+**Validation:** Side-by-side comparison of smoothed vs raw hand animation. Smoothed
+should look more natural without losing intentional hand gestures.
+
+This phase is deferred until Phase 4 is validated. Jitter may be acceptable for
+many use cases, and over-smoothing can lose detail.
+
+---
+
+## Topology Change Impact Assessment
+
+Switching from SMPL (6890 vertices) to SMPL-X (10475 vertices) affects downstream
+consumers of `body_motion.abc`.
+
+### What Changes
+
+| Property | SMPL | SMPL-X |
+|----------|------|--------|
+| Vertex count | 6890 | 10475 |
+| Face count | 13776 | 20908 |
+| UV layout | SMPL UVs | SMPL-X UVs (different) |
+| Topology | No fingers/face detail | Full finger separation, face topology |
+
+### What Does NOT Change
+
+- The Alembic export process (reads OBJ vertices, animates via shape keys)
+- The coordinate system and scale
+- The body proportions and joint positions (SMPL-X body region is compatible)
+- Camera parameters (independent of body model)
+
+### Downstream Considerations
+
+- Any Blender rigs or retarget setups built for SMPL topology will need updating
+  for SMPL-X
+- Texture maps painted for SMPL UV layout will not work on SMPL-X UVs
+- File sizes will increase ~50% (more vertices per frame)
+- If projects need both SMPL and SMPL-X outputs, the config flag
+  (`mocap_hand_estimation`) controls which model is used per-project
+
+---
+
+## Risk Register
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| WiLoR dependency conflicts with gvhmr env | Medium | Medium | Separate conda env if needed |
+| Hand detection fails on small/distant hands | High | Low | Zero-fill (flat hands) — same as current behavior |
+| Frame count mismatch between GVHMR and WiLoR | Low | High | Read frame indices from GVHMR metadata |
+| SMPL-X UVs break existing texture workflows | Medium | Medium | Config flag keeps SMPL as default |
+| WiLoR left/right flip produces wrong hand | Low | High | Validate against video overlay in Phase 2 |
+| GPU OOM running WiLoR after GVHMR | Low | Medium | Sequential execution + memory clearing |
+
+---
+
+## Open Questions
+
+1. **Separate env or shared env?** — WiLoR's dependency footprint needs testing
+   against the gvhmr conda environment. If conflicts exist, a separate `wilor` env
+   adds install complexity but is safer.
+
+2. **SMPL-X by default?** — Once validated, should SMPL-X become the default model
+   (with hand_pose zeros when hand estimation is off)? This would standardize on
+   one topology but increases vertex count even without hand data.
+
+3. **Face expressions?** — SMPL-X also supports jaw_pose and facial expressions.
+   No estimator is wired up for this, but switching to SMPL-X opens the door.
+   Leave as zeros for now.
+
+4. **Multi-person hand association** — When multiple people are tracked, how do we
+   associate WiLoR's detected hands with the correct GVHMR body? Likely need
+   spatial proximity matching (hand bounding box center near GVHMR wrist position).
+
+---
+
+## References
+
+- WiLoR: https://github.com/rolpotamias/WiLoR (CVPR 2025)
+- HaMeR: https://github.com/geopavlakos/hamer (CVPR 2024)
+- Mano2Smpl-X reference impl: https://github.com/VincentHu19/Mano2Smpl-X
+- SMPL-X library: https://github.com/vchoutas/smplx
+- SMPL-X issue #124 (MANO compatibility confirmed): https://github.com/vchoutas/smplx/issues/124
+- SMPL-X issue #222 (no wrist offset needed): https://github.com/vchoutas/smplx/issues/222
+- HaMeR issue #26 (direct SMPL-X compatibility): https://github.com/geopavlakos/hamer/issues/26
