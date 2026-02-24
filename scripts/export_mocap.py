@@ -168,6 +168,13 @@ def convert_gvhmr_to_motion(
         'gender': gender
     }
 
+    hand_poses_path = gvhmr_dir.parent / "hand_poses.npz"
+    if hand_poses_path.exists():
+        hand_data = np.load(hand_poses_path)
+        motion_format['left_hand_pose'] = hand_data['left_hand_pose']
+        motion_format['right_hand_pose'] = hand_data['right_hand_pose']
+        print(f"  → Loaded hand poses from {hand_poses_path.name}")
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, 'wb') as f:
         pickle.dump(motion_format, f)
@@ -250,6 +257,8 @@ def generate_meshes(
             gender=gender,
             num_betas=10,
             batch_size=1,
+            flat_hand_mean=True,
+            use_pca=False,
         ).to(device)
 
         faces = model.faces
@@ -258,6 +267,9 @@ def generate_meshes(
             betas = betas.reshape(1, -1)
         if betas.shape[1] < 10:
             betas = np.pad(betas, ((0, 0), (0, 10 - betas.shape[1])))
+
+        left_hand = motion_data.get('left_hand_pose')
+        right_hand = motion_data.get('right_hand_pose')
 
         meshes = []
 
@@ -276,13 +288,23 @@ def generate_meshes(
             betas_t = torch.tensor(betas[0], dtype=torch.float32, device=device).unsqueeze(0)
             transl_t = torch.tensor(trans[i], dtype=torch.float32, device=device).unsqueeze(0)
 
+            kwargs = {
+                'global_orient': global_orient_t,
+                'body_pose': body_pose_t,
+                'betas': betas_t,
+                'transl': transl_t,
+            }
+            if left_hand is not None:
+                kwargs['left_hand_pose'] = torch.tensor(
+                    left_hand[i], dtype=torch.float32, device=device
+                ).unsqueeze(0)
+            if right_hand is not None:
+                kwargs['right_hand_pose'] = torch.tensor(
+                    right_hand[i], dtype=torch.float32, device=device
+                ).unsqueeze(0)
+
             with torch.no_grad():
-                output = model(
-                    global_orient=global_orient_t,
-                    body_pose=body_pose_t,
-                    betas=betas_t,
-                    transl=transl_t,
-                )
+                output = model(**kwargs)
 
             vertices = output.vertices[0].cpu().numpy()
             meshes.append((vertices, faces))

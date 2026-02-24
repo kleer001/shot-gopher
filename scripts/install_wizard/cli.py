@@ -28,7 +28,7 @@ Examples:
     parser.add_argument(
         "--component", "-C",
         type=str,
-        choices=['core', 'pytorch', 'colmap', 'mocap_core', 'gvhmr', 'econ', 'comfyui'],
+        choices=['core', 'pytorch', 'colmap', 'mocap_core', 'gvhmr', 'wilor', 'econ', 'comfyui'],
         help="Install specific component"
     )
     parser.add_argument(

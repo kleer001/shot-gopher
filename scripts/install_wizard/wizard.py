@@ -15,7 +15,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import COLMAPInstaller, CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VGGSfMInstaller, VideoMaMaInstaller
+from .installers import COLMAPInstaller, CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VGGSfMInstaller, VideoMaMaInstaller, WiLoRInstaller
 from .platform import PlatformManager
 from .state import InstallationStateManager
 from .utils import (
@@ -153,6 +153,15 @@ class InstallationWizard:
                     install_dir=self.install_dir / "GVHMR",
                     size_gb=4.0  # Code + checkpoints (~3.5GB models)
                 )
+            ]
+        }
+
+        # WiLoR-mini (hand pose estimation, installed into gvhmr env)
+        self.components['wilor'] = {
+            'name': 'WiLoR Hand Estimation',
+            'required': False,
+            'installers': [
+                WiLoRInstaller(size_gb=0.5)
             ]
         }
 
@@ -620,7 +629,7 @@ class InstallationWizard:
         elif yolo:
             # YOLO mode: auto-select full stack (option 3)
             print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture + GS-IR)")
-            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'gvhmr', 'wilor', 'blender', 'gsir']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -641,7 +650,7 @@ class InstallationWizard:
                     to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'gvhmr', 'wilor', 'blender', 'gsir']
                     break
                 elif choice == '4':
                     to_install = []

@@ -55,6 +55,9 @@ def sanitize_stages(stages: list[str]) -> list[str]:
     if "dense" in requested:
         requested.add("matchmove_camera")
 
+    if "hands" in requested:
+        requested.add("mocap")
+
     if requested & STAGES_REQUIRING_FRAMES:
         requested.add("ingest")
 

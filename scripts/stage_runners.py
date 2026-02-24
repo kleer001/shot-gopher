@@ -53,6 +53,7 @@ __all__ = [
     "run_stage_matchmove_camera",
     "run_stage_dense",
     "run_stage_mocap",
+    "run_stage_hands",
     "run_stage_gsir",
     "run_stage_camera",
     "STAGE_HANDLERS",
@@ -1164,6 +1165,95 @@ def run_stage_camera(
     return True
 
 
+def _find_conda_exe() -> Optional[str]:
+    """Find conda or mamba executable on PATH.
+
+    Returns:
+        Path to conda/mamba executable, or None if not found
+    """
+    for name in ("conda", "mamba"):
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def run_stage_hands(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run hand pose estimation stage.
+
+    Uses WiLoR-mini to estimate per-frame MANO hand poses from video,
+    then re-exports the mocap mesh with articulated fingers.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: hands ===")
+
+    person_folder = config.mocap_person or "person"
+    mocap_person_dir = ctx.project_dir / "mocap" / person_folder
+    gvhmr_dir = mocap_person_dir / "gvhmr"
+
+    if not gvhmr_dir.exists() or not list(gvhmr_dir.rglob("hmr4d*.pt")):
+        print("  → Skipping (no GVHMR output — run mocap stage first)")
+        return True
+
+    conda_exe = _find_conda_exe()
+    if not conda_exe:
+        print("  Error: Conda not found — required for WiLoR", file=sys.stderr)
+        return False
+
+    hand_poses_path = mocap_person_dir / "hand_poses.npz"
+    export_abc = mocap_person_dir / "export" / "body_motion.abc"
+
+    if ctx.skip_existing and hand_poses_path.exists() and export_abc.exists():
+        print("  → Skipping (hand_poses.npz and body_motion.abc exist)")
+        return True
+
+    if ctx.skip_existing and hand_poses_path.exists():
+        print("  → Skipping hand estimation (hand_poses.npz exists)")
+    else:
+        print(f"  → Target person: {person_folder}")
+        script_path = Path(__file__).parent / "run_hand_estimation.py"
+        cmd = [
+            conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+            "python", str(script_path),
+            str(ctx.project_dir),
+            "--mocap-person", person_folder,
+        ]
+        try:
+            run_command(cmd, "Running hand pose estimation")
+        except subprocess.CalledProcessError:
+            print("  → Hand estimation failed", file=sys.stderr)
+            return False
+
+    print("\n  --- Re-exporting with hand poses ---")
+    export_fps = config.mocap_fps if config.mocap_fps is not None else ctx.fps
+    export_script = Path(__file__).parent / "export_mocap.py"
+    export_cmd = [
+        conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+        "python", str(export_script),
+        str(ctx.project_dir),
+        "--fps", str(export_fps),
+        "--format", "abc,usd",
+        "--mocap-person", person_folder,
+    ]
+    try:
+        run_command(export_cmd, "Re-exporting mocap with hand poses")
+    except subprocess.CalledProcessError:
+        print("  → Re-export failed", file=sys.stderr)
+        return False
+
+    clear_gpu_memory(ctx.comfyui_url)
+    return True
+
+
 STAGE_HANDLERS: dict[str, Callable[["StageContext", "PipelineConfig"], bool]] = {
     "ingest": run_stage_ingest,
     "interactive": run_stage_interactive,
@@ -1174,6 +1264,7 @@ STAGE_HANDLERS: dict[str, Callable[["StageContext", "PipelineConfig"], bool]] = 
     "matchmove_camera": run_stage_matchmove_camera,
     "dense": run_stage_dense,
     "mocap": run_stage_mocap,
+    "hands": run_stage_hands,
     "gsir": run_stage_gsir,
     "camera": run_stage_camera,
 }

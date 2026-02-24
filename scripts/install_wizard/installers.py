@@ -703,6 +703,99 @@ class GVHMRInstaller(ComponentInstaller):
             print_info("Patched demo.py: --f_mm now accepts float values")
 
 
+class WiLoRInstaller(ComponentInstaller):
+    """Installer for WiLoR-mini hand pose estimation.
+
+    WiLoR-mini is installed as a pip package into the existing gvhmr conda
+    environment. Model weights (~25MB) auto-download from HuggingFace on
+    first use.
+
+    Requires the gvhmr conda environment to already exist (install GVHMR first).
+
+    See: https://github.com/warmshao/WiLoR-mini
+    """
+
+    PACKAGE_URL = "git+https://github.com/warmshao/WiLoR-mini"
+
+    def __init__(self, size_gb: float = 0.5):
+        super().__init__("WiLoR-mini", size_gb)
+        self.env_name = "gvhmr"
+
+    def _find_conda(self) -> Optional[str]:
+        import os
+        for cmd in ["conda", "mamba"]:
+            if shutil.which(cmd):
+                return cmd
+        conda_exe = os.environ.get("CONDA_EXE")
+        if conda_exe and Path(conda_exe).exists():
+            return str(conda_exe)
+        return None
+
+    def check(self) -> bool:
+        """Check if wilor_mini is importable in the gvhmr env."""
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            self.installed = False
+            return False
+
+        success, _ = run_command([
+            conda_exe, "run", "-n", self.env_name, "--no-capture-output",
+            "python", "-c",
+            "from wilor_mini.pipelines.wilor_hand_pose3d_estimation_pipeline "
+            "import WiLorHandPose3dEstimationPipeline",
+        ], check=False, capture=True)
+        self.installed = success
+        return self.installed
+
+    EXTRA_DEPS = ["ultralytics==8.1.34", "roma"]
+
+    def install(self) -> bool:
+        """Install WiLoR-mini into the gvhmr conda environment.
+
+        Uses --no-deps to avoid re-cloning chumpy (already in gvhmr env),
+        then installs the few additional dependencies separately.
+        """
+        print("\nInstalling WiLoR-mini (hand pose estimation)...")
+
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            print_error("Conda not found - required for WiLoR installation")
+            return False
+
+        success, output = run_command(
+            [conda_exe, "env", "list"], check=False, capture=True
+        )
+        if not (success and self.env_name in output):
+            print_error(
+                f"Conda environment '{self.env_name}' not found - install GVHMR first"
+            )
+            return False
+
+        print(f"  Installing WiLoR-mini into '{self.env_name}' conda environment...")
+        success, _ = run_command([
+            conda_exe, "run", "-n", self.env_name, "--no-capture-output",
+            "pip", "install", "--no-deps", self.PACKAGE_URL,
+        ])
+
+        if not success:
+            print_error("Failed to install WiLoR-mini")
+            return False
+
+        print("  Installing additional dependencies...")
+        success, _ = run_command([
+            conda_exe, "run", "-n", self.env_name, "--no-capture-output",
+            "pip", "install", *self.EXTRA_DEPS,
+        ])
+
+        if not success:
+            print_warning("Some WiLoR dependencies may have failed to install")
+
+        self.installed = True
+        print_success("WiLoR-mini installed")
+        print_info("Model weights (~25MB) will auto-download on first use")
+        return True
+
+
 class VideoMaMaInstaller(ComponentInstaller):
     """Installer for VideoMaMa (diffusion-based video matting).
 
