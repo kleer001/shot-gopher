@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from env_config import INSTALL_DIR
+from env_config import INSTALL_DIR, UNDERPRESSURE_INSTALL_DIR
 
 from .utils import check_python_package, print_error, print_info, print_success, print_warning, run_command
 
@@ -1039,6 +1039,224 @@ class VGGSfMInstaller(ComponentInstaller):
         return True
 
 
+class SLAHMRInstaller(ComponentInstaller):
+    """Installer for SLAHMR (joint camera+body optimization).
+
+    SLAHMR requires:
+    - Separate conda environment (slahmr) with Python 3.10
+    - PyTorch 2.0.1+cu118 (CUDA 11.8 specifically)
+    - CUDA 11.8 toolkit + GCC 11 (for DROID-SLAM, detectron2)
+    - PHALP (--no-deps to avoid torch upgrade)
+    - detectron2 built from source
+    - DROID-SLAM extension modules
+    - Model checkpoints (~4.5GB via download_models.sh)
+
+    Total: ~8GB disk, ~30 min install time.
+
+    See: https://github.com/vye16/slahmr
+    """
+
+    REPO_URL = "https://github.com/vye16/slahmr.git"
+
+    def __init__(self, install_dir: Path = None, size_gb: float = 8.0):
+        super().__init__("SLAHMR", size_gb)
+        self.install_dir = install_dir or INSTALL_DIR / "tools" / "slahmr"
+        self.env_name = "slahmr"
+
+    def check(self) -> bool:
+        """Check if SLAHMR repo and conda environment exist."""
+        repo_exists = self.install_dir.exists() and (self.install_dir / "slahmr" / "run_opt.py").exists()
+
+        conda_exe = self._find_conda()
+        env_exists = False
+        if conda_exe:
+            success, output = run_command(
+                [conda_exe, "env", "list"], check=False, capture=True
+            )
+            env_exists = success and self.env_name in output
+
+        self.installed = repo_exists and env_exists
+        return self.installed
+
+    def _find_conda(self) -> Optional[str]:
+        import os
+        for cmd in ["conda", "mamba"]:
+            if shutil.which(cmd):
+                return cmd
+        conda_exe = os.environ.get("CONDA_EXE")
+        if conda_exe and Path(conda_exe).exists():
+            return str(conda_exe)
+        return None
+
+    def _run_in_env(self, cmd: list, cwd: str = None) -> bool:
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            print_error("Conda not found")
+            return False
+        full_cmd = [conda_exe, "run", "-n", self.env_name, "--no-capture-output"] + cmd
+        success, _ = run_command(full_cmd, check=False, cwd=cwd)
+        return success
+
+    def _conda_install(self, packages: list, channels: list = None) -> bool:
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            return False
+        cmd = [conda_exe, "install", "-n", self.env_name, "-y"]
+        for ch in (channels or []):
+            cmd.extend(["-c", ch])
+        cmd.extend(packages)
+        success, _ = run_command(cmd, check=False)
+        return success
+
+    def install(self) -> bool:
+        """Install SLAHMR in a dedicated conda environment."""
+        print(f"\nInstalling SLAHMR (joint camera+body optimization)...")
+        print_info("This will create conda env 'slahmr' with Python 3.10, CUDA 11.8")
+        print_info("Installation takes ~30 minutes and ~8GB disk space")
+
+        conda_exe = self._find_conda()
+        if not conda_exe:
+            print_error("Conda not found — required for SLAHMR installation")
+            return False
+
+        success, output = run_command([conda_exe, "env", "list"], check=False, capture=True)
+        if success and self.env_name in output:
+            print_info(f"Conda environment '{self.env_name}' already exists")
+        else:
+            print(f"  Creating conda environment '{self.env_name}' with Python 3.10...")
+            success, _ = run_command([
+                conda_exe, "create", "-y", "-n", self.env_name, "python=3.10",
+            ])
+            if not success:
+                print_error(f"Failed to create conda environment '{self.env_name}'")
+                return False
+            print_success(f"Created conda environment '{self.env_name}'")
+
+        self.install_dir.parent.mkdir(parents=True, exist_ok=True)
+        if self.install_dir.exists() and (self.install_dir / ".git").exists():
+            print_info("SLAHMR repository already cloned, updating...")
+            run_command(["git", "-C", str(self.install_dir), "pull"], check=False)
+            run_command([
+                "git", "-C", str(self.install_dir), "submodule", "update", "--init", "--recursive",
+            ], check=False)
+        else:
+            print("  Cloning SLAHMR repository (with submodules)...")
+            if self.install_dir.exists():
+                shutil.rmtree(self.install_dir)
+            success, _ = run_command([
+                "git", "clone", "--recursive", self.REPO_URL, str(self.install_dir),
+            ])
+            if not success:
+                print_error("Failed to clone SLAHMR repository")
+                return False
+            print_success("SLAHMR repository cloned")
+
+        print("  Installing PyTorch 2.0.1+cu118...")
+        self._run_in_env([
+            "pip", "install",
+            "torch==2.0.1+cu118", "torchvision==0.15.2+cu118",
+            "--index-url", "https://download.pytorch.org/whl/cu118",
+        ])
+
+        print("  Installing CUDA 11.8 toolkit and GCC 11 (conda)...")
+        self._conda_install(
+            ["cuda-libraries-dev", "cuda-nvcc", "cuda-nvtx", "cuda-cupti"],
+            channels=["nvidia/label/cuda-11.8.0"],
+        )
+        self._conda_install(
+            ["gcc_linux-64=11", "gxx_linux-64=11"],
+            channels=["conda-forge"],
+        )
+
+        print("  Installing numpy<2 (lietorch compatibility)...")
+        self._run_in_env(["pip", "install", "numpy<2"])
+
+        print("  Installing core dependencies...")
+        self._run_in_env([
+            "pip", "install",
+            "hydra-core", "omegaconf", "opencv-python", "einops",
+            "joblib", "scikit-learn", "smplx", "trimesh", "chumpy",
+            "tqdm", "scipy", "gdown",
+        ])
+
+        print("  Installing PHALP (--no-deps to preserve torch version)...")
+        self._run_in_env(["pip", "install", "--no-deps", "phalp[all]"])
+        self._run_in_env([
+            "pip", "install",
+            "scenedetect", "pyrender", "iopath", "av", "timm",
+            "detectron2@https://dl.fbaipublicfiles.com/detectron2/wheels/cu118/torch2.0/detectron2-0.6%2Bcu118-cp310-cp310-linux_x86_64.whl",
+        ])
+
+        print("  Reinstalling PyTorch 2.0.1+cu118 (may have been overwritten)...")
+        self._run_in_env([
+            "pip", "install",
+            "torch==2.0.1+cu118", "torchvision==0.15.2+cu118",
+            "--index-url", "https://download.pytorch.org/whl/cu118",
+        ])
+
+        print("  Building DROID-SLAM extensions...")
+        droid_dir = self.install_dir / "third-party" / "DROID-SLAM"
+        if droid_dir.exists():
+            self._run_in_env(
+                [
+                    "bash", "-c",
+                    "CUDA_HOME=$CONDA_PREFIX "
+                    "CC=x86_64-conda-linux-gnu-gcc "
+                    "CXX=x86_64-conda-linux-gnu-g++ "
+                    "pip install -e .",
+                ],
+                cwd=str(droid_dir),
+            )
+
+        print("  Installing HMR2 (4DHumans)...")
+        hmr2_dir = self.install_dir / "third-party" / "hmr2"
+        if hmr2_dir.exists():
+            self._run_in_env(["pip", "install", "-e", "."], cwd=str(hmr2_dir))
+            self._run_in_env([
+                "pip", "install",
+                "torch==2.0.1+cu118", "torchvision==0.15.2+cu118",
+                "--index-url", "https://download.pytorch.org/whl/cu118",
+            ])
+
+        print("  Installing SLAHMR package...")
+        self._run_in_env(["pip", "install", "-e", "."], cwd=str(self.install_dir))
+
+        print("  Downloading model checkpoints (~4.5GB)...")
+        download_script = self.install_dir / "download_models.sh"
+        if download_script.exists():
+            self._run_in_env(
+                ["bash", str(download_script)],
+                cwd=str(self.install_dir),
+            )
+
+        self._copy_smpl_models()
+
+        self.installed = True
+        print_success(f"SLAHMR installed to {self.install_dir}")
+        print_info(f"Conda environment: {self.env_name}")
+        return True
+
+    def _copy_smpl_models(self) -> None:
+        """Copy SMPL model files to locations expected by PHALP and HMR2."""
+        smpl_source = INSTALL_DIR / "GVHMR" / "inputs" / "checkpoints" / "body_models" / "smpl"
+        smpl_neutral = smpl_source / "SMPL_NEUTRAL.pkl"
+
+        if not smpl_neutral.exists():
+            print_warning("SMPL_NEUTRAL.pkl not found — SLAHMR may fail on first run")
+            print_info(f"Expected at: {smpl_neutral}")
+            return
+
+        phalp_dest = Path.home() / ".cache" / "phalp" / "3D" / "models" / "smpl"
+        hmr2_dest = Path.home() / ".cache" / "4DHumans" / "data" / "smpl"
+
+        for dest in [phalp_dest, hmr2_dest]:
+            dest.mkdir(parents=True, exist_ok=True)
+            target = dest / "SMPL_NEUTRAL.pkl"
+            if not target.exists():
+                shutil.copy2(smpl_neutral, target)
+                print_info(f"Copied SMPL_NEUTRAL.pkl to {dest}")
+
+
 class COLMAPInstaller(ComponentInstaller):
     """Installer for COLMAP in a dedicated conda environment.
 
@@ -1154,3 +1372,57 @@ class COLMAPInstaller(ComponentInstaller):
             print_warning("Try manually: conda create -n colmap -c conda-forge colmap")
 
         return success
+
+
+class UnderPressureInstaller(ComponentInstaller):
+    """Installer for UnderPressure foot contact detection.
+
+    UnderPressure is a neural network that predicts per-frame foot contact
+    labels from joint positions. Only the pretrained model and inference
+    code are needed — no extra dependencies beyond PyTorch (already in
+    the gvhmr conda environment).
+
+    See: https://github.com/InterDigitalInc/UnderPressure
+    """
+
+    REPO_URL = "https://github.com/InterDigitalInc/UnderPressure.git"
+
+    def __init__(self, size_gb: float = 0.1):
+        super().__init__("UnderPressure", size_gb)
+        self.install_dir = UNDERPRESSURE_INSTALL_DIR
+
+    def check(self) -> bool:
+        """Check if repo is cloned and pretrained model exists."""
+        repo_exists = self.install_dir.exists() and (self.install_dir / ".git").exists()
+        model_exists = (self.install_dir / "pretrained.tar").exists()
+        self.installed = repo_exists and model_exists
+        return self.installed
+
+    def install(self) -> bool:
+        """Clone the UnderPressure repository."""
+        print("\nInstalling UnderPressure (foot contact detection)...")
+
+        self.install_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        if self.install_dir.exists() and (self.install_dir / ".git").exists():
+            print_info("UnderPressure repository already cloned, updating...")
+            run_command(["git", "-C", str(self.install_dir), "pull"], check=False)
+        else:
+            print(f"  Cloning UnderPressure repository...")
+            if self.install_dir.exists():
+                shutil.rmtree(self.install_dir)
+            success, _ = run_command([
+                "git", "clone", self.REPO_URL, str(self.install_dir),
+            ])
+            if not success:
+                print_error("Failed to clone UnderPressure repository")
+                return False
+
+        if not (self.install_dir / "pretrained.tar").exists():
+            print_error("pretrained.tar not found in repository")
+            print_warning("Download manually from the UnderPressure releases")
+            return False
+
+        self.installed = True
+        print_success(f"UnderPressure installed to {self.install_dir}")
+        return True

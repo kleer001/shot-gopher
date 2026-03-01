@@ -190,7 +190,6 @@ def update_workflow_resolution(
     height: int,
     update_loaders: bool = True,
     update_scales: bool = True,
-    **kwargs,
 ) -> None:
     """Update resolution-dependent nodes in a ComfyUI workflow.
 
@@ -203,12 +202,6 @@ def update_workflow_resolution(
         update_loaders: Update VHS_LoadImagesPath force_size values
         update_scales: Update ImageScale width/height values
     """
-    if "update_propainter" in kwargs:  # BREADCRUMB: guard against old API
-        raise RuntimeError(
-            "BREADCRUMB: update_propainter was passed to update_workflow_resolution() "
-            f"— caller still using old API. kwargs={kwargs}"
-        )
-
     if width <= 0 or height <= 0:
         print("  → Warning: Invalid resolution, skipping workflow update")
         return

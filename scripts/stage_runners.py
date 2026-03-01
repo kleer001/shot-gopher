@@ -42,6 +42,7 @@ __all__ = [
     "run_vggsfm",
     "export_camera_to_vfx_formats",
     "run_mocap",
+    "run_slahmr",
     "run_gsir_materials",
     "setup_project",
     "run_stage_ingest",
@@ -54,6 +55,7 @@ __all__ = [
     "run_stage_dense",
     "run_stage_mocap",
     "run_stage_hands",
+    "run_stage_foot_contact",
     "run_stage_gsir",
     "run_stage_camera",
     "STAGE_HANDLERS",
@@ -62,7 +64,7 @@ __all__ = [
 
 def run_export_camera(
     project_dir: Path,
-    fps: float = 24.0,
+    fps: int = 24,
     camera_dir: Optional[Path] = None,
 ) -> bool:
     """Run camera export script.
@@ -176,7 +178,7 @@ def run_vggsfm(
 def export_camera_to_vfx_formats(
     project_dir: Path,
     start_frame: int = 1,
-    fps: float = 24.0,
+    fps: int = 24,
 ) -> bool:
     """Export camera data to VFX-friendly formats.
 
@@ -282,6 +284,55 @@ def run_mocap(
 
     try:
         run_command(cmd, "Running motion capture")
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def run_slahmr(
+    project_dir: Path,
+    gender: str = "neutral",
+    fps: Optional[float] = None,
+    start_frame: Optional[int] = None,
+    end_frame: Optional[int] = None,
+    mocap_person: Optional[str] = None,
+) -> bool:
+    """Run SLAHMR motion capture.
+
+    Args:
+        project_dir: Project directory with frames
+        gender: Body model gender (neutral, male, female)
+        fps: Frames per second
+        start_frame: Start frame (1-indexed, inclusive)
+        end_frame: End frame (1-indexed, inclusive)
+        mocap_person: Person folder name
+
+    Returns:
+        True if mocap succeeded
+    """
+    script_path = Path(__file__).parent / "run_slahmr.py"
+
+    if not script_path.exists():
+        print("    Error: run_slahmr.py not found", file=sys.stderr)
+        return False
+
+    cmd = [
+        sys.executable, str(script_path),
+        str(project_dir),
+        "--gender", gender,
+    ]
+
+    if fps is not None:
+        cmd.extend(["--fps", str(fps)])
+    if start_frame is not None:
+        cmd.extend(["--start-frame", str(start_frame)])
+    if end_frame is not None:
+        cmd.extend(["--end-frame", str(end_frame)])
+    if mocap_person is not None:
+        cmd.extend(["--mocap-person", mocap_person])
+
+    try:
+        run_command(cmd, "Running SLAHMR motion capture")
         return True
     except subprocess.CalledProcessError:
         return False
@@ -786,7 +837,7 @@ def run_stage_cleanplate(
     Returns:
         True if successful
     """
-    print("\n=== Stage: cleanplate (median-only) ===")
+    print("\n=== Stage: cleanplate ===")
     cleanplate_dir = ctx.project_dir / "cleanplate"
     roto_dir = ctx.project_dir / "roto"
 
@@ -824,7 +875,7 @@ def run_stage_matchmove_camera(
     ctx: "StageContext",
     config: "PipelineConfig",
 ) -> bool:
-    """Run SfM reconstruction stage (COLMAP or VGGSfM).
+    """Run SfM reconstruction stage (VGGSfM).
 
     Args:
         ctx: Stage execution context
@@ -835,31 +886,31 @@ def run_stage_matchmove_camera(
     """
     print("\n=== Stage: matchmove_camera ===")
     mmcam_sparse = ctx.project_dir / "mmcam" / "sparse" / "0"
-    assert "colmap" not in str(mmcam_sparse), f"BREADCRUMB: path still contains 'colmap': {mmcam_sparse}"
 
     if ctx.skip_existing and mmcam_sparse.exists():
         print("  → Skipping (sparse model exists)")
     else:
-        if config.mmcam_engine == "vggsfm":
-            print(f"  → Engine: VGGSfM")
-            if not run_vggsfm(
-                ctx.project_dir,
-                max_image_size=config.mmcam_max_size,
-            ):
-                print("  → VGGSfM reconstruction failed", file=sys.stderr)
-        else:
-            print(f"  → Engine: COLMAP")
-            if not run_matchmove_camera(
-                ctx.project_dir,
-                quality=config.mmcam_quality,
-                use_masks=config.mmcam_use_masks,
-                max_image_size=config.mmcam_max_size,
-            ):
-                print("  → COLMAP reconstruction failed", file=sys.stderr)
+        print(f"  → Engine: VGGSfM")
+        if not run_vggsfm(
+            ctx.project_dir,
+            max_image_size=config.mmcam_max_size,
+        ):
+            print("  → VGGSfM reconstruction failed", file=sys.stderr)
 
     clear_gpu_memory(ctx.comfyui_url)
 
     run_stage_camera(ctx, config)
+
+    sparse_model = ctx.project_dir / "mmcam" / "sparse" / "0"
+    if sparse_model.exists():
+        geometry_dir = ctx.project_dir / "geometry"
+        geometry_dir.mkdir(parents=True, exist_ok=True)
+        sparse_ply = geometry_dir / "sparse_pointcloud.ply"
+        if not (ctx.skip_existing and sparse_ply.exists()):
+            from run_matchmove_camera import export_sparse_ply
+
+            if export_sparse_ply(sparse_model, sparse_ply):
+                print(f"  → Sparse point cloud: {sparse_ply.name}")
 
     return True
 
@@ -979,7 +1030,7 @@ def run_stage_dense(
     return True
 
 
-def _export_geometry_to_interchange(geometry_dir: Path, fps: float) -> None:
+def _export_geometry_to_interchange(geometry_dir: Path, fps: int) -> None:
     """Export PLY geometry files to ABC and USD via Blender (if available).
 
     Args:
@@ -1039,6 +1090,8 @@ def run_stage_mocap(
 ) -> bool:
     """Run motion capture stage.
 
+    Dispatches to SLAHMR (default) or GVHMR based on config.mocap_engine.
+
     Args:
         ctx: Stage execution context
         config: Pipeline configuration
@@ -1047,15 +1100,80 @@ def run_stage_mocap(
         True if successful
     """
     print("\n=== Stage: mocap ===")
-    mocap_output = ctx.project_dir / "mocap" / "motion.pkl"
-    camera_dir = ctx.project_dir / "camera"
-    has_camera = camera_dir.exists() and (camera_dir / "extrinsics.json").exists()
 
+    person_folder = config.mocap_person or "person"
+    mocap_person_dir = ctx.project_dir / "mocap" / person_folder
+    mocap_output = mocap_person_dir / "motion.pkl"
+    mocap_camera_dir = ctx.project_dir / "mocap_camera"
+    export_dir = mocap_person_dir / "export"
     export_fps = config.mocap_fps if config.mocap_fps is not None else ctx.fps
+    mmcam_camera_dir = ctx.project_dir / "camera"
+    mmcam_output_dir = ctx.project_dir / "mocap_and_mmcam"
+    has_mmcam = (mmcam_camera_dir / "extrinsics.json").exists()
 
-    if ctx.skip_existing and mocap_output.exists():
-        print("  → Skipping (mocap data exists)")
+    mocap_complete = (
+        mocap_output.exists()
+        and (config.mocap_no_export or (
+            export_dir.exists()
+            and list(export_dir.glob("*.abc"))
+            and list(export_dir.glob("*.usd"))
+        ))
+        and (
+            not (mocap_camera_dir / "extrinsics.json").exists()
+            or (mocap_camera_dir / "camera.abc").exists()
+            or (mocap_camera_dir / "camera.usd").exists()
+        )
+        and (
+            not has_mmcam
+            or (mmcam_output_dir / "scene.abc").exists()
+            or (mmcam_output_dir / "scene.usd").exists()
+        )
+    )
+
+    if mocap_complete:
+        print("  → Skipping (mocap outputs exist)")
+        return True
+
+    if config.mocap_engine == "slahmr":
+        print(f"  → Engine: SLAHMR (joint camera+body optimization)")
+        print(f"  → Gender: {config.mocap_gender}")
+        if config.mocap_start_frame or config.mocap_end_frame:
+            range_str = f"{config.mocap_start_frame or 1}-{config.mocap_end_frame or 'end'}"
+            print(f"  → Frame range: {range_str}")
+        if not run_slahmr(
+            ctx.project_dir,
+            gender=config.mocap_gender,
+            fps=export_fps,
+            start_frame=config.mocap_start_frame,
+            end_frame=config.mocap_end_frame,
+            mocap_person=config.mocap_person,
+        ):
+            print("  → SLAHMR motion capture failed", file=sys.stderr)
+        elif not config.mocap_no_export and mocap_output.exists():
+            print(f"\n  → Exporting body motion to Alembic/USD at {export_fps} fps...")
+            conda_exe = _find_conda_exe()
+            if not conda_exe:
+                print("  Error: Conda not found — required for body export", file=sys.stderr)
+            else:
+                export_script = Path(__file__).parent / "export_mocap.py"
+                export_cmd = [
+                    conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+                    "python", str(export_script),
+                    str(ctx.project_dir),
+                    "--fps", str(export_fps),
+                    "--format", "abc,usd",
+                    "--mocap-person", person_folder,
+                ]
+                try:
+                    run_command(export_cmd, "Exporting body motion")
+                except subprocess.CalledProcessError:
+                    print("  → Body motion export failed", file=sys.stderr)
     else:
+        print(f"  → Engine: GVHMR (deprecated — use --mocap-engine=slahmr)")
+        print(f"  ⚠ Warning: GVHMR is deprecated and will be removed in a future version.",
+              file=sys.stderr)
+        camera_dir = ctx.project_dir / "camera"
+        has_camera = camera_dir.exists() and (camera_dir / "extrinsics.json").exists()
         if has_camera:
             print(f"  → Using matchmove camera data for improved accuracy")
         print(f"  → Gender: {config.mocap_gender}")
@@ -1078,10 +1196,32 @@ def run_stage_mocap(
         ):
             print("  → Motion capture failed", file=sys.stderr)
 
-    mocap_camera_dir = ctx.project_dir / "mocap_camera"
     if (mocap_camera_dir / "extrinsics.json").exists():
-        print("\n  → Exporting GVHMR camera to Alembic/USD...")
+        print("\n  → Exporting mocap camera to Alembic/USD...")
         run_export_camera(ctx.project_dir, ctx.fps, camera_dir=mocap_camera_dir)
+
+    slahmr_npz = mocap_person_dir / "slahmr" / "slahmr_stitched.npz"
+    if mocap_output.exists() and slahmr_npz.exists() and has_mmcam:
+        print("\n  → Aligning mocap body to matchmove camera...")
+        conda_exe = _find_conda_exe()
+        if not conda_exe:
+            print("  Error: Conda not found — required for alignment", file=sys.stderr)
+        else:
+            align_script = Path(__file__).parent / "align_mocap_to_mmcam.py"
+            align_cmd = [
+                conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+                "python", str(align_script),
+                str(ctx.project_dir),
+                "--fps", str(export_fps),
+                "--mocap-person", person_folder,
+                "--format", "abc,usd",
+            ]
+            try:
+                run_command(align_cmd, "Aligning mocap to matchmove camera")
+            except subprocess.CalledProcessError:
+                print("  → Mocap-to-matchmove alignment failed", file=sys.stderr)
+    elif has_mmcam and not slahmr_npz.exists():
+        print("\n  → Skipping alignment (SLAHMR output required, GVHMR not supported)")
 
     clear_gpu_memory(ctx.comfyui_url)
     return True
@@ -1131,8 +1271,8 @@ def run_stage_camera(
     """Run camera export stage.
 
     Checks for camera data in order:
-    1. camera/ (COLMAP)
-    2. mocap_camera/ (GVHMR estimate)
+    1. camera/ (matchmove SfM)
+    2. mocap_camera/ (SLAHMR/GVHMR estimate)
 
     Args:
         ctx: Stage execution context
@@ -1150,7 +1290,7 @@ def run_stage_camera(
         print("  → Using matchmove camera data")
     elif (mocap_camera_dir / "extrinsics.json").exists():
         camera_dir = mocap_camera_dir
-        print("  → Using GVHMR camera estimate")
+        print("  → Using mocap camera estimate")
     else:
         print("  → Skipping (no camera data - run matchmove_camera or mocap stage first)")
         return True
@@ -1199,9 +1339,13 @@ def run_stage_hands(
     person_folder = config.mocap_person or "person"
     mocap_person_dir = ctx.project_dir / "mocap" / person_folder
     gvhmr_dir = mocap_person_dir / "gvhmr"
+    motion_pkl = mocap_person_dir / "motion.pkl"
 
-    if not gvhmr_dir.exists() or not list(gvhmr_dir.rglob("hmr4d*.pt")):
-        print("  → Skipping (no GVHMR output — run mocap stage first)")
+    has_gvhmr = gvhmr_dir.exists() and list(gvhmr_dir.rglob("hmr4d*.pt"))
+    has_motion_pkl = motion_pkl.exists()
+
+    if not has_gvhmr and not has_motion_pkl:
+        print("  → Skipping (no mocap output — run mocap stage first)")
         return True
 
     conda_exe = _find_conda_exe()
@@ -1236,6 +1380,85 @@ def run_stage_hands(
     print("\n  --- Re-exporting with hand poses ---")
     export_fps = config.mocap_fps if config.mocap_fps is not None else ctx.fps
     export_script = Path(__file__).parent / "export_mocap.py"
+    export_cmd_args = [
+        "python", str(export_script),
+        str(ctx.project_dir),
+        "--fps", str(export_fps),
+        "--format", "abc,usd",
+        "--mocap-person", person_folder,
+    ]
+    export_cmd = [
+        conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+    ] + export_cmd_args
+    try:
+        run_command(export_cmd, "Re-exporting mocap with hand poses")
+    except subprocess.CalledProcessError:
+        print("  → Re-export failed", file=sys.stderr)
+        return False
+
+    clear_gpu_memory(ctx.comfyui_url)
+    return True
+
+
+def run_stage_foot_contact(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run foot contact detection and footskate cleanup stage.
+
+    Uses UnderPressure to detect per-frame foot contacts, then applies
+    IK foot planting to reduce footskate. Re-exports mocap afterwards.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: foot_contact ===")
+
+    person_folder = config.mocap_person or "person"
+    mocap_person_dir = ctx.project_dir / "mocap" / person_folder
+    motion_pkl = mocap_person_dir / "motion.pkl"
+    foot_contacts_path = mocap_person_dir / "foot_contacts.npz"
+    export_abc = mocap_person_dir / "export" / "body_motion.abc"
+
+    if not motion_pkl.exists():
+        print("  → Skipping (no motion.pkl — run mocap stage first)")
+        return True
+
+    conda_exe = _find_conda_exe()
+    if not conda_exe:
+        print("  Error: Conda not found — required for foot contact", file=sys.stderr)
+        return False
+
+    if ctx.skip_existing and foot_contacts_path.exists() and export_abc.exists():
+        print("  → Skipping (foot_contacts.npz and body_motion.abc exist)")
+        return True
+
+    if ctx.skip_existing and foot_contacts_path.exists():
+        print("  → Skipping contact detection (foot_contacts.npz exists)")
+    else:
+        print(f"  → Target person: {person_folder}")
+        export_fps = config.mocap_fps if config.mocap_fps is not None else ctx.fps
+        script_path = Path(__file__).parent / "run_foot_contact.py"
+        cmd = [
+            conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+            "python", str(script_path),
+            str(ctx.project_dir),
+            "--mocap-person", person_folder,
+            "--fps", str(export_fps),
+        ]
+        try:
+            run_command(cmd, "Running foot contact detection")
+        except subprocess.CalledProcessError:
+            print("  → Foot contact detection failed", file=sys.stderr)
+            return False
+
+    print("\n  --- Re-exporting with foot cleanup ---")
+    export_fps = config.mocap_fps if config.mocap_fps is not None else ctx.fps
+    export_script = Path(__file__).parent / "export_mocap.py"
     export_cmd = [
         conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
         "python", str(export_script),
@@ -1243,9 +1466,10 @@ def run_stage_hands(
         "--fps", str(export_fps),
         "--format", "abc,usd",
         "--mocap-person", person_folder,
+        "--no-convert",
     ]
     try:
-        run_command(export_cmd, "Re-exporting mocap with hand poses")
+        run_command(export_cmd, "Re-exporting mocap with foot cleanup")
     except subprocess.CalledProcessError:
         print("  → Re-export failed", file=sys.stderr)
         return False
@@ -1265,6 +1489,7 @@ STAGE_HANDLERS: dict[str, Callable[["StageContext", "PipelineConfig"], bool]] = 
     "dense": run_stage_dense,
     "mocap": run_stage_mocap,
     "hands": run_stage_hands,
+    "foot_contact": run_stage_foot_contact,
     "gsir": run_stage_gsir,
     "camera": run_stage_camera,
 }

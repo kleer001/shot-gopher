@@ -18,8 +18,10 @@ Detailed documentation for each processing stage.
 | [roto](#roto) | Roto masks | 4 GB | Frames → Masks |
 | [mama](#mama) | Matte refinement | 12 GB | Roto masks → Alpha mattes |
 | [cleanplate](#cleanplate) | Clean plate (static camera) | ~2 GB | Frames + masks → Clean plates |
-| [matchmove_camera](#matchmove_camera) | Camera tracking | 2-4 GB | Frames → 3D reconstruction |
-| [mocap](#mocap) | Motion capture | 12 GB | Frames + camera → Pose + mesh |
+| [matchmove_camera](#matchmove_camera) | Camera tracking (VGGSfM) | 2-4 GB | Frames → 3D reconstruction |
+| [mocap](#mocap) | Motion capture (SLAHMR) | 12 GB | Frames → Pose + mesh + camera |
+| [hands](#hands) | Hand pose estimation (WiLoR) | ~4 GB | Mocap + video → Hand poses |
+| [foot_contact](#foot_contact) | Foot contact cleanup (UnderPressure) | ~2 GB | Mocap → Foot-planted motion |
 | [gsir](#gsir) | PBR materials | 8 GB | COLMAP → Albedo, roughness, metallic |
 
 ---
@@ -259,14 +261,14 @@ python scripts/run_pipeline.py footage.mp4 -s roto,cleanplate
 
 ## matchmove_camera
 
-Structure-from-Motion camera tracking and 3D reconstruction.
+Structure-from-Motion camera tracking using VGGSfM.
 
 | | |
 |---|---|
 | **VRAM** | ~2-4 GB |
 | **Input** | `source/frames/*.png`, optionally `roto/*.png` |
 | **Output** | `mmcam/sparse/0/`, `camera/*.abc`, `.chan`, `.csv`, `.jsx`, `.clip` |
-| **Workflow** | None (COLMAP or VGGSfM) |
+| **Workflow** | None (VGGSfM) |
 
 **Automatic camera export:** After reconstruction completes, camera data is automatically exported to VFX formats:
 
@@ -279,106 +281,90 @@ Structure-from-Motion camera tracking and 3D reconstruction.
 | `.csv` | Any | Spreadsheet-compatible |
 
 **📖 Tutorials:**
-- [COLMAP Documentation](https://colmap.github.io/tutorial.html) — Official tutorial and parameter reference
-- [COLMAP SfM Workflow (YouTube)](https://www.youtube.com/watch?v=P-EC0DzeVEU) — Visual walkthrough of the reconstruction process
-- [Understanding SfM for VFX](https://www.fxguide.com/fxfeatured/the-art-of-photogrammetry-introduction-to-structure-from-motion/) — FXGuide's photogrammetry guide
 - [VGGSfM GitHub](https://github.com/facebookresearch/vggsfm) — VGGSfM v2 repository
+- [Understanding SfM for VFX](https://www.fxguide.com/fxfeatured/the-art-of-photogrammetry-introduction-to-structure-from-motion/) — FXGuide's photogrammetry guide
 
-### SfM Engine Selection
+VGGSfM is a learned SfM pipeline that handles handheld tracking, narrow-baseline sequences, and large dynamic foreground well. It uses PINHOLE camera model (no distortion estimation).
 
-Two SfM engines are available via `--mmcam-engine`:
-
-| Engine | Flag | Best For |
-|--------|------|----------|
-| **COLMAP** (default) | `--mmcam-engine colmap` | Orbital shots, wide baseline, distorted lenses |
-| **VGGSfM** | `--mmcam-engine vggsfm` | Handheld tracking, narrow baseline, large dynamic foreground |
-
-**When to use VGGSfM:**
-- Handheld walking shots where COLMAP drops frame registration
-- Shots with 30%+ of the frame occupied by moving subjects (with masks)
-- Narrow-baseline sequences with forward/backward camera motion
-- COLMAP fails or registers <70% of frames
-
-**VGGSfM limitations:**
-- PINHOLE camera model only (no distortion estimation) — use COLMAP for distorted lenses
+**VGGSfM details:**
 - Non-commercial license (CC BY-NC 4.0)
 - Requires separate conda environment and ~200MB model weights (auto-downloaded)
 - Long sequences are auto-subsampled (every Nth frame) to fit in VRAM; missing cameras are interpolated
 
 ```bash
-# COLMAP (default)
-python scripts/run_pipeline.py footage.mp4 -s matchmove_camera -q high
+# Default
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera
 
-# VGGSfM (learned features)
-python scripts/run_pipeline.py footage.mp4 -s matchmove_camera --mmcam-engine vggsfm
-
-# VGGSfM with downscaling for faster processing
-python scripts/run_pipeline.py footage.mp4 -s matchmove_camera --mmcam-engine vggsfm --mmcam-max-size 1500
+# With downscaling for faster processing
+python scripts/run_pipeline.py footage.mp4 -s matchmove_camera --mmcam-max-size 1500
 ```
 
 ### Options
 
 | Flag | Description |
 |------|-------------|
-| `--mmcam-engine` | SfM engine: `colmap` (default) or `vggsfm` |
-| `-q low` | Fast preview (COLMAP only) |
-| `-q medium` | Default quality (COLMAP only) |
-| `-q high` | Production quality (COLMAP only) |
-| `-q slow` | Minimal camera motion (COLMAP only) |
-| `--mmcam-max-size N` | Downscale images to max dimension N (both engines) |
-| `-M` | Disable mask usage (both engines) |
-| `-d` | Dense reconstruction (COLMAP only) |
+| `--mmcam-max-size N` | Downscale images to max dimension N |
+| `-M` | Disable mask usage |
 
-**Mask integration:** If `roto/` or `matte/` masks exist, both engines use them to ignore moving objects. Disable with `-M` if masks cause issues.
+**Mask integration:** If `roto/` or `matte/` masks exist, VGGSfM uses them to ignore moving objects. Disable with `-M` if masks cause issues.
 
-**Troubleshooting:** See [COLMAP issues](troubleshooting.md#colmap-reconstruction-failed)
-
-**Technical note — mask file naming:** COLMAP requires masks to be named `{image_filename}.png` (e.g., `frame_0001.png.png` for image `frame_0001.png`). The pipeline automatically copies masks from `roto/` to a temporary `mmcam/masks/` directory with the required naming convention, then cleans up after reconstruction completes. VGGSfM uses its own mask directory convention (`masks/*.png`) and handles this internally.
+**COLMAP:** COLMAP is still available for the dense reconstruction stage (`-s dense` — point clouds, mesh, depth/normal maps) but is no longer used for camera tracking.
 
 ---
 
 ## mocap
 
-Human motion capture using GVHMR.
+Human motion capture using SLAHMR (joint camera + body optimization).
 
 | | |
 |---|---|
 | **VRAM** | ~12 GB |
-| **Input** | `source/frames/*.png`, optionally `camera/extrinsics.json` |
-| **Output** | `mocap/<person>/motion.pkl`, `mocap/<person>/mesh_sequence/`, `mocap/<person>/export/` |
-| **Workflow** | None (GVHMR) |
+| **Input** | `source/frames/*.png` (or video) |
+| **Output** | `mocap/<person>/motion.pkl`, `mocap/<person>/export/`, `mocap_camera/` |
+| **Workflow** | None (SLAHMR → SMPLX conversion) |
 
 **📖 Tutorials:**
-- [GVHMR Project Page](https://zju3dv.github.io/gvhmr/) — Official project with paper and demo videos
+- [SLAHMR Project Page](https://slahmr.github.io/) — Official project (CVPR 2023)
 - [SMPL-X Body Model](https://smpl-x.is.tue.mpg.de/) — Understanding the output body model format
 
 **Requirements:**
-- GVHMR installed ([Installation guide](../installation.md))
-- Camera data from `matchmove_camera` stage (optional, improves accuracy)
+- SLAHMR installed via install wizard (`slahmr` conda environment)
+- Runs for 1-3 hours depending on sequence length
 
 ```bash
-# With COLMAP camera data (best accuracy)
+# Full pipeline: camera tracking + mocap + alignment
 python scripts/run_pipeline.py footage.mp4 -s matchmove_camera,mocap
 
-# Without COLMAP (lock-off/static camera shots)
+# Mocap only (SLAHMR estimates its own camera)
 python scripts/run_pipeline.py footage.mp4 -s ingest,mocap
 ```
 
+### Engine Selection
+
+| Engine | Flag | Status |
+|--------|------|--------|
+| **SLAHMR** (default) | `--mocap-engine slahmr` | Joint camera + body optimization, best accuracy |
+| **GVHMR** | `--mocap-engine gvhmr` | **Deprecated** — will be removed in a future version |
+
+SLAHMR jointly optimizes camera trajectory and body pose, producing both motion data and camera extrinsics. It uses SMPL-H internally; the pipeline automatically converts to SMPLX for consistent output.
+
 ### Camera Data
 
-GVHMR can use camera intrinsics from two sources:
+SLAHMR produces its own camera estimate alongside the body motion:
 
-| Source | Location | When Used |
-|--------|----------|-----------|
-| COLMAP | `camera/` | When matchmove_camera stage has run (moving camera shots) |
-| GVHMR estimate | `mocap/camera/` | Auto-exported when COLMAP not available (lock-off shots) |
+| Source | Location | When Available |
+|--------|----------|----------------|
+| VGGSfM | `camera/` | When matchmove_camera stage has run |
+| SLAHMR estimate | `mocap_camera/` | Always (auto-exported by mocap stage) |
 
-**Lock-off shot workflow:** For static camera shots where COLMAP fails (no parallax for triangulation), mocap automatically exports GVHMR's camera estimate to `mocap/camera/` and runs the camera export stage to generate Alembic/USD/etc formats. This gives you camera data even without running matchmove_camera.
+When both VGGSfM and SLAHMR cameras exist, the pipeline automatically aligns the mocap body into VGGSfM's world space, producing a combined output in `mocap_and_mmcam/` with scene files containing both the animated body mesh and camera.
 
 **Pipeline:**
-1. **GVHMR** — Extracts world-grounded pose from video (SMPL-X compatible)
-2. **Mesh Generation** — Creates animated SMPL-X mesh sequence
-3. **Export** — Outputs T-pose reference and animated mesh in Alembic/USD formats
+1. **SLAHMR** — Joint camera + body optimization (SMPL-H)
+2. **SMPL-H → SMPLX** — Body model conversion with betas fitting
+3. **Camera Export** — SLAHMR camera to Alembic/USD
+4. **Mesh Export** — SMPLX animated mesh to Alembic/USD
+5. **Alignment** (if mmcam exists) — Body mesh aligned to VGGSfM world space → `mocap_and_mmcam/`
 
 ### Multi-Person Tracking
 
@@ -399,59 +385,144 @@ The `--mocap-person` flag composites source frames with the corresponding roto m
 
 ```
 mocap/
-├── camera/              # GVHMR camera estimate (when COLMAP not run)
-│   ├── extrinsics.json  # Identity matrices (static camera)
-│   ├── intrinsics.json  # Estimated focal length, principal point
-│   ├── gvhmr_raw.json   # Source metadata
-│   ├── camera.abc       # Alembic camera
-│   └── camera.usd       # USD camera
-├── person/              # Default output (single person)
-│   ├── motion.pkl       # Pose data (SMPL parameters)
-│   ├── mesh_sequence/   # OBJ mesh per frame
-│   └── export/          # Production-ready formats
-│       ├── tpose.obj    # T-pose bind reference
-│       ├── motion.abc   # Alembic animation
-│       └── motion.usd   # USD animation
-├── person_00/           # First person (when using --mocap-person)
-└── person_01/           # Second person
+├── person/                 # Default output (single person)
+│   ├── motion.pkl          # SMPLX pose data
+│   ├── hand_poses.npz      # Hand poses (after hands stage)
+│   ├── foot_contacts.npz   # Foot contacts (after foot_contact stage)
+│   ├── slahmr/             # Raw SLAHMR output
+│   │   ├── slahmr_stitched.npz  # Stitched SMPL-H chunks
+│   │   └── run/            # Optimizer checkpoints
+│   └── export/             # Production-ready formats
+│       ├── tpose.obj       # T-pose bind reference
+│       ├── body_motion.abc # Alembic animation
+│       └── body_motion.usd # USD animation
+├── person_00/              # First person (when using --mocap-person)
+└── person_01/              # Second person
+mocap_camera/               # SLAHMR camera estimate
+├── extrinsics.json         # Camera-to-world 4x4 matrices
+├── intrinsics.json         # Focal length, principal point
+├── camera.abc              # Alembic camera
+└── camera.usd              # USD camera
+mocap_and_mmcam/            # Aligned body + camera (when mmcam exists)
+├── body_motion.abc         # Body in VGGSfM world space
+├── body_motion.usd
+├── scene.abc               # Combined mesh + camera
+├── scene.usd
+├── camera.abc              # Output camera (SLAHMR focal + VGGSfM trajectory)
+├── camera.usd
+├── extrinsics.json
+├── intrinsics.json
+└── tpose.obj
 ```
 
 ### Options
 
 | Flag | Description |
 |------|-------------|
+| `--mocap-engine` | Engine: `slahmr` (default) or `gvhmr` (deprecated) |
 | `--mocap-person` | Roto person to isolate (e.g., `person_00`) |
-| `--start-frame` | First frame to process (1-indexed) |
-| `--end-frame` | Last frame to process (1-indexed) |
-| `--gender` | Body model: `neutral`, `male`, `female` |
-| `--export` | Export formats: `abc`, `usd`, `obj`, `none` |
-| `--list-persons` | List detected persons in existing results |
+| `--mocap-start-frame` | First frame to process (1-indexed) |
+| `--mocap-end-frame` | Last frame to process (1-indexed) |
+| `--mocap-gender` | Body model: `neutral`, `male`, `female` |
+| `--mocap-no-export` | Skip mesh export |
+| `--mocap-fps` | Override export FPS (default: project FPS) |
 
 ### Export Formats
 
 | Format | Contents | Use Case |
 |--------|----------|----------|
 | `tpose.obj` | T-pose mesh with UVs | Bind pose for rigging, cloth sim reference |
-| `motion.abc` | Animated mesh sequence | Maya, Houdini, Blender, Nuke |
-| `motion.usd` | Animated mesh sequence | Houdini/Solaris, USD pipelines |
+| `body_motion.abc` | Animated mesh sequence | Maya, Houdini, Blender, Nuke |
+| `body_motion.usd` | Animated mesh sequence | Houdini/Solaris, USD pipelines |
+| `scene.abc` | Mesh + camera combined | Single-file import in DCC apps |
+| `scene.usd` | Mesh + camera combined | USD pipelines |
 
 ### How to Import
 
 | Application | Method |
 |-------------|--------|
-| Maya | File → Import → Alembic (`motion.abc`) |
-| Houdini | Alembic SOP → `motion.abc` |
+| Maya | File → Import → Alembic (`body_motion.abc` or `scene.abc`) |
+| Houdini | Alembic SOP → `body_motion.abc` or `scene.abc` |
 | Blender | File → Import → Alembic |
-| Nuke | ReadGeo → `motion.abc` |
-| Solaris | Reference LOP → `motion.usd` |
+| Nuke | ReadGeo → `body_motion.abc` |
+| Solaris | Reference LOP → `body_motion.usd` or `scene.usd` |
 
 **Rigging workflow:**
 1. Import `tpose.obj` as bind pose
 2. Build rig/skeleton on T-pose
-3. Import `motion.abc` as animated geometry
+3. Import `body_motion.abc` as animated geometry
 4. Transfer animation or use as reference
 
 **Troubleshooting:** See [Mocap issues](troubleshooting.md#motion-capture-requires-camera-data)
+
+---
+
+## hands
+
+Hand pose estimation using WiLoR-mini.
+
+| | |
+|---|---|
+| **VRAM** | ~4 GB |
+| **Input** | `mocap/<person>/` (requires completed mocap stage) |
+| **Output** | `mocap/<person>/hand_poses.npz`, re-exported `body_motion.abc`/`.usd` with articulated fingers |
+| **Workflow** | None (WiLoR-mini) |
+
+Estimates per-frame 3D hand poses from video using WiLoR-mini, producing SMPLX-compatible axis-angle rotations (15 joints x 3 per hand). After estimation, the mocap body mesh is re-exported with articulated fingers.
+
+**Requirements:**
+- Completed mocap stage
+- `gvhmr` conda environment (WiLoR-mini is installed there)
+
+```bash
+# Full pipeline: mocap then hands
+python scripts/run_pipeline.py footage.mp4 -s mocap,hands
+
+# Hands only (mocap already complete)
+python scripts/run_pipeline.py footage.mp4 -s hands --mocap-person person
+```
+
+**Processing:**
+1. Runs WiLoR-mini per-frame on the source video
+2. Selects the largest-bbox detection per hand per frame
+3. Fills detection gaps via linear interpolation
+4. Applies Savitzky-Golay temporal smoothing
+5. Saves to `hand_poses.npz` and re-exports body mesh
+
+**Output:**
+- `hand_poses.npz` — Left/right hand poses (N x 45 axis-angle) with detection masks
+- Re-exported `body_motion.abc`/`.usd` with articulated fingers
+
+---
+
+## foot_contact
+
+Foot contact detection and footskate cleanup using UnderPressure.
+
+| | |
+|---|---|
+| **VRAM** | ~2 GB |
+| **Input** | `mocap/<person>/motion.pkl` (requires completed mocap stage) |
+| **Output** | `mocap/<person>/foot_contacts.npz`, re-exported `body_motion.abc`/`.usd` |
+| **Workflow** | None (UnderPressure) |
+
+Detects per-frame foot-ground contact and applies IK foot planting to reduce footskate artifacts in the mocap output.
+
+**Requirements:**
+- Completed mocap stage
+- `gvhmr` conda environment
+
+```bash
+# Full pipeline: mocap then foot cleanup
+python scripts/run_pipeline.py footage.mp4 -s mocap,foot_contact
+
+# Foot contact only (mocap already complete)
+python scripts/run_pipeline.py footage.mp4 -s foot_contact --mocap-person person
+```
+
+**Output:**
+- `foot_contacts.npz` — Per-frame contact labels
+- Re-exported `body_motion.abc`/`.usd` with foot-planted motion
 
 ---
 

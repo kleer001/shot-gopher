@@ -87,9 +87,9 @@ def main():
     )
     parser.add_argument(
         "--fps", "-f",
-        type=float,
-        default=24.0,
-        help="Frames per second (default: 24)"
+        type=int,
+        default=24,
+        help="Integer FPS (default: 24)"
     )
     parser.add_argument(
         "--start-frame", "-s",

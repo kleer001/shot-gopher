@@ -26,79 +26,83 @@ SMPLX_HAND_JOINTS = 15
 HAND_POSE_DIM = SMPLX_HAND_JOINTS * 3
 
 
-def find_gvhmr_input_video(gvhmr_dir: Path, project_dir: Path) -> Path:
-    """Locate the video that GVHMR processed.
+def find_source_video(project_dir: Path, gvhmr_dir: Path) -> Path:
+    """Locate the input video for hand estimation.
 
-    GVHMR creates output at gvhmr_dir/<video_stem>/hmr4d_results.pt.
-    The video lives at source/<video_stem>.mp4.
+    Checks in order:
+    1. GVHMR output structure (gvhmr/<video_stem>/hmr4d*.pt → source/<video_stem>.mp4)
+    2. SLAHMR-generated video (source/_slahmr_input.mp4)
+    3. GVHMR-generated video (source/_gvhmr_input.mp4)
+    4. Any non-underscore video in source/
 
     Args:
-        gvhmr_dir: GVHMR output directory (mocap/<person>/gvhmr/)
         project_dir: Project root directory
+        gvhmr_dir: GVHMR output directory (mocap/<person>/gvhmr/)
 
     Returns:
         Path to the input video
     """
-    hmr4d_files = list(gvhmr_dir.rglob("hmr4d*.pt"))
-    if not hmr4d_files:
-        print(f"Error: No GVHMR output in {gvhmr_dir}", file=sys.stderr)
-        sys.exit(1)
+    source_dir = project_dir / "source"
 
-    relative = hmr4d_files[0].relative_to(gvhmr_dir)
-    if len(relative.parts) < 2:
-        print(
-            f"Error: Unexpected GVHMR output structure — "
-            f"hmr4d file directly in {gvhmr_dir}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    hmr4d_files = list(gvhmr_dir.rglob("hmr4d*.pt")) if gvhmr_dir.exists() else []
+    if hmr4d_files:
+        relative = hmr4d_files[0].relative_to(gvhmr_dir)
+        if len(relative.parts) >= 2:
+            video_path = source_dir / f"{relative.parts[0]}.mp4"
+            if video_path.exists():
+                return video_path
 
-    video_stem = relative.parts[0]
-    video_path = project_dir / "source" / f"{video_stem}.mp4"
+    for name in ("_slahmr_input.mp4", "_gvhmr_input.mp4"):
+        candidate = source_dir / name
+        if candidate.exists():
+            return candidate
 
-    if not video_path.exists():
-        print(f"Error: GVHMR input video not found: {video_path}", file=sys.stderr)
-        print(
-            f"  (Derived stem '{video_stem}' from GVHMR output structure)",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    for ext in (".mp4", ".mov", ".avi", ".mkv", ".webm"):
+        for f in source_dir.glob(f"*{ext}"):
+            if not f.name.startswith("_"):
+                return f
 
-    return video_path
+    print(f"Error: No video found in {source_dir}", file=sys.stderr)
+    sys.exit(1)
 
 
-def load_gvhmr_frame_count(gvhmr_dir: Path) -> int:
-    """Load GVHMR output and return the number of frames.
+def load_mocap_frame_count(mocap_person_dir: Path) -> int:
+    """Load frame count from mocap output.
+
+    Checks GVHMR output first (hmr4d*.pt), then motion.pkl.
 
     Args:
-        gvhmr_dir: Directory containing GVHMR output (hmr4d*.pt)
+        mocap_person_dir: Person directory (mocap/<person>/)
 
     Returns:
-        Number of frames in GVHMR output
+        Number of frames in mocap output
     """
     import numpy as np
-    import torch
 
-    gvhmr_files = list(gvhmr_dir.rglob("hmr4d*.pt"))
-    if not gvhmr_files:
-        print(f"Error: No GVHMR output found in {gvhmr_dir}", file=sys.stderr)
-        sys.exit(1)
+    gvhmr_dir = mocap_person_dir / "gvhmr"
+    gvhmr_files = list(gvhmr_dir.rglob("hmr4d*.pt")) if gvhmr_dir.exists() else []
+    if gvhmr_files:
+        import torch
+        data = torch.load(gvhmr_files[0], map_location="cpu", weights_only=False)
+        if "smpl_params_global" in data:
+            body_pose = data["smpl_params_global"].get("body_pose")
+        else:
+            body_pose = data.get("body_pose", data.get("poses"))
+        if body_pose is not None:
+            if hasattr(body_pose, "numpy"):
+                body_pose = body_pose.numpy()
+            return len(np.asarray(body_pose))
 
-    data = torch.load(gvhmr_files[0], map_location="cpu", weights_only=False)
+    motion_pkl = mocap_person_dir / "motion.pkl"
+    if motion_pkl.exists():
+        import pickle
+        with open(motion_pkl, "rb") as f:
+            data = pickle.load(f)
+        poses = np.asarray(data["poses"])
+        return poses.shape[0]
 
-    if "smpl_params_global" in data:
-        body_pose = data["smpl_params_global"].get("body_pose")
-    else:
-        body_pose = data.get("body_pose", data.get("poses"))
-
-    if body_pose is None:
-        print("Error: Cannot determine frame count from GVHMR output", file=sys.stderr)
-        sys.exit(1)
-
-    if hasattr(body_pose, "numpy"):
-        body_pose = body_pose.numpy()
-
-    return len(np.asarray(body_pose))
+    print(f"Error: No mocap output in {mocap_person_dir}", file=sys.stderr)
+    sys.exit(1)
 
 
 def extract_hand_pose(wilor_pred: dict) -> "np.ndarray":
@@ -197,33 +201,30 @@ def run_hand_estimation(
     mocap_person_dir = project_dir / "mocap" / mocap_person
     gvhmr_dir = mocap_person_dir / "gvhmr"
 
-    video_path = find_gvhmr_input_video(gvhmr_dir, project_dir)
-    n_gvhmr_frames = load_gvhmr_frame_count(gvhmr_dir)
+    video_path = find_source_video(project_dir, gvhmr_dir)
+    n_mocap_frames = load_mocap_frame_count(mocap_person_dir)
 
     cap = cv2.VideoCapture(str(video_path))
     n_video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    if n_video_frames != n_gvhmr_frames:
+    if n_video_frames != n_mocap_frames:
         print(
-            f"Error: Frame count mismatch — video has {n_video_frames}, "
-            f"GVHMR has {n_gvhmr_frames}",
+            f"Warning: Frame count mismatch — video has {n_video_frames}, "
+            f"mocap has {n_mocap_frames}. Using mocap frame count.",
             file=sys.stderr,
         )
-        cap.release()
-        sys.exit(1)
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float16 if device.type == "cuda" else torch.float32
     print(f"  Device: {device} ({dtype})")
 
     pipeline = WiLorHandPose3dEstimationPipeline(device=device, dtype=dtype, verbose=False)
 
-    left_hand_poses = np.zeros((n_gvhmr_frames, HAND_POSE_DIM), dtype=np.float32)
-    right_hand_poses = np.zeros((n_gvhmr_frames, HAND_POSE_DIM), dtype=np.float32)
+    left_hand_poses = np.zeros((n_mocap_frames, HAND_POSE_DIM), dtype=np.float32)
+    right_hand_poses = np.zeros((n_mocap_frames, HAND_POSE_DIM), dtype=np.float32)
 
-    print(f"  Processing {n_gvhmr_frames} frames...")
+    print(f"  Processing {n_mocap_frames} frames...")
 
-    for i in range(n_gvhmr_frames):
+    for i in range(n_mocap_frames):
         ret, frame = cap.read()
         if not ret:
             print(f"  Warning: Failed to read frame {i}", file=sys.stderr)
@@ -247,7 +248,7 @@ def run_hand_estimation(
             right_hand_poses[i] = extract_hand_pose(best)
 
         if (i + 1) % 100 == 0 or i == 0:
-            print(f"    Frame {i + 1}/{n_gvhmr_frames}")
+            print(f"    Frame {i + 1}/{n_mocap_frames}")
 
     cap.release()
 
@@ -274,8 +275,8 @@ def run_hand_estimation(
     n_right = int(right_detected.sum())
 
     print(f"  OK Saved {output_path}")
-    print(f"    Left hand:  {n_left} detected, {n_gvhmr_frames - n_left} filled")
-    print(f"    Right hand: {n_right} detected, {n_gvhmr_frames - n_right} filled")
+    print(f"    Left hand:  {n_left} detected, {n_mocap_frames - n_left} filled")
+    print(f"    Right hand: {n_right} detected, {n_mocap_frames - n_right} filled")
 
     return True
 

@@ -58,6 +58,9 @@ def sanitize_stages(stages: list[str]) -> list[str]:
     if "hands" in requested:
         requested.add("mocap")
 
+    if "foot_contact" in requested:
+        requested.add("mocap")
+
     if requested & STAGES_REQUIRING_FRAMES:
         requested.add("ingest")
 
@@ -125,7 +128,7 @@ def run_pipeline(config: PipelineConfig) -> bool:
                     fps = float(fps_str)
                 break
 
-    fps = fps or 24.0
+    fps = round(fps) if fps else 24
     print(f"Frame rate: {fps} fps")
 
     metadata.initialize(project_name, fps, config.input_path)
@@ -224,9 +227,9 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--fps", "-f",
-        type=float,
+        type=int,
         default=None,
-        help="Override frame rate (default: auto-detect)"
+        help="Override frame rate as integer (default: auto-detect)"
     )
     parser.add_argument(
         "--skip-existing", "-e",
@@ -243,9 +246,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--matchmove-camera-engine", "--mmcam-engine",
         dest="mmcam_engine",
-        choices=["colmap", "vggsfm"],
+        choices=["vggsfm"],
         default="vggsfm",
-        help="SfM engine for matchmove camera: vggsfm (default, learned features) or colmap (traditional SIFT)"
+        help="SfM engine for matchmove camera (default: vggsfm)"
     )
     parser.add_argument(
         "-q", "--matchmove-camera-quality", "--mmcam-quality",
@@ -282,6 +285,13 @@ def parse_arguments() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--mocap-engine",
+        dest="mocap_engine",
+        choices=["slahmr", "gvhmr"],
+        default="slahmr",
+        help="Motion capture engine: slahmr (default, joint camera+body) or gvhmr (deprecated)"
+    )
+    parser.add_argument(
         "--mocap-gender",
         choices=["neutral", "male", "female"],
         default="neutral",
@@ -294,9 +304,9 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mocap-fps",
-        type=float,
+        type=int,
         default=None,
-        help="Frames per second for mocap export (default: use project fps)"
+        help="Integer FPS for mocap export (default: use project fps)"
     )
     parser.add_argument(
         "--mocap-start-frame",
@@ -424,8 +434,6 @@ def main():
             project_dir = input_path
             print(f"Using existing project: {project_dir.name}")
 
-    assert not hasattr(args, 'colmap_quality'), "BREADCRUMB: argparse still defines --colmap-quality"
-
     config = PipelineConfig(
         input_path=input_path if not project_dir else None,
         project_name=project_dir.name if project_dir else args.name,
@@ -443,6 +451,7 @@ def main():
         mmcam_max_size=args.mmcam_max_size,
         gsir_iterations=args.gsir_iterations,
         gsir_path=args.gsir_path,
+        mocap_engine=args.mocap_engine,
         mocap_gender=args.mocap_gender,
         mocap_no_export=args.mocap_no_export,
         mocap_fps=args.mocap_fps,

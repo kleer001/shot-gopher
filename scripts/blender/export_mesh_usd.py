@@ -140,13 +140,13 @@ def export_usd(
     output_path: Path,
     start_frame: int,
     end_frame: int,
-    fps: float = 24.0,
+    fps: int = 24,
 ):
     """Export scene to USD file with animation baked."""
     bpy.context.scene.frame_start = start_frame
     bpy.context.scene.frame_end = end_frame
-    bpy.context.scene.render.fps = int(fps)
-    bpy.context.scene.render.fps_base = fps / int(fps)
+    bpy.context.scene.render.fps = fps
+    bpy.context.scene.render.fps_base = 1.0
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -221,9 +221,9 @@ def main():
     )
     parser.add_argument(
         "--fps", "-f",
-        type=float,
-        default=24.0,
-        help="Frames per second (default: 24)"
+        type=int,
+        default=24,
+        help="Integer FPS (default: 24)"
     )
     parser.add_argument(
         "--start-frame", "-s",

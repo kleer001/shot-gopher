@@ -142,7 +142,7 @@ def _run_blender_script(
 def export_mesh_sequence_to_alembic(
     input_dir: Path,
     output_path: Path,
-    fps: float = 24.0,
+    fps: int = 24,
     start_frame: int = 1,
     blender_path: Optional[Path] = None,
     timeout: int = 3600,
@@ -205,7 +205,7 @@ def _export_camera(
     output_path: Path,
     script_name: str,
     format_name: str,
-    fps: float = 24.0,
+    fps: int = 24,
     start_frame: int = 1,
     camera_name: Optional[str] = None,
     blender_path: Optional[Path] = None,
@@ -277,7 +277,7 @@ def _export_camera(
 def export_camera_to_alembic(
     camera_dir: Path,
     output_path: Path,
-    fps: float = 24.0,
+    fps: int = 24,
     start_frame: int = 1,
     camera_name: Optional[str] = None,
     blender_path: Optional[Path] = None,
@@ -349,7 +349,7 @@ def check_blender_available() -> tuple[bool, str]:
 def export_camera_to_usd(
     camera_dir: Path,
     output_path: Path,
-    fps: float = 24.0,
+    fps: int = 24,
     start_frame: int = 1,
     camera_name: Optional[str] = None,
     blender_path: Optional[Path] = None,
@@ -390,7 +390,7 @@ def export_camera_to_usd(
 def export_mesh_sequence_to_usd(
     input_dir: Path,
     output_path: Path,
-    fps: float = 24.0,
+    fps: int = 24,
     start_frame: int = 1,
     blender_path: Optional[Path] = None,
     timeout: int = 3600,
@@ -525,7 +525,7 @@ def export_gsir_materials_to_usd(
 def export_ply_to_alembic(
     input_path: Path,
     output_path: Path,
-    fps: float = 24.0,
+    fps: int = 24,
     blender_path: Optional[Path] = None,
     timeout: int = 600,
 ) -> bool:
@@ -574,7 +574,7 @@ def export_ply_to_alembic(
 def export_ply_to_usd(
     input_path: Path,
     output_path: Path,
-    fps: float = 24.0,
+    fps: int = 24,
     blender_path: Optional[Path] = None,
     timeout: int = 600,
 ) -> bool:
@@ -618,3 +618,148 @@ def export_ply_to_usd(
     print(f"  Output: {output_path}")
 
     return _run_blender_script(cmd, output_path, timeout, "PLY USD")
+
+
+def _export_scene(
+    mesh_dir: Path,
+    camera_dir: Path,
+    output_path: Path,
+    script_name: str,
+    format_name: str,
+    fps: int = 24,
+    start_frame: int = 1,
+    camera_name: str = "camera",
+    blender_path: Optional[Path] = None,
+    timeout: int = 3600,
+) -> bool:
+    """Export animated mesh + camera to a single file (shared implementation).
+
+    Args:
+        mesh_dir: Directory containing OBJ sequence.
+        camera_dir: Directory containing extrinsics.json and intrinsics.json.
+        output_path: Output file path.
+        script_name: Blender export script name.
+        format_name: Format name for messages.
+        fps: Frames per second.
+        start_frame: Starting frame number.
+        camera_name: Name for the camera node.
+        blender_path: Optional path to Blender executable.
+        timeout: Maximum time in seconds.
+
+    Returns:
+        True if export succeeded.
+
+    Raises:
+        FileNotFoundError: If inputs not found.
+        RuntimeError: If export fails.
+    """
+    if not mesh_dir.exists():
+        raise FileNotFoundError(f"Mesh directory not found: {mesh_dir}")
+    if not camera_dir.exists():
+        raise FileNotFoundError(f"Camera directory not found: {camera_dir}")
+    if not (camera_dir / "extrinsics.json").exists():
+        raise FileNotFoundError(f"Extrinsics not found: {camera_dir / 'extrinsics.json'}")
+
+    blender_path = _ensure_blender(blender_path)
+
+    script_path = SCRIPTS_DIR / script_name
+    if not script_path.exists():
+        raise FileNotFoundError(f"Export script not found: {script_path}")
+
+    cmd = [
+        str(blender_path),
+        "-b",
+        "--python", str(script_path),
+        "--",
+        "--mesh-dir", str(mesh_dir),
+        "--camera-dir", str(camera_dir),
+        "--output", str(output_path),
+        "--fps", str(fps),
+        "--start-frame", str(start_frame),
+        "--camera-name", camera_name,
+    ]
+
+    print(f"Running Blender headless combined {format_name} export...")
+    print(f"  Mesh: {mesh_dir}")
+    print(f"  Camera: {camera_dir}")
+    print(f"  Output: {output_path}")
+
+    return _run_blender_script(cmd, output_path, timeout, f"scene {format_name}")
+
+
+def export_scene_to_alembic(
+    mesh_dir: Path,
+    camera_dir: Path,
+    output_path: Path,
+    fps: int = 24,
+    start_frame: int = 1,
+    camera_name: str = "camera",
+    blender_path: Optional[Path] = None,
+    timeout: int = 3600,
+) -> bool:
+    """Export animated mesh + camera to a single Alembic file.
+
+    Args:
+        mesh_dir: Directory containing OBJ sequence.
+        camera_dir: Directory containing extrinsics.json and intrinsics.json.
+        output_path: Output .abc file path.
+        fps: Frames per second.
+        start_frame: Starting frame number.
+        camera_name: Name for the camera node.
+        blender_path: Optional path to Blender executable.
+        timeout: Maximum time in seconds (default: 1 hour).
+
+    Returns:
+        True if export succeeded.
+    """
+    return _export_scene(
+        mesh_dir=mesh_dir,
+        camera_dir=camera_dir,
+        output_path=output_path,
+        script_name="export_scene_alembic.py",
+        format_name="Alembic",
+        fps=fps,
+        start_frame=start_frame,
+        camera_name=camera_name,
+        blender_path=blender_path,
+        timeout=timeout,
+    )
+
+
+def export_scene_to_usd(
+    mesh_dir: Path,
+    camera_dir: Path,
+    output_path: Path,
+    fps: int = 24,
+    start_frame: int = 1,
+    camera_name: str = "camera",
+    blender_path: Optional[Path] = None,
+    timeout: int = 3600,
+) -> bool:
+    """Export animated mesh + camera to a single USD file.
+
+    Args:
+        mesh_dir: Directory containing OBJ sequence.
+        camera_dir: Directory containing extrinsics.json and intrinsics.json.
+        output_path: Output .usd file path.
+        fps: Frames per second.
+        start_frame: Starting frame number.
+        camera_name: Name for the camera node.
+        blender_path: Optional path to Blender executable.
+        timeout: Maximum time in seconds (default: 1 hour).
+
+    Returns:
+        True if export succeeded.
+    """
+    return _export_scene(
+        mesh_dir=mesh_dir,
+        camera_dir=camera_dir,
+        output_path=output_path,
+        script_name="export_scene_usd.py",
+        format_name="USD",
+        fps=fps,
+        start_frame=start_frame,
+        camera_name=camera_name,
+        blender_path=blender_path,
+        timeout=timeout,
+    )

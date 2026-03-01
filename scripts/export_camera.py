@@ -109,7 +109,7 @@ def export_json_camera(
     intrinsics: dict,
     output_path: Path,
     start_frame: int = 1,
-    fps: float = 24.0
+    fps: int = 24
 ) -> None:
     """Export camera data to JSON format (fallback when Alembic unavailable).
 
@@ -240,7 +240,7 @@ def export_houdini_cmd(
     camera_dir: Path,
     output_path: Path,
     start_frame: int = 1,
-    fps: float = 24.0,
+    fps: int = 24,
 ) -> None:
     """Export Houdini .cmd file that creates camera from JSON.
 
@@ -430,7 +430,7 @@ def export_houdini_clip(
     intrinsics: dict,
     output_path: Path,
     start_frame: int = 1,
-    fps: float = 24.0,
+    fps: int = 24,
 ) -> None:
     """Export camera to Houdini .clip format (CHOP channel data).
 
@@ -486,7 +486,7 @@ def export_after_effects_jsx(
     intrinsics: dict,
     output_path: Path,
     start_frame: int = 1,
-    fps: float = 24.0,
+    fps: int = 24,
     camera_name: str = "pipeline_camera"
 ) -> None:
     """Export camera to After Effects JSX script.
@@ -683,9 +683,9 @@ def main():
     )
     parser.add_argument(
         "--fps", "-f",
-        type=float,
-        default=24.0,
-        help="Frames per second (default: 24)"
+        type=int,
+        default=24,
+        help="Integer FPS (default: 24)"
     )
     parser.add_argument(
         "--width", "-W",

@@ -8,11 +8,16 @@ No pytorch3d or torch dependency — numpy only, reusing transforms.py.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
+from scipy.signal import savgol_filter
 
-from transforms import axis_angle_to_rotation_matrix_batch
+from transforms import (
+    axis_angle_to_rotation_matrix_batch,
+    quaternion_to_rotation_matrix,
+    rotation_matrix_to_quaternion,
+)
 
 
 def camera_rotation_from_orients(
@@ -91,17 +96,220 @@ def camera_translation_from_transl(
     return pelvis_correction + transl_incam - np.einsum("nij,nj->ni", R_w2c, transl_global)
 
 
+def compute_chordal_mean_rotation(
+    rotations: np.ndarray,
+) -> np.ndarray:
+    """Compute the chordal L2 mean of rotation matrices.
+
+    Solves the Wahba problem: find R* minimising
+    sum_t ||R* - R[t]||_F^2, via SVD projection onto SO(3).
+
+    Args:
+        rotations: (N, 3, 3) rotation matrices
+
+    Returns:
+        (3, 3) mean rotation matrix in SO(3)
+    """
+    M = rotations.mean(axis=0)
+    U, _, Vt = np.linalg.svd(M)
+    S = np.diag([1.0, 1.0, np.linalg.det(U @ Vt)])
+    return U @ S @ Vt
+
+
+def compute_world_transform(
+    gvhmr_c2w: np.ndarray,
+    mmcam_c2w: np.ndarray,
+) -> dict[str, Any]:
+    """Compute Sim(3) transform from GVHMR-world to mmcam-world.
+
+    Uses camera position correspondences to find a single (R, s, t)
+    that maps GVHMR's coordinate system to mmcam's. Applied once
+    to all frames, preserving relative body motion (foot contact, etc).
+
+    Stage 1: Wahba rotation (chordal L2 mean of per-frame R_rel)
+    Stage 2: Least-squares scale and translation offset
+
+    Args:
+        gvhmr_c2w: (N, 4, 4) GVHMR-derived camera-to-world matrices
+        mmcam_c2w: (N, 4, 4) mmcam camera-to-world matrices
+
+    Returns:
+        Dict with R (3,3), s (float), t (3,) such that:
+        x_mmcam = s * R @ x_gvhmr + t
+    """
+    R_rel = np.einsum(
+        "nij,nkj->nik",
+        mmcam_c2w[:, :3, :3],
+        gvhmr_c2w[:, :3, :3],
+    )
+    R = compute_chordal_mean_rotation(R_rel)
+
+    P_src = gvhmr_c2w[:, :3, 3]
+    P_tgt = mmcam_c2w[:, :3, 3]
+    P_rotated = np.einsum("ij,nj->ni", R, P_src)
+
+    mu_src = P_rotated.mean(axis=0)
+    mu_tgt = P_tgt.mean(axis=0)
+    src_centered = P_rotated - mu_src
+    tgt_centered = P_tgt - mu_tgt
+
+    var_src = np.sum(src_centered ** 2)
+    s = float(np.sum(tgt_centered * src_centered) / var_src) if var_src > 1e-12 else 1.0
+    t = mu_tgt - s * mu_src
+
+    return {"R": R, "s": s, "t": t}
+
+
+def align_colmap_trajectory(
+    colmap_c2w: np.ndarray,
+    gvhmr_c2w: np.ndarray,
+    residual_window: int = 31,
+    residual_poly: int = 2,
+) -> np.ndarray:
+    """Align COLMAP trajectory into GVHMR's world frame.
+
+    Combines COLMAP's smooth camera motion with GVHMR's body-tracking
+    accuracy using a three-stage approach:
+
+    1. Robust rotation alignment — chordal L2 mean (Wahba problem)
+       across all frames, avoiding single-frame noise sensitivity.
+    2. Scale + translation offset — least-squares fit on rotated
+       positions to account for COLMAP's arbitrary scale.
+    3. Complementary filter — low-pass filters the per-frame position
+       residual between GVHMR and aligned COLMAP, then adds it back.
+       High-frequency motion from COLMAP (feature-tracked stability),
+       low-frequency body tracking from GVHMR.
+
+    Args:
+        colmap_c2w: (N, 4, 4) camera-to-world matrices from COLMAP/VGGSfM
+        gvhmr_c2w: (N, 4, 4) camera-to-world matrices from GVHMR (noisy)
+        residual_window: Savitzky-Golay window for residual smoothing
+            (must be odd, default 31 ~= 1.3s at 24fps)
+        residual_poly: Polynomial order for residual smoothing
+
+    Returns:
+        (N, 4, 4) aligned camera-to-world matrices
+    """
+    n_frames = colmap_c2w.shape[0]
+
+    R_rel = np.einsum(
+        "nij,nkj->nik",
+        gvhmr_c2w[:, :3, :3],
+        colmap_c2w[:, :3, :3],
+    )
+    R_align = compute_chordal_mean_rotation(R_rel)
+
+    R_rotated = np.einsum("ij,njk->nik", R_align, colmap_c2w[:, :3, :3])
+    P_rotated = np.einsum("ij,nj->ni", R_align, colmap_c2w[:, :3, 3])
+
+    tgt = gvhmr_c2w[:, :3, 3]
+    mu_src = P_rotated.mean(axis=0)
+    mu_tgt = tgt.mean(axis=0)
+    src_centered = P_rotated - mu_src
+    tgt_centered = tgt - mu_tgt
+
+    var_src = np.sum(src_centered ** 2)
+    s = np.sum(tgt_centered * src_centered) / var_src if var_src > 1e-12 else 1.0
+    P_aligned = s * P_rotated + (mu_tgt - s * mu_src)
+
+    residual = tgt - P_aligned
+    window = residual_window
+    if n_frames < window:
+        window = n_frames if n_frames % 2 == 1 else n_frames - 1
+    if window > residual_poly:
+        residual_smooth = np.empty_like(residual)
+        for axis in range(3):
+            residual_smooth[:, axis] = savgol_filter(
+                residual[:, axis], window, residual_poly,
+            )
+    else:
+        residual_smooth = residual.copy()
+
+    P_final = P_aligned + residual_smooth
+
+    result = np.broadcast_to(np.eye(4), (n_frames, 4, 4)).copy()
+    result[:, :3, :3] = R_rotated
+    result[:, :3, 3] = P_final
+
+    return result
+
+
+def smooth_camera_trajectory(
+    c2w_matrices: np.ndarray,
+    window: int = 11,
+    poly_order: int = 3,
+    translation_only: bool = False,
+) -> np.ndarray:
+    """Smooth camera trajectory using Savitzky-Golay filtering.
+
+    Smooths translation components directly. Smooths rotation by
+    converting to quaternions (hemisphere-consistent), filtering
+    each component, and renormalising.
+
+    Args:
+        c2w_matrices: (N, 4, 4) camera-to-world matrices
+        window: Savitzky-Golay window length (must be odd)
+        poly_order: Polynomial order for Savitzky-Golay filter
+        translation_only: If True, smooth only translation, keep rotation
+
+    Returns:
+        (N, 4, 4) smoothed camera-to-world matrices
+    """
+    n_frames = c2w_matrices.shape[0]
+    if n_frames < window:
+        window = n_frames if n_frames % 2 == 1 else n_frames - 1
+        if window <= poly_order:
+            return c2w_matrices.copy()
+
+    result = c2w_matrices.copy()
+
+    trans = c2w_matrices[:, :3, 3].copy()
+    for axis in range(3):
+        trans[:, axis] = savgol_filter(trans[:, axis], window, poly_order)
+    result[:, :3, 3] = trans
+
+    if translation_only:
+        return result
+
+    quats = np.zeros((n_frames, 4))
+    for i in range(n_frames):
+        quats[i] = rotation_matrix_to_quaternion(c2w_matrices[i, :3, :3])
+
+    for i in range(1, n_frames):
+        if np.dot(quats[i], quats[i - 1]) < 0:
+            quats[i] = -quats[i]
+
+    for c in range(4):
+        quats[:, c] = savgol_filter(quats[:, c], window, poly_order)
+
+    norms = np.linalg.norm(quats, axis=1, keepdims=True)
+    quats /= norms
+
+    for i in range(n_frames):
+        result[i, :3, :3] = quaternion_to_rotation_matrix(quats[i])
+
+    return result
+
+
 def compute_aligned_camera(
     gvhmr_data: dict[str, Any],
     image_width: int,
     image_height: int,
     pelvis_joint: np.ndarray,
+    colmap_extrinsics: Optional[np.ndarray] = None,
 ) -> dict[str, Any]:
     """Compute body-aligned camera extrinsics from GVHMR output.
 
-    Uses SMPL orient params (Source A) to derive camera rotation and
-    translation that are algebraically consistent with the body mesh
-    in GVHMR-global coordinates.
+    Uses SMPL orient params to derive camera rotation and translation
+    that are algebraically consistent with the body mesh in
+    GVHMR-global coordinates.
+
+    When colmap_extrinsics are provided, aligns COLMAP's smooth
+    trajectory into GVHMR's world frame using robust rotation
+    alignment (Wahba problem) and a complementary filter that
+    fuses COLMAP's stability with GVHMR's body tracking. Falls
+    back to Savitzky-Golay smoothing when no COLMAP data is
+    available.
 
     Args:
         gvhmr_data: Dict from hmr4d_results.pt (must contain
@@ -110,6 +318,7 @@ def compute_aligned_camera(
         image_height: Source image height in pixels
         pelvis_joint: (3,) SMPL pelvis joint in rest pose from
             compute_pelvis_joint()
+        colmap_extrinsics: Optional (N, 4, 4) c2w matrices from COLMAP
 
     Returns:
         Dict with:
@@ -129,15 +338,18 @@ def compute_aligned_camera(
     t_w2c = camera_translation_from_transl(R_w2c, transl_w, transl_c, pelvis_joint)
 
     n_frames = R_w2c.shape[0]
-    T_w2c = np.broadcast_to(np.eye(4), (n_frames, 4, 4)).copy()
-    T_w2c[:, :3, :3] = R_w2c
-    T_w2c[:, :3, 3] = t_w2c
-
     R_c2w = np.swapaxes(R_w2c, -2, -1)
     t_c2w = -np.einsum("nij,nj->ni", R_c2w, t_w2c)
-    T_c2w = np.broadcast_to(np.eye(4), (n_frames, 4, 4)).copy()
-    T_c2w[:, :3, :3] = R_c2w
-    T_c2w[:, :3, 3] = t_c2w
+    T_c2w_gvhmr = np.broadcast_to(np.eye(4), (n_frames, 4, 4)).copy()
+    T_c2w_gvhmr[:, :3, :3] = R_c2w
+    T_c2w_gvhmr[:, :3, 3] = t_c2w
+
+    if colmap_extrinsics is not None:
+        T_c2w = np.asarray(colmap_extrinsics, dtype=np.float64).copy()
+        rotation_source = "mmcam_direct"
+    else:
+        T_c2w = smooth_camera_trajectory(T_c2w_gvhmr)
+        rotation_source = "smpl_orient"
 
     K_fullimg = np.asarray(gvhmr_data["K_fullimg"])
     if K_fullimg.ndim == 3:
@@ -158,16 +370,22 @@ def compute_aligned_camera(
         "params": [fx, fy, cx, cy],
     }
 
+    translation_source = rotation_source if rotation_source != "smpl_orient" else "smpl_transl"
     metadata = {
         "source": "gvhmr_aligned",
-        "rotation_source": "smpl_orient",
-        "translation_source": "smpl_transl",
+        "rotation_source": rotation_source,
+        "translation_source": translation_source,
         "total_frames": n_frames,
         "K_fullimg": K_fullimg.tolist(),
     }
 
-    return {
+    result = {
         "extrinsics": list(T_c2w),
         "intrinsics": intrinsics,
         "metadata": metadata,
     }
+
+    if colmap_extrinsics is not None:
+        result["world_transform"] = compute_world_transform(T_c2w_gvhmr, T_c2w)
+
+    return result

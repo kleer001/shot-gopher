@@ -135,7 +135,7 @@ def create_animated_camera(
     extrinsics: list,
     intrinsics: dict,
     start_frame: int,
-    fps: float,
+    fps: int,
     camera_name: str
 ) -> bpy.types.Object:
     """Create an animated camera from extrinsics data.
@@ -176,12 +176,8 @@ def create_animated_camera(
     bpy.context.scene.render.resolution_x = width
     bpy.context.scene.render.resolution_y = height
 
-    if abs(fps - round(fps)) < 0.001:
-        bpy.context.scene.render.fps = int(round(fps))
-        bpy.context.scene.render.fps_base = 1.0
-    else:
-        bpy.context.scene.render.fps = 1000
-        bpy.context.scene.render.fps_base = 1000.0 / fps
+    bpy.context.scene.render.fps = int(fps)
+    bpy.context.scene.render.fps_base = 1.0
 
     cam_obj.rotation_mode = 'XYZ'
 
@@ -202,7 +198,7 @@ def create_animated_camera(
 def run_camera_export(
     input_dir: Path,
     output_path: Path,
-    fps: float,
+    fps: int,
     start_frame: int,
     camera_name: str | None,
     format_name: str,

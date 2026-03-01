@@ -115,7 +115,7 @@ class VramAnalysisResult:
     gpu_name: Optional[str]
     frame_count: int
     resolution: list[int]
-    fps: float
+    fps: int
     stages: dict[str, dict]
     analyzed_at: str
     warnings: list[str]
@@ -278,7 +278,7 @@ def analyze_stage(
 def analyze_project_vram(
     frame_count: int,
     resolution: tuple[int, int],
-    fps: float,
+    fps: int,
     vram_gb: Optional[float] = None,
 ) -> VramAnalysisResult:
     """Analyze VRAM requirements for all stages given project parameters.
@@ -381,7 +381,7 @@ def analyze_and_save(
     project_dir: Path,
     frame_count: int,
     resolution: tuple[int, int],
-    fps: float,
+    fps: int,
 ) -> dict:
     """Analyze VRAM requirements and save to project directory.
 
@@ -442,9 +442,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--fps",
-        type=float,
-        default=24.0,
-        help="Frames per second (default: 24.0)"
+        type=int,
+        default=24,
+        help="Integer FPS (default: 24)"
     )
     parser.add_argument(
         "--vram",

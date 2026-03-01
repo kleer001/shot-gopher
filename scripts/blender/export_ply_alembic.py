@@ -38,7 +38,7 @@ def import_ply(filepath: Path) -> bpy.types.Object:
     return bpy.context.selected_objects[0]
 
 
-def export_alembic(output_path: Path, fps: float = 24.0) -> None:
+def export_alembic(output_path: Path, fps: int = 24) -> None:
     """Export scene to Alembic file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -94,9 +94,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--fps", "-f",
-        type=float,
-        default=24.0,
-        help="Frames per second (default: 24)"
+        type=int,
+        default=24,
+        help="Integer FPS (default: 24)"
     )
     args = parser.parse_args(argv)
 

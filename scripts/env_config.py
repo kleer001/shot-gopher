@@ -64,6 +64,13 @@ def _get_activation_script_name() -> str:
 
 ACTIVATION_SCRIPT = INSTALL_DIR / _get_activation_script_name()
 
+# SLAHMR installation paths
+SLAHMR_INSTALL_DIR = INSTALL_DIR / "tools" / "slahmr"
+SLAHMR_CONDA_ENV = "slahmr"
+
+# UnderPressure installation path
+UNDERPRESSURE_INSTALL_DIR = INSTALL_DIR / "tools" / "underpressure"
+
 
 # =============================================================================
 # PLATFORM DETECTION

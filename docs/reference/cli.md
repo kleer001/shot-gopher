@@ -20,8 +20,10 @@ Run the VFX pipeline from a single command.
 | [roto](stages.md#roto) | Roto masks | 4 GB |
 | [mama](stages.md#mama) | Matte refinement | 12 GB |
 | [cleanplate](stages.md#cleanplate) | Clean plate (static camera) | ~2 GB |
-| [matchmove_camera](stages.md#matchmove_camera) | Camera tracking | 2-4 GB |
-| [mocap](stages.md#mocap) | Motion capture | 12 GB |
+| [matchmove_camera](stages.md#matchmove_camera) | Camera tracking (VGGSfM) | 2-4 GB |
+| [mocap](stages.md#mocap) | Motion capture (SLAHMR) | 12 GB |
+| [hands](stages.md#hands) | Hand pose estimation (WiLoR) | ~4 GB |
+| [foot_contact](stages.md#foot_contact) | Foot contact cleanup | ~2 GB |
 | [gsir](stages.md#gsir) | PBR materials | 8 GB |
 
 ---
@@ -74,10 +76,6 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 
 | Short | Long | Description |
 |-------|------|-------------|
-| | `--matchmove-camera-engine` | SfM engine: `colmap` (default) or `vggsfm` (learned features) |
-| `-q` | `--matchmove-camera-quality` | `low`, `medium` (default), `high`, or `slow` (COLMAP only) |
-| `-d` | `--matchmove-camera-dense` | Run dense reconstruction (COLMAP only) |
-| `-m` | `--matchmove-camera-mesh` | Generate mesh (requires `-d`, COLMAP only) |
 | `-M` | `--matchmove-camera-no-masks` | Don't use roto masks for tracking |
 | | `--matchmove-camera-max-size` | Max image dimension (downscales larger, use 1000-2000 for speed) |
 
@@ -92,11 +90,13 @@ python scripts/run_pipeline.py footage.mp4 --list-stages
 
 | Long | Description |
 |------|-------------|
+| `--mocap-engine` | Engine: `slahmr` (default, joint camera+body) or `gvhmr` (deprecated) |
 | `--mocap-person` | Roto person to isolate (e.g., `person_00`). Composites source frames with roto matte for single-person tracking |
 | `--mocap-start-frame` | Start frame for mocap (1-indexed). Use when person enters late |
 | `--mocap-end-frame` | End frame for mocap (1-indexed). Use when person exits early |
 | `--mocap-gender` | Body model gender: `neutral`, `male`, `female` (default: `neutral`) |
-| `--mocap-export` | Auto-export formats: `abc`, `usd`, `obj`, `none` (default: `abc,usd`) |
+| `--mocap-no-export` | Skip mesh export |
+| `--mocap-fps` | Override export FPS (default: use project FPS) |
 
 ### Automation Options
 
@@ -176,10 +176,10 @@ python scripts/run_mocap.py ./projects/MyShot --mocap-person person_01 \
 
 Creates separate output folders: `mocap/person_00/`, `mocap/person_01/`
 
-### High-Quality Matchmove Camera
+### Mocap with Hand Poses and Foot Cleanup
 
 ```bash
-python scripts/run_pipeline.py footage.mp4 -s matchmove_camera -q high -d -m
+python scripts/run_pipeline.py footage.mp4 -s mocap,hands,foot_contact
 ```
 
 ### Resume After Interruption
@@ -219,17 +219,30 @@ Pipeline creates this directory structure:
 │   ├── dense/           # Dense point cloud (optional)
 │   └── meshed/          # Mesh (optional)
 ├── mocap/
-│   └── person/          # Default person output (or person_00/, person_01/)
-│       ├── motion.pkl   # GVHMR pose estimates
-│       ├── mesh_sequence/  # SMPL-X mesh sequence
-│       └── export/      # Exported formats
-│           ├── tpose.obj   # T-pose reference mesh
-│           ├── motion.abc  # Alembic animation
-│           └── motion.usd  # USD animation
+│   └── person/              # Default person output (or person_00/, person_01/)
+│       ├── motion.pkl       # SMPLX pose data
+│       ├── hand_poses.npz   # Hand poses (after hands stage)
+│       ├── foot_contacts.npz # Foot contacts (after foot_contact stage)
+│       ├── slahmr/          # Raw SLAHMR output
+│       └── export/          # Exported formats
+│           ├── tpose.obj       # T-pose reference mesh
+│           ├── body_motion.abc # Alembic animation
+│           └── body_motion.usd # USD animation
+├── mocap_camera/            # SLAHMR camera estimate
+│   ├── extrinsics.json
+│   ├── intrinsics.json
+│   ├── camera.abc
+│   └── camera.usd
+├── mocap_and_mmcam/         # Aligned body + camera (when mmcam exists)
+│   ├── body_motion.abc      # Body in VGGSfM world space
+│   ├── scene.abc            # Combined mesh + camera
+│   ├── camera.abc
+│   ├── extrinsics.json
+│   └── intrinsics.json
 ├── gsir/
 │   ├── model/           # Checkpoints
 │   └── materials/       # Albedo, roughness, metallic
-├── camera/              # From matchmove_camera stage
+├── camera/              # From matchmove_camera stage (VGGSfM)
 │   ├── extrinsics.json  # 4x4 matrices per frame
 │   ├── intrinsics.json  # fx, fy, cx, cy
 │   ├── camera.abc       # Alembic export
