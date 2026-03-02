@@ -631,6 +631,7 @@ def _export_scene(
     camera_name: str = "camera",
     blender_path: Optional[Path] = None,
     timeout: int = 3600,
+    ply_files: Optional[list[Path]] = None,
 ) -> bool:
     """Export animated mesh + camera to a single file (shared implementation).
 
@@ -679,6 +680,9 @@ def _export_scene(
         "--camera-name", camera_name,
     ]
 
+    if ply_files:
+        cmd.extend(["--ply-files", ",".join(str(p) for p in ply_files)])
+
     print(f"Running Blender headless combined {format_name} export...")
     print(f"  Mesh: {mesh_dir}")
     print(f"  Camera: {camera_dir}")
@@ -696,6 +700,7 @@ def export_scene_to_alembic(
     camera_name: str = "camera",
     blender_path: Optional[Path] = None,
     timeout: int = 3600,
+    ply_files: Optional[list[Path]] = None,
 ) -> bool:
     """Export animated mesh + camera to a single Alembic file.
 
@@ -708,6 +713,7 @@ def export_scene_to_alembic(
         camera_name: Name for the camera node.
         blender_path: Optional path to Blender executable.
         timeout: Maximum time in seconds (default: 1 hour).
+        ply_files: Optional list of PLY files to include as static geometry.
 
     Returns:
         True if export succeeded.
@@ -723,6 +729,7 @@ def export_scene_to_alembic(
         camera_name=camera_name,
         blender_path=blender_path,
         timeout=timeout,
+        ply_files=ply_files,
     )
 
 

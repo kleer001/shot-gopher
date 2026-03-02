@@ -101,6 +101,10 @@ def main():
     parser.add_argument(
         "--camera-name", type=str, default="camera", help="Camera name"
     )
+    parser.add_argument(
+        "--ply-files", type=str, default=None,
+        help="Comma-separated PLY files to include as static geometry"
+    )
     args = parser.parse_args(argv)
 
     obj_files = find_obj_files(args.mesh_dir)
@@ -130,6 +134,14 @@ def main():
         fps=args.fps,
         camera_name=args.camera_name,
     )
+
+    if args.ply_files:
+        for ply_str in args.ply_files.split(","):
+            ply_path = Path(ply_str.strip())
+            if ply_path.exists():
+                bpy.ops.wm.ply_import(filepath=str(ply_path))
+                imported = bpy.context.selected_objects[0]
+                print(f"Imported static geometry: {imported.name} ({len(imported.data.vertices)} verts)")
 
     print(f"Animation range: {args.start_frame}-{end_frame}")
     verify_animation(mesh_obj, args.start_frame, end_frame)

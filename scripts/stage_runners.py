@@ -906,11 +906,19 @@ def run_stage_matchmove_camera(
         geometry_dir = ctx.project_dir / "geometry"
         geometry_dir.mkdir(parents=True, exist_ok=True)
         sparse_ply = geometry_dir / "sparse_pointcloud.ply"
+        sparse_abc = geometry_dir / "sparse_pointcloud.abc"
         if not (ctx.skip_existing and sparse_ply.exists()):
             from run_matchmove_camera import export_sparse_ply
 
             if export_sparse_ply(sparse_model, sparse_ply):
                 print(f"  → Sparse point cloud: {sparse_ply.name}")
+
+        if sparse_ply.exists() and not (ctx.skip_existing and sparse_abc.exists()):
+            from blender import export_ply_to_alembic
+
+            export_ply_to_alembic(sparse_ply, sparse_abc)
+            if sparse_abc.exists():
+                print(f"  → Sparse point cloud ABC: {sparse_abc.name}")
 
     return True
 

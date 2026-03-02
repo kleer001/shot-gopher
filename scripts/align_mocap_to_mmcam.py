@@ -165,17 +165,17 @@ def compute_ground_height(meshes: List[Tuple], percentile: float = 2.0) -> float
     return float(np.percentile(frame_mins, percentile))
 
 
-def generate_ground_plane_obj(
+def generate_ground_plane_ply(
     output_path: Path,
     height: float,
     center: np.ndarray,
     size: float = 4.0,
     divisions: int = 10,
 ) -> None:
-    """Write a grid mesh OBJ at the given Y height.
+    """Write a grid mesh PLY at the given Y height.
 
     Args:
-        output_path: Path to write the OBJ file.
+        output_path: Path to write the PLY file.
         height: Y coordinate for the grid.
         center: (2,) XZ center of the grid.
         size: Half-extent of the grid in world units.
@@ -200,10 +200,84 @@ def generate_ground_plane_obj(
             faces.append((v0, v3, v2))
 
     with open(output_path, "w", encoding="utf-8") as f:
+        f.write("ply\n")
+        f.write("format ascii 1.0\n")
+        f.write(f"element vertex {len(vertices)}\n")
+        f.write("property float x\n")
+        f.write("property float y\n")
+        f.write("property float z\n")
+        f.write(f"element face {len(faces)}\n")
+        f.write("property list uchar int vertex_indices\n")
+        f.write("end_header\n")
         for v in vertices:
-            f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
+            f.write(f"{v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
         for face in faces:
-            f.write(f"f {face[0]+1} {face[1]+1} {face[2]+1}\n")
+            f.write(f"3 {face[0]} {face[1]} {face[2]}\n")
+
+
+def export_static_geometry(
+    output_dir: Path,
+    meshes: List[Tuple],
+    project_dir: Path,
+    fps: int,
+) -> List[Path]:
+    """Export ground plane and sparse pointcloud as PLY and Alembic.
+
+    Generates a ground plane grid mesh at foot-contact height and copies
+    the sparse pointcloud from the mmcam geometry directory. Both are
+    converted to Alembic via Blender.
+
+    Args:
+        output_dir: Output directory for exported files.
+        meshes: List of (vertices, faces) in world space.
+        project_dir: Project directory (for sparse PLY source).
+        fps: Frame rate for Alembic export.
+
+    Returns:
+        List of exported file paths.
+    """
+    from blender import check_blender_available, export_ply_to_alembic
+
+    exported: List[Path] = []
+
+    ground_height = compute_ground_height(meshes)
+    all_verts = np.concatenate([v for v, _ in meshes], axis=0)
+    xz_center = np.array([np.median(all_verts[:, 0]), np.median(all_verts[:, 2])])
+    xz_range = max(all_verts[:, 0].ptp(), all_verts[:, 2].ptp())
+    grid_half = max(xz_range * 0.75, 2.0)
+
+    ground_ply = output_dir / "ground_plane.ply"
+    generate_ground_plane_ply(ground_ply, ground_height, xz_center, size=grid_half)
+    print(f"  Ground plane at Y={ground_height:.4f}")
+
+    with open(output_dir / "ground_plane.json", "w", encoding="utf-8") as f:
+        json.dump({
+            "height": ground_height,
+            "normal": [0.0, 1.0, 0.0],
+            "coordinate_system": "vggsfm_world_gravity_aligned",
+        }, f, indent=2)
+
+    sparse_ply_src = project_dir / "geometry" / "sparse_pointcloud.ply"
+    if sparse_ply_src.exists():
+        shutil.copy2(sparse_ply_src, output_dir / "sparse_pointcloud.ply")
+
+    blender_ok, blender_msg = check_blender_available()
+    if not blender_ok:
+        print(f"  Warning: {blender_msg} — skipping geometry ABC export")
+        return exported
+
+    ply_targets = [("ground plane", ground_ply, output_dir / "ground_plane.abc")]
+    sparse_ply_dst = output_dir / "sparse_pointcloud.ply"
+    if sparse_ply_dst.exists():
+        ply_targets.append(("sparse pointcloud", sparse_ply_dst, output_dir / "sparse_pointcloud.abc"))
+
+    for label, ply_path, abc_path in ply_targets:
+        print(f"  Exporting {label} Alembic...")
+        export_ply_to_alembic(ply_path, abc_path, fps)
+        if abc_path.exists():
+            exported.append(abc_path)
+
+    return exported
 
 
 def write_combined_intrinsics(
@@ -309,11 +383,15 @@ def export_scene(
     output_dir: Path,
     formats: List[str],
     fps: int = 24,
+    ply_files: Optional[List[Path]] = None,
 ) -> List[Path]:
     """Export combined mesh + camera scene files.
 
     Writes OBJ sequence to a temp directory, then calls Blender to produce
     single Alembic/USD files containing both the animated mesh and camera.
+
+    When ply_files is provided, also produces a combined.abc that includes
+    the static geometry alongside the animated mesh and camera.
 
     Args:
         meshes: List of (vertices, faces) tuples.
@@ -321,6 +399,7 @@ def export_scene(
         output_dir: Directory for output scene files.
         formats: List of format strings ("abc", "usd").
         fps: Frames per second.
+        ply_files: Optional PLY files to include in combined.abc.
 
     Returns:
         List of successfully exported file paths.
@@ -348,7 +427,7 @@ def export_scene(
         for fmt in formats:
             if fmt == "abc":
                 out = output_dir / "scene.abc"
-                print("  Exporting combined scene Alembic...")
+                print("  Exporting scene Alembic...")
                 export_scene_to_alembic(
                     mesh_dir=obj_dir,
                     camera_dir=camera_dir,
@@ -359,9 +438,25 @@ def export_scene(
                 )
                 if out.exists():
                     exported.append(out)
+
+                if ply_files:
+                    combined = output_dir / "combined.abc"
+                    print("  Exporting combined scene + geometry Alembic...")
+                    export_scene_to_alembic(
+                        mesh_dir=obj_dir,
+                        camera_dir=camera_dir,
+                        output_path=combined,
+                        fps=fps,
+                        start_frame=1,
+                        camera_name="mocap_mmcam",
+                        ply_files=ply_files,
+                    )
+                    if combined.exists():
+                        exported.append(combined)
+
             elif fmt == "usd":
                 out = output_dir / "scene.usd"
-                print("  Exporting combined scene USD...")
+                print("  Exporting scene USD...")
                 export_scene_to_usd(
                     mesh_dir=obj_dir,
                     camera_dir=camera_dir,
@@ -496,34 +591,15 @@ def run_alignment(
     camera_paths = export_camera(output_dir, fps)
     exported.extend(camera_paths)
 
-    scene_paths = export_scene(meshes, output_dir, output_dir, formats, fps)
+    geometry_paths = export_static_geometry(output_dir, meshes, project_dir, fps)
+    exported.extend(geometry_paths)
+
+    ply_files = [
+        p for p in [output_dir / "ground_plane.ply", output_dir / "sparse_pointcloud.ply"]
+        if p.exists()
+    ]
+    scene_paths = export_scene(meshes, output_dir, output_dir, formats, fps, ply_files=ply_files)
     exported.extend(scene_paths)
-
-    ground_height = compute_ground_height(meshes)
-    all_verts = np.concatenate([v for v, _ in meshes], axis=0)
-    xz_center = np.array([np.median(all_verts[:, 0]), np.median(all_verts[:, 2])])
-    xz_range = max(all_verts[:, 0].ptp(), all_verts[:, 2].ptp())
-    grid_half = max(xz_range * 0.75, 2.0)
-
-    ground_obj = output_dir / "ground_plane.obj"
-    generate_ground_plane_obj(ground_obj, ground_height, xz_center, size=grid_half)
-    if ground_obj.exists():
-        exported.append(ground_obj)
-        print(f"  Ground plane at Y={ground_height:.4f}")
-
-    ground_meta = output_dir / "ground_plane.json"
-    with open(ground_meta, "w", encoding="utf-8") as f:
-        json.dump({
-            "height": ground_height,
-            "normal": [0.0, 1.0, 0.0],
-            "coordinate_system": "vggsfm_world_gravity_aligned",
-        }, f, indent=2)
-
-    sparse_ply_src = project_dir / "geometry" / "sparse_pointcloud.ply"
-    if sparse_ply_src.exists():
-        sparse_ply_dst = output_dir / "sparse_pointcloud.ply"
-        shutil.copy2(sparse_ply_src, sparse_ply_dst)
-        exported.append(sparse_ply_dst)
 
     if tpose_path.exists():
         exported.append(tpose_path)
