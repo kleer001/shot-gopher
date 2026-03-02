@@ -15,7 +15,29 @@ import argparse
 import sys
 from pathlib import Path
 
+import bmesh
 import bpy
+
+
+def ensure_faces(obj: bpy.types.Object) -> None:
+    """Create triangles from vertex triplets if mesh has no faces.
+
+    USD PolyMesh requires faces — a vertex-only mesh gets discarded
+    on export. This creates minimal triangles so all point positions
+    survive the USD round-trip.
+    """
+    if len(obj.data.polygons) > 0:
+        return
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    verts = list(bm.verts)
+    for i in range(0, len(verts) - 2, 3):
+        bm.faces.new((verts[i], verts[i + 1], verts[i + 2]))
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+    print(f"  Added {len(obj.data.polygons)} faces for USD compatibility")
 
 
 def clear_scene() -> None:
@@ -32,7 +54,7 @@ def clear_scene() -> None:
 
 def import_ply(filepath: Path) -> bpy.types.Object:
     """Import a PLY file into the scene."""
-    bpy.ops.wm.ply_import(filepath=str(filepath))
+    bpy.ops.wm.ply_import(filepath=str(filepath), forward_axis='NEGATIVE_Z', up_axis='Y')
     if not bpy.context.selected_objects:
         raise ValueError(f"Failed to import: {filepath}")
     return bpy.context.selected_objects[0]
@@ -100,6 +122,7 @@ def main() -> None:
     obj = import_ply(args.input)
     print(f"  Vertices: {len(obj.data.vertices)}")
     print(f"  Faces: {len(obj.data.polygons)}")
+    ensure_faces(obj)
 
     print(f"Exporting USD: {args.output}")
     export_usd(args.output, args.fps)

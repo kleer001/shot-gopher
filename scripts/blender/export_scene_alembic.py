@@ -136,11 +136,14 @@ def main():
     )
 
     if args.ply_files:
+        from export_ply_alembic import ensure_faces
+
         for ply_str in args.ply_files.split(","):
             ply_path = Path(ply_str.strip())
             if ply_path.exists():
-                bpy.ops.wm.ply_import(filepath=str(ply_path))
+                bpy.ops.wm.ply_import(filepath=str(ply_path), forward_axis='NEGATIVE_Z', up_axis='Y')
                 imported = bpy.context.selected_objects[0]
+                ensure_faces(imported)
                 print(f"Imported static geometry: {imported.name} ({len(imported.data.vertices)} verts)")
 
     print(f"Animation range: {args.start_frame}-{end_frame}")
