@@ -111,6 +111,100 @@ def compute_pelvis_offset(
     )
 
 
+def compute_trajectory_scale(
+    c2w: np.ndarray,
+    cam_R: np.ndarray,
+    cam_t: np.ndarray,
+) -> float:
+    """Compute scale ratio between VGGSfM and SLAHMR camera trajectories.
+
+    Both camera systems trace the same physical path but at different scales.
+    VGGSfM's monocular SfM produces an arbitrary-scale reconstruction;
+    SLAHMR's body-aware optimization produces metric-scale results.
+
+    Uses total path length (sum of inter-frame steps) for a robust estimate.
+
+    Args:
+        c2w: (N, 4, 4) VGGSfM camera-to-world matrices.
+        cam_R: (N, 3, 3) SLAHMR world-to-camera rotation.
+        cam_t: (N, 3) SLAHMR world-to-camera translation.
+
+    Returns:
+        Scale factor (VGGSfM_units / meters).
+    """
+    vggsfm_pos = c2w[:, :3, 3]
+    slahmr_pos = np.array([-cam_R[i].T @ cam_t[i] for i in range(len(cam_t))])
+
+    vggsfm_length = np.linalg.norm(np.diff(vggsfm_pos, axis=0), axis=1).sum()
+    slahmr_length = np.linalg.norm(np.diff(slahmr_pos, axis=0), axis=1).sum()
+
+    return vggsfm_length / slahmr_length
+
+
+def transform_sparse_ply(
+    input_path: Path,
+    output_path: Path,
+    c2w: np.ndarray,
+    scale_factor: float,
+) -> None:
+    """Scale sparse pointcloud from VGGSfM space to match body mesh scale.
+
+    Scales vertex positions around the VGGSfM camera trajectory centroid
+    so the pointcloud's metric scale matches the aligned body mesh.
+
+    Preserves vertex colors and PLY structure (binary or ASCII).
+
+    Args:
+        input_path: Input PLY file in VGGSfM world space.
+        output_path: Output PLY file scaled to body-mesh space.
+        c2w: (N, 4, 4) VGGSfM camera-to-world matrices.
+        scale_factor: VGGSfM_units / meters ratio.
+    """
+    centroid = c2w[:, :3, 3].mean(axis=0)
+
+    with open(input_path, "rb") as f:
+        header_lines = []
+        while True:
+            line = f.readline()
+            header_lines.append(line)
+            if line.strip() == b"end_header":
+                break
+        header = b"".join(header_lines)
+        body = f.read()
+
+    header_text = header.decode("ascii")
+    n_verts = 0
+    for line in header_text.splitlines():
+        if line.startswith("element vertex"):
+            n_verts = int(line.split()[-1])
+            break
+
+    is_binary = "binary_little_endian" in header_text
+    vertex_dtype = np.dtype([
+        ("x", "<f4"), ("y", "<f4"), ("z", "<f4"),
+        ("red", "u1"), ("green", "u1"), ("blue", "u1"),
+    ])
+
+    if is_binary:
+        vertices = np.frombuffer(body, dtype=vertex_dtype, count=n_verts)
+    else:
+        vertices = np.loadtxt(
+            input_path,
+            dtype=vertex_dtype,
+            skiprows=len(header_lines),
+            max_rows=n_verts,
+        )
+
+    vertices = vertices.copy()
+    for axis, name in enumerate(("x", "y", "z")):
+        vertices[name] = centroid[axis] + (vertices[name] - centroid[axis]) / scale_factor
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "wb") as f:
+        f.write(header)
+        f.write(vertices.tobytes())
+
+
 def transform_meshes(
     meshes: List[Tuple],
     cam_R: np.ndarray,
@@ -220,18 +314,22 @@ def export_static_geometry(
     meshes: List[Tuple],
     project_dir: Path,
     fps: int,
+    c2w: np.ndarray,
+    scale_factor: float,
 ) -> List[Path]:
     """Export ground plane and sparse pointcloud as PLY and Alembic.
 
-    Generates a ground plane grid mesh at foot-contact height and copies
-    the sparse pointcloud from the mmcam geometry directory. Both are
-    converted to Alembic via Blender.
+    Generates a ground plane grid mesh at foot-contact height and transforms
+    the sparse pointcloud from VGGSfM scale to body-mesh (metric) scale.
+    Both are converted to Alembic via Blender.
 
     Args:
         output_dir: Output directory for exported files.
         meshes: List of (vertices, faces) in world space.
         project_dir: Project directory (for sparse PLY source).
         fps: Frame rate for Alembic export.
+        c2w: (N, 4, 4) VGGSfM camera-to-world matrices.
+        scale_factor: VGGSfM_units / meters ratio for pointcloud scaling.
 
     Returns:
         List of exported file paths.
@@ -258,8 +356,10 @@ def export_static_geometry(
         }, f, indent=2)
 
     sparse_ply_src = project_dir / "geometry" / "sparse_pointcloud.ply"
+    sparse_ply_dst = output_dir / "sparse_pointcloud.ply"
     if sparse_ply_src.exists():
-        shutil.copy2(sparse_ply_src, output_dir / "sparse_pointcloud.ply")
+        print(f"  Transforming sparse pointcloud (scale factor: {scale_factor:.1f}x)...")
+        transform_sparse_ply(sparse_ply_src, sparse_ply_dst, c2w, scale_factor)
 
     blender_ok, blender_msg = check_blender_available()
     if not blender_ok:
@@ -591,7 +691,11 @@ def run_alignment(
     camera_paths = export_camera(output_dir, fps)
     exported.extend(camera_paths)
 
-    geometry_paths = export_static_geometry(output_dir, meshes, project_dir, fps)
+    scale_factor = compute_trajectory_scale(c2w, cam_R, cam_t)
+    print(f"  VGGSfM/SLAHMR scale ratio: {scale_factor:.1f}x")
+    geometry_paths = export_static_geometry(
+        output_dir, meshes, project_dir, fps, c2w, scale_factor
+    )
     exported.extend(geometry_paths)
 
     ply_files = [

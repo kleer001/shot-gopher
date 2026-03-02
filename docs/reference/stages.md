@@ -365,6 +365,7 @@ When both VGGSfM and SLAHMR cameras exist, the pipeline automatically aligns the
 3. **Camera Export** — SLAHMR camera to Alembic/USD
 4. **Mesh Export** — SMPLX animated mesh to Alembic/USD
 5. **Alignment** (if mmcam exists) — Body mesh aligned to VGGSfM world space → `mocap_and_mmcam/`
+6. **Scene Geometry** — Ground plane at foot height + sparse pointcloud (scaled from VGGSfM to body-mesh metric scale)
 
 ### Multi-Person Tracking
 
@@ -406,10 +407,16 @@ mocap_camera/               # SLAHMR camera estimate
 mocap_and_mmcam/            # Aligned body + camera (when mmcam exists)
 ├── body_motion.abc         # Body in VGGSfM world space
 ├── body_motion.usd
-├── scene.abc               # Combined mesh + camera
+├── scene.abc               # Animated mesh + camera
 ├── scene.usd
+├── combined.abc            # Everything: mesh + camera + ground plane + pointcloud
 ├── camera.abc              # Output camera (SLAHMR focal + VGGSfM trajectory)
 ├── camera.usd
+├── ground_plane.ply        # Grid mesh at foot-contact height
+├── ground_plane.abc
+├── ground_plane.json       # Ground height + normal metadata
+├── sparse_pointcloud.ply   # VGGSfM reconstruction (scaled to body)
+├── sparse_pointcloud.abc
 ├── extrinsics.json
 ├── intrinsics.json
 └── tpose.obj
@@ -436,15 +443,18 @@ mocap_and_mmcam/            # Aligned body + camera (when mmcam exists)
 | `body_motion.usd` | Animated mesh sequence | Houdini/Solaris, USD pipelines |
 | `scene.abc` | Mesh + camera combined | Single-file import in DCC apps |
 | `scene.usd` | Mesh + camera combined | USD pipelines |
+| `combined.abc` | Mesh + camera + ground plane + sparse pointcloud | Full scene context in one file |
+| `ground_plane.abc` | Grid mesh at foot-contact Y height | Reference plane for compositing |
+| `sparse_pointcloud.abc` | VGGSfM 3D reconstruction (scaled to body) | Scene context, layout reference |
 
 ### How to Import
 
 | Application | Method |
 |-------------|--------|
-| Maya | File → Import → Alembic (`body_motion.abc` or `scene.abc`) |
-| Houdini | Alembic SOP → `body_motion.abc` or `scene.abc` |
+| Maya | File → Import → Alembic (`combined.abc` for full scene, or individual files) |
+| Houdini | Alembic SOP → `combined.abc` or `scene.abc` |
 | Blender | File → Import → Alembic |
-| Nuke | ReadGeo → `body_motion.abc` |
+| Nuke | ReadGeo → `body_motion.abc` or `scene.abc` |
 | Solaris | Reference LOP → `body_motion.usd` or `scene.usd` |
 
 **Rigging workflow:**
