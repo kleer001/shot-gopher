@@ -30,7 +30,7 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Dict
 
-from env_config import require_conda_env, INSTALL_DIR
+from env_config import require_conda_env, INSTALL_DIR, GVHMR_CONDA_PREFIX
 from log_manager import LogCapture
 
 
@@ -834,7 +834,7 @@ def run_gvhmr_motion_tracking(
         if focal_mm:
             gvhmr_args.extend(["--f_mm", str(focal_mm)])
 
-        cmd = [conda_exe, "run", "-n", "gvhmr", "--no-capture-output"] + gvhmr_args
+        cmd = [conda_exe, "run", "-p", str(GVHMR_CONDA_PREFIX), "--no-capture-output"] + gvhmr_args
 
         print(f"  → Running GVHMR in 'gvhmr' conda environment...")
         print(f"    $ {' '.join(gvhmr_args)}")
@@ -1290,7 +1290,7 @@ def run_export_pipeline(
     if world_transform_path.exists():
         export_args.extend(["--world-transform", str(world_transform_path)])
 
-    cmd = [conda_exe, "run", "-n", "gvhmr", "--no-capture-output"] + export_args
+    cmd = [conda_exe, "run", "-p", str(GVHMR_CONDA_PREFIX), "--no-capture-output"] + export_args
 
     print(f"  → Running export in 'gvhmr' conda environment...")
 

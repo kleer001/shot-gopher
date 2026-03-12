@@ -27,6 +27,7 @@ from pipeline_utils import (
     generate_preview_movie,
     run_command,
 )
+from env_config import GVHMR_CONDA_PREFIX
 from workflow_utils import (
     refresh_workflow_from_template,
     update_segmentation_prompt,
@@ -1165,7 +1166,7 @@ def run_stage_mocap(
             else:
                 export_script = Path(__file__).parent / "export_mocap.py"
                 export_cmd = [
-                    conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+                    conda_exe, "run", "-p", str(GVHMR_CONDA_PREFIX), "--no-capture-output",
                     "python", str(export_script),
                     str(ctx.project_dir),
                     "--fps", str(export_fps),
@@ -1217,7 +1218,7 @@ def run_stage_mocap(
         else:
             align_script = Path(__file__).parent / "align_mocap_to_mmcam.py"
             align_cmd = [
-                conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+                conda_exe, "run", "-p", str(GVHMR_CONDA_PREFIX), "--no-capture-output",
                 "python", str(align_script),
                 str(ctx.project_dir),
                 "--fps", str(export_fps),
@@ -1374,7 +1375,7 @@ def run_stage_hands(
         print(f"  → Target person: {person_folder}")
         script_path = Path(__file__).parent / "run_hand_estimation.py"
         cmd = [
-            conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+            conda_exe, "run", "-p", str(GVHMR_CONDA_PREFIX), "--no-capture-output",
             "python", str(script_path),
             str(ctx.project_dir),
             "--mocap-person", person_folder,
@@ -1396,7 +1397,7 @@ def run_stage_hands(
         "--mocap-person", person_folder,
     ]
     export_cmd = [
-        conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+        conda_exe, "run", "-p", str(GVHMR_CONDA_PREFIX), "--no-capture-output",
     ] + export_cmd_args
     try:
         run_command(export_cmd, "Re-exporting mocap with hand poses")
@@ -1452,7 +1453,7 @@ def run_stage_foot_contact(
         export_fps = config.mocap_fps if config.mocap_fps is not None else ctx.fps
         script_path = Path(__file__).parent / "run_foot_contact.py"
         cmd = [
-            conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+            conda_exe, "run", "-p", str(GVHMR_CONDA_PREFIX), "--no-capture-output",
             "python", str(script_path),
             str(ctx.project_dir),
             "--mocap-person", person_folder,
@@ -1468,7 +1469,7 @@ def run_stage_foot_contact(
     export_fps = config.mocap_fps if config.mocap_fps is not None else ctx.fps
     export_script = Path(__file__).parent / "export_mocap.py"
     export_cmd = [
-        conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+        conda_exe, "run", "-p", str(GVHMR_CONDA_PREFIX), "--no-capture-output",
         "python", str(export_script),
         str(ctx.project_dir),
         "--fps", str(export_fps),

@@ -11,11 +11,11 @@ Environment:
     dependencies with GVHMR motion capture.
 
 Usage:
-    conda run -n gvhmr python export_mocap.py <project_dir> [options]
+    conda run -p <prefix> python export_mocap.py <project_dir> [options]
 
 Example:
-    conda run -n gvhmr python export_mocap.py /path/to/project --format abc
-    conda run -n gvhmr python export_mocap.py /path/to/project --format usd --fps 30
+    conda run -p <prefix> python export_mocap.py /path/to/project --format abc
+    conda run -p <prefix> python export_mocap.py /path/to/project --format usd --fps 30
 """
 
 import argparse
@@ -24,9 +24,9 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Tuple
 
-from env_config import require_conda_env, INSTALL_DIR
+from env_config import require_conda_env, INSTALL_DIR, GVHMR_CONDA_PREFIX
 
-REQUIRED_ENV = "gvhmr"
+REQUIRED_ENV = GVHMR_CONDA_PREFIX
 
 
 def convert_slahmr_to_motion(

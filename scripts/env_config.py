@@ -2,12 +2,15 @@
 """Centralized conda environment configuration for VFX Pipeline.
 
 This module provides:
-- Single source of truth for environment name and settings
+- Single source of truth for environment paths and settings
 - Functions to check if the correct environment is active
 - Helpers to guide users to activate the environment
 
+All conda environments use prefix mode (-p) and live under
+.vfx_pipeline/envs/ so that deleting the repo removes everything.
+
 Usage in production scripts:
-    from env_config import require_conda_env, CONDA_ENV_NAME
+    from env_config import require_conda_env, CONDA_ENV_PREFIX
 
     # At the start of your script:
     require_conda_env()  # Exits with helpful message if wrong env
@@ -30,9 +33,6 @@ if sys.platform == 'win32':
 # ENVIRONMENT CONFIGURATION
 # =============================================================================
 
-# The canonical conda environment name for the VFX Pipeline
-CONDA_ENV_NAME = "vfx-pipeline"
-
 # Python version requirement
 PYTHON_VERSION = "3.10"
 
@@ -54,6 +54,23 @@ DEFAULT_PROJECTS_DIR = Path(os.environ.get(
     str(_REPO_ROOT.parent / "vfx_projects")
 ))
 
+# =============================================================================
+# CONDA ENVIRONMENT PREFIXES (sandboxed under repo)
+# =============================================================================
+
+CONDA_ENVS_DIR = INSTALL_DIR / "envs"
+
+CONDA_ENV_PREFIX = CONDA_ENVS_DIR / "vfx-pipeline"
+GVHMR_CONDA_PREFIX = CONDA_ENVS_DIR / "gvhmr"
+SLAHMR_CONDA_PREFIX = CONDA_ENVS_DIR / "slahmr"
+VGGSFM_CONDA_PREFIX = CONDA_ENVS_DIR / "vggsfm"
+COLMAP_CONDA_PREFIX = CONDA_ENVS_DIR / "colmap"
+VIDEOMAMA_CONDA_PREFIX = CONDA_ENVS_DIR / "videomama"
+
+# Display names derived from prefix paths (for messages and backward compat)
+CONDA_ENV_NAME = CONDA_ENV_PREFIX.name
+SLAHMR_CONDA_ENV = SLAHMR_CONDA_PREFIX.name
+
 # Path to the generated activation script (platform-specific)
 def _get_activation_script_name() -> str:
     """Get platform-appropriate activation script name."""
@@ -66,7 +83,6 @@ ACTIVATION_SCRIPT = INSTALL_DIR / _get_activation_script_name()
 
 # SLAHMR installation paths
 SLAHMR_INSTALL_DIR = INSTALL_DIR / "tools" / "slahmr"
-SLAHMR_CONDA_ENV = "slahmr"
 
 # UnderPressure installation path
 UNDERPRESSURE_INSTALL_DIR = INSTALL_DIR / "tools" / "underpressure"
@@ -125,36 +141,20 @@ def get_platform_name() -> str:
 def get_active_conda_env() -> str | None:
     """Get the currently active conda environment name.
 
+    For prefix-based environments, CONDA_DEFAULT_ENV contains the full
+    path. This function returns the folder name (last component) so
+    display code stays readable.
+
     Returns:
         Environment name if in a conda environment, None otherwise.
     """
     value = os.environ.get("CONDA_DEFAULT_ENV")
-    if value is not None:
-        value = value.strip()
-    return value
-
-
-def is_conda_env_active(env_name: str = None) -> bool:
-    """Check if the specified conda environment is currently active.
-
-    Args:
-        env_name: Environment name to check. Defaults to CONDA_ENV_NAME.
-
-    Returns:
-        True if the specified environment is active.
-    """
-    if env_name is None:
-        env_name = CONDA_ENV_NAME
-    return get_active_conda_env() == env_name
-
-
-def is_any_conda_env_active() -> bool:
-    """Check if any conda environment is currently active.
-
-    Returns:
-        True if any conda environment is active.
-    """
-    return get_active_conda_env() is not None
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    return Path(value).name
 
 
 def get_conda_prefix() -> Path | None:
@@ -167,17 +167,58 @@ def get_conda_prefix() -> Path | None:
     return Path(prefix) if prefix else None
 
 
+def is_conda_env_active(env_prefix: Path | str | None = None) -> bool:
+    """Check if the specified conda environment is currently active.
+
+    Uses CONDA_PREFIX for reliable comparison — works for both named
+    and prefix-based environments.
+
+    Args:
+        env_prefix: Environment prefix path or name to check.
+                    Accepts a Path (preferred) or a string name for
+                    backward compatibility. Defaults to CONDA_ENV_PREFIX.
+
+    Returns:
+        True if the specified environment is active.
+    """
+    if env_prefix is None:
+        env_prefix = CONDA_ENV_PREFIX
+
+    if isinstance(env_prefix, str):
+        env_prefix = CONDA_ENVS_DIR / env_prefix
+
+    active_prefix = get_conda_prefix()
+    if active_prefix is None:
+        return False
+
+    return active_prefix.resolve() == env_prefix.resolve()
+
+
+def is_any_conda_env_active() -> bool:
+    """Check if any conda environment is currently active.
+
+    Returns:
+        True if any conda environment is active.
+    """
+    return get_conda_prefix() is not None
+
+
 # =============================================================================
 # ACTIVATION HELPERS
 # =============================================================================
 
-def get_activation_command() -> str:
-    """Get the shell command to activate the VFX Pipeline environment.
+def get_activation_command(env_prefix: Path | None = None) -> str:
+    """Get the shell command to activate a VFX Pipeline environment.
+
+    Args:
+        env_prefix: Environment prefix path. Defaults to CONDA_ENV_PREFIX.
 
     Returns:
         Shell command string.
     """
-    return f"conda activate {CONDA_ENV_NAME}"
+    if env_prefix is None:
+        env_prefix = CONDA_ENV_PREFIX
+    return f"conda activate {env_prefix}"
 
 
 def get_activation_script_path() -> Path | None:
@@ -249,14 +290,16 @@ def get_activation_instructions() -> str:
 # ENFORCEMENT
 # =============================================================================
 
-def require_conda_env(env_name: str = None, exit_on_fail: bool = True) -> bool:
+def require_conda_env(env_prefix: Path | str | None = None, exit_on_fail: bool = True) -> bool:
     """Require that the correct conda environment is active.
 
     This function should be called at the start of production scripts
     to ensure they run in the correct environment.
 
     Args:
-        env_name: Environment name to require. Defaults to CONDA_ENV_NAME.
+        env_prefix: Environment prefix path or name. Accepts a Path
+                    (preferred) or a string name for backward compatibility.
+                    Defaults to CONDA_ENV_PREFIX.
         exit_on_fail: If True, exit the process with an error message.
                       If False, just return False.
 
@@ -266,10 +309,13 @@ def require_conda_env(env_name: str = None, exit_on_fail: bool = True) -> bool:
     Exits:
         With code 1 if environment is wrong and exit_on_fail=True.
     """
-    if env_name is None:
-        env_name = CONDA_ENV_NAME
+    if env_prefix is None:
+        env_prefix = CONDA_ENV_PREFIX
 
-    if is_conda_env_active(env_name):
+    if isinstance(env_prefix, str):
+        env_prefix = CONDA_ENVS_DIR / env_prefix
+
+    if is_conda_env_active(env_prefix):
         return True
 
     if exit_on_fail:
@@ -279,32 +325,36 @@ def require_conda_env(env_name: str = None, exit_on_fail: bool = True) -> bool:
     return False
 
 
-def check_conda_env_or_warn(env_name: str = None) -> bool:
+def check_conda_env_or_warn(env_prefix: Path | str | None = None) -> bool:
     """Check environment and print a warning if wrong, but continue execution.
 
     Use this for scripts that can partially work outside the environment
     but may have reduced functionality.
 
     Args:
-        env_name: Environment name to check. Defaults to CONDA_ENV_NAME.
+        env_prefix: Environment prefix path or name. Defaults to CONDA_ENV_PREFIX.
 
     Returns:
         True if environment is correct, False otherwise.
     """
-    if env_name is None:
-        env_name = CONDA_ENV_NAME
+    if env_prefix is None:
+        env_prefix = CONDA_ENV_PREFIX
 
-    if is_conda_env_active(env_name):
+    if isinstance(env_prefix, str):
+        env_prefix = CONDA_ENVS_DIR / env_prefix
+
+    if is_conda_env_active(env_prefix):
         return True
 
     active = get_active_conda_env()
+    env_name = env_prefix.name
     if active:
         print(f"Warning: Running in '{active}' environment, "
               f"expected '{env_name}'", file=sys.stderr)
     else:
         print(f"Warning: No conda environment active, "
               f"expected '{env_name}'", file=sys.stderr)
-    print(f"Some features may not work. Run: {get_activation_command()}",
+    print(f"Some features may not work. Run: {get_activation_command(env_prefix)}",
           file=sys.stderr)
     print("", file=sys.stderr)
 
@@ -315,16 +365,20 @@ def check_conda_env_or_warn(env_name: str = None) -> bool:
 # SCRIPT EXECUTION HELPERS
 # =============================================================================
 
-def get_env_python() -> Path | None:
-    """Get the path to the Python executable in the VFX Pipeline environment.
+def get_env_python(env_prefix: Path | None = None) -> Path | None:
+    """Get the path to the Python executable in a conda environment.
+
+    Args:
+        env_prefix: Environment prefix path. Defaults to CONDA_ENV_PREFIX.
 
     Returns:
         Path to Python if environment exists, None otherwise.
     """
-    import shutil
+    if env_prefix is None:
+        env_prefix = CONDA_ENV_PREFIX
 
     prefix = get_conda_prefix()
-    if prefix and is_conda_env_active():
+    if prefix and is_conda_env_active(env_prefix):
         if is_windows():
             return prefix / "python.exe"
         return prefix / "bin" / "python"
@@ -337,7 +391,7 @@ def get_env_python() -> Path | None:
             where_cmd = ["which", "python"]
 
         result = subprocess.run(
-            ["conda", "run", "-n", CONDA_ENV_NAME] + where_cmd,
+            ["conda", "run", "-p", str(env_prefix)] + where_cmd,
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
@@ -348,14 +402,15 @@ def get_env_python() -> Path | None:
     return None
 
 
-def run_in_env(command: list[str], **kwargs) -> "subprocess.CompletedProcess":
-    """Run a command in the VFX Pipeline conda environment.
+def run_in_env(command: list[str], env_prefix: Path | None = None, **kwargs) -> "subprocess.CompletedProcess":
+    """Run a command in a conda environment.
 
     If already in the correct environment, runs directly.
     Otherwise, uses 'conda run' to execute in the environment.
 
     Args:
         command: Command and arguments as a list.
+        env_prefix: Environment prefix path. Defaults to CONDA_ENV_PREFIX.
         **kwargs: Additional arguments passed to subprocess.run.
 
     Returns:
@@ -363,12 +418,13 @@ def run_in_env(command: list[str], **kwargs) -> "subprocess.CompletedProcess":
     """
     import subprocess
 
-    if is_conda_env_active():
-        # Already in correct environment, run directly
+    if env_prefix is None:
+        env_prefix = CONDA_ENV_PREFIX
+
+    if is_conda_env_active(env_prefix):
         return subprocess.run(command, **kwargs)
     else:
-        # Use conda run to execute in the environment
-        conda_cmd = ["conda", "run", "-n", CONDA_ENV_NAME, "--no-capture-output"]
+        conda_cmd = ["conda", "run", "-p", str(env_prefix), "--no-capture-output"]
         conda_cmd.extend(command)
         return subprocess.run(conda_cmd, **kwargs)
 
@@ -405,7 +461,7 @@ def main():
 
     # Handle specific queries
     if args.show_env:
-        print(CONDA_ENV_NAME)
+        print(str(CONDA_ENV_PREFIX))
         return 0
 
     if args.show_activate:
@@ -425,10 +481,10 @@ def main():
         return 0 if active else 1
 
     # Full status display
-    print(f"VFX Pipeline Environment Configuration")
+    print("VFX Pipeline Environment Configuration")
     print("=" * 40)
-    print(f"Required environment: {CONDA_ENV_NAME}")
-    print(f"Current environment:  {get_active_conda_env() or 'none'}")
+    print(f"Required environment: {CONDA_ENV_PREFIX}")
+    print(f"Current prefix:       {get_conda_prefix() or 'none'}")
     print(f"Status:              {'ACTIVE' if active else 'NOT ACTIVE'}")
     print()
 

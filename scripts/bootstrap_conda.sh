@@ -284,7 +284,7 @@ fi
 print_banner "Installation Complete!" "$GREEN"
 echo "Next steps:"
 echo "  1. Restart your terminal (if conda was just installed)"
-echo "  2. Activate environment: conda activate vfx-pipeline"
+echo "  2. Activate environment: conda activate $INSTALL_DIR/.vfx_pipeline/envs/vfx-pipeline"
 echo "  3. Or use: source $INSTALL_DIR/.vfx_pipeline/activate.sh"
 echo "  4. Run: python scripts/run_pipeline.py --help"
 echo ""

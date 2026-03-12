@@ -21,10 +21,10 @@ Environment:
     Requires 'gvhmr' conda environment (has smplx, torch).
 
 Usage:
-    conda run -n gvhmr python align_mocap_to_mmcam.py <project_dir> [options]
+    conda run -p <prefix> python align_mocap_to_mmcam.py <project_dir> [options]
 
 Example:
-    conda run -n gvhmr python align_mocap_to_mmcam.py /path/to/TNIS0012 --fps 24
+    conda run -p <prefix> python align_mocap_to_mmcam.py /path/to/TNIS0012 --fps 24
 """
 
 import argparse
@@ -38,7 +38,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from env_config import require_conda_env
+from env_config import require_conda_env, GVHMR_CONDA_PREFIX
 from transforms import quaternion_to_rotation_matrix
 from export_mocap import (
     export_alembic,
@@ -50,7 +50,7 @@ from export_mocap import (
     parse_formats,
 )
 
-REQUIRED_ENV = "gvhmr"
+REQUIRED_ENV = GVHMR_CONDA_PREFIX
 
 
 def load_slahmr_camera(

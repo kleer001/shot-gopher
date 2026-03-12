@@ -33,8 +33,10 @@ else
 fi
 
 # Activate the vfx-pipeline environment
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+VFX_ENV_PREFIX="$REPO_ROOT/.vfx_pipeline/envs/vfx-pipeline"
 echo "Activating vfx-pipeline environment..."
-conda activate vfx-pipeline
+conda activate "$VFX_ENV_PREFIX"
 if [ $? -ne 0 ]; then
     echo "ERROR: Failed to activate vfx-pipeline environment"
     echo ""

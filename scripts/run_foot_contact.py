@@ -9,10 +9,10 @@ Environment:
     Requires 'gvhmr' conda environment (has PyTorch, smplx, scipy).
 
 Usage:
-    conda run -n gvhmr python run_foot_contact.py <project_dir> [options]
+    conda run -p <prefix> python run_foot_contact.py <project_dir> [options]
 
 Example:
-    conda run -n gvhmr python run_foot_contact.py /path/to/project --fps 30
+    conda run -p <prefix> python run_foot_contact.py /path/to/project --fps 30
 """
 
 import argparse
@@ -24,9 +24,9 @@ from typing import Optional
 import numpy as np
 import torch
 
-from env_config import require_conda_env, UNDERPRESSURE_INSTALL_DIR, INSTALL_DIR
+from env_config import require_conda_env, UNDERPRESSURE_INSTALL_DIR, INSTALL_DIR, GVHMR_CONDA_PREFIX
 
-REQUIRED_ENV = "gvhmr"
+REQUIRED_ENV = GVHMR_CONDA_PREFIX
 
 SMPLX_TO_AMASS = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,

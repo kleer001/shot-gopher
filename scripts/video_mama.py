@@ -29,10 +29,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from env_config import INSTALL_DIR
+from env_config import INSTALL_DIR, VIDEOMAMA_CONDA_PREFIX
 from pipeline_utils import get_gpu_vram_gb, get_image_dimensions
 
-VIDEOMAMA_ENV_NAME = "videomama"
+VIDEOMAMA_ENV_NAME = VIDEOMAMA_CONDA_PREFIX
 VIDEOMAMA_TOOLS_DIR = INSTALL_DIR / "tools" / "VideoMaMa"
 VIDEOMAMA_MODELS_DIR = INSTALL_DIR / "models" / "VideoMaMa"
 SVD_MODEL_DIR = VIDEOMAMA_MODELS_DIR / "stable-video-diffusion-img2vid-xt"
@@ -205,7 +205,7 @@ if torch.cuda.is_available():
 """
     try:
         subprocess.run(
-            [conda_exe, "run", "-n", VIDEOMAMA_ENV_NAME, "python", "-c", clear_script],
+            [conda_exe, "run", "-p", str(VIDEOMAMA_ENV_NAME), "python", "-c", clear_script],
             capture_output=True,
             timeout=30,
         )
@@ -235,7 +235,7 @@ def run_videomama_chunk(
         return False, False
 
     cmd = [
-        conda_exe, "run", "-n", VIDEOMAMA_ENV_NAME,
+        conda_exe, "run", "-p", str(VIDEOMAMA_ENV_NAME),
         "--cwd", str(VIDEOMAMA_TOOLS_DIR),
         "python", str(inference_script),
         "--base_model_path", str(SVD_MODEL_DIR),

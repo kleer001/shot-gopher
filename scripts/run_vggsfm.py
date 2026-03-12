@@ -26,12 +26,11 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from env_config import require_conda_env, INSTALL_DIR
+from env_config import require_conda_env, INSTALL_DIR, VGGSFM_CONDA_PREFIX
 from log_manager import LogCapture
 
 
 VGGSFM_INSTALL_DIR = INSTALL_DIR / "tools" / "vggsfm"
-VGGSFM_CONDA_ENV = "vggsfm"
 
 
 def _vram_gb() -> float:
@@ -124,11 +123,7 @@ def check_vggsfm_available() -> bool:
     if not conda_exe:
         return False
 
-    result = subprocess.run(
-        [conda_exe, "env", "list"],
-        capture_output=True, text=True, timeout=10,
-    )
-    return result.returncode == 0 and VGGSFM_CONDA_ENV in result.stdout
+    return VGGSFM_CONDA_PREFIX.exists()
 
 
 def diagnose_vggsfm_environment(verbose: bool = False) -> dict:
@@ -151,15 +146,11 @@ def diagnose_vggsfm_environment(verbose: bool = False) -> dict:
 
     conda_exe = _find_conda()
     if conda_exe:
-        result = subprocess.run(
-            [conda_exe, "env", "list"],
-            capture_output=True, text=True, timeout=10,
-        )
-        info["conda_env_exists"] = result.returncode == 0 and VGGSFM_CONDA_ENV in result.stdout
+        info["conda_env_exists"] = VGGSFM_CONDA_PREFIX.exists()
 
     if info["conda_env_exists"] and conda_exe:
         result = subprocess.run(
-            [conda_exe, "run", "-n", VGGSFM_CONDA_ENV,
+            [conda_exe, "run", "-p", str(VGGSFM_CONDA_PREFIX),
              "python", "-c", "import torch; print(torch.cuda.is_available())"],
             capture_output=True, text=True, timeout=30,
         )
@@ -177,7 +168,7 @@ def diagnose_vggsfm_environment(verbose: bool = False) -> dict:
         print(f"    DIAG: Repo exists: {info['repo_exists']}")
         print(f"    DIAG: demo.py exists: {info['demo_py_exists']}")
         print(f"    DIAG: video_demo.py exists: {info['video_demo_py_exists']}")
-        print(f"    DIAG: Conda env '{VGGSFM_CONDA_ENV}': {info['conda_env_exists']}")
+        print(f"    DIAG: Conda env '{VGGSFM_CONDA_PREFIX}': {info['conda_env_exists']}")
         print(f"    DIAG: CUDA available: {info['cuda_available']}")
 
     return info
@@ -448,7 +439,7 @@ def run_vggsfm_pipeline(
 
     conda_exe = _find_conda()
     cmd = [
-        conda_exe, "run", "-n", VGGSFM_CONDA_ENV, "--no-capture-output",
+        conda_exe, "run", "-p", str(VGGSFM_CONDA_PREFIX), "--no-capture-output",
         "python", str(VGGSFM_INSTALL_DIR / "demo.py"),
     ] + hydra_overrides
 

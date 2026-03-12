@@ -263,8 +263,7 @@ class InstallationWizard:
 
         print_info(message)
 
-        # Create environment if needed
-        if not self.conda_manager.environment_exists(self.conda_manager.env_name):
+        if not self.conda_manager.environment_exists():
             print_info(f"Creating dedicated environment '{self.conda_manager.env_name}'...")
             if not self.conda_manager.create_environment():
                 return False

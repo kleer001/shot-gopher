@@ -4,8 +4,11 @@ REM Shared error message for conda environment activation failure
 REM Called by wrapper scripts in src/
 REM =============================================================================
 
-REM Environment name - single source of truth for Windows scripts
+REM Environment config - single source of truth for Windows scripts
 set "VFX_ENV_NAME=vfx-pipeline"
+set "SCRIPT_DIR=%~dp0"
+set "REPO_ROOT=%SCRIPT_DIR%.."
+set "VFX_ENV_PREFIX=%REPO_ROOT%\.vfx_pipeline\envs\vfx-pipeline"
 
 echo.
 echo !!! ============================================================== !!!
@@ -15,6 +18,7 @@ echo !!!                                                                !!!
 echo !!! ============================================================== !!!
 echo.
 echo     The '%VFX_ENV_NAME%' conda environment could not be activated.
+echo     Prefix: %VFX_ENV_PREFIX%
 echo.
 echo     +----------------------------------------------------------+
 echo     ^|  To fix this, first run the install wizard:             ^|
@@ -23,7 +27,7 @@ echo     ^|      python scripts\install_wizard.py                    ^|
 echo     ^|                                                          ^|
 echo     ^|  Then activate the environment:                          ^|
 echo     ^|                                                          ^|
-echo     ^|      conda activate %VFX_ENV_NAME%                         ^|
+echo     ^|      conda activate "%VFX_ENV_PREFIX%"
 echo     ^|                                                          ^|
 echo     +----------------------------------------------------------+
 echo.

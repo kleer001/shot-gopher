@@ -113,7 +113,7 @@ def run_colmap_undistorter(
     """
     colmap_exe = get_colmap_executable()
     if not colmap_exe:
-        print(f"    Error: COLMAP not found. Install via: conda create -n colmap -c conda-forge colmap", file=sys.stderr)
+        print(f"    Error: COLMAP not found. Install via: conda create -p <colmap-prefix> -c conda-forge colmap", file=sys.stderr)
         return False
 
     if output_dir.exists():

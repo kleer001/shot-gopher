@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 # Import centralized environment configuration
-from env_config import CONDA_ENV_NAME, PYTHON_VERSION
+from env_config import CONDA_ENV_NAME, CONDA_ENV_PREFIX, CONDA_ENVS_DIR, PYTHON_VERSION
 
 from .utils import print_error, print_success, print_warning, run_command
 
@@ -22,10 +22,16 @@ def _is_windows() -> bool:
 
 
 class CondaEnvironmentManager:
-    """Manages conda environment creation and activation."""
+    """Manages conda environment creation and activation.
 
-    def __init__(self, env_name: str = CONDA_ENV_NAME):
-        self.env_name = env_name
+    All environments use prefix mode (-p) under CONDA_ENVS_DIR so they
+    are sandboxed inside the repo. The env_name property is derived from
+    the prefix path for display purposes.
+    """
+
+    def __init__(self, env_prefix: Path = CONDA_ENV_PREFIX):
+        self.env_prefix = env_prefix
+        self.env_name = env_prefix.name
         self.conda_exe = None
         self.python_version = PYTHON_VERSION
 
@@ -131,9 +137,27 @@ class CondaEnvironmentManager:
                     envs.append(parts[0])
         return envs
 
-    def environment_exists(self, env_name: str) -> bool:
-        """Check if a conda environment exists."""
-        return env_name in self.list_environments()
+    def environment_exists(self, env_name_or_prefix: str | Path | None = None) -> bool:
+        """Check if a conda environment exists.
+
+        For prefix-based environments, checks for conda-meta/ directory.
+        Falls back to listing envs for named environments.
+
+        Args:
+            env_name_or_prefix: Path to prefix dir, env name string, or
+                                None to check self.env_prefix.
+        """
+        if env_name_or_prefix is None:
+            env_name_or_prefix = self.env_prefix
+
+        if isinstance(env_name_or_prefix, Path):
+            return (env_name_or_prefix / "conda-meta").is_dir()
+
+        prefix_path = CONDA_ENVS_DIR / env_name_or_prefix
+        if (prefix_path / "conda-meta").is_dir():
+            return True
+
+        return env_name_or_prefix in self.list_environments()
 
     def accept_tos_if_needed(self) -> None:
         """Accept conda channel TOS if required (conda >= 26)."""
@@ -153,7 +177,7 @@ class CondaEnvironmentManager:
             )
 
     def create_environment(self, python_version: Optional[str] = None) -> bool:
-        """Create new conda environment.
+        """Create new conda environment using prefix mode.
 
         Args:
             python_version: Python version (e.g., "3.10"), uses default if None
@@ -168,17 +192,18 @@ class CondaEnvironmentManager:
         self.accept_tos_if_needed()
 
         py_ver = python_version or self.python_version
-        print(f"\nCreating conda environment '{self.env_name}' with Python {py_ver}...")
+        self.env_prefix.parent.mkdir(parents=True, exist_ok=True)
+        print(f"\nCreating conda environment '{self.env_name}' at {self.env_prefix}...")
 
         success, _ = run_command([
             self.conda_exe, "create",
-            "-n", self.env_name,
+            "-p", str(self.env_prefix),
             f"python={py_ver}",
             "-y"
         ])
 
         if success:
-            print_success(f"Environment '{self.env_name}' created")
+            print_success(f"Environment '{self.env_name}' created at {self.env_prefix}")
         else:
             print_error(f"Failed to create environment '{self.env_name}'")
 
@@ -186,7 +211,7 @@ class CondaEnvironmentManager:
 
     def get_activation_command(self) -> str:
         """Get command to activate the environment."""
-        return f"conda activate {self.env_name}"
+        return f"conda activate {self.env_prefix}"
 
     def get_python_executable(self) -> Optional[Path]:
         """Get path to Python executable in the environment."""
@@ -199,7 +224,7 @@ class CondaEnvironmentManager:
             where_cmd = ["which", "python"]
 
         success, output = run_command(
-            [self.conda_exe, "run", "-n", self.env_name] + where_cmd,
+            [self.conda_exe, "run", "-p", str(self.env_prefix)] + where_cmd,
             check=False,
             capture=True
         )
@@ -223,12 +248,11 @@ class CondaEnvironmentManager:
         if not self.conda_exe:
             return False
 
-        # Can't use conda install in pip-only mode
         if self.conda_exe == "pip-only":
             print_warning(f"  Conda binary not available, cannot install {package} via conda")
             return False
 
-        cmd = [self.conda_exe, "install", "-n", self.env_name, package, "-y"]
+        cmd = [self.conda_exe, "install", "-p", str(self.env_prefix), package, "-y"]
         if channel:
             cmd.extend(["-c", channel])
 
@@ -250,13 +274,11 @@ class CondaEnvironmentManager:
 
         print(f"  Installing {package} via pip...")
 
-        # If we're in pip-only mode (active conda env but no conda binary),
-        # run pip directly
         if self.conda_exe == "pip-only":
             success, _ = run_command(["pip", "install", package])
         else:
             success, _ = run_command([
-                self.conda_exe, "run", "-n", self.env_name,
+                self.conda_exe, "run", "-p", str(self.env_prefix),
                 "pip", "install", package
             ])
         return success
@@ -277,12 +299,10 @@ class CondaEnvironmentManager:
 
         current_env = self.get_current_env()
 
-        # Check if vfx-pipeline exists
-        if self.environment_exists(self.env_name):
+        if self.environment_exists():
             if current_env == self.env_name:
                 return True, f"Using existing environment '{self.env_name}'"
             else:
                 return True, f"Environment '{self.env_name}' exists but not activated. Will use it."
 
-        # Need to create environment
-        return True, f"Will create new environment '{self.env_name}'"
+        return True, f"Will create new environment '{self.env_name}' at {self.env_prefix}"

@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from env_config import INSTALL_DIR, UNDERPRESSURE_INSTALL_DIR
+from env_config import CONDA_ENVS_DIR, INSTALL_DIR, UNDERPRESSURE_INSTALL_DIR
 
 from .utils import check_python_package, print_error, print_info, print_success, print_warning, run_command
 
@@ -57,7 +57,7 @@ class PythonPackageInstaller(ComponentInstaller):
         if self.conda_manager and self.conda_manager.conda_exe:
             # Check within the conda environment
             success, output = run_command([
-                self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                self.conda_manager.conda_exe, "run", "-p", str(self.conda_manager.env_prefix),
                 "python", "-c", f"import {self.import_name}"
             ], check=False, capture=True)
             self.installed = success
@@ -106,7 +106,7 @@ class CondaPackageInstaller(ComponentInstaller):
         """
         if self.conda_manager and self.conda_manager.conda_exe:
             success, _ = run_command([
-                self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                self.conda_manager.conda_exe, "run", "-p", str(self.conda_manager.env_prefix),
                 self.command, "--version"
             ], check=False, capture=True)
             self.installed = success
@@ -254,7 +254,7 @@ class GitRepoInstaller(ComponentInstaller):
             print(f"  Installing {self.name} dependencies...")
             if self.conda_manager and self.conda_manager.conda_exe:
                 success, _ = run_command([
-                    self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                    self.conda_manager.conda_exe, "run", "-p", str(self.conda_manager.env_prefix),
                     "pip", "install", "-r", str(requirements_txt)
                 ])
             else:
@@ -272,7 +272,7 @@ class GitRepoInstaller(ComponentInstaller):
             # Use conda manager if available to install into the environment
             if self.conda_manager and self.conda_manager.conda_exe:
                 success, _ = run_command([
-                    self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                    self.conda_manager.conda_exe, "run", "-p", str(self.conda_manager.env_prefix),
                     "pip", "install", "-e", str(self.install_dir)
                 ])
             else:
@@ -289,7 +289,7 @@ class GitRepoInstaller(ComponentInstaller):
             for pkg in self.extra_packages:
                 if self.conda_manager and self.conda_manager.conda_exe:
                     success, _ = run_command([
-                        self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                        self.conda_manager.conda_exe, "run", "-p", str(self.conda_manager.env_prefix),
                         "pip", "install", pkg
                     ])
                 else:
@@ -303,7 +303,7 @@ class GitRepoInstaller(ComponentInstaller):
             print(f"  Running {self.name} install script...")
             if self.conda_manager and self.conda_manager.conda_exe:
                 success, output = run_command([
-                    self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                    self.conda_manager.conda_exe, "run", "-p", str(self.conda_manager.env_prefix),
                     "python", str(install_py)
                 ], capture=True)
             else:
@@ -416,7 +416,7 @@ class GSIRInstaller(ComponentInstaller):
     def _run_pip(self, args: list) -> bool:
         if self.conda_manager and self.conda_manager.conda_exe:
             cmd = [
-                self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                self.conda_manager.conda_exe, "run", "-p", str(self.conda_manager.env_prefix),
                 "pip"
             ] + args
         else:
@@ -508,18 +508,12 @@ class GVHMRInstaller(ComponentInstaller):
     def __init__(self, install_dir: Path = None, size_gb: float = 4.0):
         super().__init__("GVHMR", size_gb)
         self.install_dir = install_dir or INSTALL_DIR / "GVHMR"
-        self.env_name = "gvhmr"
+        self.env_prefix = CONDA_ENVS_DIR / "gvhmr"
+        self.env_name = self.env_prefix.name
 
     def check(self) -> bool:
         repo_exists = self.install_dir.exists() and (self.install_dir / ".git").exists()
-
-        conda_exe = self._find_conda()
-        env_exists = False
-        if conda_exe:
-            success, output = run_command(
-                [conda_exe, "env", "list"], check=False, capture=True
-            )
-            env_exists = success and self.env_name in output
+        env_exists = (self.env_prefix / "conda-meta").is_dir()
 
         self.installed = repo_exists and env_exists
         return self.installed
@@ -539,7 +533,7 @@ class GVHMRInstaller(ComponentInstaller):
         if not conda_exe:
             print_error("Conda not found")
             return False
-        full_cmd = [conda_exe, "run", "-n", self.env_name] + cmd
+        full_cmd = [conda_exe, "run", "-p", str(self.env_prefix)] + cmd
         success, _ = run_command(full_cmd, check=False, cwd=cwd)
         return success
 
@@ -606,13 +600,12 @@ class GVHMRInstaller(ComponentInstaller):
             print_error("Conda not found - required for GVHMR installation")
             return False
 
-        success, output = run_command([conda_exe, "env", "list"], check=False, capture=True)
-        if success and self.env_name in output:
+        if (self.env_prefix / "conda-meta").is_dir():
             print_info(f"Conda environment '{self.env_name}' already exists")
         else:
             print(f"  Creating conda environment '{self.env_name}' with Python 3.10...")
             success, _ = run_command([
-                conda_exe, "create", "-y", "-n", self.env_name, "python=3.10"
+                conda_exe, "create", "-y", "-p", str(self.env_prefix), "python=3.10"
             ])
             if not success:
                 print_error(f"Failed to create conda environment '{self.env_name}'")
@@ -678,7 +671,7 @@ class GVHMRInstaller(ComponentInstaller):
 
         self.installed = True
         print_success(f"GVHMR installed to {self.install_dir}")
-        print_info(f"Activate with: conda activate {self.env_name}")
+        print_info(f"Activate with: conda activate {self.env_prefix}")
         return True
 
     def _patch_demo_argparse(self) -> None:
@@ -719,7 +712,8 @@ class WiLoRInstaller(ComponentInstaller):
 
     def __init__(self, size_gb: float = 0.5):
         super().__init__("WiLoR-mini", size_gb)
-        self.env_name = "gvhmr"
+        self.env_prefix = CONDA_ENVS_DIR / "gvhmr"
+        self.env_name = self.env_prefix.name
 
     def _find_conda(self) -> Optional[str]:
         import os
@@ -739,7 +733,7 @@ class WiLoRInstaller(ComponentInstaller):
             return False
 
         success, _ = run_command([
-            conda_exe, "run", "-n", self.env_name, "--no-capture-output",
+            conda_exe, "run", "-p", str(self.env_prefix), "--no-capture-output",
             "python", "-c",
             "from wilor_mini.pipelines.wilor_hand_pose3d_estimation_pipeline "
             "import WiLorHandPose3dEstimationPipeline",
@@ -762,10 +756,7 @@ class WiLoRInstaller(ComponentInstaller):
             print_error("Conda not found - required for WiLoR installation")
             return False
 
-        success, output = run_command(
-            [conda_exe, "env", "list"], check=False, capture=True
-        )
-        if not (success and self.env_name in output):
+        if not (self.env_prefix / "conda-meta").is_dir():
             print_error(
                 f"Conda environment '{self.env_name}' not found - install GVHMR first"
             )
@@ -773,7 +764,7 @@ class WiLoRInstaller(ComponentInstaller):
 
         print(f"  Installing WiLoR-mini into '{self.env_name}' conda environment...")
         success, _ = run_command([
-            conda_exe, "run", "-n", self.env_name, "--no-capture-output",
+            conda_exe, "run", "-p", str(self.env_prefix), "--no-capture-output",
             "pip", "install", "--no-deps", self.PACKAGE_URL,
         ])
 
@@ -783,7 +774,7 @@ class WiLoRInstaller(ComponentInstaller):
 
         print("  Installing additional dependencies...")
         success, _ = run_command([
-            conda_exe, "run", "-n", self.env_name, "--no-capture-output",
+            conda_exe, "run", "-p", str(self.env_prefix), "--no-capture-output",
             "pip", "install", *self.EXTRA_DEPS,
         ])
 
@@ -814,20 +805,15 @@ class VideoMaMaInstaller(ComponentInstaller):
         self.models_dir = INSTALL_DIR / "models" / "VideoMaMa"
         self.svd_dir = self.models_dir / "stable-video-diffusion-img2vid-xt"
         self.checkpoint_dir = self.models_dir / "checkpoints" / "VideoMaMa"
-        self.env_name = "videomama"
+        self.env_prefix = CONDA_ENVS_DIR / "videomama"
+        self.env_name = self.env_prefix.name
 
     def check(self) -> bool:
         repo_exists = self.tools_dir.exists() and (self.tools_dir / ".git").exists()
         svd_exists = self.svd_dir.exists() and bool(list(self.svd_dir.glob("*.safetensors")))
         checkpoint_exists = self.checkpoint_dir.exists() and bool(list(self.checkpoint_dir.glob("*")))
 
-        conda_exe = self._find_conda()
-        env_exists = False
-        if conda_exe:
-            success, output = run_command(
-                [conda_exe, "env", "list"], check=False, capture=True
-            )
-            env_exists = success and self.env_name in output
+        env_exists = (self.env_prefix / "conda-meta").is_dir()
 
         self.installed = repo_exists and svd_exists and checkpoint_exists and env_exists
         return self.installed
@@ -887,19 +873,14 @@ class VGGSfMInstaller(ComponentInstaller):
     def __init__(self, install_dir: Path = None, size_gb: float = 2.0):
         super().__init__("VGGSfM", size_gb)
         self.install_dir = install_dir or INSTALL_DIR / "tools" / "vggsfm"
-        self.env_name = "vggsfm"
+        self.env_prefix = CONDA_ENVS_DIR / "vggsfm"
+        self.env_name = self.env_prefix.name
 
     def check(self) -> bool:
         """Check if VGGSfM repo and conda environment exist."""
         repo_exists = self.install_dir.exists() and (self.install_dir / "demo.py").exists()
 
-        conda_exe = self._find_conda()
-        env_exists = False
-        if conda_exe:
-            success, output = run_command(
-                [conda_exe, "env", "list"], check=False, capture=True
-            )
-            env_exists = success and self.env_name in output
+        env_exists = (self.env_prefix / "conda-meta").is_dir()
 
         self.installed = repo_exists and env_exists
         return self.installed
@@ -919,7 +900,7 @@ class VGGSfMInstaller(ComponentInstaller):
         if not conda_exe:
             print_error("Conda not found")
             return False
-        full_cmd = [conda_exe, "run", "-n", self.env_name] + cmd
+        full_cmd = [conda_exe, "run", "-p", str(self.env_prefix)] + cmd
         success, _ = run_command(full_cmd, check=False, cwd=cwd)
         return success
 
@@ -928,7 +909,7 @@ class VGGSfMInstaller(ComponentInstaller):
         if not conda_exe:
             print_error("Conda not found")
             return False
-        cmd = [conda_exe, "install", "-n", self.env_name, "-y"]
+        cmd = [conda_exe, "install", "-p", str(self.env_prefix), "-y"]
         for ch in (channels or []):
             cmd.extend(["-c", ch])
         cmd.extend(packages)
@@ -949,13 +930,12 @@ class VGGSfMInstaller(ComponentInstaller):
             print_error("Conda not found - required for VGGSfM installation")
             return False
 
-        success, output = run_command([conda_exe, "env", "list"], check=False, capture=True)
-        if success and self.env_name in output:
+        if (self.env_prefix / "conda-meta").is_dir():
             print_info(f"Conda environment '{self.env_name}' already exists")
         else:
             print(f"  Creating conda environment '{self.env_name}' with Python 3.10...")
             success, _ = run_command([
-                conda_exe, "create", "-y", "-n", self.env_name, "python=3.10"
+                conda_exe, "create", "-y", "-p", str(self.env_prefix), "python=3.10"
             ])
             if not success:
                 print_error(f"Failed to create conda environment '{self.env_name}'")
@@ -1061,19 +1041,14 @@ class SLAHMRInstaller(ComponentInstaller):
     def __init__(self, install_dir: Path = None, size_gb: float = 8.0):
         super().__init__("SLAHMR", size_gb)
         self.install_dir = install_dir or INSTALL_DIR / "tools" / "slahmr"
-        self.env_name = "slahmr"
+        self.env_prefix = CONDA_ENVS_DIR / "slahmr"
+        self.env_name = self.env_prefix.name
 
     def check(self) -> bool:
         """Check if SLAHMR repo and conda environment exist."""
         repo_exists = self.install_dir.exists() and (self.install_dir / "slahmr" / "run_opt.py").exists()
 
-        conda_exe = self._find_conda()
-        env_exists = False
-        if conda_exe:
-            success, output = run_command(
-                [conda_exe, "env", "list"], check=False, capture=True
-            )
-            env_exists = success and self.env_name in output
+        env_exists = (self.env_prefix / "conda-meta").is_dir()
 
         self.installed = repo_exists and env_exists
         return self.installed
@@ -1093,7 +1068,7 @@ class SLAHMRInstaller(ComponentInstaller):
         if not conda_exe:
             print_error("Conda not found")
             return False
-        full_cmd = [conda_exe, "run", "-n", self.env_name, "--no-capture-output"] + cmd
+        full_cmd = [conda_exe, "run", "-p", str(self.env_prefix), "--no-capture-output"] + cmd
         success, _ = run_command(full_cmd, check=False, cwd=cwd)
         return success
 
@@ -1101,7 +1076,7 @@ class SLAHMRInstaller(ComponentInstaller):
         conda_exe = self._find_conda()
         if not conda_exe:
             return False
-        cmd = [conda_exe, "install", "-n", self.env_name, "-y"]
+        cmd = [conda_exe, "install", "-p", str(self.env_prefix), "-y"]
         for ch in (channels or []):
             cmd.extend(["-c", ch])
         cmd.extend(packages)
@@ -1125,13 +1100,12 @@ class SLAHMRInstaller(ComponentInstaller):
             print_error("Conda not found — required for SLAHMR installation")
             return False
 
-        success, output = run_command([conda_exe, "env", "list"], check=False, capture=True)
-        if success and self.env_name in output:
+        if (self.env_prefix / "conda-meta").is_dir():
             print_info(f"Conda environment '{self.env_name}' already exists")
         else:
             print(f"  Creating conda environment '{self.env_name}' with Python 3.10...")
             success, _ = run_command([
-                conda_exe, "create", "-y", "-n", self.env_name, "python=3.10",
+                conda_exe, "create", "-y", "-p", str(self.env_prefix), "python=3.10",
             ])
             if not success:
                 print_error(f"Failed to create conda environment '{self.env_name}'")
@@ -1277,11 +1251,12 @@ class COLMAPInstaller(ComponentInstaller):
     - Same pattern as GVHMR
     """
 
-    ENV_NAME = "colmap"
     CHANNEL = "conda-forge"
 
     def __init__(self, size_gb: float = 1.5):
         super().__init__("COLMAP", size_gb)
+        self.env_prefix = CONDA_ENVS_DIR / "colmap"
+        self.env_name = self.env_prefix.name
 
     def _find_conda(self) -> Optional[str]:
         """Find conda or mamba executable."""
@@ -1294,41 +1269,19 @@ class COLMAPInstaller(ComponentInstaller):
             return str(conda_exe)
         return None
 
-    def _find_conda_base(self) -> Optional[Path]:
-        """Find the conda base directory."""
-        import os
-        conda_exe = os.environ.get("CONDA_EXE")
-        if conda_exe:
-            return Path(conda_exe).parent.parent
-
-        for base_name in ["anaconda3", "miniconda3", "miniforge3"]:
-            conda_base = Path.home() / base_name
-            if conda_base.exists():
-                return conda_base
-
-        return None
-
-    def _env_exists(self, conda_exe: str) -> bool:
+    def _env_exists(self) -> bool:
         """Check if the colmap conda environment exists."""
-        success, output = run_command(
-            [conda_exe, "env", "list"], check=False, capture=True
-        )
-        return success and self.ENV_NAME in output
+        return (self.env_prefix / "conda-meta").is_dir()
 
     def _colmap_installed_in_env(self) -> bool:
         """Check if colmap binary exists in the dedicated env."""
-        conda_base = self._find_conda_base()
-        if not conda_base:
-            return False
-
-        env_path = conda_base / "envs" / self.ENV_NAME
         if sys.platform == "win32":
             candidates = [
-                env_path / "Scripts" / "colmap.exe",
-                env_path / "Library" / "bin" / "colmap.exe",
+                self.env_prefix / "Scripts" / "colmap.exe",
+                self.env_prefix / "Library" / "bin" / "colmap.exe",
             ]
         else:
-            candidates = [env_path / "bin" / "colmap"]
+            candidates = [self.env_prefix / "bin" / "colmap"]
 
         return any(c.exists() for c in candidates)
 
@@ -1339,43 +1292,41 @@ class COLMAPInstaller(ComponentInstaller):
 
     def install(self) -> bool:
         """Install COLMAP in a dedicated conda environment."""
-        print(f"\nInstalling COLMAP in dedicated conda environment '{self.ENV_NAME}'...")
+        print(f"\nInstalling COLMAP in dedicated conda environment '{self.env_name}'...")
         print_info("This avoids dependency conflicts with the main environment")
 
         conda_exe = self._find_conda()
         if not conda_exe:
             print_error("Conda not found - required for COLMAP installation")
-            print_warning("Install manually: conda create -n colmap -c conda-forge colmap")
+            print_warning(f"Install manually: conda create -p {self.env_prefix} -c conda-forge colmap")
             return False
 
-        if self._env_exists(conda_exe):
+        if self._env_exists():
             if self._colmap_installed_in_env():
-                print_info(f"COLMAP already installed in '{self.ENV_NAME}' environment")
+                print_info(f"COLMAP already installed in '{self.env_name}' environment")
                 self.installed = True
                 return True
             else:
-                print_info(f"Environment '{self.ENV_NAME}' exists but COLMAP not found, installing...")
+                print_info(f"Environment '{self.env_name}' exists but COLMAP not found, installing...")
                 success, _ = run_command([
-                    conda_exe, "install", "-n", self.ENV_NAME,
+                    conda_exe, "install", "-p", str(self.env_prefix),
                     "-c", self.CHANNEL, "colmap", "-y"
                 ], stream=True)
         else:
-            print(f"  Creating conda environment '{self.ENV_NAME}' with COLMAP...")
+            print(f"  Creating conda environment '{self.env_name}' with COLMAP...")
             success, _ = run_command([
-                conda_exe, "create", "-n", self.ENV_NAME,
+                conda_exe, "create", "-p", str(self.env_prefix),
                 "-c", self.CHANNEL, "colmap", "-y"
             ], stream=True)
 
         if success:
             self.installed = True
-            print_success(f"COLMAP installed in '{self.ENV_NAME}' environment")
-            conda_base = self._find_conda_base()
-            if conda_base:
-                colmap_path = conda_base / "envs" / self.ENV_NAME / "bin" / "colmap"
-                print_info(f"COLMAP path: {colmap_path}")
+            print_success(f"COLMAP installed in '{self.env_name}' environment")
+            colmap_path = self.env_prefix / "bin" / "colmap"
+            print_info(f"COLMAP path: {colmap_path}")
         else:
             print_error("COLMAP installation failed")
-            print_warning("Try manually: conda create -n colmap -c conda-forge colmap")
+            print_warning(f"Try manually: conda create -p {self.env_prefix} -c conda-forge colmap")
 
         return success
 

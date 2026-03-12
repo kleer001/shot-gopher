@@ -214,7 +214,8 @@ def report_conda_envs() -> None:
         _fail("Failed to list conda environments")
         return
 
-    pipeline_envs = {"vfx-pipeline", "gvhmr", "colmap", "videomama", "gs-ir"}
+    from env_config import CONDA_ENVS_DIR
+    pipeline_env_names = {"vfx-pipeline", "gvhmr", "colmap", "videomama", "slahmr", "vggsfm"}
     for line in output.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
@@ -222,7 +223,11 @@ def report_conda_envs() -> None:
         parts = line.split()
         env_name = parts[0]
         env_path = parts[-1] if len(parts) > 1 else ""
-        if env_name in pipeline_envs:
+        is_pipeline = (
+            env_name in pipeline_env_names
+            or (env_path and Path(env_path).parent == CONDA_ENVS_DIR)
+        )
+        if is_pipeline:
             _ok(f"{env_name.ljust(15)} {env_path}")
         elif env_name == "base":
             _info(f"{env_name.ljust(15)} {env_path}")
