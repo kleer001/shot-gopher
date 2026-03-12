@@ -18,6 +18,65 @@ if TYPE_CHECKING:
     from .conda import CondaEnvironmentManager
 
 
+def _get_installed_packages(conda_exe: str, env_prefix: Path) -> set[str]:
+    """Query pip in a conda env and return lowercase normalized package names."""
+    success, output = run_command(
+        [conda_exe, "run", "-p", str(env_prefix), "pip", "list", "--format=freeze"],
+        check=False, capture=True,
+    )
+    if not success:
+        return set()
+    packages: set[str] = set()
+    for line in output.splitlines():
+        if "==" in line:
+            packages.add(line.split("==")[0].lower().replace("-", "_"))
+    return packages
+
+
+def _filter_missing(specs: list[str], installed: set[str]) -> tuple[list[str], list[str]]:
+    """Return (missing, already_installed) package specs."""
+    missing: list[str] = []
+    present: list[str] = []
+    for spec in specs:
+        name = re.split(r"[=<>\[!@]", spec)[0].strip()
+        if name.lower().replace("-", "_") not in installed:
+            missing.append(spec)
+        else:
+            present.append(name)
+    return missing, present
+
+
+def _pip_install_missing(
+    conda_exe: str,
+    env_prefix: Path,
+    packages: list[str],
+    extra_args: list[str] | None = None,
+    cwd: str | None = None,
+) -> bool:
+    """Install only packages not already present in the env.
+
+    Queries pip list first, skips anything already installed, and prints
+    what was skipped so the user sees progress.
+    """
+    installed = _get_installed_packages(conda_exe, env_prefix)
+    missing, present = _filter_missing(packages, installed)
+
+    if present:
+        print(f"    already installed: {', '.join(present)}")
+
+    if not missing:
+        print_info("All packages already installed, skipping")
+        return True
+
+    print(f"    to install: {', '.join(re.split(r'[=<>!@[]', s)[0] for s in missing)}")
+    cmd = [conda_exe, "run", "-p", str(env_prefix), "pip", "install"]
+    if extra_args:
+        cmd.extend(extra_args)
+    cmd.extend(missing)
+    success, _ = run_command(cmd, check=False, cwd=cwd)
+    return success
+
+
 class ComponentInstaller:
     """Base class for component installers."""
 
@@ -633,9 +692,9 @@ class GVHMRInstaller(ComponentInstaller):
         if not success:
             print_warning("PyTorch installation may have failed - continuing anyway")
 
+        conda_exe = self._find_conda()
         print("  Installing core dependencies...")
-        self._run_in_env([
-            "pip", "install",
+        _pip_install_missing(conda_exe, self.env_prefix, [
             "opencv-python", "numpy==1.23.5", "scipy", "tqdm",
             "einops", "trimesh", "smplx", "joblib",
             "imageio==2.34.1", "av==13.0.0",
@@ -645,8 +704,8 @@ class GVHMRInstaller(ComponentInstaller):
         ])
 
         print("  Installing ultralytics (--no-deps, torch already present)...")
-        self._run_in_env(["pip", "install", "--no-deps", "ultralytics==8.2.42"])
-        self._run_in_env(["pip", "install", "lapx", "cython_bbox"])
+        _pip_install_missing(conda_exe, self.env_prefix, ["ultralytics==8.2.42"], extra_args=["--no-deps"])
+        _pip_install_missing(conda_exe, self.env_prefix, ["lapx", "cython_bbox"])
 
         print("  Installing chumpy (legacy SMPL dependency)...")
         success = self._run_in_env(["pip", "install", "--no-build-isolation", "chumpy"])
@@ -780,22 +839,10 @@ class WiLoRInstaller(ComponentInstaller):
             return False
 
         print("  Installing ultralytics (--no-deps, torch already present)...")
-        success, _ = run_command([
-            conda_exe, "run", "-p", str(self.env_prefix), "--no-capture-output",
-            "pip", "install", "--no-deps", "ultralytics==8.1.34",
-        ])
-
-        if not success:
-            print_warning("ultralytics failed to install")
+        _pip_install_missing(conda_exe, self.env_prefix, ["ultralytics==8.1.34"], extra_args=["--no-deps"])
 
         print("  Installing roma and ultralytics extras...")
-        success, _ = run_command([
-            conda_exe, "run", "-p", str(self.env_prefix), "--no-capture-output",
-            "pip", "install", "roma", *self.ULTRALYTICS_EXTRA_DEPS,
-        ])
-
-        if not success:
-            print_warning("Some WiLoR dependencies may have failed to install")
+        _pip_install_missing(conda_exe, self.env_prefix, ["roma", *self.ULTRALYTICS_EXTRA_DEPS])
 
         self.installed = True
         print_success("WiLoR-mini installed")
@@ -994,9 +1041,9 @@ class VGGSfMInstaller(ComponentInstaller):
         print("  Pinning MKL to avoid PyTorch symbol conflicts...")
         self._conda_install(["mkl<2024", "intel-openmp<2024"])
 
+        conda_exe = self._find_conda()
         print("  Installing core dependencies...")
-        self._run_in_env([
-            "pip", "install",
+        _pip_install_missing(conda_exe, self.env_prefix, [
             "hydra-core", "omegaconf", "opencv-python", "einops",
             "kornia", "tqdm", "scipy", "scikit-learn",
             "imageio[ffmpeg]", "trimesh", "huggingface_hub", "plotly",
@@ -1004,10 +1051,10 @@ class VGGSfMInstaller(ComponentInstaller):
         ])
 
         print("  Installing visdom (build requires --no-build-isolation)...")
-        self._run_in_env(["pip", "install", "--no-build-isolation", "visdom"])
+        _pip_install_missing(conda_exe, self.env_prefix, ["visdom"], extra_args=["--no-build-isolation"])
 
         print("  Installing pycolmap and poselib...")
-        self._run_in_env(["pip", "install", "pycolmap==3.10.0", "pyceres==2.3", "poselib==2.0.2"])
+        _pip_install_missing(conda_exe, self.env_prefix, ["pycolmap==3.10.0", "pyceres==2.3", "poselib==2.0.2"])
 
         lightglue_dir = self.install_dir / "dependency" / "LightGlue"
         if lightglue_dir.exists() and (lightglue_dir / ".git").exists():
@@ -1164,21 +1211,21 @@ class SLAHMRInstaller(ComponentInstaller):
             channels=["conda-forge"],
         )
 
+        conda_exe = self._find_conda()
+
         print("  Installing numpy<2 (lietorch compatibility)...")
-        self._run_in_env(["pip", "install", "numpy<2"])
+        _pip_install_missing(conda_exe, self.env_prefix, ["numpy<2"])
 
         print("  Installing core dependencies...")
-        self._run_in_env([
-            "pip", "install",
+        _pip_install_missing(conda_exe, self.env_prefix, [
             "hydra-core", "omegaconf", "opencv-python", "einops",
             "joblib", "scikit-learn", "smplx", "trimesh", "chumpy",
             "tqdm", "scipy", "gdown",
         ])
 
         print("  Installing PHALP (--no-deps to preserve torch version)...")
-        self._run_in_env(["pip", "install", "--no-deps", "phalp[all]"])
-        self._run_in_env([
-            "pip", "install",
+        _pip_install_missing(conda_exe, self.env_prefix, ["phalp[all]"], extra_args=["--no-deps"])
+        _pip_install_missing(conda_exe, self.env_prefix, [
             "scenedetect", "pyrender", "iopath", "av", "timm",
             "detectron2@https://dl.fbaipublicfiles.com/detectron2/wheels/cu118/torch2.0/detectron2-0.6%2Bcu118-cp310-cp310-linux_x86_64.whl",
         ])
