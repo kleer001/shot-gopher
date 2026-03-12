@@ -633,8 +633,20 @@ class GVHMRInstaller(ComponentInstaller):
         if not success:
             print_warning("PyTorch installation may have failed - continuing anyway")
 
-        print("  Installing OpenCV and core dependencies...")
-        self._run_in_env(["pip", "install", "opencv-python", "numpy", "scipy", "tqdm"])
+        print("  Installing core dependencies...")
+        self._run_in_env([
+            "pip", "install",
+            "opencv-python", "numpy==1.23.5", "scipy", "tqdm",
+            "einops", "trimesh", "smplx", "joblib",
+            "imageio==2.34.1", "av==13.0.0",
+            "hydra-core==1.3", "hydra-zen", "hydra_colorlog",
+            "lightning==2.3.0", "rich", "timm==0.9.12",
+            "scikit-image", "termcolor", "ffmpeg-python",
+        ])
+
+        print("  Installing ultralytics (--no-deps, torch already present)...")
+        self._run_in_env(["pip", "install", "--no-deps", "ultralytics==8.2.42"])
+        self._run_in_env(["pip", "install", "lapx", "cython_bbox"])
 
         print("  Installing chumpy (legacy SMPL dependency)...")
         success = self._run_in_env(["pip", "install", "--no-build-isolation", "chumpy"])
@@ -643,16 +655,6 @@ class GVHMRInstaller(ComponentInstaller):
             success = self._run_in_env(["pip", "install", "git+https://github.com/mattloper/chumpy.git"])
             if not success:
                 print_warning("chumpy installation failed - some SMPL features may not work")
-
-        requirements_txt = self.install_dir / "requirements.txt"
-        if requirements_txt.exists():
-            print("  Installing requirements.txt...")
-            success = self._run_in_env(
-                ["pip", "install", "-r", str(requirements_txt)],
-                cwd=str(self.install_dir)
-            )
-            if not success:
-                print_warning("Some requirements may have failed to install")
 
         print("  Installing GVHMR package (pip install -e .)...")
         success = self._run_in_env(
