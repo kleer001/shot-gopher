@@ -5,6 +5,8 @@ and system check utilities used throughout the wizard.
 """
 
 import datetime
+import os
+import signal
 import shutil
 import subprocess
 import sys
@@ -261,6 +263,20 @@ def run_command(
 _HEARTBEAT_INTERVAL = 30
 
 
+def _kill_process_tree(proc: subprocess.Popen) -> None:
+    """Kill a process and all its descendants."""
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+            capture_output=True,
+        )
+    else:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        except OSError:
+            proc.kill()
+
+
 def _run_with_heartbeat(
     cmd: List[str],
     check: bool = True,
@@ -268,7 +284,11 @@ def _run_with_heartbeat(
     shell: bool = False,
     cwd: str = None,
 ) -> Tuple[bool, str]:
-    """Run a command with a periodic heartbeat printed every 30 seconds."""
+    """Run a command with a periodic heartbeat printed every 30 seconds.
+
+    Uses Popen instead of subprocess.run so that on timeout the entire
+    process tree is killed, not just the top-level process.
+    """
     stop = threading.Event()
     start = time.monotonic()
 
@@ -279,14 +299,26 @@ def _run_with_heartbeat(
             print(f"    ... still working ({minutes}m {seconds}s)")
             sys.stdout.flush()
 
+    popen_kwargs: dict = dict(shell=shell, cwd=cwd)
+    if sys.platform != "win32":
+        popen_kwargs["start_new_session"] = True
+
+    proc = subprocess.Popen(cmd, **popen_kwargs)
     thread = threading.Thread(target=_heartbeat, daemon=True)
     thread.start()
     try:
-        result = subprocess.run(cmd, check=check, timeout=timeout, shell=shell, cwd=cwd)
-        return result.returncode == 0, ""
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_process_tree(proc)
+        proc.wait(timeout=5)
+        raise
     finally:
         stop.set()
         thread.join(timeout=2)
+
+    if check and proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, cmd)
+    return proc.returncode == 0, ""
 
 
 def check_python_package(package: str, import_name: Optional[str] = None) -> bool:
