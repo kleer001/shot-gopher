@@ -104,6 +104,29 @@ Automated VFX Ingest pipeline. Start with footage, get first pass depth maps, ro
 - **Interactive Roto** excels where auto-roto fails (occluded objects, separating similar items)
 - **Long sequences (150+ frames)** may hit VRAM limits on 12GB cards
 
+### Tool Limitations by OS
+
+Not all tools support all platforms. Several motion capture and reconstruction tools depend on Linux-only compiled libraries (detectron2, pytorch3d, GCC toolchains).
+
+| Tool | Linux | macOS | Windows | Notes |
+|------|-------|-------|---------|-------|
+| **Depth (VDA)** | ✅ | ✅ | ✅ | |
+| **Roto (SAM3)** | ✅ | ✅ | ✅ | |
+| **Interactive Roto** | ✅ | ✅ | ✅ | |
+| **Matte (VideoMaMa)** | ✅ | ✅ | ✅ | |
+| **Clean Plate** | ✅ | ✅ | ✅ | |
+| **Camera (COLMAP)** | ✅ | ✅ | ✅ | |
+| **Camera (VGGSfM)** | ✅ | ⚠️ | ⚠️ | Requires CUDA; no native macOS GPU support |
+| **Material (GS-IR)** | ✅ | 🚫 | ⚠️ | CUDA required; Linux recommended |
+| **MoCap (GVHMR)** | ✅ | 🚫 | 🚫 | pytorch3d is Linux-only |
+| **MoCap (SLAHMR)** | ✅ | 🚫 | 🚫 | Requires GCC, detectron2, bash scripts |
+| **Hands (WiLoR)** | ✅ | ⚠️ | ⚠️ | CUDA recommended |
+| **Foot Contact (UnderPressure)** | ✅ | ✅ | ✅ | CPU-only, works everywhere |
+| **Export (Blender)** | ✅ | ✅ | ✅ | |
+| **ComfyUI** | ✅ | ✅ | ✅ | |
+
+**Windows/macOS users:** The core pipeline (ingest, depth, roto, matte, camera, export) works fully. Motion capture stages (GVHMR, SLAHMR) require Linux or WSL2.
+
 ## Getting Started
 
 This script will:

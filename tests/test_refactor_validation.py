@@ -271,8 +271,6 @@ class TestColmapToMmcam:
 
         config = PipelineConfig()
         assert hasattr(config, "mmcam_quality"), "Missing mmcam_quality field"
-        assert hasattr(config, "mmcam_dense"), "Missing mmcam_dense field"
-        assert hasattr(config, "mmcam_mesh"), "Missing mmcam_mesh field"
         assert hasattr(config, "mmcam_use_masks"), "Missing mmcam_use_masks field"
         assert hasattr(config, "mmcam_max_size"), "Missing mmcam_max_size field"
         assert not hasattr(config, "colmap_quality"), "colmap_quality still exists"
@@ -510,6 +508,11 @@ class TestNoOrphanedReferences:
                 "CHANNEL",
                 "SNAP_RESTRICTED",
                 "colmap_urls",
+                "mmcam_engine",
+                'choices=["colmap"',
+                'default="colmap"',
+                'engine == "colmap"',
+                "Engine: COLMAP",
             ]):
                 continue
             # Allow install_wizard/ internal COLMAP tool references
@@ -517,7 +520,8 @@ class TestNoOrphanedReferences:
                 continue
             # Allow internal COLMAP binary/data-source refs in scripts
             if path.name in ("run_matchmove_camera.py", "export_camera.py",
-                             "debug_mmcam_images.py", "diagnose.py"):
+                             "debug_mmcam_images.py", "diagnose.py",
+                             "run_vggsfm.py"):
                 continue
             filtered.append((path, num, line))
         assert filtered == [], (

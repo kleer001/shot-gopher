@@ -80,7 +80,18 @@
       "required": false,
       "dependencies": [],
       "defaultEnabled": false,
-      "enables": ["gsir", "mocap"],
+      "enables": ["dense", "gsir", "mocap"],
+      "requiresComfyUI": false
+    },
+    "dense": {
+      "name": "Dense Reconstruction",
+      "displayName": "Dense Reconstruction (COLMAP MVS)",
+      "description": "Point clouds, mesh, depth maps, normals from COLMAP MVS",
+      "outputDir": "geometry",
+      "estimatedTimePerFrame": 3.0,
+      "required": false,
+      "dependencies": ["matchmove_camera"],
+      "defaultEnabled": false,
       "requiresComfyUI": false
     },
     "gsir": {

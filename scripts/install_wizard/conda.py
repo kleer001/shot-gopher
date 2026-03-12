@@ -135,6 +135,23 @@ class CondaEnvironmentManager:
         """Check if a conda environment exists."""
         return env_name in self.list_environments()
 
+    def accept_tos_if_needed(self) -> None:
+        """Accept conda channel TOS if required (conda >= 26)."""
+        if not self.conda_exe or self.conda_exe == "pip-only":
+            return
+
+        channels = [
+            "https://repo.anaconda.com/pkgs/main",
+            "https://repo.anaconda.com/pkgs/r",
+            "https://repo.anaconda.com/pkgs/msys2",
+        ]
+        for channel in channels:
+            run_command(
+                [self.conda_exe, "tos", "accept", "--override-channels", "--channel", channel],
+                check=False,
+                capture=True,
+            )
+
     def create_environment(self, python_version: Optional[str] = None) -> bool:
         """Create new conda environment.
 
@@ -147,6 +164,8 @@ class CondaEnvironmentManager:
         if not self.conda_exe:
             print_error("Conda not available")
             return False
+
+        self.accept_tos_if_needed()
 
         py_ver = python_version or self.python_version
         print(f"\nCreating conda environment '{self.env_name}' with Python {py_ver}...")

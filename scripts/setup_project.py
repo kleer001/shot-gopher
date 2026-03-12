@@ -36,6 +36,7 @@ PROJECT_DIRS = [
     "roto",
     "cleanplate",
     "camera",
+    "mocap_camera",
     "workflows",
 ]
 

@@ -29,6 +29,58 @@ from env_config import require_conda_env, INSTALL_DIR
 REQUIRED_ENV = "gvhmr"
 
 
+def convert_slahmr_to_motion(
+    slahmr_dir: Path,
+    output_path: Path,
+    gender: str = "neutral",
+) -> bool:
+    """Convert SLAHMR output to motion.pkl format via SMPL-H → SMPLX.
+
+    Looks for slahmr_stitched.npz in the slahmr directory and converts
+    to SMPLX format using betas fitting.
+
+    Args:
+        slahmr_dir: Directory containing SLAHMR output (e.g., mocap/person/slahmr).
+        output_path: Path for output motion.pkl.
+        gender: Body model gender.
+
+    Returns:
+        True if conversion successful.
+    """
+    stitched_npz = slahmr_dir / "slahmr_stitched.npz"
+    if not stitched_npz.exists():
+        npz_files = sorted(slahmr_dir.glob("*_world_results.npz"))
+        if npz_files:
+            stitched_npz = npz_files[0]
+        else:
+            print(f"Error: No SLAHMR output found in {slahmr_dir}", file=sys.stderr)
+            return False
+
+    from convert_smplh_to_smplx import convert_slahmr_npz_to_smplx
+
+    if not convert_slahmr_npz_to_smplx(
+        npz_path=stitched_npz,
+        output_path=output_path,
+        gender=gender,
+    ):
+        return False
+
+    hand_poses_path = slahmr_dir.parent / "hand_poses.npz"
+    if hand_poses_path.exists():
+        import numpy as np
+
+        with open(output_path, "rb") as f:
+            motion = pickle.load(f)
+        hand_data = np.load(hand_poses_path)
+        motion["left_hand_pose"] = hand_data["left_hand_pose"]
+        motion["right_hand_pose"] = hand_data["right_hand_pose"]
+        with open(output_path, "wb") as f:
+            pickle.dump(motion, f)
+        print(f"  → Loaded hand poses from {hand_poses_path.name}")
+
+    return True
+
+
 def load_motion_data(motion_path: Path) -> Optional[dict]:
     """Load motion data from pickle file.
 
@@ -62,16 +114,24 @@ def load_motion_data(motion_path: Path) -> Optional[dict]:
         return None
 
 
-def convert_gvhmr_to_motion(gvhmr_dir: Path, output_path: Path, gender: str = "neutral") -> bool:
+def convert_gvhmr_to_motion(
+    gvhmr_dir: Path,
+    output_path: Path,
+    gender: str = "neutral",
+    use_incam: bool = False,
+) -> bool:
     """Convert GVHMR output (hmr4d_results.pt) to motion.pkl format.
 
-    This function runs in gvhmr environment where numpy versions match,
-    avoiding pickle compatibility issues.
+    By default uses smpl_params_global (GVHMR world coordinates).
+    When use_incam=True, uses smpl_params_incam (camera coordinates)
+    for the mmcam-direct approach where the body mesh will be
+    transformed to world space using mmcam extrinsics.
 
     Args:
         gvhmr_dir: Directory containing GVHMR output (e.g., mocap/person/gvhmr)
         output_path: Path for output motion.pkl
         gender: Body model gender
+        use_incam: Use smpl_params_incam instead of smpl_params_global
 
     Returns:
         True if conversion successful
@@ -85,7 +145,8 @@ def convert_gvhmr_to_motion(gvhmr_dir: Path, output_path: Path, gender: str = "n
         return False
 
     gvhmr_file = gvhmr_files[0]
-    print(f"  → Converting {gvhmr_file.name} to motion.pkl...")
+    param_source = "smpl_params_incam" if use_incam else "smpl_params_global"
+    print(f"  → Converting {gvhmr_file.name} to motion.pkl ({param_source})...")
 
     def to_numpy(obj):
         if hasattr(obj, 'numpy'):
@@ -96,119 +157,115 @@ def convert_gvhmr_to_motion(gvhmr_dir: Path, output_path: Path, gender: str = "n
             return [to_numpy(v) for v in obj]
         return obj
 
-    try:
-        gvhmr_data = torch.load(gvhmr_file, map_location='cpu', weights_only=False)
-        gvhmr_data = to_numpy(gvhmr_data)
+    gvhmr_data = torch.load(gvhmr_file, map_location='cpu', weights_only=False)
+    gvhmr_data = to_numpy(gvhmr_data)
 
-        if 'smpl_params_global' in gvhmr_data:
-            params = gvhmr_data['smpl_params_global']
-        elif 'global_orient' in gvhmr_data:
-            params = gvhmr_data
-        else:
-            params = gvhmr_data
+    param_key = "smpl_params_incam" if use_incam else "smpl_params_global"
+    if param_key in gvhmr_data:
+        params = gvhmr_data[param_key]
+    elif 'global_orient' in gvhmr_data:
+        params = gvhmr_data
+    else:
+        params = gvhmr_data
 
-        body_pose = params.get('body_pose', params.get('poses'))
-        global_orient = params.get('global_orient')
-        transl = params.get('transl', params.get('trans'))
-        betas = params.get('betas')
+    body_pose = params.get('body_pose', params.get('poses'))
+    global_orient = params.get('global_orient')
+    transl = params.get('transl', params.get('trans'))
+    betas = params.get('betas')
 
-        if body_pose is None:
-            print(f"Error: Could not find body_pose in {gvhmr_file.name}", file=sys.stderr)
-            return False
-
-        body_pose = np.array(body_pose)
-        if body_pose.ndim < 2 or body_pose.shape[0] == 0:
-            print(f"Error: Invalid body_pose shape in {gvhmr_file.name}", file=sys.stderr)
-            return False
-
-        n_frames = len(body_pose)
-
-        if global_orient is not None:
-            global_orient = np.array(global_orient)
-            if global_orient.ndim == 1:
-                global_orient = global_orient.reshape(1, -1)
-            if len(global_orient) == 1 and n_frames > 1:
-                global_orient = np.tile(global_orient, (n_frames, 1))
-        else:
-            global_orient = np.zeros((n_frames, 3))
-
-        if body_pose.shape[1] == 63:
-            poses = np.concatenate([
-                global_orient,
-                body_pose,
-                np.zeros((n_frames, 6))
-            ], axis=1)
-        elif body_pose.shape[1] > 63:
-            poses = np.concatenate([
-                global_orient,
-                body_pose[:, :63],
-                np.zeros((n_frames, 6))
-            ], axis=1)
-        else:
-            padding_needed = 69 - body_pose.shape[1]
-            poses = np.concatenate([
-                global_orient,
-                body_pose,
-                np.zeros((n_frames, padding_needed))
-            ], axis=1)
-
-        if transl is not None:
-            transl = np.array(transl)
-        else:
-            transl = np.zeros((n_frames, 3))
-
-        if betas is not None:
-            betas = np.array(betas)
-            if betas.ndim > 1:
-                betas = betas[0]
-        else:
-            betas = np.zeros(10)
-
-        motion_format = {
-            'poses': poses,
-            'trans': transl,
-            'betas': betas,
-            'gender': gender
-        }
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, 'wb') as f:
-            pickle.dump(motion_format, f)
-
-        print(f"  OK Converted {n_frames} frames to {output_path.name}")
-        return True
-
-    except Exception as e:
-        print(f"Error converting GVHMR output: {e}", file=sys.stderr)
+    if body_pose is None:
+        print(f"Error: Could not find body_pose in {gvhmr_file.name}", file=sys.stderr)
         return False
 
+    body_pose = np.array(body_pose)
+    if body_pose.ndim < 2 or body_pose.shape[0] == 0:
+        print(f"Error: Invalid body_pose shape in {gvhmr_file.name}", file=sys.stderr)
+        return False
 
-def get_smpl_model_path(gender: str) -> Optional[Path]:
-    """Get path to SMPL model for specified gender.
+    n_frames = len(body_pose)
+
+    if global_orient is not None:
+        global_orient = np.array(global_orient)
+        if global_orient.ndim == 1:
+            global_orient = global_orient.reshape(1, -1)
+        if len(global_orient) == 1 and n_frames > 1:
+            global_orient = np.tile(global_orient, (n_frames, 1))
+    else:
+        global_orient = np.zeros((n_frames, 3))
+
+    if transl is not None:
+        transl = np.array(transl)
+    else:
+        transl = np.zeros((n_frames, 3))
+
+    if betas is not None:
+        betas = np.array(betas)
+        if betas.ndim > 1:
+            betas = betas[0]
+    else:
+        betas = np.zeros(10)
+
+    if body_pose.shape[1] >= 63:
+        poses = np.concatenate([
+            global_orient,
+            body_pose[:, :63],
+        ], axis=1)
+    else:
+        padding_needed = 63 - body_pose.shape[1]
+        poses = np.concatenate([
+            global_orient,
+            body_pose,
+            np.zeros((n_frames, padding_needed))
+        ], axis=1)
+
+    motion_format = {
+        'poses': poses,
+        'trans': transl,
+        'betas': betas,
+        'gender': gender
+    }
+
+    hand_poses_path = gvhmr_dir.parent / "hand_poses.npz"
+    if hand_poses_path.exists():
+        hand_data = np.load(hand_poses_path)
+        motion_format['left_hand_pose'] = hand_data['left_hand_pose']
+        motion_format['right_hand_pose'] = hand_data['right_hand_pose']
+        print(f"  → Loaded hand poses from {hand_poses_path.name}")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, 'wb') as f:
+        pickle.dump(motion_format, f)
+
+    print(f"  OK Converted {n_frames} frames to {output_path.name}")
+    return True
+
+
+def get_body_model_path(gender: str) -> Optional[Path]:
+    """Get path to SMPL-X body model for specified gender.
 
     Args:
         gender: neutral, male, or female
 
     Returns:
-        Path to SMPL pkl file or None if not found
+        Path to SMPL-X npz file or None if not found
     """
     body_models_dir = INSTALL_DIR / "GVHMR" / "inputs" / "checkpoints" / "body_models"
-    smpl_dir = body_models_dir / "smpl"
+    smplx_dir = body_models_dir / "smplx"
 
     gender_map = {
-        'neutral': 'SMPL_NEUTRAL.pkl',
-        'male': 'SMPL_MALE.pkl',
-        'female': 'SMPL_FEMALE.pkl',
+        'neutral': 'SMPLX_NEUTRAL.npz',
+        'male': 'SMPLX_MALE.npz',
+        'female': 'SMPLX_FEMALE.npz',
     }
 
     if gender not in gender_map:
         print(f"Error: Invalid gender '{gender}'", file=sys.stderr)
         return None
 
-    model_path = smpl_dir / gender_map[gender]
+    model_path = smplx_dir / gender_map[gender]
     if not model_path.exists():
-        print(f"Error: SMPL model not found: {model_path}", file=sys.stderr)
-        print("Run the installation wizard to download SMPL models", file=sys.stderr)
+        print(f"Error: SMPL-X model not found: {model_path}", file=sys.stderr)
+        print("Run the installation wizard to download SMPL-X models", file=sys.stderr)
         return None
 
     return model_path
@@ -253,10 +310,12 @@ def generate_meshes(
 
         model = smplx.create(
             model_path=str(model_path.parent.parent),
-            model_type='smpl',
+            model_type='smplx',
             gender=gender,
             num_betas=10,
             batch_size=1,
+            flat_hand_mean=True,
+            use_pca=False,
         ).to(device)
 
         faces = model.faces
@@ -266,6 +325,9 @@ def generate_meshes(
         if betas.shape[1] < 10:
             betas = np.pad(betas, ((0, 0), (0, 10 - betas.shape[1])))
 
+        left_hand = motion_data.get('left_hand_pose')
+        right_hand = motion_data.get('right_hand_pose')
+
         meshes = []
 
         for i in range(n_frames):
@@ -273,27 +335,33 @@ def generate_meshes(
                 print(f"    Frame {i}/{n_frames}...")
 
             pose = poses[i]
-            if pose.shape[0] >= 72:
-                global_orient = pose[:3]
-                body_pose = pose[3:72]
-            else:
-                global_orient = pose[:3] if pose.shape[0] >= 3 else np.zeros(3)
-                body_pose = pose[3:] if pose.shape[0] > 3 else np.zeros(69)
-                if body_pose.shape[0] < 69:
-                    body_pose = np.pad(body_pose, (0, 69 - body_pose.shape[0]))
+            global_orient = pose[:3] if pose.shape[0] >= 3 else np.zeros(3)
+            body_pose = pose[3:66] if pose.shape[0] >= 66 else np.zeros(63)
+            if body_pose.shape[0] < 63:
+                body_pose = np.pad(body_pose, (0, 63 - body_pose.shape[0]))
 
             global_orient_t = torch.tensor(global_orient, dtype=torch.float32, device=device).unsqueeze(0)
             body_pose_t = torch.tensor(body_pose, dtype=torch.float32, device=device).unsqueeze(0)
             betas_t = torch.tensor(betas[0], dtype=torch.float32, device=device).unsqueeze(0)
             transl_t = torch.tensor(trans[i], dtype=torch.float32, device=device).unsqueeze(0)
 
+            kwargs = {
+                'global_orient': global_orient_t,
+                'body_pose': body_pose_t,
+                'betas': betas_t,
+                'transl': transl_t,
+            }
+            if left_hand is not None:
+                kwargs['left_hand_pose'] = torch.tensor(
+                    left_hand[i], dtype=torch.float32, device=device
+                ).unsqueeze(0)
+            if right_hand is not None:
+                kwargs['right_hand_pose'] = torch.tensor(
+                    right_hand[i], dtype=torch.float32, device=device
+                ).unsqueeze(0)
+
             with torch.no_grad():
-                output = model(
-                    global_orient=global_orient_t,
-                    body_pose=body_pose_t,
-                    betas=betas_t,
-                    transl=transl_t,
-                )
+                output = model(**kwargs)
 
             vertices = output.vertices[0].cpu().numpy()
             meshes.append((vertices, faces))
@@ -308,10 +376,41 @@ def generate_meshes(
         return None
 
 
+def transform_meshes_to_world(
+    meshes: List[Tuple],
+    c2w_matrices: "np.ndarray",
+) -> List[Tuple]:
+    """Transform mesh vertices from camera space to world space.
+
+    Applies per-frame camera-to-world transforms: v_world = R @ v_cam + t
+
+    Args:
+        meshes: List of (vertices, faces) tuples in camera space
+        c2w_matrices: (N, 4, 4) camera-to-world matrices
+
+    Returns:
+        List of (vertices, faces) tuples in world space
+    """
+    import numpy as np
+
+    if len(meshes) != len(c2w_matrices):
+        raise ValueError(
+            f"Frame count mismatch: {len(meshes)} meshes vs {len(c2w_matrices)} c2w matrices"
+        )
+
+    transformed = []
+    for i, (vertices, faces) in enumerate(meshes):
+        R = c2w_matrices[i, :3, :3]
+        t = c2w_matrices[i, :3, 3]
+        v_world = vertices @ R.T + t
+        transformed.append((v_world, faces))
+    return transformed
+
+
 def export_alembic(
     meshes: List[Tuple],
     output_path: Path,
-    fps: float = 24.0
+    fps: int = 24
 ) -> bool:
     """Export meshes to Alembic format using Blender.
 
@@ -387,7 +486,7 @@ def export_alembic(
 def export_usd(
     meshes: List[Tuple],
     output_path: Path,
-    fps: float = 24.0
+    fps: int = 24
 ) -> bool:
     """Export meshes to USD format using Blender.
 
@@ -548,7 +647,7 @@ def export_tpose(
 
         model = smplx.create(
             model_path=str(model_path.parent.parent),
-            model_type='smpl',
+            model_type='smplx',
             gender=gender,
             num_betas=10,
             batch_size=1,
@@ -565,7 +664,7 @@ def export_tpose(
             betas_t = torch.zeros(1, 10, dtype=torch.float32, device=device)
 
         global_orient_t = torch.zeros(1, 3, dtype=torch.float32, device=device)
-        body_pose_t = torch.zeros(1, 69, dtype=torch.float32, device=device)
+        body_pose_t = torch.zeros(1, 63, dtype=torch.float32, device=device)
         transl_t = torch.zeros(1, 3, dtype=torch.float32, device=device)
 
         with torch.no_grad():
@@ -600,12 +699,25 @@ def export_tpose(
 def run_export(
     project_dir: Path,
     formats: List[str] = None,
-    fps: float = 24.0,
+    fps: int = 24,
     motion_file: Optional[Path] = None,
     output_dir: Optional[Path] = None,
     mocap_person: Optional[str] = None,
+    camera_extrinsics_path: Optional[Path] = None,
+    world_transform_path: Optional[Path] = None,
+    no_convert: bool = False,
 ) -> bool:
     """Run motion export pipeline.
+
+    Two approaches for mmcam camera alignment:
+
+    --camera-extrinsics: mmcam-direct. Body from smpl_params_incam (camera
+        space), transformed per-frame via c2w. Pixel-perfect alignment,
+        no foot grounding.
+
+    --world-transform: Rigid transform. Body from smpl_params_global (world
+        space with foot contact), transformed once via Sim(3). Preserves
+        foot grounding, static offset from pixel-perfect.
 
     Args:
         project_dir: Project directory
@@ -614,6 +726,10 @@ def run_export(
         motion_file: Override motion.pkl path
         output_dir: Override output directory
         mocap_person: Person folder name (e.g., 'person_00'), defaults to 'person'
+        camera_extrinsics_path: Path to extrinsics.json with c2w matrices.
+            Uses incam body + per-frame transform.
+        world_transform_path: Path to world_transform.json with R, s, t.
+            Uses global body + single rigid transform.
 
     Returns:
         True if all exports successful
@@ -632,12 +748,25 @@ def run_export(
     export_dir = output_dir or mocap_person_dir / "export"
     export_dir.mkdir(parents=True, exist_ok=True)
 
-    if gvhmr_dir.exists():
-        gvhmr_files = list(gvhmr_dir.rglob("hmr4d*.pt"))
-        if gvhmr_files:
-            print("  → Converting GVHMR output to motion.pkl...")
-            if not convert_gvhmr_to_motion(gvhmr_dir, motion_path):
+    slahmr_dir = mocap_person_dir / "slahmr"
+    use_incam = camera_extrinsics_path is not None and world_transform_path is None
+
+    if not no_convert:
+        if slahmr_dir.exists() and list(slahmr_dir.glob("*.npz")):
+            print("  → Converting SLAHMR output to motion.pkl...")
+            gender = "neutral"
+            if motion_path.exists():
+                existing = load_motion_data(motion_path)
+                if existing:
+                    gender = existing.get("gender", "neutral")
+            if not convert_slahmr_to_motion(slahmr_dir, motion_path, gender=gender):
                 return False
+        elif gvhmr_dir.exists():
+            gvhmr_files = list(gvhmr_dir.rglob("hmr4d*.pt"))
+            if gvhmr_files:
+                print("  → Converting GVHMR output to motion.pkl...")
+                if not convert_gvhmr_to_motion(gvhmr_dir, motion_path, use_incam=use_incam):
+                    return False
 
     use_gpu = detect_gpu()
     device = "cuda" if use_gpu else "cpu"
@@ -660,7 +789,7 @@ def run_export(
     print(f"Gender: {gender}")
     print(f"Frames: {len(motion_data['poses'])}")
 
-    model_path = get_smpl_model_path(gender)
+    model_path = get_body_model_path(gender)
     if model_path is None:
         return False
 
@@ -676,6 +805,30 @@ def run_export(
     if not meshes:
         print("Error: No mesh frames generated", file=sys.stderr)
         return False
+
+    if world_transform_path is not None:
+        import json
+        import numpy as np
+
+        with open(world_transform_path, encoding="utf-8") as f:
+            wt = json.load(f)
+        R = np.array(wt["R"], dtype=np.float64)
+        s = float(wt["s"])
+        t = np.array(wt["t"], dtype=np.float64)
+        print(f"  Applying rigid Sim(3) transform (scale={s:.4f})...")
+        transformed = []
+        for vertices, faces in meshes:
+            v_world = s * (vertices @ R.T) + t
+            transformed.append((v_world, faces))
+        meshes = transformed
+    elif camera_extrinsics_path is not None:
+        import json
+        import numpy as np
+
+        with open(camera_extrinsics_path, encoding="utf-8") as f:
+            c2w = np.array(json.load(f), dtype=np.float64)
+        print(f"  Transforming meshes to world space ({len(c2w)} c2w matrices)...")
+        meshes = transform_meshes_to_world(meshes, c2w)
 
     all_success = True
     exported_paths = []
@@ -753,9 +906,9 @@ def main():
     )
     parser.add_argument(
         "--fps",
-        type=float,
-        default=24.0,
-        help="Frames per second (default: 24)"
+        type=int,
+        default=24,
+        help="Integer FPS (default: 24)"
     )
     parser.add_argument(
         "--motion-file", "-m",
@@ -772,6 +925,23 @@ def main():
         type=str,
         default=None,
         help="Person folder name (e.g., 'person_00'). Defaults to 'person'."
+    )
+    parser.add_argument(
+        "--camera-extrinsics",
+        type=Path,
+        default=None,
+        help="Path to extrinsics.json (c2w matrices). Uses incam body + per-frame transform."
+    )
+    parser.add_argument(
+        "--world-transform",
+        type=Path,
+        default=None,
+        help="Path to world_transform.json (R, s, t). Uses global body + rigid Sim(3) transform."
+    )
+    parser.add_argument(
+        "--no-convert",
+        action="store_true",
+        help="Skip SLAHMR/GVHMR → motion.pkl conversion (use existing motion.pkl as-is)"
     )
 
     args = parser.parse_args()
@@ -795,6 +965,9 @@ def main():
         motion_file=args.motion_file,
         output_dir=args.output_dir,
         mocap_person=args.mocap_person,
+        camera_extrinsics_path=args.camera_extrinsics,
+        world_transform_path=args.world_transform,
+        no_convert=args.no_convert,
     )
 
     sys.exit(0 if success else 1)

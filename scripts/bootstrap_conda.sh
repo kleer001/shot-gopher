@@ -254,15 +254,23 @@ fi
 
 print_banner "Launching Installation Wizard"
 
+# When stdin is piped (curl|bash, SSH, etc.) the Python wizard cannot
+# prompt for input — auto-add --yolo so it runs non-interactively.
+wizard_args=("$@")
+if [ ! -t 0 ]; then
+    echo -e "${YELLOW}Non-interactive session detected, using --yolo mode${NC}"
+    wizard_args+=("--yolo")
+fi
+
 # Get conda base directory and find python
 conda_base=$(dirname $(dirname "$conda_path"))
 python_path="$conda_base/bin/python"
 
 if [ -x "$python_path" ]; then
-    "$python_path" scripts/install_wizard.py "$@"
+    "$python_path" scripts/install_wizard.py "${wizard_args[@]}"
 else
     # Fall back to conda run
-    "$conda_path" run -n base python scripts/install_wizard.py "$@"
+    "$conda_path" run -n base python scripts/install_wizard.py "${wizard_args[@]}"
 fi
 
 wizard_exit=$?

@@ -231,8 +231,17 @@ def run_pipeline_thread(
     # Start process
     try:
         env = os.environ.copy()
-        # Ensure unbuffered output
         env["PYTHONUNBUFFERED"] = "1"
+
+        tools_dir = Path(__file__).parent.parent / ".vfx_pipeline" / "tools"
+        if tools_dir.exists():
+            extra_paths = []
+            for tool_dir in sorted(tools_dir.iterdir()):
+                bin_dir = tool_dir / "bin"
+                if bin_dir.is_dir():
+                    extra_paths.append(str(bin_dir))
+            if extra_paths:
+                env["PATH"] = os.pathsep.join(extra_paths) + os.pathsep + env.get("PATH", "")
 
         process = subprocess.Popen(
             cmd,

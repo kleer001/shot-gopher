@@ -119,9 +119,6 @@ pip install -r ComfyUI-DepthAnythingV2/requirements.txt
 git clone https://github.com/1038lab/ComfyUI-SAM3.git
 pip install -r ComfyUI-SAM3/requirements.txt
 
-# ProPainter (clean plates)
-git clone https://github.com/Kosinkadink/ComfyUI-Advanced-ControlNet.git
-
 cd ../..
 ```
 

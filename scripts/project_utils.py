@@ -85,7 +85,7 @@ class ProjectMetadata:
         """
         return self.get("fps")
 
-    def set_source_info(self, source_path: Path, fps: float) -> None:
+    def set_source_info(self, source_path: Path, fps: int) -> None:
         """Set source file information.
 
         Args:
@@ -104,7 +104,7 @@ class ProjectMetadata:
         """
         self.update(frame_count=count, width=width, height=height)
 
-    def initialize(self, name: str, fps: float, source_path: Optional[Path] = None) -> dict:
+    def initialize(self, name: str, fps: int, source_path: Optional[Path] = None) -> dict:
         """Initialize or update project metadata.
 
         Merges new values with existing metadata.

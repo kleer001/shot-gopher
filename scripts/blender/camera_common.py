@@ -65,10 +65,16 @@ def load_camera_data(camera_dir: Path) -> tuple[list, dict, str]:
 
 
 def matrix_to_blender(matrix_data: list) -> tuple[tuple, tuple]:
-    """Convert 4x4 matrix to Blender location and rotation.
+    """Convert 4x4 camera-to-world matrix to Blender location and rotation.
 
-    Converts from OpenCV convention (Y-down, Z-forward) to
-    OpenGL/Blender convention (Y-up, Z-back) via matrix @ flip.
+    Two conversions applied:
+    1. Camera axes: OpenCV (Y-down, Z-forward) → OpenGL (Y-up, Z-back)
+       via right-multiply by diag([1,-1,-1,1])
+    2. World coordinates: Y-up → Blender Z-up
+       via left-multiply by [[1,0,0,0],[0,0,-1,0],[0,1,0,0],[0,0,0,1]]
+
+    Blender's Alembic/USD export reverses step 2 (Z-up → Y-up),
+    so the final file contains correct OpenGL camera matrices.
 
     Args:
         matrix_data: 4x4 matrix as nested list or flat list
@@ -96,11 +102,13 @@ def matrix_to_blender(matrix_data: list) -> tuple[tuple, tuple]:
         [0.0, 0.0, 0.0, 1.0]
     ]
 
-    result = [[0.0] * 4 for _ in range(4)]
+    gl = [[0.0] * 4 for _ in range(4)]
     for i in range(4):
         for j in range(4):
             for k in range(4):
-                result[i][j] += m[i][k] * flip[k][j]
+                gl[i][j] += m[i][k] * flip[k][j]
+
+    result = [gl[0][:], [-gl[2][j] for j in range(4)], gl[1][:], gl[3][:]]
 
     tx, ty, tz = result[0][3], result[1][3], result[2][3]
 
@@ -127,7 +135,7 @@ def create_animated_camera(
     extrinsics: list,
     intrinsics: dict,
     start_frame: int,
-    fps: float,
+    fps: int,
     camera_name: str
 ) -> bpy.types.Object:
     """Create an animated camera from extrinsics data.
@@ -168,12 +176,8 @@ def create_animated_camera(
     bpy.context.scene.render.resolution_x = width
     bpy.context.scene.render.resolution_y = height
 
-    if abs(fps - round(fps)) < 0.001:
-        bpy.context.scene.render.fps = int(round(fps))
-        bpy.context.scene.render.fps_base = 1.0
-    else:
-        bpy.context.scene.render.fps = 1000
-        bpy.context.scene.render.fps_base = 1000.0 / fps
+    bpy.context.scene.render.fps = int(fps)
+    bpy.context.scene.render.fps_base = 1.0
 
     cam_obj.rotation_mode = 'XYZ'
 
@@ -194,7 +198,7 @@ def create_animated_camera(
 def run_camera_export(
     input_dir: Path,
     output_path: Path,
-    fps: float,
+    fps: int,
     start_frame: int,
     camera_name: str | None,
     format_name: str,

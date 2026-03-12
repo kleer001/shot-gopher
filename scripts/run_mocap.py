@@ -23,6 +23,7 @@ Example:
 """
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -262,35 +263,50 @@ def export_gvhmr_camera(
     n_frames: int,
     image_width: int,
     image_height: int,
+    colmap_camera_dir: Optional[Path] = None,
 ) -> bool:
-    """Export GVHMR camera estimate in COLMAP-compatible format.
+    """Export body-aligned camera from GVHMR SMPL orient params.
 
-    For lock-off shots where COLMAP fails, GVHMR can provide camera intrinsics.
-    Extrinsics are identity matrices (static camera assumption).
+    Derives per-frame camera extrinsics algebraically from the
+    relationship between smpl_params_global and smpl_params_incam
+    orient/transl fields. The resulting camera is consistent with
+    the body mesh in GVHMR-global coordinates.
 
-    Creates the same output format as COLMAP's export_colmap_to_pipeline_format():
-    - extrinsics.json: List of 4x4 identity matrices (one per frame)
+    When colmap_camera_dir is provided and contains extrinsics.json,
+    COLMAP's feature-track rotation is substituted for GVHMR's noisy
+    body orient estimate, producing much smoother camera motion.
+
+    Creates:
+    - extrinsics.json: List of 4x4 camera-to-world matrices
     - intrinsics.json: {fx, fy, cx, cy, width, height, model, params}
     - gvhmr_raw.json: Source metadata
 
     Args:
-        gvhmr_output_dir: Directory containing GVHMR output (hmr4d*.pt files)
-        camera_output_dir: Output directory (typically project/mocap/camera/)
-        n_frames: Total number of frames
+        gvhmr_output_dir: Directory containing GVHMR output tree
+        camera_output_dir: Output directory (typically project/mocap_camera/)
+        n_frames: Total number of source frames
         image_width: Source image width
         image_height: Source image height
+        colmap_camera_dir: Optional path to camera/ dir with extrinsics.json
 
     Returns:
         True if export succeeded
     """
     import json
 
-    try:
-        import numpy as np
-        import torch
-    except ImportError:
-        print("Error: numpy and torch required for GVHMR camera export", file=sys.stderr)
-        return False
+    import numpy as np
+    import torch
+
+    from camera_alignment import compute_aligned_camera, compute_pelvis_joint
+
+    def _to_numpy(obj: object) -> object:
+        if hasattr(obj, 'numpy'):
+            return obj.numpy()
+        elif isinstance(obj, dict):
+            return {k: _to_numpy(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [_to_numpy(v) for v in obj]
+        return obj
 
     gvhmr_files = list(gvhmr_output_dir.rglob("hmr4d*.pt"))
     if not gvhmr_files:
@@ -298,70 +314,58 @@ def export_gvhmr_camera(
         return False
 
     gvhmr_file = gvhmr_files[0]
+    gvhmr_data = torch.load(gvhmr_file, map_location='cpu', weights_only=False)
+    gvhmr_data = _to_numpy(gvhmr_data)
 
-    try:
-        gvhmr_data = torch.load(gvhmr_file, map_location='cpu', weights_only=False)
+    colmap_extrinsics = None
+    if colmap_camera_dir is not None:
+        colmap_ext_path = colmap_camera_dir / "extrinsics.json"
+        if colmap_ext_path.exists():
+            with open(colmap_ext_path, encoding="utf-8") as f:
+                colmap_extrinsics = np.array(json.load(f), dtype=np.float64)
+            print(f"  Using Procrustes alignment with COLMAP trajectory ({len(colmap_extrinsics)} frames)")
 
-        K_fullimg = None
-        if 'K_fullimg' in gvhmr_data:
-            K_fullimg = gvhmr_data['K_fullimg']
-            if hasattr(K_fullimg, 'numpy'):
-                K_fullimg = K_fullimg.numpy()
-            K_fullimg = np.array(K_fullimg)
+    if colmap_extrinsics is None:
+        print("  No COLMAP extrinsics available, using Savitzky-Golay smoothing fallback")
 
-        if K_fullimg is None or K_fullimg.size == 0:
-            print("  Warning: No K_fullimg in GVHMR output, using default intrinsics")
-            fx = fy = max(image_width, image_height)
-            cx = image_width / 2.0
-            cy = image_height / 2.0
-        else:
-            if K_fullimg.ndim == 3:
-                K_fullimg = K_fullimg[0]
-            fx = float(K_fullimg[0, 0])
-            fy = float(K_fullimg[1, 1])
-            cx = float(K_fullimg[0, 2])
-            cy = float(K_fullimg[1, 2])
+    smplx_model_path = INSTALL_DIR / "GVHMR" / "inputs" / "checkpoints" / "body_models" / "smplx" / "SMPLX_NEUTRAL.npz"
+    betas = np.asarray(gvhmr_data["smpl_params_global"]["betas"][0], dtype=np.float64)
+    pelvis_joint = compute_pelvis_joint(smplx_model_path, betas)
 
-        camera_output_dir.mkdir(parents=True, exist_ok=True)
+    result = compute_aligned_camera(
+        gvhmr_data, image_width, image_height, pelvis_joint,
+        colmap_extrinsics=colmap_extrinsics,
+    )
 
-        identity = np.eye(4).tolist()
-        extrinsics = [identity for _ in range(n_frames)]
+    camera_output_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(camera_output_dir / "extrinsics.json", "w", encoding='utf-8') as f:
-            json.dump(extrinsics, f, indent=2)
+    extrinsics_data = [m.tolist() for m in result["extrinsics"]]
+    with open(camera_output_dir / "extrinsics.json", "w", encoding='utf-8') as f:
+        json.dump(extrinsics_data, f, indent=2)
 
-        intrinsics = {
-            "fx": fx,
-            "fy": fy,
-            "cx": cx,
-            "cy": cy,
-            "width": image_width,
-            "height": image_height,
-            "model": "GVHMR_ESTIMATED",
-            "params": [fx, fy, cx, cy],
+    with open(camera_output_dir / "intrinsics.json", "w", encoding='utf-8') as f:
+        json.dump(result["intrinsics"], f, indent=2)
+
+    with open(camera_output_dir / "gvhmr_raw.json", "w", encoding='utf-8') as f:
+        json.dump(result["metadata"], f, indent=2)
+
+    if "world_transform" in result:
+        wt = result["world_transform"]
+        wt_data = {
+            "R": wt["R"].tolist(),
+            "s": wt["s"],
+            "t": wt["t"].tolist(),
         }
-        with open(camera_output_dir / "intrinsics.json", "w", encoding='utf-8') as f:
-            json.dump(intrinsics, f, indent=2)
+        with open(camera_output_dir / "world_transform.json", "w", encoding='utf-8') as f:
+            json.dump(wt_data, f, indent=2)
 
-        gvhmr_raw = {
-            "source": "gvhmr",
-            "source_file": str(gvhmr_file.name),
-            "total_frames": n_frames,
-            "static_camera": True,
-            "K_fullimg": K_fullimg.tolist() if K_fullimg is not None else None,
-            "note": "Camera estimated by GVHMR. Extrinsics are identity (static camera assumption).",
-        }
-        with open(camera_output_dir / "gvhmr_raw.json", "w", encoding='utf-8') as f:
-            json.dump(gvhmr_raw, f, indent=2)
-
-        print(f"  → Exported GVHMR camera to {camera_output_dir}")
-        print(f"    Intrinsics: fx={fx:.1f}, fy={fy:.1f}, cx={cx:.1f}, cy={cy:.1f}")
-        print(f"    Extrinsics: {n_frames} identity matrices (static camera)")
-        return True
-
-    except Exception as e:
-        print(f"Error exporting GVHMR camera: {e}", file=sys.stderr)
-        return False
+    intr = result["intrinsics"]
+    n_exported = len(result["extrinsics"])
+    stabilisation = "COLMAP-stabilised" if colmap_extrinsics is not None else "smoothed"
+    print(f"  -> Exported camera to {camera_output_dir}")
+    print(f"    Intrinsics: fx={intr['fx']:.1f}, fy={intr['fy']:.1f}, cx={intr['cx']:.1f}, cy={intr['cy']:.1f}")
+    print(f"    Extrinsics: {n_exported} frames ({stabilisation})")
+    return True
 
 
 def composite_frames_with_matte(
@@ -444,7 +448,7 @@ def composite_frames_with_matte(
 
 def find_or_create_video(
     project_dir: Path,
-    fps: float = 24.0,
+    fps: int = 24,
     start_frame: Optional[int] = None,
     end_frame: Optional[int] = None,
     mocap_person: Optional[str] = None,
@@ -667,6 +671,74 @@ def _find_conda() -> Optional[str]:
     return None
 
 
+def _patch_gvhmr_f_mm_type(demo_script: Path) -> None:
+    """Patch GVHMR demo.py to accept float focal lengths if needed.
+
+    Upstream defines --f_mm as type=int, but camera solves produce floats.
+    The downstream math (create_camera_sensor) is pure multiplication.
+    """
+    if not demo_script.exists():
+        return
+    content = demo_script.read_text()
+    patched = re.sub(
+        r'("--f_mm",\s*)type=int',
+        r'\1type=float',
+        content,
+    )
+    if patched != content:
+        demo_script.write_text(patched)
+
+
+def _inject_mmcam_camera(
+    mmcam_extrinsics_path: Path,
+    slam_output_path: Path,
+    start_frame: Optional[int] = None,
+    end_frame: Optional[int] = None,
+) -> bool:
+    """Convert mmcam extrinsics to GVHMR's slam_results.pt format.
+
+    Reads camera-to-world 4x4 matrices from mmcam, inverts to
+    world-to-camera, slices for frame range, and saves as the
+    (L, 4, 4) numpy array that GVHMR's load_data_dict expects.
+
+    Args:
+        mmcam_extrinsics_path: Path to mmcam extrinsics.json
+        slam_output_path: Where to write slam_results.pt
+        start_frame: Start frame (1-indexed, inclusive)
+        end_frame: End frame (1-indexed, inclusive)
+
+    Returns:
+        True if injection succeeded
+    """
+    import json
+    import numpy as np
+    import torch
+
+    with open(mmcam_extrinsics_path, "r", encoding="utf-8") as f:
+        c2w_list = json.load(f)
+
+    c2w = np.array(c2w_list, dtype=np.float64)
+
+    if start_frame is not None or end_frame is not None:
+        s = (start_frame or 1) - 1
+        e = end_frame or len(c2w)
+        c2w = c2w[s:e]
+
+    R_c2w = c2w[:, :3, :3]
+    t_c2w = c2w[:, :3, 3]
+    R_w2c = np.swapaxes(R_c2w, -2, -1)
+    t_w2c = -np.einsum("fij,fj->fi", R_w2c, t_c2w)
+
+    T_w2c = np.broadcast_to(np.eye(4), (len(c2w), 4, 4)).copy()
+    T_w2c[:, :3, :3] = R_w2c
+    T_w2c[:, :3, 3] = t_w2c
+
+    slam_output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(torch.from_numpy(T_w2c).float(), slam_output_path)
+    print(f"    Injected {len(T_w2c)} mmcam camera poses as slam_results.pt")
+    return True
+
+
 def run_gvhmr_motion_tracking(
     project_dir: Path,
     focal_mm: Optional[float] = None,
@@ -674,8 +746,9 @@ def run_gvhmr_motion_tracking(
     output_dir: Optional[Path] = None,
     start_frame: Optional[int] = None,
     end_frame: Optional[int] = None,
-    fps: float = 24.0,
+    fps: int = 24,
     mocap_person: Optional[str] = None,
+    mmcam_extrinsics_path: Optional[Path] = None,
 ) -> bool:
     """Run GVHMR for world-grounded motion tracking.
 
@@ -691,6 +764,8 @@ def run_gvhmr_motion_tracking(
         end_frame: End frame (1-indexed, inclusive)
         fps: Frames per second (for trimming calculations)
         mocap_person: Roto person folder to isolate (e.g., 'person_00')
+        mmcam_extrinsics_path: Path to mmcam extrinsics.json to use
+            instead of GVHMR's built-in visual odometry
 
     Returns:
         True if successful
@@ -725,7 +800,9 @@ def run_gvhmr_motion_tracking(
         print(f"Frame range: {range_str}")
     if focal_mm:
         print(f"Focal length: {focal_mm:.1f}mm")
-    if static_camera:
+    if mmcam_extrinsics_path and not static_camera:
+        print(f"Camera source: mmcam ({mmcam_extrinsics_path.parent.name})")
+    elif static_camera:
         print(f"Mode: Static camera (skipping visual odometry)")
     print(f"Output: {output_dir}")
     print()
@@ -734,6 +811,16 @@ def run_gvhmr_motion_tracking(
         demo_script = gvhmr_dir / "tools" / "demo" / "demo.py"
         if not demo_script.exists():
             demo_script = gvhmr_dir / "demo.py"
+
+        _patch_gvhmr_f_mm_type(demo_script)
+
+        if mmcam_extrinsics_path and not static_camera:
+            preprocess_dir = output_dir / video_path.stem / "preprocess"
+            slam_path = preprocess_dir / "slam_results.pt"
+            _inject_mmcam_camera(
+                mmcam_extrinsics_path, slam_path,
+                start_frame=start_frame, end_frame=end_frame,
+            )
 
         gvhmr_args = [
             "python", str(demo_script),
@@ -1075,11 +1162,15 @@ def run_mocap_pipeline(
         if focal_mm:
             print(f"Using COLMAP focal length: {focal_mm:.1f}mm")
 
+    mmcam_extrinsics_path = None
     extrinsics_path = project_dir / "camera" / "extrinsics.json"
     if extrinsics_path.exists():
+        mmcam_extrinsics_path = extrinsics_path
         static_camera = detect_static_camera(extrinsics_path)
         if static_camera:
             print("Detected static camera, skipping visual odometry")
+        else:
+            print("Using mmcam camera solve for GVHMR")
 
     success = run_gvhmr_motion_tracking(
         project_dir,
@@ -1089,6 +1180,7 @@ def run_mocap_pipeline(
         start_frame=start_frame,
         end_frame=end_frame,
         mocap_person=mocap_person,
+        mmcam_extrinsics_path=mmcam_extrinsics_path,
     )
 
     if not success:
@@ -1097,13 +1189,10 @@ def run_mocap_pipeline(
 
     gvhmr_output = mocap_person_dir / "gvhmr"
 
-    camera_dir = project_dir / "camera"
-    mocap_camera_dir = project_dir / "mocap" / "camera"
-    colmap_camera_exists = (camera_dir / "extrinsics.json").exists()
+    mocap_camera_dir = project_dir / "mocap_camera"
 
-    if export_camera and not colmap_camera_exists:
+    if export_camera:
         print("\n--- Exporting GVHMR Camera ---")
-        print("  (No COLMAP camera found, using GVHMR estimate)")
 
         source_frames = project_dir / "source" / "frames"
         frame_files = sorted(source_frames.glob("*.png")) + sorted(source_frames.glob("*.jpg"))
@@ -1119,12 +1208,14 @@ def run_mocap_pipeline(
                 print(f"  Warning: Could not read image dimensions, using defaults: {e}")
 
         if n_frames > 0:
+            colmap_camera_dir = project_dir / "camera" if extrinsics_path.exists() else None
             export_gvhmr_camera(
                 gvhmr_output_dir=gvhmr_output,
                 camera_output_dir=mocap_camera_dir,
                 n_frames=n_frames,
                 image_width=image_width,
                 image_height=image_height,
+                colmap_camera_dir=colmap_camera_dir,
             )
 
     print(f"\n{'=' * 60}")
@@ -1148,7 +1239,7 @@ def run_mocap_pipeline(
 
 def run_export_pipeline(
     project_dir: Path,
-    fps: float = 24.0,
+    fps: int = 24,
     mocap_person: Optional[str] = None,
 ) -> bool:
     """Run mesh export after motion capture.
@@ -1193,6 +1284,11 @@ def run_export_pipeline(
     ]
     if mocap_person:
         export_args.extend(["--mocap-person", mocap_person])
+
+    mocap_camera_dir = project_dir / "mocap_camera"
+    world_transform_path = mocap_camera_dir / "world_transform.json"
+    if world_transform_path.exists():
+        export_args.extend(["--world-transform", str(world_transform_path)])
 
     cmd = [conda_exe, "run", "-n", "gvhmr", "--no-capture-output"] + export_args
 
@@ -1256,9 +1352,9 @@ def main():
     )
     parser.add_argument(
         "--fps",
-        type=float,
-        default=24.0,
-        help="Frames per second for export (default: 24)"
+        type=int,
+        default=24,
+        help="Integer FPS for export (default: 24)"
     )
     parser.add_argument(
         "--start-frame",

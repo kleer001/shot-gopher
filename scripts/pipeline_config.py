@@ -25,12 +25,13 @@ class PipelineConfig:
     projects_dir: Path = field(default_factory=lambda: DEFAULT_PROJECTS_DIR)
     stages: list[str] = field(default_factory=list)
     comfyui_url: str = DEFAULT_COMFYUI_URL
-    fps: Optional[float] = None
+    fps: Optional[int] = None
     skip_existing: bool = False
     overwrite: bool = True
     auto_movie: bool = False
     auto_start_comfyui: bool = True
 
+    mmcam_engine: str = "vggsfm"
     mmcam_quality: str = "medium"
     mmcam_use_masks: bool = True
     mmcam_max_size: int = -1
@@ -38,9 +39,10 @@ class PipelineConfig:
     gsir_iterations: int = 35000
     gsir_path: Optional[str] = None
 
+    mocap_engine: str = "slahmr"
     mocap_gender: str = "neutral"
     mocap_no_export: bool = False
-    mocap_fps: Optional[float] = None
+    mocap_fps: Optional[int] = None
     mocap_start_frame: Optional[int] = None
     mocap_end_frame: Optional[int] = None
     mocap_person: Optional[str] = None
@@ -75,11 +77,13 @@ class PipelineConfig:
                 overwrite=not args.no_overwrite,
                 auto_movie=args.auto_movie,
                 auto_start_comfyui=not args.no_auto_comfyui,
+                mmcam_engine=getattr(args, 'mmcam_engine', 'vggsfm'),
                 mmcam_quality=args.mmcam_quality,
                 mmcam_use_masks=not args.mmcam_no_masks,
                 mmcam_max_size=args.mmcam_max_size,
                 gsir_iterations=args.gsir_iterations,
                 gsir_path=args.gsir_path,
+                mocap_engine=getattr(args, 'mocap_engine', 'slahmr'),
                 mocap_gender=getattr(args, 'mocap_gender', 'neutral'),
                 mocap_no_export=getattr(args, 'mocap_no_export', False),
                 mocap_fps=getattr(args, 'mocap_fps', None),
@@ -103,11 +107,13 @@ class PipelineConfig:
             overwrite=not args.no_overwrite,
             auto_movie=args.auto_movie,
             auto_start_comfyui=not args.no_auto_comfyui,
+            mmcam_engine=getattr(args, 'mmcam_engine', 'vggsfm'),
             mmcam_quality=args.mmcam_quality,
             mmcam_use_masks=not args.mmcam_no_masks,
             mmcam_max_size=args.mmcam_max_size,
             gsir_iterations=args.gsir_iterations,
             gsir_path=args.gsir_path,
+            mocap_engine=getattr(args, 'mocap_engine', 'slahmr'),
             mocap_gender=getattr(args, 'mocap_gender', 'neutral'),
             mocap_no_export=getattr(args, 'mocap_no_export', False),
             mocap_fps=getattr(args, 'mocap_fps', None),
@@ -133,7 +139,7 @@ class StageContext:
     workflows_dir: Path
     comfyui_url: str
     total_frames: int
-    fps: float
+    fps: int
     skip_existing: bool
     overwrite: bool
     auto_movie: bool
@@ -146,7 +152,7 @@ class StageContext:
         config: PipelineConfig,
         project_dir: Path,
         total_frames: int,
-        fps: float,
+        fps: int,
         width: int = 0,
         height: int = 0,
     ) -> "StageContext":
@@ -156,7 +162,7 @@ class StageContext:
             config: Pipeline configuration
             project_dir: Resolved project directory
             total_frames: Number of source frames
-            fps: Frames per second
+            fps: Integer frames per second
             width: Source frame width in pixels
             height: Source frame height in pixels
 

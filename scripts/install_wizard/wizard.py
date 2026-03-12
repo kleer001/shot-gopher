@@ -15,7 +15,7 @@ from env_config import INSTALL_DIR
 from .conda import CondaEnvironmentManager
 from .config import ConfigurationGenerator
 from .downloader import CheckpointDownloader
-from .installers import COLMAPInstaller, CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, SystemPackageInstaller, ToolInstaller, VideoMaMaInstaller
+from .installers import COLMAPInstaller, CondaPackageInstaller, GitRepoInstaller, GSIRInstaller, GVHMRInstaller, PythonPackageInstaller, SLAHMRInstaller, SystemPackageInstaller, ToolInstaller, UnderPressureInstaller, VGGSfMInstaller, VideoMaMaInstaller, WiLoRInstaller
 from .platform import PlatformManager
 from .state import InstallationStateManager
 from .utils import (
@@ -120,6 +120,18 @@ class InstallationWizard:
             'size_gb': 1.5,
         }
 
+        # VGGSfM (alternative SfM engine for narrow-baseline video sequences)
+        self.components['vggsfm'] = {
+            'name': 'VGGSfM',
+            'required': False,
+            'installers': [
+                VGGSfMInstaller(
+                    install_dir=self.install_dir / "tools" / "vggsfm",
+                    size_gb=2.0,
+                )
+            ]
+        }
+
         # Motion capture dependencies
         self.components['mocap_core'] = {
             'name': 'Motion Capture Core',
@@ -141,6 +153,36 @@ class InstallationWizard:
                     install_dir=self.install_dir / "GVHMR",
                     size_gb=4.0  # Code + checkpoints (~3.5GB models)
                 )
+            ]
+        }
+
+        # SLAHMR (joint camera+body optimization - default mocap engine)
+        self.components['slahmr'] = {
+            'name': 'SLAHMR',
+            'required': False,
+            'installers': [
+                SLAHMRInstaller(
+                    install_dir=self.install_dir / "tools" / "slahmr",
+                    size_gb=8.0,
+                )
+            ]
+        }
+
+        # WiLoR-mini (hand pose estimation, installed into gvhmr env)
+        self.components['wilor'] = {
+            'name': 'WiLoR Hand Estimation',
+            'required': False,
+            'installers': [
+                WiLoRInstaller(size_gb=0.5)
+            ]
+        }
+
+        # UnderPressure (foot contact detection, uses gvhmr env)
+        self.components['underpressure'] = {
+            'name': 'UnderPressure Foot Contact',
+            'required': False,
+            'installers': [
+                UnderPressureInstaller(size_gb=0.1)
             ]
         }
 
@@ -574,7 +616,10 @@ class InstallationWizard:
                 status = self.state_manager.get_component_status(comp_id)
                 print(f"  - {self.components.get(comp_id, {}).get('name', comp_id)}: {status}")
 
-            if ask_yes_no("\nResume previous installation?", default=True):
+            if yolo:
+                print_info("YOLO mode: auto-resuming previous installation")
+                resume = True
+            elif ask_yes_no("\nResume previous installation?", default=True):
                 resume = True
             else:
                 if ask_yes_no("Start fresh (clear previous state)?", default=False):
@@ -593,8 +638,9 @@ class InstallationWizard:
         status = self.check_all_components()
         self.print_status(status)
 
-        # Set up credentials for authenticated downloads
-        self.setup_credentials(self.repo_root)
+        # Set up credentials for authenticated downloads (skip prompt in yolo mode)
+        if not yolo:
+            self.setup_credentials(self.repo_root)
 
         # Determine what to install
         if component:
@@ -608,7 +654,7 @@ class InstallationWizard:
         elif yolo:
             # YOLO mode: auto-select full stack (option 3)
             print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture + GS-IR)")
-            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'slahmr', 'gvhmr', 'wilor', 'underpressure', 'blender', 'gsir']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -623,13 +669,13 @@ class InstallationWizard:
             while True:
                 choice = tty_input("\nChoice [1-5]: ").strip()
                 if choice == '1':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm']
                     break
                 elif choice == '2':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'comfyui', 'mocap_core', 'gvhmr', 'blender', 'gsir']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'slahmr', 'gvhmr', 'wilor', 'underpressure', 'blender', 'gsir']
                     break
                 elif choice == '4':
                     to_install = []

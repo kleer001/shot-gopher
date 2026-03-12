@@ -64,6 +64,13 @@ def _get_activation_script_name() -> str:
 
 ACTIVATION_SCRIPT = INSTALL_DIR / _get_activation_script_name()
 
+# SLAHMR installation paths
+SLAHMR_INSTALL_DIR = INSTALL_DIR / "tools" / "slahmr"
+SLAHMR_CONDA_ENV = "slahmr"
+
+# UnderPressure installation path
+UNDERPRESSURE_INSTALL_DIR = INSTALL_DIR / "tools" / "underpressure"
+
 
 # =============================================================================
 # PLATFORM DETECTION
@@ -121,7 +128,10 @@ def get_active_conda_env() -> str | None:
     Returns:
         Environment name if in a conda environment, None otherwise.
     """
-    return os.environ.get("CONDA_DEFAULT_ENV")
+    value = os.environ.get("CONDA_DEFAULT_ENV")
+    if value is not None:
+        value = value.strip()
+    return value
 
 
 def is_conda_env_active(env_name: str = None) -> bool:

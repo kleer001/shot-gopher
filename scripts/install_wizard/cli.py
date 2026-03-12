@@ -6,7 +6,9 @@ for the installation wizard.
 
 import argparse
 import sys
+from pathlib import Path
 
+from .utils import setup_install_log
 from .wizard import InstallationWizard
 
 
@@ -28,7 +30,7 @@ Examples:
     parser.add_argument(
         "--component", "-C",
         type=str,
-        choices=['core', 'pytorch', 'colmap', 'mocap_core', 'gvhmr', 'econ', 'comfyui'],
+        choices=['core', 'pytorch', 'colmap', 'mocap_core', 'gvhmr', 'wilor', 'econ', 'comfyui'],
         help="Install specific component"
     )
     parser.add_argument(
@@ -59,29 +61,36 @@ Examples:
 
     args = parser.parse_args()
 
-    wizard = InstallationWizard()
+    repo_root = Path(__file__).parent.parent.parent.resolve()
+    log_path = repo_root / ".vfx_pipeline" / "install_wizard.log"
+    log_file = setup_install_log(log_path)
 
-    if args.check_only:
-        wizard.check_system_requirements()
-        status = wizard.check_all_components()
-        wizard.print_status(status)
-        sys.exit(0)
+    try:
+        wizard = InstallationWizard()
 
-    if args.validate:
-        wizard.validator.validate_and_report()
-        sys.exit(0)
+        if args.check_only:
+            wizard.check_system_requirements()
+            status = wizard.check_all_components()
+            wizard.print_status(status)
+            sys.exit(0)
 
-    if args.diagnose:
-        from diagnose import main as diagnose_main
-        diagnose_main()
-        sys.exit(0)
+        if args.validate:
+            wizard.validator.validate_and_report()
+            sys.exit(0)
 
-    success = wizard.interactive_install(
-        component=args.component,
-        resume=args.resume,
-        yolo=args.yolo
-    )
-    sys.exit(0 if success else 1)
+        if args.diagnose:
+            from diagnose import main as diagnose_main
+            diagnose_main()
+            sys.exit(0)
+
+        success = wizard.interactive_install(
+            component=args.component,
+            resume=args.resume,
+            yolo=args.yolo
+        )
+        sys.exit(0 if success else 1)
+    finally:
+        log_file.close()
 
 
 if __name__ == "__main__":

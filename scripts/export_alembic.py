@@ -40,7 +40,7 @@ def export_mesh_alembic(
     input_dir: Path,
     output_path: Path,
     start_frame: int = 1,
-    fps: float = 24.0,
+    fps: int = 24,
 ) -> bool:
     """Export OBJ mesh sequence to Alembic file using Blender.
 
@@ -109,9 +109,9 @@ def main():
     )
     parser.add_argument(
         "--fps", "-f",
-        type=float,
-        default=24.0,
-        help="Frames per second (default: 24)"
+        type=int,
+        default=24,
+        help="Integer FPS (default: 24)"
     )
     parser.add_argument(
         "--check",

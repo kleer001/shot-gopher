@@ -29,9 +29,11 @@ STAGES = {
     "roto": "Run roto (02_segmentation.json)",
     "mama": "Refine mattes with VideoMaMa diffusion",
     "cleanplate": "Clean plate via temporal median (static camera)",
-    "matchmove_camera": "Run camera tracking (COLMAP SfM)",
+    "matchmove_camera": "Run camera tracking (VGGSfM SfM)",
     "dense": "Dense reconstruction: point clouds, mesh, depth maps, normals (COLMAP MVS)",
-    "mocap": "Run human motion capture (GVHMR)",
+    "mocap": "Run human motion capture (SLAHMR)",
+    "hands": "Run hand pose estimation (WiLoR)",
+    "foot_contact": "Detect foot contacts and reduce footskate (UnderPressure)",
     "gsir": "Run GS-IR material decomposition",
     "camera": "Export camera to Alembic",
 }
@@ -42,12 +44,12 @@ STAGE_ALIASES: dict[str, str] = {
 
 STAGE_ORDER = [
     "ingest", "interactive", "depth", "roto", "mama", "cleanplate",
-    "matchmove_camera", "dense", "mocap", "gsir", "camera"
+    "matchmove_camera", "dense", "mocap", "hands", "foot_contact", "gsir", "camera"
 ]
 
 STAGES_REQUIRING_FRAMES = {
     "interactive", "depth", "roto", "mama", "cleanplate",
-    "matchmove_camera", "dense", "mocap", "gsir", "camera"
+    "matchmove_camera", "dense", "mocap", "hands", "foot_contact", "gsir", "camera"
 }
 
 WORKFLOW_TEMPLATES_DIR = Path(__file__).parent.parent / "workflow_templates"

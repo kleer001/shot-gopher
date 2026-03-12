@@ -109,7 +109,7 @@ def export_json_camera(
     intrinsics: dict,
     output_path: Path,
     start_frame: int = 1,
-    fps: float = 24.0
+    fps: int = 24
 ) -> None:
     """Export camera data to JSON format (fallback when Alembic unavailable).
 
@@ -240,7 +240,7 @@ def export_houdini_cmd(
     camera_dir: Path,
     output_path: Path,
     start_frame: int = 1,
-    fps: float = 24.0,
+    fps: int = 24,
 ) -> None:
     """Export Houdini .cmd file that creates camera from JSON.
 
@@ -306,9 +306,18 @@ if os.path.exists(intrinsics_path):
 else:
     print(f"No intrinsics.json, using defaults")
 
+def opencv_to_opengl(m):
+    result = [[0.0]*4 for _ in range(4)]
+    flip = [1.0, -1.0, -1.0, 1.0]
+    for i in range(4):
+        for j in range(4):
+            result[i][j] = m[i][j] * flip[j]
+    return result
+
 def decompose(m):
-    tx, ty, tz = m[0][3], m[1][3], m[2][3]
-    r = [[m[i][j] for j in range(3)] for i in range(3)]
+    gl = opencv_to_opengl(m)
+    tx, ty, tz = gl[0][3], gl[1][3], gl[2][3]
+    r = [[gl[i][j] for j in range(3)] for i in range(3)]
     sx = math.sqrt(r[0][0]**2 + r[1][0]**2 + r[2][0]**2)
     sy = math.sqrt(r[0][1]**2 + r[1][1]**2 + r[2][1]**2)
     sz = math.sqrt(r[0][2]**2 + r[1][2]**2 + r[2][2]**2)
@@ -421,7 +430,7 @@ def export_houdini_clip(
     intrinsics: dict,
     output_path: Path,
     start_frame: int = 1,
-    fps: float = 24.0,
+    fps: int = 24,
 ) -> None:
     """Export camera to Houdini .clip format (CHOP channel data).
 
@@ -477,7 +486,7 @@ def export_after_effects_jsx(
     intrinsics: dict,
     output_path: Path,
     start_frame: int = 1,
-    fps: float = 24.0,
+    fps: int = 24,
     camera_name: str = "pipeline_camera"
 ) -> None:
     """Export camera to After Effects JSX script.
@@ -674,9 +683,9 @@ def main():
     )
     parser.add_argument(
         "--fps", "-f",
-        type=float,
-        default=24.0,
-        help="Frames per second (default: 24)"
+        type=int,
+        default=24,
+        help="Integer FPS (default: 24)"
     )
     parser.add_argument(
         "--width", "-W",
@@ -714,7 +723,7 @@ def main():
         type=Path,
         default=None,
         help="Camera data directory (default: <project_dir>/camera/). "
-             "Use for GVHMR camera at mocap/camera/"
+             "Use for GVHMR camera at mocap_camera/"
     )
 
     args = parser.parse_args()

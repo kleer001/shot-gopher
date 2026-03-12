@@ -4,7 +4,12 @@
 # Usage:
 #   irm https://raw.githubusercontent.com/kleer001/shot-gopher/main/scripts/bootstrap_conda.ps1 | iex
 
-$ErrorActionPreference = "Stop"
+# NOTE: We intentionally do NOT set $ErrorActionPreference = "Stop" globally.
+# Native commands (git, conda) write progress to stderr, which PowerShell
+# converts to non-terminating errors. With "Stop", these become terminating
+# errors that abort the script on perfectly normal output like
+# "Cloning into 'shot-gopher'...". Instead, we use explicit error checking
+# ($LASTEXITCODE, try/catch) where needed.
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -27,6 +32,69 @@ function Write-Banner {
     Write-Host ""
 }
 
+function Read-UserInput {
+    <#
+    .SYNOPSIS
+    Read user input, working correctly even when stdin is piped (irm | iex).
+    Falls back to [Console]::ReadLine() when stdin is not interactive.
+    Returns empty string if no console is available (fully non-interactive).
+    #>
+    param([string]$Prompt, [string]$Default = "")
+
+    Write-Host $Prompt -NoNewline
+
+    try {
+        if ([Console]::IsInputRedirected) {
+            $result = [Console]::ReadLine()
+            if ($null -eq $result) { return $Default }
+            return $result
+        }
+    } catch {
+        # [Console]::IsInputRedirected may not be available on PS 5.1
+    }
+
+    try {
+        $result = Read-Host
+        return $result
+    } catch {
+        return $Default
+    }
+}
+
+function Invoke-NativeCommand {
+    <#
+    .SYNOPSIS
+    Run a native command (git, conda, etc.) without PowerShell's stderr
+    interference. Returns $true if exit code is 0, $false otherwise.
+    Output is displayed to the console normally.
+    #>
+    param(
+        [string]$Command,
+        [string[]]$Arguments,
+        [switch]$Silent
+    )
+
+    $savedEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+
+    try {
+        if ($Silent) {
+            & $Command @Arguments 2>&1 | Out-Null
+        } else {
+            & $Command @Arguments 2>&1 | ForEach-Object {
+                if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                    Write-Host $_.ToString()
+                } else {
+                    Write-Host $_
+                }
+            }
+        }
+        return $LASTEXITCODE -eq 0
+    } finally {
+        $ErrorActionPreference = $savedEAP
+    }
+}
+
 function Install-Git {
     $installed = $false
 
@@ -37,6 +105,9 @@ function Install-Git {
         $savedDir = (Get-Location).Path
 
         try {
+            # Pre-update winget sources to avoid stale source errors on fresh installs
+            Start-Process -FilePath "winget" -ArgumentList @("source", "update") -Wait -NoNewWindow 2>$null
+
             $process = Start-Process -FilePath "winget" -ArgumentList @(
                 "install", "--id", "Git.Git", "-e", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"
             ) -Wait -PassThru -NoNewWindow
@@ -243,17 +314,32 @@ function Install-Miniconda {
 function Initialize-CondaShell {
     param([string]$CondaPath)
 
+    # conda init powershell creates a profile.ps1 that requires script execution.
+    # If the execution policy is Restricted (Windows default), that profile will
+    # error on every PowerShell session. Fix this BEFORE running conda init.
+    $policy = Get-ExecutionPolicy -Scope CurrentUser
+    if ($policy -eq "Restricted" -or $policy -eq "Undefined") {
+        Write-Host "Setting PowerShell execution policy to RemoteSigned (CurrentUser scope)..." -ForegroundColor Yellow
+        try {
+            Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+            Write-Host "OK Execution policy set to RemoteSigned" -ForegroundColor Green
+        } catch {
+            Write-Host "! Could not set execution policy automatically" -ForegroundColor Yellow
+            Write-Host "  Run manually (as Administrator):" -ForegroundColor Gray
+            Write-Host "    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "  Without this, PowerShell will show an error on every startup" -ForegroundColor Gray
+            Write-Host "  after conda init creates a profile script." -ForegroundColor Gray
+        }
+    }
+
     Write-Host "Initializing conda for PowerShell..." -ForegroundColor Yellow
 
-    try {
-        & $CondaPath init powershell 2>&1 | Out-Null
-        Write-Host "OK Conda initialized for PowerShell" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "NOTE: You may need to restart PowerShell for conda to work properly." -ForegroundColor Yellow
-    } catch {
-        Write-Host "! Could not auto-initialize conda" -ForegroundColor Yellow
-        Write-Host "  Run manually: conda init powershell" -ForegroundColor Gray
-    }
+    Invoke-NativeCommand -Command $CondaPath -Arguments @("init", "powershell") -Silent
+
+    Write-Host "OK Conda initialized for PowerShell" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "NOTE: You may need to restart PowerShell for conda to work properly." -ForegroundColor Yellow
 }
 
 function Install-VFXPipeline {
@@ -282,7 +368,7 @@ function Install-VFXPipeline {
         Write-Host "It is used to download and update the pipeline code." -ForegroundColor Gray
         Write-Host ""
 
-        $response = Read-Host "Would you like to install Git automatically? (Y/n)"
+        $response = Read-UserInput "Would you like to install Git automatically? (Y/n): "
 
         if ($response -match "^[Nn]$") {
             Write-Host ""
@@ -318,7 +404,7 @@ function Install-VFXPipeline {
         Write-Host "It provides isolated Python environments with GPU support." -ForegroundColor Gray
         Write-Host ""
 
-        $response = Read-Host "Would you like to install Miniconda automatically? (Y/n)"
+        $response = Read-UserInput "Would you like to install Miniconda automatically? (Y/n): "
 
         if ($response -match "^[Nn]$") {
             Write-Host ""
@@ -349,32 +435,51 @@ function Install-VFXPipeline {
     }
 
     # Verify conda works
-    try {
-        $condaVersion = & $condaPath --version 2>&1
-        Write-Host "OK $condaVersion" -ForegroundColor Green
-    } catch {
+    $condaVersion = & $condaPath --version 2>&1 | Out-String
+    if ($condaVersion) {
+        Write-Host "OK $($condaVersion.Trim())" -ForegroundColor Green
+    } else {
         Write-Host "! Could not verify conda version" -ForegroundColor Yellow
     }
 
     Write-Host ""
 
     # Clone or update repository
-    if (Test-Path $INSTALL_DIR) {
-        Write-Host "Directory $INSTALL_DIR already exists."
-        $response = Read-Host "Update existing installation? (y/N)"
+    $isValidRepo = (Test-Path $INSTALL_DIR) -and (Test-Path (Join-Path $INSTALL_DIR ".git"))
+
+    if ($isValidRepo) {
+        Write-Host "Directory $INSTALL_DIR already exists (valid git repo)."
+        $response = Read-UserInput "Update existing installation? (y/N): "
         if ($response -match "^[Yy]$") {
             Write-Host "Updating repository..."
-            git -C $INSTALL_DIR pull
-            if ($LASTEXITCODE -ne 0) {
+            Invoke-NativeCommand -Command "git" -Arguments @("-C", $INSTALL_DIR, "pull")
+            if (-not $?) {
                 Write-Host "! Git pull failed, continuing with existing code..." -ForegroundColor Yellow
             }
         } else {
             Write-Host "Using existing installation at $INSTALL_DIR"
         }
     } else {
+        if (Test-Path $INSTALL_DIR) {
+            Write-Host "Directory $INSTALL_DIR exists but is not a valid git repository." -ForegroundColor Yellow
+            Write-Host "Removing and re-cloning..." -ForegroundColor Yellow
+            Remove-Item $INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
+            # Windows filesystem needs time to release directory handles
+            $retries = 0
+            while ((Test-Path $INSTALL_DIR) -and $retries -lt 10) {
+                Start-Sleep -Milliseconds 500
+                Remove-Item $INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
+                $retries++
+            }
+            if (Test-Path $INSTALL_DIR) {
+                Write-Host "X Could not remove $INSTALL_DIR" -ForegroundColor Red
+                Write-Host "  Close any programs using that folder, then try again." -ForegroundColor Yellow
+                return 1
+            }
+        }
         Write-Host "Cloning repository to $INSTALL_DIR..."
-        git clone $REPO_URL $INSTALL_DIR
-        if ($LASTEXITCODE -ne 0) {
+        $cloneOk = Invoke-NativeCommand -Command "git" -Arguments @("clone", $REPO_URL, $INSTALL_DIR)
+        if (-not $cloneOk) {
             Write-Host "X Failed to clone repository" -ForegroundColor Red
             return 1
         }
@@ -382,9 +487,18 @@ function Install-VFXPipeline {
 
     Write-Banner "Launching Installation Wizard"
 
-    # Run the wizard using conda run (works regardless of installation method)
+    # When stdin is redirected (irm|iex, SSH, etc.) the Python wizard cannot
+    # prompt for input — auto-add --yolo so it runs non-interactively.
+    $wizardArgs = @("run", "-n", "base", "python", "scripts/install_wizard.py")
+    $stdinRedirected = $false
+    try { $stdinRedirected = [Console]::IsInputRedirected } catch {}
+    if ($stdinRedirected) {
+        Write-Host "Non-interactive session detected, using --yolo mode" -ForegroundColor Yellow
+        $wizardArgs += "--yolo"
+    }
+
     Push-Location $INSTALL_DIR
-    & $condaPath run -n base python scripts/install_wizard.py
+    Invoke-NativeCommand -Command $condaPath -Arguments $wizardArgs
     $wizardExitCode = $LASTEXITCODE
     Pop-Location
 
@@ -419,5 +533,21 @@ try {
     $script:exitCode = 1
 }
 
-Write-Host ""
-Read-Host "Press Enter to close"
+# Only prompt "Press Enter" when running interactively.
+# When piped via irm|iex or run over SSH, there is no console to read from.
+$isInteractive = $false
+try {
+    $isInteractive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
+} catch {
+    # PS 5.1 may not support IsInputRedirected; fall back to checking stdin
+    try {
+        $isInteractive = [Console]::In -ne $null -and [Environment]::UserInteractive
+    } catch {
+        $isInteractive = $false
+    }
+}
+
+if ($isInteractive) {
+    Write-Host ""
+    Read-Host "Press Enter to close"
+}

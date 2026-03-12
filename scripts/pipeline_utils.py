@@ -229,7 +229,7 @@ def extract_frames(
     input_path: Path,
     output_dir: Path,
     start_frame: int = 1,
-    fps: Optional[float] = None
+    fps: Optional[int] = None
 ) -> int:
     """Extract frames from video file using ffmpeg.
 
@@ -330,7 +330,7 @@ def get_video_info(input_path: Path) -> dict:
 def generate_preview_movie(
     image_dir: Path,
     output_path: Path,
-    fps: float = 24.0,
+    fps: int = 24,
     pattern: str = "*.png",
     crf: int = 23,
 ) -> bool:
