@@ -616,7 +616,10 @@ class InstallationWizard:
                 status = self.state_manager.get_component_status(comp_id)
                 print(f"  - {self.components.get(comp_id, {}).get('name', comp_id)}: {status}")
 
-            if ask_yes_no("\nResume previous installation?", default=True):
+            if yolo:
+                print_info("YOLO mode: auto-resuming previous installation")
+                resume = True
+            elif ask_yes_no("\nResume previous installation?", default=True):
                 resume = True
             else:
                 if ask_yes_no("Start fresh (clear previous state)?", default=False):
@@ -635,8 +638,9 @@ class InstallationWizard:
         status = self.check_all_components()
         self.print_status(status)
 
-        # Set up credentials for authenticated downloads
-        self.setup_credentials(self.repo_root)
+        # Set up credentials for authenticated downloads (skip prompt in yolo mode)
+        if not yolo:
+            self.setup_credentials(self.repo_root)
 
         # Determine what to install
         if component:

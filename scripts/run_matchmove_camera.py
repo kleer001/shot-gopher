@@ -1610,7 +1610,9 @@ def colmap_to_camera_matrices(images: dict, cameras: dict) -> tuple[list, dict]:
     return extrinsics, intrinsics
 
 
-def _gravity_align_extrinsics(extrinsics: list[np.ndarray]) -> list[np.ndarray]:
+def _gravity_align_extrinsics(
+    extrinsics: list[np.ndarray],
+) -> tuple[list[np.ndarray], np.ndarray]:
     """Align camera-to-world extrinsics so world +Y points up (against gravity).
 
     SfM reconstructions (COLMAP, VGGSfM) produce cameras in an arbitrary world
@@ -1622,10 +1624,10 @@ def _gravity_align_extrinsics(extrinsics: list[np.ndarray]) -> list[np.ndarray]:
         extrinsics: List of 4x4 camera-to-world matrices (OpenCV convention)
 
     Returns:
-        Gravity-aligned list of 4x4 camera-to-world matrices
+        Tuple of (gravity-aligned extrinsics, 3x3 alignment rotation matrix).
     """
     if not extrinsics:
-        return extrinsics
+        return extrinsics, np.eye(3)
 
     gravity_samples = []
     for mat in extrinsics:
@@ -1639,7 +1641,7 @@ def _gravity_align_extrinsics(extrinsics: list[np.ndarray]) -> list[np.ndarray]:
 
     dot = np.clip(np.dot(gravity_dir, target), -1.0, 1.0)
     if abs(dot - 1.0) < 1e-8:
-        return extrinsics
+        return extrinsics, np.eye(3)
 
     if abs(dot + 1.0) < 1e-8:
         R_align = np.diag([1.0, -1.0, -1.0])
@@ -1658,7 +1660,7 @@ def _gravity_align_extrinsics(extrinsics: list[np.ndarray]) -> list[np.ndarray]:
     R4 = np.eye(4)
     R4[:3, :3] = R_align
 
-    return [R4 @ mat for mat in extrinsics]
+    return [R4 @ mat for mat in extrinsics], R_align
 
 
 def export_colmap_to_pipeline_format(
@@ -1715,7 +1717,9 @@ def export_colmap_to_pipeline_format(
         # Use only registered frames
         extrinsics, intrinsics = colmap_to_camera_matrices(images, cameras)
 
-    extrinsics = _gravity_align_extrinsics(extrinsics)
+    extrinsics, gravity_rotation = _gravity_align_extrinsics(extrinsics)
+
+    np.save(output_dir / "gravity_align.npy", gravity_rotation)
 
     # Save extrinsics (list of 4x4 matrices)
     extrinsics_data = [m.tolist() if isinstance(m, np.ndarray) else m for m in extrinsics]

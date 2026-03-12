@@ -4,14 +4,91 @@ This module provides terminal output formatting, user input helpers,
 and system check utilities used throughout the wizard.
 """
 
+import datetime
 import shutil
 import subprocess
 import sys
+from io import TextIOWrapper
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import IO, List, Optional, Tuple
 
 # Global TTY file handle for reading input when piped (Unix only)
-_tty_handle = None
+_tty_handle: Optional[TextIOWrapper] = None
+
+
+class TeeWriter:
+    """Wraps a text stream to mirror all output to a shared log file.
+
+    Every line written is also written to the log file with a timestamp
+    prefix. Flushes after every write for real-time monitoring via
+    ``tail -f`` or SSH.
+    """
+
+    def __init__(self, original: IO[str], log_file: IO[str]) -> None:
+        self._original = original
+        self._log_file = log_file
+        self._at_line_start = True
+
+    @property
+    def encoding(self) -> str:
+        """Return encoding of the underlying stream."""
+        return getattr(self._original, "encoding", "utf-8")
+
+    def write(self, text: str) -> int:
+        """Write to both the original stream and the log file."""
+        self._original.write(text)
+        if not text:
+            return 0
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            if self._at_line_start and line:
+                ts = datetime.datetime.now().strftime("%H:%M:%S")
+                self._log_file.write(f"[{ts}] {line}")
+            else:
+                self._log_file.write(line)
+            if i < len(lines) - 1:
+                self._log_file.write("\n")
+                self._at_line_start = True
+            else:
+                self._at_line_start = not line
+        self._log_file.flush()
+        return len(text)
+
+    def flush(self) -> None:
+        """Flush both streams."""
+        self._original.flush()
+        self._log_file.flush()
+
+    def fileno(self) -> int:
+        """Return the file descriptor of the original stream."""
+        return self._original.fileno()
+
+    def isatty(self) -> bool:
+        """Return whether the original stream is a TTY."""
+        return self._original.isatty()
+
+
+def setup_install_log(log_path: Path) -> IO[str]:
+    """Replace sys.stdout with a TeeWriter that mirrors to a log file.
+
+    All subsequent ``print()`` calls will be mirrored to *log_path*
+    with per-line timestamps. The log file is opened in append mode.
+
+    Args:
+        log_path: Path to the log file (created/appended).
+
+    Returns:
+        The open log file handle. Caller must close it when done.
+    """
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_file = open(log_path, "a", encoding="utf-8")
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_file.write(f"\n{'='*60}\n")
+    log_file.write(f"Install wizard started at {ts}\n")
+    log_file.write(f"{'='*60}\n")
+    log_file.flush()
+    sys.stdout = TeeWriter(sys.stdout, log_file)  # type: ignore[assignment]
+    return log_file
 
 
 def _is_windows() -> bool:

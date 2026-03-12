@@ -487,9 +487,18 @@ function Install-VFXPipeline {
 
     Write-Banner "Launching Installation Wizard"
 
-    # Run the wizard using conda run (works regardless of installation method)
+    # When stdin is redirected (irm|iex, SSH, etc.) the Python wizard cannot
+    # prompt for input — auto-add --yolo so it runs non-interactively.
+    $wizardArgs = @("run", "-n", "base", "python", "scripts/install_wizard.py")
+    $stdinRedirected = $false
+    try { $stdinRedirected = [Console]::IsInputRedirected } catch {}
+    if ($stdinRedirected) {
+        Write-Host "Non-interactive session detected, using --yolo mode" -ForegroundColor Yellow
+        $wizardArgs += "--yolo"
+    }
+
     Push-Location $INSTALL_DIR
-    Invoke-NativeCommand -Command $condaPath -Arguments @("run", "-n", "base", "python", "scripts/install_wizard.py")
+    Invoke-NativeCommand -Command $condaPath -Arguments $wizardArgs
     $wizardExitCode = $LASTEXITCODE
     Pop-Location
 

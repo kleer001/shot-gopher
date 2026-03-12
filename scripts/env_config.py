@@ -128,7 +128,10 @@ def get_active_conda_env() -> str | None:
     Returns:
         Environment name if in a conda environment, None otherwise.
     """
-    return os.environ.get("CONDA_DEFAULT_ENV")
+    value = os.environ.get("CONDA_DEFAULT_ENV")
+    if value is not None:
+        value = value.strip()
+    return value
 
 
 def is_conda_env_active(env_name: str = None) -> bool:

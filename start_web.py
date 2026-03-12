@@ -8,6 +8,7 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 import webbrowser
 from pathlib import Path
@@ -17,12 +18,29 @@ sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 
 from log_manager import LogCapture
 
+
+def _add_tools_to_path() -> None:
+    """Add .vfx_pipeline/tools/*/bin directories to PATH."""
+    tools_dir = Path(__file__).parent / ".vfx_pipeline" / "tools"
+    if not tools_dir.exists():
+        return
+    extra = []
+    for tool_dir in sorted(tools_dir.iterdir()):
+        bin_dir = tool_dir / "bin"
+        if bin_dir.is_dir():
+            extra.append(str(bin_dir))
+    if extra:
+        os.environ["PATH"] = os.pathsep.join(extra) + os.pathsep + os.environ.get("PATH", "")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Launch VFX Pipeline web interface")
     parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser")
     parser.add_argument("--port", type=int, default=5000, help="Server port (default: 5000)")
     parser.add_argument("--host", default="127.0.0.1", help="Server host (default: 127.0.0.1)")
     args = parser.parse_args()
+
+    _add_tools_to_path()
 
     # Check conda environment first
     try:

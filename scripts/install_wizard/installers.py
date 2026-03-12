@@ -1111,6 +1111,12 @@ class SLAHMRInstaller(ComponentInstaller):
     def install(self) -> bool:
         """Install SLAHMR in a dedicated conda environment."""
         print(f"\nInstalling SLAHMR (joint camera+body optimization)...")
+
+        if sys.platform == "win32":
+            print_warning("SLAHMR requires Linux (GCC, detectron2, bash scripts)")
+            print_info("Skipping on Windows — use WSL2 or a Linux machine for SLAHMR")
+            return True
+
         print_info("This will create conda env 'slahmr' with Python 3.10, CUDA 11.8")
         print_info("Installation takes ~30 minutes and ~8GB disk space")
 

@@ -30,15 +30,18 @@ def _rotation_around_x(angle_rad: float) -> np.ndarray:
 
 class TestGravityAlignExtrinsics:
     def test_empty_list_returns_empty(self):
-        assert _gravity_align_extrinsics([]) == []
+        aligned, R_align = _gravity_align_extrinsics([])
+        assert aligned == []
+        np.testing.assert_array_almost_equal(R_align, np.eye(3))
 
     def test_already_aligned_is_unchanged(self):
         R_aligned = np.diag([1.0, -1.0, -1.0])
         cameras = [_make_camera_c2w(R_aligned, np.array([0.0, 0.0, float(i)])) for i in range(5)]
-        aligned = _gravity_align_extrinsics(cameras)
+        aligned, R_align = _gravity_align_extrinsics(cameras)
 
         for orig, result in zip(cameras, aligned):
             np.testing.assert_array_almost_equal(orig, result, decimal=5)
+        np.testing.assert_array_almost_equal(R_align, np.eye(3))
 
     def test_tilted_cameras_become_y_up(self):
         tilt = np.radians(30)
@@ -48,7 +51,7 @@ class TestGravityAlignExtrinsics:
             for i in range(10)
         ]
 
-        aligned = _gravity_align_extrinsics(cameras)
+        aligned, _ = _gravity_align_extrinsics(cameras)
 
         for mat in aligned:
             cam_y = mat[:3, 1]
@@ -59,7 +62,7 @@ class TestGravityAlignExtrinsics:
         R_tilt = _rotation_around_x(tilt)
         cameras = [_make_camera_c2w(R_tilt, np.zeros(3)) for _ in range(3)]
 
-        aligned = _gravity_align_extrinsics(cameras)
+        aligned, _ = _gravity_align_extrinsics(cameras)
 
         for mat in aligned:
             R = mat[:3, :3]
@@ -69,7 +72,7 @@ class TestGravityAlignExtrinsics:
         R_flip = np.diag([1.0, -1.0, -1.0])
         cameras = [_make_camera_c2w(R_flip, np.zeros(3)) for _ in range(3)]
 
-        aligned = _gravity_align_extrinsics(cameras)
+        aligned, _ = _gravity_align_extrinsics(cameras)
 
         for mat in aligned:
             cam_y = mat[:3, 1]

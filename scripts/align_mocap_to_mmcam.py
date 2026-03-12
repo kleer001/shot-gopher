@@ -29,6 +29,7 @@ Example:
 
 import argparse
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -38,6 +39,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 from env_config import require_conda_env
+from transforms import quaternion_to_rotation_matrix
 from export_mocap import (
     export_alembic,
     export_tpose,
@@ -111,18 +113,39 @@ def compute_pelvis_offset(
     )
 
 
-def compute_trajectory_scale(
+def compute_gravity_rotation(
+    c2w: np.ndarray,
+    camera_dir: Path,
+) -> np.ndarray:
+    """Load the gravity alignment rotation saved during camera export.
+
+    The pipeline applies a gravity alignment rotation to camera extrinsics
+    (so world +Y = up), but the sparse pointcloud PLY from COLMAP is in the
+    raw (unrotated) world frame. This rotation brings the pointcloud into
+    the same gravity-aligned frame as the body mesh.
+
+    Args:
+        c2w: (N, 4, 4) gravity-aligned camera-to-world matrices.
+        camera_dir: Directory containing gravity_align.npy.
+
+    Returns:
+        (3, 3) rotation matrix mapping raw COLMAP world to gravity-aligned world.
+    """
+    npy_path = camera_dir / "gravity_align.npy"
+    return np.load(npy_path)
+
+
+def compute_world_scale(
     c2w: np.ndarray,
     cam_R: np.ndarray,
     cam_t: np.ndarray,
 ) -> float:
-    """Compute scale ratio between VGGSfM and SLAHMR camera trajectories.
+    """Compute VGGSfM-to-metric scale via Umeyama alignment of camera trajectories.
 
-    Both camera systems trace the same physical path but at different scales.
     VGGSfM's monocular SfM produces an arbitrary-scale reconstruction;
     SLAHMR's body-aware optimization produces metric-scale results.
-
-    Uses total path length (sum of inter-frame steps) for a robust estimate.
+    The Umeyama algorithm finds the similarity transform (rotation + scale +
+    translation) that best maps SLAHMR camera positions to VGGSfM positions.
 
     Args:
         c2w: (N, 4, 4) VGGSfM camera-to-world matrices.
@@ -135,33 +158,52 @@ def compute_trajectory_scale(
     vggsfm_pos = c2w[:, :3, 3]
     slahmr_pos = np.array([-cam_R[i].T @ cam_t[i] for i in range(len(cam_t))])
 
-    vggsfm_length = np.linalg.norm(np.diff(vggsfm_pos, axis=0), axis=1).sum()
-    slahmr_length = np.linalg.norm(np.diff(slahmr_pos, axis=0), axis=1).sum()
+    mu_src = slahmr_pos.mean(0)
+    mu_dst = vggsfm_pos.mean(0)
+    src_c = slahmr_pos - mu_src
+    dst_c = vggsfm_pos - mu_dst
 
-    return vggsfm_length / slahmr_length
+    sigma_src = np.sum(src_c ** 2) / len(src_c)
+    if sigma_src < 1e-12:
+        raise ValueError("SLAHMR cameras are stationary — cannot compute scale")
+
+    h = (dst_c.T @ src_c) / len(src_c)
+    u, d, vt = np.linalg.svd(h)
+
+    s_mat = np.eye(3)
+    if np.linalg.det(u) * np.linalg.det(vt) < 0:
+        s_mat[2, 2] = -1
+
+    return float(np.trace(np.diag(d) @ s_mat) / sigma_src)
 
 
 def transform_sparse_ply(
     input_path: Path,
     output_path: Path,
-    c2w: np.ndarray,
-    scale_factor: float,
+    rotation: np.ndarray,
+    scale: float,
+    centroid: np.ndarray,
 ) -> None:
-    """Scale sparse pointcloud from VGGSfM space to match body mesh scale.
+    """Transform sparse pointcloud from raw COLMAP world to body-mesh space.
 
-    Scales vertex positions around the VGGSfM camera trajectory centroid
-    so the pointcloud's metric scale matches the aligned body mesh.
+    Applies two corrections:
+      1. Gravity alignment rotation (raw COLMAP → gravity-aligned world)
+      2. Scale around camera centroid (VGGSfM arbitrary scale → metric)
+
+    The body mesh sits in a hybrid space: VGGSfM camera positions with metric
+    body offsets. Scaling the rotated pointcloud around the camera centroid
+    brings scene features to metric distance from the cameras, matching
+    the body's metric offsets.
 
     Preserves vertex colors and PLY structure (binary or ASCII).
 
     Args:
-        input_path: Input PLY file in VGGSfM world space.
-        output_path: Output PLY file scaled to body-mesh space.
-        c2w: (N, 4, 4) VGGSfM camera-to-world matrices.
-        scale_factor: VGGSfM_units / meters ratio.
+        input_path: Input PLY file in raw COLMAP world space.
+        output_path: Output PLY file in gravity-aligned metric-scale space.
+        rotation: (3, 3) gravity alignment rotation.
+        scale: VGGSfM_units / meters ratio.
+        centroid: (3,) camera trajectory centroid in gravity-aligned space.
     """
-    centroid = c2w[:, :3, 3].mean(axis=0)
-
     with open(input_path, "rb") as f:
         header_lines = []
         while True:
@@ -195,14 +237,26 @@ def transform_sparse_ply(
             max_rows=n_verts,
         )
 
+    xyz = np.column_stack([vertices["x"], vertices["y"], vertices["z"]])
+    xyz_rotated = (rotation @ xyz.T).T
+    xyz_scaled = centroid + (xyz_rotated - centroid) / scale
+
     vertices = vertices.copy()
-    for axis, name in enumerate(("x", "y", "z")):
-        vertices[name] = centroid[axis] + (vertices[name] - centroid[axis]) / scale_factor
+    vertices["x"] = xyz_scaled[:, 0].astype(np.float32)
+    vertices["y"] = xyz_scaled[:, 1].astype(np.float32)
+    vertices["z"] = xyz_scaled[:, 2].astype(np.float32)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "wb") as f:
-        f.write(header)
-        f.write(vertices.tobytes())
+    if is_binary:
+        with open(output_path, "wb") as f:
+            f.write(header)
+            f.write(vertices.tobytes())
+    else:
+        with open(output_path, "w", encoding="ascii") as f:
+            f.write(header_text)
+            for row in vertices:
+                vals = " ".join(str(v) for v in row)
+                f.write(vals + "\n")
 
 
 def transform_meshes(
@@ -314,22 +368,24 @@ def export_static_geometry(
     meshes: List[Tuple],
     project_dir: Path,
     fps: int,
-    c2w: np.ndarray,
-    scale_factor: float,
+    gravity_rotation: np.ndarray,
+    world_scale: float,
+    camera_centroid: np.ndarray,
 ) -> List[Path]:
     """Export ground plane and sparse pointcloud as PLY and Alembic.
 
     Generates a ground plane grid mesh at foot-contact height and transforms
-    the sparse pointcloud from VGGSfM scale to body-mesh (metric) scale.
-    Both are converted to Alembic via Blender.
+    the sparse pointcloud from raw COLMAP world into gravity-aligned metric
+    space (matching the body mesh). Both are converted to Alembic via Blender.
 
     Args:
         output_dir: Output directory for exported files.
         meshes: List of (vertices, faces) in world space.
         project_dir: Project directory (for sparse PLY source).
         fps: Frame rate for Alembic export.
-        c2w: (N, 4, 4) VGGSfM camera-to-world matrices.
-        scale_factor: VGGSfM_units / meters ratio for pointcloud scaling.
+        gravity_rotation: (3, 3) rotation from raw COLMAP → gravity-aligned world.
+        world_scale: VGGSfM_units / meters ratio.
+        camera_centroid: (3,) camera centroid in gravity-aligned world.
 
     Returns:
         List of exported file paths.
@@ -358,8 +414,10 @@ def export_static_geometry(
     sparse_ply_src = project_dir / "geometry" / "sparse_pointcloud.ply"
     sparse_ply_dst = output_dir / "sparse_pointcloud.ply"
     if sparse_ply_src.exists():
-        print(f"  Transforming sparse pointcloud (scale factor: {scale_factor:.1f}x)...")
-        transform_sparse_ply(sparse_ply_src, sparse_ply_dst, c2w, scale_factor)
+        print(f"  Transforming sparse pointcloud (gravity align + scale 1/{world_scale:.1f})...")
+        transform_sparse_ply(
+            sparse_ply_src, sparse_ply_dst, gravity_rotation, world_scale, camera_centroid
+        )
 
     blender_ok, blender_msg = check_blender_available()
     if not blender_ok:
@@ -691,10 +749,12 @@ def run_alignment(
     camera_paths = export_camera(output_dir, fps)
     exported.extend(camera_paths)
 
-    scale_factor = compute_trajectory_scale(c2w, cam_R, cam_t)
-    print(f"  VGGSfM/SLAHMR scale ratio: {scale_factor:.1f}x")
+    gravity_rot = compute_gravity_rotation(c2w, camera_dir)
+    world_scale = compute_world_scale(c2w, cam_R, cam_t)
+    camera_centroid = c2w[:, :3, 3].mean(axis=0)
+    print(f"  World scale (VGGSfM/metric): {world_scale:.1f}x")
     geometry_paths = export_static_geometry(
-        output_dir, meshes, project_dir, fps, c2w, scale_factor
+        output_dir, meshes, project_dir, fps, gravity_rot, world_scale, camera_centroid
     )
     exported.extend(geometry_paths)
 
