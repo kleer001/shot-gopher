@@ -8,6 +8,8 @@ import datetime
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from io import TextIOWrapper
 from pathlib import Path
 from typing import IO, List, Optional, Tuple
@@ -248,13 +250,43 @@ def run_command(
             process.wait()
             return process.returncode == 0, ''.join(output_lines)
         else:
-            result = subprocess.run(cmd, check=check, timeout=timeout, shell=shell, cwd=cwd)
-            return result.returncode == 0, ""
+            return _run_with_heartbeat(cmd, check=check, timeout=timeout, shell=shell, cwd=cwd)
     except subprocess.TimeoutExpired:
         print_warning(f"Command timed out after {timeout}s")
         return False, ""
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False, ""
+
+
+_HEARTBEAT_INTERVAL = 30
+
+
+def _run_with_heartbeat(
+    cmd: List[str],
+    check: bool = True,
+    timeout: int = 600,
+    shell: bool = False,
+    cwd: str = None,
+) -> Tuple[bool, str]:
+    """Run a command with a periodic heartbeat printed every 30 seconds."""
+    stop = threading.Event()
+    start = time.monotonic()
+
+    def _heartbeat() -> None:
+        while not stop.wait(_HEARTBEAT_INTERVAL):
+            elapsed = int(time.monotonic() - start)
+            minutes, seconds = divmod(elapsed, 60)
+            print(f"    ... still working ({minutes}m {seconds}s)")
+            sys.stdout.flush()
+
+    thread = threading.Thread(target=_heartbeat, daemon=True)
+    thread.start()
+    try:
+        result = subprocess.run(cmd, check=check, timeout=timeout, shell=shell, cwd=cwd)
+        return result.returncode == 0, ""
+    finally:
+        stop.set()
+        thread.join(timeout=2)
 
 
 def check_python_package(package: str, import_name: Optional[str] = None) -> bool:
