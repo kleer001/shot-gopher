@@ -254,7 +254,10 @@ def run_command(
         else:
             return _run_with_heartbeat(cmd, check=check, timeout=timeout, shell=shell, cwd=cwd)
     except subprocess.TimeoutExpired:
-        print_warning(f"Command timed out after {timeout}s")
+        t_min, t_sec = divmod(timeout, 60)
+        cmd_label = cmd[0] if isinstance(cmd, list) else str(cmd)
+        print_warning(f"Command timed out after {t_min}m {t_sec}s: {cmd_label}")
+        print_info("The process and all its children have been terminated")
         return False, ""
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False, ""
@@ -295,9 +298,15 @@ def _run_with_heartbeat(
     def _heartbeat() -> None:
         while not stop.wait(_HEARTBEAT_INTERVAL):
             elapsed = int(time.monotonic() - start)
-            minutes, seconds = divmod(elapsed, 60)
-            print(f"    ... still working ({minutes}m {seconds}s)")
+            remaining = max(0, timeout - elapsed)
+            e_min, e_sec = divmod(elapsed, 60)
+            r_min, r_sec = divmod(remaining, 60)
+            print(f"    ... still working ({e_min}m {e_sec}s elapsed, {r_min}m {r_sec}s remaining)")
             sys.stdout.flush()
+
+    t_min, t_sec = divmod(timeout, 60)
+    print(f"    [timeout: {t_min}m {t_sec}s]")
+    sys.stdout.flush()
 
     popen_kwargs: dict = dict(shell=shell, cwd=cwd)
     if sys.platform != "win32":
