@@ -280,7 +280,7 @@ class Janitor:
 
         if self.conda_manager.conda_exe:
             success, output = run_command([
-                self.conda_manager.conda_exe, "run", "-n", self.conda_manager.env_name,
+                self.conda_manager.conda_exe, "run", "-p", str(self.conda_manager.env_prefix),
                 "python", str(install_py)
             ], capture=True, cwd=str(self.sam3_dir))
         else:

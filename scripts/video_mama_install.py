@@ -25,9 +25,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from env_config import INSTALL_DIR
+from env_config import INSTALL_DIR, VIDEOMAMA_CONDA_PREFIX
 
-VIDEOMAMA_ENV_NAME = "videomama"
+VIDEOMAMA_ENV_NAME = VIDEOMAMA_CONDA_PREFIX
 VIDEOMAMA_PYTHON_VERSION = "3.10"
 VIDEOMAMA_TOOLS_DIR = INSTALL_DIR / "tools" / "VideoMaMa"
 VIDEOMAMA_MODELS_DIR = INSTALL_DIR / "models" / "VideoMaMa"
@@ -99,37 +99,40 @@ def find_conda() -> str | None:
     return None
 
 
-def env_exists(conda_exe: str, env_name: str) -> bool:
+def env_exists(conda_exe: str, env_name_or_prefix: str | Path) -> bool:
     """Check if conda environment exists."""
+    if isinstance(env_name_or_prefix, Path):
+        return (env_name_or_prefix / "conda-meta").is_dir()
     success, output = run_command([conda_exe, "env", "list"], check=False, capture=True)
     if not success:
         return False
-    return env_name in output
+    return env_name_or_prefix in output
 
 
 def create_conda_env(conda_exe: str) -> bool:
     """Create VideoMaMa conda environment."""
     if env_exists(conda_exe, VIDEOMAMA_ENV_NAME):
-        print_success(f"Conda environment '{VIDEOMAMA_ENV_NAME}' already exists")
+        print_success(f"Conda environment '{VIDEOMAMA_ENV_NAME.name}' already exists")
         return True
 
-    print_info(f"Creating conda environment '{VIDEOMAMA_ENV_NAME}'...")
+    VIDEOMAMA_ENV_NAME.parent.mkdir(parents=True, exist_ok=True)
+    print_info(f"Creating conda environment '{VIDEOMAMA_ENV_NAME.name}' at {VIDEOMAMA_ENV_NAME}...")
     success, _ = run_command([
-        conda_exe, "create", "-n", VIDEOMAMA_ENV_NAME,
+        conda_exe, "create", "-p", str(VIDEOMAMA_ENV_NAME),
         f"python={VIDEOMAMA_PYTHON_VERSION}", "-y"
     ])
 
     if success:
-        print_success(f"Created environment '{VIDEOMAMA_ENV_NAME}'")
+        print_success(f"Created environment '{VIDEOMAMA_ENV_NAME.name}'")
     else:
-        print_error(f"Failed to create environment '{VIDEOMAMA_ENV_NAME}'")
+        print_error(f"Failed to create environment '{VIDEOMAMA_ENV_NAME.name}'")
 
     return success
 
 
 def run_in_env(conda_exe: str, cmd: list, cwd: Path = None) -> bool:
     """Run command in VideoMaMa conda environment."""
-    full_cmd = [conda_exe, "run", "-n", VIDEOMAMA_ENV_NAME] + cmd
+    full_cmd = [conda_exe, "run", "-p", str(VIDEOMAMA_ENV_NAME)] + cmd
     success, _ = run_command(full_cmd, check=False, cwd=cwd)
     return success
 
@@ -248,7 +251,7 @@ for attempt in range(max_retries):
     script_path.write_text(download_script)
 
     try:
-        full_cmd = [conda_exe, "run", "-n", VIDEOMAMA_ENV_NAME, "python", "-u", str(script_path)]
+        full_cmd = [conda_exe, "run", "-p", str(VIDEOMAMA_ENV_NAME), "python", "-u", str(script_path)]
         result = subprocess.run(full_cmd, check=False)
         success = result.returncode == 0
         if success:
@@ -314,7 +317,7 @@ for attempt in range(max_retries):
     script_path.write_text(download_script)
 
     try:
-        full_cmd = [conda_exe, "run", "-n", VIDEOMAMA_ENV_NAME, "python", "-u", str(script_path)]
+        full_cmd = [conda_exe, "run", "-p", str(VIDEOMAMA_ENV_NAME), "python", "-u", str(script_path)]
         result = subprocess.run(full_cmd, check=False)
         success = result.returncode == 0
         if success:
@@ -379,7 +382,7 @@ def print_status(status: dict) -> None:
         return "[OK]" if ok else "[  ]"
 
     print(f"  {status_icon(status['conda_found'])} Conda available")
-    print(f"  {status_icon(status['env_exists'])} Conda environment '{VIDEOMAMA_ENV_NAME}'")
+    print(f"  {status_icon(status['env_exists'])} Conda environment '{VIDEOMAMA_ENV_NAME.name}'")
     print(f"  {status_icon(status['repo_cloned'])} VideoMaMa repository cloned")
     print(f"  {status_icon(status['svd_model'])} SVD base model (~10GB)")
     print(f"  {status_icon(status['videomama_checkpoint'])} VideoMaMa checkpoint (~1.5GB)")

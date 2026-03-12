@@ -509,7 +509,7 @@ function Install-VFXPipeline {
     Write-Banner "Installation Complete!" "Green"
     Write-Host "Next steps:"
     Write-Host "  1. Restart PowerShell (if conda was just installed)"
-    Write-Host "  2. Activate environment: conda activate vfx-pipeline"
+    Write-Host "  2. Activate environment: conda activate $INSTALL_DIR\.vfx_pipeline\envs\vfx-pipeline"
     Write-Host "  3. Or use: . $INSTALL_DIR\.vfx_pipeline\activate.ps1"
     Write-Host "  4. Run: python scripts/run_pipeline.py --help"
     Write-Host ""

@@ -11,7 +11,7 @@ Environment:
     Requires 'gvhmr' conda environment (has smplx, chumpy, torch).
 
 Usage:
-    conda run -n gvhmr python convert_smplh_to_smplx.py \\
+    conda run -p <prefix> python convert_smplh_to_smplx.py \\
         --smplh-npz /path/to/slahmr_results.npz \\
         --output /path/to/motion.pkl \\
         --gender neutral
@@ -370,8 +370,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    from env_config import require_conda_env
-    require_conda_env("gvhmr")
+    from env_config import require_conda_env, GVHMR_CONDA_PREFIX
+    require_conda_env(GVHMR_CONDA_PREFIX)
 
     if not args.smplh_npz.exists():
         print(f"Error: Input file not found: {args.smplh_npz}", file=sys.stderr)

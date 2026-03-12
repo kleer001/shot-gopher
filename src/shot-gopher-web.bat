@@ -27,7 +27,7 @@ if %ERRORLEVEL% neq 0 (
 
 REM Activate the vfx-pipeline environment
 echo Activating vfx-pipeline environment...
-call conda activate vfx-pipeline
+call conda activate "%SCRIPT_DIR%..\.vfx_pipeline\envs\vfx-pipeline"
 if %ERRORLEVEL% neq 0 (
     call "%SCRIPT_DIR%..\scripts\show_conda_error.bat"
     pause

@@ -47,15 +47,13 @@ def main():
         from env_config import require_conda_env
         require_conda_env()  # Exits with helpful message if wrong env
     except ImportError:
-        # env_config not found - check manually
-        import os
-        conda_env = os.environ.get("CONDA_DEFAULT_ENV")
-        if conda_env != "vfx-pipeline":
+        conda_prefix = os.environ.get("CONDA_PREFIX", "")
+        if not conda_prefix or Path(conda_prefix).name != "vfx-pipeline":
             print("""
 ERROR: Wrong conda environment.
 
 Please activate the VFX Pipeline environment first:
-    conda activate vfx-pipeline
+    conda activate <vfx-pipeline prefix>
 
 Then re-run this script.
 """)

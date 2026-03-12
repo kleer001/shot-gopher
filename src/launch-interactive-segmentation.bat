@@ -25,7 +25,7 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-call conda activate vfx-pipeline
+call conda activate "%REPO_ROOT%\.vfx_pipeline\envs\vfx-pipeline"
 if %ERRORLEVEL% neq 0 (
     call "%REPO_ROOT%\scripts\show_conda_error.bat"
     exit /b 1

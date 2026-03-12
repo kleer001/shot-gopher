@@ -16,6 +16,8 @@
 # =============================================================================
 
 # Configuration - single source of truth
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VFX_ENV_PREFIX="$REPO_ROOT/.vfx_pipeline/envs/vfx-pipeline"
 VFX_ENV_NAME="vfx-pipeline"
 
 # Colors for output (disable if not interactive)
@@ -67,7 +69,7 @@ _vfx_show_activation_warning() {
     echo "    ┌────────────────────────────────────────────────────────┐" >&2
     echo "    │  To fix this, run:                                     │" >&2
     echo "    │                                                        │" >&2
-    echo -e "    │      ${GREEN}conda activate $VFX_ENV_NAME${NC}                        │" >&2
+    echo -e "    │      ${GREEN}conda activate $VFX_ENV_PREFIX${NC}" >&2
     echo "    │                                                        │" >&2
     echo "    └────────────────────────────────────────────────────────┘" >&2
     echo "" >&2
@@ -78,7 +80,7 @@ _vfx_show_activation_warning() {
 # -----------------------------------------------------------------------------
 
 _vfx_check_env() {
-    if [[ "$CONDA_DEFAULT_ENV" == "$VFX_ENV_NAME" ]]; then
+    if [[ "$CONDA_PREFIX" == "$VFX_ENV_PREFIX" ]]; then
         return 0
     fi
     return 1
@@ -136,7 +138,7 @@ _vfx_init_conda() {
 # -----------------------------------------------------------------------------
 
 _vfx_env_exists() {
-    conda env list 2>/dev/null | grep -q "^${VFX_ENV_NAME} "
+    [ -d "$VFX_ENV_PREFIX/conda-meta" ]
 }
 
 # -----------------------------------------------------------------------------
@@ -206,7 +208,7 @@ _vfx_activate() {
     # Activate the environment
     _vfx_log_info "Activating '$VFX_ENV_NAME' environment..."
 
-    if conda activate "$VFX_ENV_NAME" 2>/dev/null; then
+    if conda activate "$VFX_ENV_PREFIX" 2>/dev/null; then
         _vfx_log_info "Environment activated successfully"
         return 0
     else

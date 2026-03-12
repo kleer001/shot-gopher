@@ -7,7 +7,7 @@ Produces motion.pkl (SMPLX format) and mocap_camera/ extrinsics.
 SLAHMR outputs SMPL-H in motion chunks. This wrapper:
 1. Finds or creates video from source frames
 2. Sets up temp data dir with SLAHMR layout
-3. Runs SLAHMR via conda run -n slahmr
+3. Runs SLAHMR via conda run -p <prefix>
 4. Stitches chunked output into a single NPZ
 5. Exports camera (extrinsics.json, intrinsics.json)
 6. Converts SMPL-H → SMPLX via betas fitting
@@ -39,6 +39,8 @@ from env_config import (
     require_conda_env,
     SLAHMR_INSTALL_DIR,
     SLAHMR_CONDA_ENV,
+    SLAHMR_CONDA_PREFIX,
+    GVHMR_CONDA_PREFIX,
 )
 from log_manager import LogCapture
 
@@ -404,7 +406,7 @@ def check_slahmr_available() -> bool:
         [conda_exe, "env", "list"],
         capture_output=True, text=True, timeout=10,
     )
-    return result.returncode == 0 and SLAHMR_CONDA_ENV in result.stdout
+    return result.returncode == 0 and SLAHMR_CONDA_PREFIX.exists()
 
 
 def find_or_create_video(
@@ -888,7 +890,7 @@ def run_slahmr_pipeline(
             slahmr_cmd += " optim.motion_chunks.opt_cams=False"
 
         cmd = [
-            conda_exe, "run", "-n", SLAHMR_CONDA_ENV, "--no-capture-output",
+            conda_exe, "run", "-p", str(SLAHMR_CONDA_PREFIX), "--no-capture-output",
             "bash", "-c", slahmr_cmd,
         ]
 
@@ -961,7 +963,7 @@ def run_slahmr_pipeline(
             return False
         convert_script = Path(__file__).parent / "convert_smplh_to_smplx.py"
         convert_cmd = [
-            conda_exe, "run", "-n", "gvhmr", "--no-capture-output",
+            conda_exe, "run", "-p", str(GVHMR_CONDA_PREFIX), "--no-capture-output",
             "python", str(convert_script),
             "--smplh-npz", str(final_npz),
             "--output", str(motion_pkl_path),

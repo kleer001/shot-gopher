@@ -30,7 +30,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from env_config import require_conda_env
+from env_config import require_conda_env, COLMAP_CONDA_PREFIX
 from log_manager import LogCapture
 from install_wizard.platform import PlatformManager
 from subprocess_utils import (
@@ -50,7 +50,7 @@ from transforms import (
 _colmap_path: Optional[str] = None
 
 # Dedicated conda environment for COLMAP (avoids solver conflicts)
-COLMAP_CONDA_ENV = "colmap"
+COLMAP_CONDA_ENV = COLMAP_CONDA_PREFIX.name
 
 
 def _find_conda_base() -> Optional[Path]:
@@ -104,7 +104,7 @@ def get_colmap_executable() -> Optional[str]:
     # 1. Check dedicated colmap conda environment
     conda_base = _find_conda_base()
     if conda_base:
-        dedicated_env = conda_base / "envs" / COLMAP_CONDA_ENV
+        dedicated_env = COLMAP_CONDA_PREFIX
         colmap_path = _get_conda_colmap_path(dedicated_env)
         if colmap_path:
             _colmap_path = str(colmap_path)

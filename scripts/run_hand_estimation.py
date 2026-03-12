@@ -9,19 +9,19 @@ Environment:
     Requires 'gvhmr' conda environment (has WiLoR-mini, torch, cv2).
 
 Usage:
-    conda run -n gvhmr python run_hand_estimation.py <project_dir> [options]
+    conda run -p <prefix> python run_hand_estimation.py <project_dir> [options]
 
 Example:
-    conda run -n gvhmr python run_hand_estimation.py /path/to/project --mocap-person person
+    conda run -p <prefix> python run_hand_estimation.py /path/to/project --mocap-person person
 """
 
 import argparse
 import sys
 from pathlib import Path
 
-from env_config import require_conda_env
+from env_config import require_conda_env, GVHMR_CONDA_PREFIX
 
-REQUIRED_ENV = "gvhmr"
+REQUIRED_ENV = GVHMR_CONDA_PREFIX
 SMPLX_HAND_JOINTS = 15
 HAND_POSE_DIM = SMPLX_HAND_JOINTS * 3
 

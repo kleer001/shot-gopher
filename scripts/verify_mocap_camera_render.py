@@ -11,7 +11,7 @@ If the camera extraction is correct, both overlays should be identical.
 Must run in the gvhmr conda env (needs pytorch3d, smplx, einops).
 
 Usage:
-    conda run -n gvhmr python scripts/verify_mocap_camera_render.py <project_dir>
+    conda run -p <prefix> python scripts/verify_mocap_camera_render.py <project_dir>
 """
 
 import argparse

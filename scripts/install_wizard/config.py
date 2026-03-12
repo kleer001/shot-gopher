@@ -39,7 +39,7 @@ class ConfigurationGenerator:
 
         config = {
             "version": "1.0",
-            "environment": self.conda_manager.env_name,
+            "environment": str(self.conda_manager.env_prefix),
             "paths": {
                 "base": str(self.base_dir),
                 "gvhmr": str(self.base_dir / "GVHMR"),

@@ -11,16 +11,16 @@ Environment:
     dependencies with GVHMR motion capture.
 
 Usage:
-    conda run -n gvhmr python smplx_from_motion.py <project_dir> [options]
+    conda run -p <prefix> python smplx_from_motion.py <project_dir> [options]
 
 Example:
     # Generate from GVHMR motion (preferred)
-    conda run -n gvhmr python smplx_from_motion.py /path/to/project \\
+    conda run -p <prefix> python smplx_from_motion.py /path/to/project \\
         --motion mocap/motion.pkl \\
         --output mocap/smplx_animated/
 
     # Also export rest pose (frame 0)
-    conda run -n gvhmr python smplx_from_motion.py /path/to/project \\
+    conda run -p <prefix> python smplx_from_motion.py /path/to/project \\
         --motion mocap/motion.pkl \\
         --output mocap/smplx_animated/ \\
         --rest-pose mocap/smplx_rest.obj
@@ -35,9 +35,9 @@ from typing import Optional, Dict, Any
 
 import numpy as np
 
-from env_config import require_conda_env, INSTALL_DIR
+from env_config import require_conda_env, INSTALL_DIR, GVHMR_CONDA_PREFIX
 
-REQUIRED_ENV = "gvhmr"
+REQUIRED_ENV = GVHMR_CONDA_PREFIX
 
 
 def extract_frame_number(filename: str) -> int:
