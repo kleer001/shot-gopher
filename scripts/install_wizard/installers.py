@@ -741,13 +741,18 @@ class WiLoRInstaller(ComponentInstaller):
         self.installed = success
         return self.installed
 
-    EXTRA_DEPS = ["ultralytics==8.1.34", "roma"]
+    ULTRALYTICS_EXTRA_DEPS = [
+        "psutil", "py-cpuinfo", "thop>=0.1.1",
+        "pandas>=1.1.4", "seaborn>=0.11.0",
+    ]
 
     def install(self) -> bool:
         """Install WiLoR-mini into the gvhmr conda environment.
 
-        Uses --no-deps to avoid re-cloning chumpy (already in gvhmr env),
-        then installs the few additional dependencies separately.
+        Uses --no-deps for both WiLoR-mini and ultralytics to avoid
+        pip resolver conflicts with torch/torchvision already in the env.
+        Ultralytics' heavy deps (torch, opencv, scipy, etc.) are already
+        present; only the lightweight extras are installed explicitly.
         """
         print("\nInstalling WiLoR-mini (hand pose estimation)...")
 
@@ -772,10 +777,19 @@ class WiLoRInstaller(ComponentInstaller):
             print_error("Failed to install WiLoR-mini")
             return False
 
-        print("  Installing additional dependencies...")
+        print("  Installing ultralytics (--no-deps, torch already present)...")
         success, _ = run_command([
             conda_exe, "run", "-p", str(self.env_prefix), "--no-capture-output",
-            "pip", "install", *self.EXTRA_DEPS,
+            "pip", "install", "--no-deps", "ultralytics==8.1.34",
+        ])
+
+        if not success:
+            print_warning("ultralytics failed to install")
+
+        print("  Installing roma and ultralytics extras...")
+        success, _ = run_command([
+            conda_exe, "run", "-p", str(self.env_prefix), "--no-capture-output",
+            "pip", "install", "roma", *self.ULTRALYTICS_EXTRA_DEPS,
         ])
 
         if not success:
