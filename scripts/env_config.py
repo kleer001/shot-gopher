@@ -191,7 +191,10 @@ def is_conda_env_active(env_prefix: Path | str | None = None) -> bool:
     if active_prefix is None:
         return False
 
-    return active_prefix.resolve() == env_prefix.resolve()
+    if env_prefix.exists():
+        return active_prefix.resolve() == env_prefix.resolve()
+
+    return active_prefix.name == env_prefix.name
 
 
 def is_any_conda_env_active() -> bool:
@@ -251,9 +254,14 @@ def get_activation_instructions() -> str:
         "",
     ]
 
+    active_prefix = get_conda_prefix()
     if active_env:
         lines.append(f"    Currently active: '{active_env}'")
         lines.append(f"    Required:         '{CONDA_ENV_NAME}'")
+        if active_prefix and active_env == CONDA_ENV_NAME:
+            lines.append("")
+            lines.append(f"    Active path:   {active_prefix}")
+            lines.append(f"    Required path: {CONDA_ENV_PREFIX}")
     else:
         lines.append("    No conda environment is currently active.")
         lines.append(f"    Required: '{CONDA_ENV_NAME}'")
