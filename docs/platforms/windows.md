@@ -104,9 +104,8 @@ powershell -Command "irm https://raw.githubusercontent.com/kleer001/shot-gopher/
 
 | Shell | Activation Command |
 |-------|-------------------|
-| PowerShell | `. .\.vfx_pipeline\activate.ps1` |
-| CMD | `.vfx_pipeline\activate.bat` |
-| Git Bash | `source .vfx_pipeline/activate.sh` |
+| PowerShell | `. .\activate_env.ps1` |
+| Git Bash | `source activate_env.sh` |
 
 #### Conda Not Initialized
 

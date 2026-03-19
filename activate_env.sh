@@ -7,16 +7,16 @@
 # It can be sourced by other scripts or run directly.
 #
 # Usage:
-#   source scripts/activate_env.sh        # Activate in current shell
-#   source scripts/activate_env.sh --check  # Just check, don't activate
+#   source activate_env.sh        # Activate in current shell
+#   source activate_env.sh --check  # Just check, don't activate
 #
 # In other scripts:
-#   source "$(dirname "$0")/activate_env.sh" || exit 1
+#   source "$(dirname "$0")/../activate_env.sh" || exit 1
 #
 # =============================================================================
 
 # Configuration - single source of truth
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VFX_ENV_PREFIX="$REPO_ROOT/.vfx_pipeline/envs/vfx-pipeline"
 VFX_ENV_NAME="vfx-pipeline"
 

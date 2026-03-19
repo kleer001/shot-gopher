@@ -261,7 +261,6 @@ After installation completes:
 1. **Validation tests** run automatically
 2. **Configuration files** generated:
    - `.vfx_pipeline/config.json` - Component paths
-   - `.vfx_pipeline/activate.sh` - Environment activation script
 3. **Installation state** saved to `.vfx_pipeline/install_state.json`
 
 ## Configuration Files
@@ -282,33 +281,26 @@ Generated configuration with all paths:
 }
 ```
 
-### activate.sh
+### activate_env.sh / activate_env.ps1
 
-Environment activation script:
+Activation helper scripts at the repo root. They locate the sandboxed conda
+environment, initialize conda if needed, and activate it in the current shell.
 
-```bash
-#!/bin/bash
-# VFX Pipeline Environment Activation Script
-
-# Activate conda environment
-conda activate vfx-pipeline
-
-# Set up Python path
-export PYTHONPATH="${PYTHONPATH}:/path/to/.vfx_pipeline/GVHMR"
-
-# Set up environment variables
-export VFX_PIPELINE_BASE="/path/to/.vfx_pipeline"
-export GVHMR_DIR="/path/to/.vfx_pipeline/GVHMR"
-export SMPLX_MODEL_DIR="${VFX_PIPELINE_BASE}/smplx_models"
-
-echo "✓ VFX Pipeline environment activated"
-```
-
-Use with:
+**Linux / macOS / Git Bash** — must be sourced:
 
 ```bash
-source .vfx_pipeline/activate.sh
+source activate_env.sh
 ```
+
+**Windows PowerShell** — must be dot-sourced:
+
+```powershell
+. .\activate_env.ps1
+```
+
+Both scripts accept a `-Check` / `--check` flag to verify the environment is
+active without activating it, and a `-Quiet` / `--quiet` flag to suppress
+informational output.
 
 ### install_state.json
 
@@ -444,7 +436,7 @@ URLs may be outdated. Manually download and place in correct directories:
 Activate the environment:
 
 ```bash
-source .vfx_pipeline/activate.sh
+source activate_env.sh
 ```
 
 Verify environment:
