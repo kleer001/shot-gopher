@@ -200,9 +200,9 @@ class InstallationValidator:
         Returns:
             (success, message)
         """
-        smplx_dir = self.base_dir / "smplx_models"
+        smplx_dir = self.base_dir / "GVHMR" / "inputs" / "checkpoints" / "body_models"
         if not smplx_dir.exists():
-            return False, f"SMPL-X directory not found ({INSTALL_DIR}/smplx_models/)"
+            return False, f"SMPL-X directory not found ({smplx_dir})"
 
         # Look for model files - check multiple possible locations and extensions
         # The SMPL-X v1.1 zip extracts to: models/smplx/SMPLX_*.npz

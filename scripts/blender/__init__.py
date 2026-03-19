@@ -770,3 +770,115 @@ def export_scene_to_usd(
         blender_path=blender_path,
         timeout=timeout,
     )
+
+
+def export_face_mesh_to_alembic(
+    face_mesh_dir: Path,
+    output_path: Path,
+    fps: int = 24,
+    start_frame: int = 1,
+    blender_path: Optional[Path] = None,
+    timeout: int = 1800,
+) -> bool:
+    """Export animated face mesh landmarks to Alembic using Blender.
+
+    Reads face_mesh/landmarks.npz and writes a 478-vertex animated point cloud
+    as an Alembic PolyMesh. Vertex positions are animated per frame via shape keys.
+
+    Args:
+        face_mesh_dir: face_mesh/ project subdirectory.
+        output_path: Output .abc file path.
+        fps: Frames per second.
+        start_frame: First frame number.
+        blender_path: Optional path to Blender executable.
+        timeout: Maximum time in seconds (default: 30 minutes).
+
+    Returns:
+        True if export succeeded.
+
+    Raises:
+        FileNotFoundError: If Blender is not installed or landmarks.npz not found.
+        RuntimeError: If export fails.
+    """
+    landmarks_path = face_mesh_dir / "landmarks.npz"
+    if not landmarks_path.exists():
+        raise FileNotFoundError(f"landmarks.npz not found: {landmarks_path}")
+    if fps <= 0:
+        raise ValueError(f"FPS must be positive, got {fps}")
+
+    blender_path = _ensure_blender(blender_path)
+    script_path = SCRIPTS_DIR / "export_face_mesh_alembic.py"
+    if not script_path.exists():
+        raise FileNotFoundError(f"Export script not found: {script_path}")
+
+    cmd = [
+        str(blender_path), "-b",
+        "--python", str(script_path),
+        "--",
+        "--input", str(face_mesh_dir),
+        "--output", str(output_path),
+        "--fps", str(fps),
+        "--start-frame", str(start_frame),
+    ]
+
+    print(f"Running Blender headless face mesh Alembic export...")
+    print(f"  Input: {face_mesh_dir}")
+    print(f"  Output: {output_path}")
+
+    return _run_blender_script(cmd, output_path, timeout, "face mesh Alembic")
+
+
+def export_face_mesh_to_usd(
+    face_mesh_dir: Path,
+    output_path: Path,
+    fps: int = 24,
+    start_frame: int = 1,
+    blender_path: Optional[Path] = None,
+    timeout: int = 1800,
+) -> bool:
+    """Export animated face mesh landmarks to USD using Blender.
+
+    Reads face_mesh/landmarks.npz and writes a 478-vertex animated point cloud
+    as a USD Mesh prim. Vertex positions are animated per frame via shape keys.
+
+    Args:
+        face_mesh_dir: face_mesh/ project subdirectory.
+        output_path: Output .usd file path.
+        fps: Frames per second.
+        start_frame: First frame number.
+        blender_path: Optional path to Blender executable.
+        timeout: Maximum time in seconds (default: 30 minutes).
+
+    Returns:
+        True if export succeeded.
+
+    Raises:
+        FileNotFoundError: If Blender is not installed or landmarks.npz not found.
+        RuntimeError: If export fails.
+    """
+    landmarks_path = face_mesh_dir / "landmarks.npz"
+    if not landmarks_path.exists():
+        raise FileNotFoundError(f"landmarks.npz not found: {landmarks_path}")
+    if fps <= 0:
+        raise ValueError(f"FPS must be positive, got {fps}")
+
+    blender_path = _ensure_blender(blender_path)
+    script_path = SCRIPTS_DIR / "export_face_mesh_usd.py"
+    if not script_path.exists():
+        raise FileNotFoundError(f"Export script not found: {script_path}")
+
+    cmd = [
+        str(blender_path), "-b",
+        "--python", str(script_path),
+        "--",
+        "--input", str(face_mesh_dir),
+        "--output", str(output_path),
+        "--fps", str(fps),
+        "--start-frame", str(start_frame),
+    ]
+
+    print(f"Running Blender headless face mesh USD export...")
+    print(f"  Input: {face_mesh_dir}")
+    print(f"  Output: {output_path}")
+
+    return _run_blender_script(cmd, output_path, timeout, "face mesh USD")

@@ -194,10 +194,13 @@ def print_info(text: str):
 
 
 def ask_yes_no(question: str, default: bool = True) -> bool:
-    """Ask user yes/no question."""
+    """Ask user yes/no question. Returns default if no TTY is available."""
     default_str = "Y/n" if default else "y/N"
     while True:
-        response = tty_input(f"{question} [{default_str}]: ").strip().lower()
+        try:
+            response = tty_input(f"{question} [{default_str}]: ").strip().lower()
+        except EOFError:
+            return default
         if not response:
             return default
         if response in ('y', 'yes'):

@@ -34,22 +34,24 @@ STAGES = {
     "mocap": "Run human motion capture (SLAHMR)",
     "hands": "Run hand pose estimation (WiLoR)",
     "foot_contact": "Detect foot contacts and reduce footskate (UnderPressure)",
+    "face_mesh": "Run facial landmark detection (MediaPipe Face Mesh)",
     "gsir": "Run GS-IR material decomposition",
     "camera": "Export camera to Alembic",
 }
 
 STAGE_ALIASES: dict[str, str] = {
     "mmcam": "matchmove_camera",
+    "mmface": "face_mesh",
 }
 
 STAGE_ORDER = [
     "ingest", "interactive", "depth", "roto", "mama", "cleanplate",
-    "matchmove_camera", "dense", "mocap", "hands", "foot_contact", "gsir", "camera"
+    "matchmove_camera", "dense", "mocap", "hands", "foot_contact", "face_mesh", "gsir", "camera"
 ]
 
 STAGES_REQUIRING_FRAMES = {
     "interactive", "depth", "roto", "mama", "cleanplate",
-    "matchmove_camera", "dense", "mocap", "hands", "foot_contact", "gsir", "camera"
+    "matchmove_camera", "dense", "mocap", "hands", "foot_contact", "face_mesh", "gsir", "camera"
 }
 
 WORKFLOW_TEMPLATES_DIR = Path(__file__).parent.parent / "workflow_templates"

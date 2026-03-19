@@ -27,7 +27,7 @@ from pipeline_utils import (
     generate_preview_movie,
     run_command,
 )
-from env_config import GVHMR_CONDA_PREFIX
+from env_config import CONDA_ENV_PREFIX, GVHMR_CONDA_PREFIX
 from workflow_utils import (
     refresh_workflow_from_template,
     update_segmentation_prompt,
@@ -57,6 +57,7 @@ __all__ = [
     "run_stage_mocap",
     "run_stage_hands",
     "run_stage_foot_contact",
+    "run_stage_face_mesh",
     "run_stage_gsir",
     "run_stage_camera",
     "STAGE_HANDLERS",
@@ -1236,6 +1237,75 @@ def run_stage_mocap(
     return True
 
 
+def run_stage_face_mesh(
+    ctx: "StageContext",
+    config: "PipelineConfig",
+) -> bool:
+    """Run MediaPipe Face Mesh facial landmark detection and export stage.
+
+    Detection (run_face_mesh.py):
+        Detects 478 landmarks, 52 ARKit blendshapes, head pose, and eye gaze
+        per source frame. Writes face_mesh/{landmarks,blendshapes,head_pose,eye_gaze}.npz.
+
+    Export (export_face_mesh.py):
+        Generates face_mesh/export/face_mesh.json (blendshape curves),
+        face_mesh/preview/ overlays, optional camera-space landmarks,
+        and optional Alembic/USD via Blender.
+
+    Args:
+        ctx: Stage execution context
+        config: Pipeline configuration
+
+    Returns:
+        True if successful
+    """
+    print("\n=== Stage: face_mesh ===")
+
+    face_mesh_dir = ctx.project_dir / "face_mesh"
+    landmarks_path = face_mesh_dir / "landmarks.npz"
+    export_json_path = face_mesh_dir / "export" / "face_mesh.json"
+
+    if ctx.skip_existing and landmarks_path.exists() and export_json_path.exists():
+        print("  → Skipping (landmarks.npz and face_mesh.json exist)")
+        return True
+
+    conda_exe = _find_conda_exe()
+    if not conda_exe:
+        print("  Error: Conda not found — required for MediaPipe", file=sys.stderr)
+        return False
+
+    if not (ctx.skip_existing and landmarks_path.exists()):
+        detect_script = Path(__file__).parent / "run_face_mesh.py"
+        detect_cmd = [
+            conda_exe, "run", "-p", str(CONDA_ENV_PREFIX), "--no-capture-output",
+            "python", str(detect_script),
+            str(ctx.project_dir),
+        ]
+        try:
+            run_command(detect_cmd, "Running MediaPipe Face Mesh detection")
+        except subprocess.CalledProcessError:
+            print("  → Face mesh detection failed", file=sys.stderr)
+            return False
+    else:
+        print("  → Skipping detection (landmarks.npz exists)")
+
+    print("\n  --- Exporting face mesh ---")
+    export_script = Path(__file__).parent / "export_face_mesh.py"
+    export_cmd = [
+        conda_exe, "run", "-p", str(CONDA_ENV_PREFIX), "--no-capture-output",
+        "python", str(export_script),
+        str(ctx.project_dir),
+        "--fps", str(ctx.fps),
+    ]
+    try:
+        run_command(export_cmd, "Exporting face mesh")
+    except subprocess.CalledProcessError:
+        print("  → Face mesh export failed", file=sys.stderr)
+        return False
+
+    return True
+
+
 def run_stage_gsir(
     ctx: "StageContext",
     config: "PipelineConfig",
@@ -1499,6 +1569,7 @@ STAGE_HANDLERS: dict[str, Callable[["StageContext", "PipelineConfig"], bool]] = 
     "mocap": run_stage_mocap,
     "hands": run_stage_hands,
     "foot_contact": run_stage_foot_contact,
+    "face_mesh": run_stage_face_mesh,
     "gsir": run_stage_gsir,
     "camera": run_stage_camera,
 }

@@ -30,8 +30,7 @@ Examples:
     parser.add_argument(
         "--component", "-C",
         type=str,
-        choices=['core', 'pytorch', 'colmap', 'mocap_core', 'gvhmr', 'wilor', 'econ', 'comfyui'],
-        help="Install specific component"
+        help="Install specific component (e.g. face_mesh, gvhmr, colmap)"
     )
     parser.add_argument(
         "--check-only", "-c",

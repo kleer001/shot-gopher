@@ -112,13 +112,14 @@ class PythonPackageInstaller(ComponentInstaller):
         self.conda_manager = conda_manager
 
     def check(self) -> bool:
-        """Check if package is installed in the conda environment."""
+        """Check if package is installed in the conda environment or current Python env."""
         if self.conda_manager and self.conda_manager.conda_exe:
-            # Check within the conda environment
-            success, output = run_command([
+            success, _ = run_command([
                 self.conda_manager.conda_exe, "run", "-p", str(self.conda_manager.env_prefix),
                 "python", "-c", f"import {self.import_name}"
             ], check=False, capture=True)
+            if not success:
+                success = check_python_package(self.package, self.import_name)
             self.installed = success
         else:
             self.installed = check_python_package(self.package, self.import_name)

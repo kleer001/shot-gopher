@@ -87,6 +87,9 @@ SLAHMR_INSTALL_DIR = INSTALL_DIR / "tools" / "slahmr"
 # UnderPressure installation path
 UNDERPRESSURE_INSTALL_DIR = INSTALL_DIR / "tools" / "underpressure"
 
+# MediaPipe model directory
+MEDIAPIPE_MODELS_DIR = INSTALL_DIR / "models" / "mediapipe"
+
 
 # =============================================================================
 # PLATFORM DETECTION

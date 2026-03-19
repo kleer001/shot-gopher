@@ -186,6 +186,15 @@ class InstallationWizard:
             ]
         }
 
+        # MediaPipe Face Mesh (facial landmark detection, runs in main vfx-pipeline env)
+        self.components['face_mesh'] = {
+            'name': 'Face Mesh (MediaPipe)',
+            'required': False,
+            'installers': [
+                PythonPackageInstaller('MediaPipe', 'mediapipe', size_gb=0.1),
+            ]
+        }
+
         # Blender (for Alembic mesh export)
         self.components['blender'] = {
             'name': 'Blender',
@@ -531,6 +540,25 @@ class InstallationWizard:
 
         return success
 
+    def _download_face_landmarker_model(self) -> None:
+        """Download the MediaPipe FaceLandmarker model if not already present."""
+        import urllib.request
+        from env_config import MEDIAPIPE_MODELS_DIR
+
+        model_path = MEDIAPIPE_MODELS_DIR / "face_landmarker.task"
+        if model_path.exists():
+            print(f"\nFaceLandmarker model already present: {model_path}")
+            return
+
+        url = (
+            "https://storage.googleapis.com/mediapipe-models/"
+            "face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
+        )
+        print(f"\nDownloading FaceLandmarker model (~7 MB)...")
+        MEDIAPIPE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(url, model_path)
+        print(f"  Saved: {model_path}")
+
     def setup_credentials(self, repo_root: Path) -> None:
         """Prompt user to set up credentials for authenticated downloads.
 
@@ -594,8 +622,11 @@ class InstallationWizard:
         """
         print_header("VFX Pipeline Installation Wizard (Conda-Based)")
 
-        if yolo:
-            print_info("YOLO mode: Full stack install with auto-yes")
+        if yolo or component:
+            if yolo:
+                print_info("YOLO mode: Full stack install with auto-yes")
+            else:
+                print_info(f"Installing component: {component}")
         else:
             has_gpu, _ = check_gpu_available()
             recommendation = self.platform_manager.get_wizard_recommendation(
@@ -615,8 +646,8 @@ class InstallationWizard:
                 status = self.state_manager.get_component_status(comp_id)
                 print(f"  - {self.components.get(comp_id, {}).get('name', comp_id)}: {status}")
 
-            if yolo:
-                print_info("YOLO mode: auto-resuming previous installation")
+            if yolo or component:
+                print_info("Auto-resuming previous installation")
                 resume = True
             elif ask_yes_no("\nResume previous installation?", default=True):
                 resume = True
@@ -652,8 +683,8 @@ class InstallationWizard:
             to_install = [component]
         elif yolo:
             # YOLO mode: auto-select full stack (option 3)
-            print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture + GS-IR)")
-            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'slahmr', 'gvhmr', 'wilor', 'underpressure', 'blender', 'gsir']
+            print_info("Auto-selecting: Full stack (Core + ComfyUI + Motion capture + GS-IR + Face Mesh)")
+            to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'slahmr', 'gvhmr', 'wilor', 'underpressure', 'blender', 'gsir', 'face_mesh']
         else:
             # Interactive selection
             print("\n" + "="*60)
@@ -674,7 +705,7 @@ class InstallationWizard:
                     to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui']
                     break
                 elif choice == '3':
-                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'slahmr', 'gvhmr', 'wilor', 'underpressure', 'blender', 'gsir']
+                    to_install = ['core', 'web_gui', 'pytorch', 'colmap', 'vggsfm', 'comfyui', 'mocap_core', 'slahmr', 'gvhmr', 'wilor', 'underpressure', 'blender', 'gsir', 'face_mesh']
                     break
                 elif choice == '4':
                     to_install = []
@@ -693,8 +724,8 @@ class InstallationWizard:
                 print_error("\nInsufficient disk space for installation")
                 return False
 
-            # Confirm installation (skip in yolo mode)
-            if not yolo:
+            # Confirm installation (skip in yolo mode or single-component mode)
+            if not yolo and not component:
                 if not ask_yes_no("\nProceed with installation?", default=True):
                     print_info("Installation cancelled")
                     return True
@@ -738,6 +769,10 @@ class InstallationWizard:
             else:
                 print("\n! SMPL-X credentials not found - skipping model download")
                 print("  Run wizard again after setting up credentials to download models")
+
+        # Download FaceLandmarker model for MediaPipe Face Mesh
+        if 'face_mesh' in to_install:
+            self._download_face_landmarker_model()
 
         # Final status
         final_status = self.check_all_components()

@@ -1723,7 +1723,7 @@ Auto-downloads from Ultralytics releases.'''
         else:
             dest_dir = self.base_dir / checkpoint_info['dest_dir_rel']
 
-        # Verify actual file exists before trusting state (handles filename changes)
+        # Verify actual file exists (and is not truncated) before trusting state
         files_exist = True
         for file_info in checkpoint_info['files']:
             if file_info.get('extract'):
@@ -1737,6 +1737,12 @@ Auto-downloads from Ultralytics releases.'''
                 if not dest_path.exists():
                     files_exist = False
                     break
+                expected_size_mb = file_info.get('size_mb')
+                if expected_size_mb:
+                    actual_mb = dest_path.stat().st_size / (1024 * 1024)
+                    if actual_mb < expected_size_mb * 0.9:
+                        files_exist = False
+                        break
 
         # Check if already downloaded AND files exist
         if state_manager and state_manager.is_checkpoint_downloaded(comp_id) and files_exist:
@@ -1861,8 +1867,18 @@ Auto-downloads from Ultralytics releases.'''
             dest_path = dest_dir / file_info['filename']
 
             if dest_path.exists() and not file_info.get('extract'):
-                print_success(f"{file_info['filename']} already exists")
-                continue
+                expected_size_mb = file_info.get('size_mb')
+                if expected_size_mb:
+                    actual_mb = dest_path.stat().st_size / (1024 * 1024)
+                    if actual_mb < expected_size_mb * 0.9:
+                        print_warning(f"{file_info['filename']} is {actual_mb:.1f} MB (expected >={expected_size_mb} MB), re-downloading...")
+                        dest_path.unlink()
+                    else:
+                        print_success(f"{file_info['filename']} already exists ({actual_mb:.1f} MB)")
+                        continue
+                else:
+                    print_success(f"{file_info['filename']} already exists")
+                    continue
 
             dest_path.parent.mkdir(parents=True, exist_ok=True)
 
